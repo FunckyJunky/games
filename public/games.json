@@ -19,5 +19,12 @@
     "path": "games/pixel-wall/",
     "color": "#7cff6b",
     "tag": "live"
+  },
+  {
+    "title": "Leviathan Voyage",
+    "description": "Wake up in the hangar shack, start her up and fly the AP-7 airship over an endless land. Walk her decks. Best full screen with a controller.",
+    "path": "games/leviathan-voyage/",
+    "color": "#ff9f43",
+    "tag": "3d"
   }
 ]
