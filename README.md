@@ -13,6 +13,8 @@ public/                 the website
   games/
     pixel-hop/          one folder per game (index.html + music, images...)
     pixel-party/
+  apps/
+    fk-chat/            FK-CHAT: text chat by channel code
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -33,6 +35,10 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
   "tag": "new"
 }
 ```
+
+   `folder` is `games`, `online` or `apps` (the three tabs in the FK-DOS menu).
+   `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, or leave it
+   out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 

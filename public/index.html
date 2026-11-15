@@ -338,9 +338,9 @@ const SND = {
 // ===================================================================
 // games
 // ===================================================================
-let games = [], folders = { games: [], online: [] };
-const FOLDERS = ['games', 'online'];
-let folder = 0, sel = { games: 0, online: 0 }, scroll = { games: 0, online: 0 };
+let games = [], folders = { games: [], online: [], apps: [] };
+const FOLDERS = ['games', 'online', 'apps'];
+let folder = 0, sel = { games: 0, online: 0, apps: 0 }, scroll = { games: 0, online: 0, apps: 0 };
 function dosName(g) {
   const base = String(g.title || g.id || '?').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return base.length <= 8 ? base : base.slice(0, 6) + '~1';
@@ -450,7 +450,29 @@ function sceneShip(t, seg) {
   seg.push([tr([1.3, -0.82, 0]), tr([1.2, -0.62, 0])]);
   return { yaw: 0.75 + Math.sin(t * 0.15) * 0.35, pitch: 0.22, dist: 9.5, ty: 0.4 };
 }
-const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip };
+function sceneChat(t, seg, quads) {
+  // two terminals talking: packets fly between them on an arc
+  const term = (x, face) => {
+    cubeEdges(x, 0.55, 0, 1.3, 1.1, 1.0, 0, seg);           // the monitor
+    cubeEdges(x, -0.15, 0.1, 1.5, 0.18, 1.1, 0, seg);       // the keyboard base
+    const sx = x + face * 0.66;
+    seg.push([[sx, 0.2, -0.4], [sx, 0.9, -0.4]], [[sx, 0.9, -0.4], [sx, 0.9, 0.4]], [[sx, 0.9, 0.4], [sx, 0.2, 0.4]], [[sx, 0.2, 0.4], [sx, 0.2, -0.4]]);
+    // text lines on the screen
+    for (let i = 0; i < 3; i++) {
+      const y = 0.75 - i * 0.18, len = 0.2 + ((Math.sin(t * 3 + i * 2 + x) + 1) * 0.25);
+      seg.push([[sx, y, -0.3], [sx, y, -0.3 + len]]);
+    }
+  };
+  term(-2.3, 1); term(2.3, -1);
+  for (let i = -4; i <= 4; i++) seg.push([[-4, -0.25, i * 0.5], [4, -0.25, i * 0.5]]);
+  for (let k = 0; k < 4; k++) {
+    const ph = ((t * 0.45 + k * 0.25) % 1), dir = k % 2 ? 1 : -1;
+    const x = dir * (-1.6 + ph * 3.2), y = 0.6 + Math.sin(ph * Math.PI) * 1.4;
+    cubeEdges(x, y, 0, 0.22, 0.22, 0.22, t * 3 + k, seg);
+  }
+  return { yaw: Math.sin(t * 0.25) * 0.5 + 0.2, pitch: 0.3, dist: 8.5, ty: 0.6 };
+}
+const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat };
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
@@ -671,7 +693,7 @@ function drawMain() {
   // folder tabs
   const t = LAY.tabs;
   put(t.r, t.c0, 'C:\\' + F.toUpperCase() + '\\', '');
-  let x = t.c1 - 17;
+  let x = t.c1 - FOLDERS.reduce((n, f) => n + f.length + 3, 0) + 2;
   FOLDERS.forEach((name, i) => {
     const label = ' ' + name.toUpperCase() + ' ';
     put(t.r, x, label, i === folder ? 'i' : 'd');
@@ -725,7 +747,7 @@ function drawMain() {
 
 function fkeyBar() {
   const keys = WIDE
-    ? [['ENTER', 'Run', run], ['<>', 'Dir', () => setFolder(1 - folder)], ['C', 'Colour', nextColor], ['I', 'Info', openInfo], ['ESC', 'Setup', openSetup], ['G', 'Glitch', () => burst(5)]]
+    ? [['ENTER', 'Run', run], ['<>', 'Dir', () => setFolder((folder + 1) % FOLDERS.length)], ['C', 'Colour', nextColor], ['I', 'Info', openInfo], ['ESC', 'Setup', openSetup], ['G', 'Glitch', () => burst(5)]]
     : [['ENTER', 'Run', run], ['C', 'Col', nextColor], ['I', 'Info', openInfo], ['ESC', 'Setup', openSetup]];
   let x = 0;
   for (const [k, label, act] of keys) {
@@ -877,7 +899,7 @@ async function boot(kind) {
   bootPrint('');
   await typeLine('C:\\>', 'SCAN *.HTM /S');
   for (const g of games) {
-    bootPrint('  ' + (dosName(g) + '.HTM').padEnd(14) + '<' + (g.folder === 'online' ? 'ONLINE' : 'GAME') + '>');
+    bootPrint('  ' + (dosName(g) + '.HTM').padEnd(14) + '<' + ({ online: 'ONLINE', apps: 'APP' }[g.folder] || 'GAME') + '>');
     SND.move(); await sleep(110);
   }
   bootPrint('  ' + games.length + ' program(s) found');
@@ -961,8 +983,8 @@ function key(k) {
   const F = FOLDERS[folder];
   if (k === 'up') select(sel[F] - 1);
   else if (k === 'down') select(sel[F] + 1);
-  else if (k === 'left') setFolder(0);
-  else if (k === 'right') setFolder(1);
+  else if (k === 'left') setFolder((folder + FOLDERS.length - 1) % FOLDERS.length);
+  else if (k === 'right') setFolder((folder + 1) % FOLDERS.length);
   else if (k === 'enter') run();
   else if (k === 'color') nextColor();
   else if (k === 'info') openInfo();
@@ -1065,14 +1087,14 @@ async function start() {
   try {
     games = await fetch('/games.json', { cache: 'no-store' }).then(r => r.json());
   } catch (e) { games = []; }
-  folders = { games: [], online: [] };
-  for (const g of games) (folders[g.folder === 'online' ? 'online' : 'games']).push(g);
+  folders = { games: [], online: [], apps: [] };
+  for (const g of games) (folders[FOLDERS.includes(g.folder) ? g.folder : 'games']).push(g);
   const saved = store.get('fkdos-sel', null);
   if (saved) {
-    folder = saved.folder === 1 ? 1 : 0;
+    folder = Math.min(FOLDERS.length - 1, Math.max(0, saved.folder | 0));
     for (const F of FOLDERS) sel[F] = Math.min(Math.max(0, (saved.sel && saved.sel[F]) | 0), Math.max(0, folders[F].length - 1));
   }
-  if (!folders[FOLDERS[folder]].length) folder = 1 - folder;
+  if (!folders[FOLDERS[folder]].length) folder = 0;
 
   let ran = null;
   try { ran = sessionStorage.getItem('fkdos-ran'); sessionStorage.removeItem('fkdos-ran'); } catch (e) {}

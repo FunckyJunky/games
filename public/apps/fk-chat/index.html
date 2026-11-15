@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
+<title>FK-CHAT</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 4h10v6H7l-3 3v-3H3z%27 stroke=%27%2339ff7a%27 stroke-width=%271.4%27 fill=%27none%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=block" rel="stylesheet">
+<style>
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body {
+    display: grid; place-items: center;
+    height: 100dvh;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    font-family: 'VT323', ui-monospace, monospace;
+  }
+  #tube {
+    position: relative; overflow: hidden; background: #000;
+    width: min(100vw - 16px, 980px); height: calc(100dvh - 16px);
+    border-radius: 18px / 22px;
+    box-shadow: 0 0 0 3px #0c0c0c, 0 0 0 7px #161616, 0 0 80px rgba(0,0,0,.9);
+  }
+  @media (min-width: 700px) { #tube { width: min(100vw - 60px, 980px); height: calc(100dvh - 60px); } }
+  #tube.flat { border-radius: 3px; }
+  #crt {
+    position: absolute; inset: 0; background: var(--bg); color: var(--fg);
+    display: flex; flex-direction: column;
+    padding: clamp(10px, 2.2vw, 22px) clamp(12px, 2.6vw, 26px);
+    box-sizing: border-box;
+    font-size: clamp(18px, 4.9vw, 27px); line-height: 1.1;
+    text-shadow: 0 0 5px var(--glow);
+    transform-origin: 50% 50%;
+  }
+  #crt.flicker { animation: flicker .12s steps(2) infinite; }
+  @keyframes flicker { 50% { opacity: .965; } }
+
+  .bar {
+    display: flex; justify-content: space-between; gap: 10px;
+    background: var(--fg); color: var(--bg); text-shadow: none; padding: 0 .4em;
+    box-shadow: 0 0 8px var(--glow); white-space: nowrap; overflow: hidden; flex: none;
+  }
+  .bar .r { display: flex; gap: .8em; }
+  .bar button { all: unset; cursor: pointer; padding: 0 .2em; }
+  .bar button:active { background: var(--bg); color: var(--fg); }
+
+  #main { flex: 1; min-height: 0; position: relative; margin: .35em 0 .2em; }
+  #log {
+    position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+    white-space: pre-wrap; word-break: break-word; touch-action: pan-y;
+    scrollbar-width: none; -webkit-user-select: text; user-select: text;
+  }
+  #log::-webkit-scrollbar { display: none; }
+  #log .sys { color: var(--dim); text-shadow: none; }
+  #log .me { background: var(--fg); color: var(--bg); text-shadow: none; padding: 0 .15em; }
+  #log .nm { font-weight: normal; }
+  #log .t { color: var(--dim); text-shadow: none; }
+  #log .act { font-style: normal; }
+  #lobby { position: absolute; inset: 0; overflow: hidden; white-space: pre-wrap; }
+  .field { cursor: pointer; }
+  .field.on .val { border-bottom: 2px solid var(--fg); }
+  .btn {
+    display: inline-block; padding: 0 .5em; border: 2px solid var(--fg); cursor: pointer;
+    box-shadow: 0 0 6px var(--glow), inset 0 0 6px var(--glow); margin: .2em .5em .2em 0;
+  }
+  .btn:active, .btn.hot { background: var(--fg); color: var(--bg); text-shadow: none; }
+  .cur { background: var(--fg); color: var(--bg); animation: blink 1.06s steps(1) infinite; text-shadow: none; }
+  @keyframes blink { 50% { background: transparent; color: var(--fg); } }
+  .err { color: var(--fg); }
+  .dim { color: var(--dim); text-shadow: none; }
+
+  #input { flex: none; white-space: pre-wrap; word-break: break-word; max-height: 4.6em; overflow: hidden; padding-top: .15em; border-top: 1px dashed var(--dim); }
+  #input .count { color: var(--dim); float: right; text-shadow: none; }
+
+  /* ---------- the on-screen keyboard ---------- */
+  #kbd { flex: none; margin-top: .45em; display: flex; flex-direction: column; gap: clamp(4px, .9vh, 7px); touch-action: none; }
+  #kbd.hidden { display: none; }
+  .krow { display: flex; gap: clamp(3px, 1vw, 7px); }
+  .k {
+    flex: 1 1 0; min-width: 0; position: relative;
+    height: clamp(34px, 6.1dvh, 54px);
+    display: grid; place-items: center;
+    font-size: clamp(19px, 5.2vw, 28px); line-height: 1;
+    color: var(--fg); border: 2px solid var(--dim); border-bottom-width: 4px; border-radius: 4px;
+    background: linear-gradient(to bottom, rgba(255,255,255,.04), rgba(0,0,0,.25));
+    box-shadow: inset 0 0 8px rgba(0,0,0,.6);
+    cursor: pointer; text-transform: none;
+  }
+  .k.sm { font-size: clamp(14px, 3.6vw, 20px); letter-spacing: .04em; }
+  .k.fn { height: clamp(26px, 4.4dvh, 38px); border-bottom-width: 2px; border-style: dashed; font-size: clamp(14px, 3.6vw, 20px); }
+  .k.w15 { flex-grow: 1.5; } .k.w2 { flex-grow: 2.2; } .k.w5 { flex-grow: 5.5; }
+  .k.send { background: var(--fg); color: var(--bg); text-shadow: none; border-color: var(--fg); box-shadow: 0 0 10px var(--glow); }
+  .k.down { background: var(--fg); color: var(--bg); text-shadow: none; border-color: var(--fg); box-shadow: 0 0 14px var(--glow); transform: translateY(2px); border-bottom-width: 2px; }
+  .k.send.down { filter: brightness(1.5); }
+  .k .led { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--dim); }
+  .k .led.on { background: var(--fg); box-shadow: 0 0 6px var(--fg); border-color: var(--fg); }
+  .k .led.lock { box-shadow: 0 0 6px var(--fg), 0 0 0 2px var(--bg), 0 0 0 3px var(--fg); }
+  .k .sub { position: absolute; left: 4px; top: 2px; font-size: 55%; color: var(--dim); text-shadow: none; }
+  #hint { flex: none; color: var(--dim); text-shadow: none; font-size: 80%; margin-top: .3em; display: none; }
+
+  /* glass */
+  #scan { position: absolute; inset: 0; z-index: 6; pointer-events: none; background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, rgba(0,0,0,0) 1px 3px); }
+  #roll { position: absolute; left: 0; right: 0; height: 14%; z-index: 7; pointer-events: none; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.04) 60%, rgba(255,255,255,0)); animation: roll 7s linear infinite; }
+  @keyframes roll { from { top: -15%; } to { top: 101%; } }
+  #glass { position: absolute; inset: 0; z-index: 8; pointer-events: none; border-radius: inherit;
+    background: radial-gradient(ellipse 120% 90% at 30% 8%, rgba(255,255,255,.05), rgba(255,255,255,0) 40%), radial-gradient(ellipse at center, rgba(0,0,0,0) 60%, rgba(0,0,0,.5) 100%);
+    box-shadow: inset 0 0 70px rgba(0,0,0,.8); }
+  #tube.flat #glass { background: none; box-shadow: inset 0 0 25px rgba(0,0,0,.6); }
+  #noise { position: absolute; inset: 0; z-index: 9; pointer-events: none; width: 100%; height: 100%; }
+
+  #crt.jitter { animation: jitter .07s steps(2) infinite; }
+  @keyframes jitter { 0% { transform: translate(1.5px, 0); } 100% { transform: translate(-1.5px, 1px); } }
+  #crt.rollslip { animation: rollslip .45s cubic-bezier(.3,.7,.4,1); }
+  @keyframes rollslip { 0% { transform: translateY(0); } 25% { transform: translateY(-18%); } 26% { transform: translateY(14%); } 100% { transform: translateY(0); } }
+  #crt.rgb { text-shadow: -2px 0 rgba(255,40,80,.85), 2px 0 rgba(40,140,255,.85); }
+  #crt.off { animation: poweroff .42s ease-in forwards; }
+  @keyframes poweroff { 0% { transform: scale(1,1); filter: brightness(1); } 55% { transform: scale(1,.004); filter: brightness(4); } 85% { transform: scale(.12,.004); filter: brightness(6); } 100% { transform: scale(0,0); filter: brightness(0); } }
+  #crt.on { animation: poweron .5s ease-out; }
+  @keyframes poweron { 0% { transform: scale(0,.004); filter: brightness(6); } 35% { transform: scale(1,.004); filter: brightness(4); } 100% { transform: scale(1,1); filter: brightness(1); } }
+</style>
+</head>
+<body>
+<div id="tube">
+  <div id="crt">
+    <div class="bar" id="status"><span id="stL">FK-CHAT 1.0</span><span class="r"><span id="stOn"></span><span id="stClock"></span></span></div>
+    <div id="main">
+      <div id="lobby"></div>
+      <div id="log" hidden></div>
+    </div>
+    <div id="input" hidden></div>
+    <div id="kbd"></div>
+    <div id="hint">F1 on-screen keyboard · /help commands · Esc leaves</div>
+  </div>
+  <div id="scan"></div>
+  <div id="roll"></div>
+  <div id="glass"></div>
+  <canvas id="noise"></canvas>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const crt = $('crt'), tube = $('tube'), log = $('log'), lobbyEl = $('lobby'), inputEl = $('input'), kbd = $('kbd');
+
+// ---------- settings shared with the FK-DOS menu ----------
+const SCHEMES = [
+  { name: 'GREEN',    fg: '#39ff7a', dim: '#1b7a3c', bg: '#031208', glow: 'rgba(57,255,122,.55)' },
+  { name: 'AMBER',    fg: '#ffb43a', dim: '#8a5a12', bg: '#120a02', glow: 'rgba(255,180,58,.5)' },
+  { name: 'WHITE',    fg: '#e9f0ff', dim: '#6b7080', bg: '#08090d', glow: 'rgba(233,240,255,.4)' },
+  { name: 'DOS BLUE', fg: '#f2f2ff', dim: '#8d98ff', bg: '#0019a6', glow: 'rgba(200,210,255,.35)' },
+  { name: 'CYAN',     fg: '#45f0ff', dim: '#157a85', bg: '#021014', glow: 'rgba(69,240,255,.5)' },
+];
+let S = { color: 0, glitch: 1, curved: true, sound: true };
+try { Object.assign(S, JSON.parse(localStorage.getItem('fkdos-settings') || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem('fkdos-settings', JSON.stringify(S)); } catch (e) {} }
+function applyColors() {
+  const c = SCHEMES[S.color % SCHEMES.length], st = document.documentElement.style;
+  st.setProperty('--fg', c.fg); st.setProperty('--dim', c.dim); st.setProperty('--bg', c.bg); st.setProperty('--glow', c.glow);
+  tube.classList.toggle('flat', !S.curved);
+  noiseColor = c.fg;
+}
+let noiseColor = '#39ff7a';
+
+// ---------- sound ----------
+let ac = null, unlocked = false;
+function audio() {
+  if (!S.sound || !unlocked) return null;
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tone(f, d, v, type, when) {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime + (when || 0), o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'square'; o.frequency.value = f;
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + 0.02);
+}
+let nb = null;
+function noise(d, v, f, q, when) {
+  const a = audio(); if (!a) return;
+  if (!nb) { nb = a.createBuffer(1, a.sampleRate, a.sampleRate); const x = nb.getChannelData(0); for (let i = 0; i < x.length; i++) x[i] = Math.random() * 2 - 1; }
+  const t = a.currentTime + (when || 0), s = a.createBufferSource(), bf = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = nb; bf.type = 'bandpass'; bf.frequency.value = f; bf.Q.value = q;
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  s.connect(bf).connect(g).connect(a.destination); s.start(t, Math.random() * .5); s.stop(t + d + .02);
+}
+const SND = {
+  key() { noise(0.022, 0.22, 3600, 0.8); tone(1900, 0.008, 0.012); },
+  space() { noise(0.03, 0.25, 1600, 0.7); },
+  send() { tone(880, 0.05, 0.035); tone(1320, 0.07, 0.035, 'square', 0.05); },
+  incoming() { tone(1568, 0.04, 0.03); tone(2093, 0.06, 0.025, 'square', 0.05); },
+  join() { tone(660, 0.05, 0.02, 'triangle'); tone(990, 0.07, 0.02, 'triangle', 0.06); },
+  crackle() { for (let i = 0; i < 3; i++) noise(0.03 + Math.random() * 0.05, 0.05 + Math.random() * 0.07, 900 + Math.random() * 3000, 0.6, Math.random() * 0.1); },
+  err() { tone(220, 0.15, 0.04); },
+};
+
+// ---------- glitches (lighter than the menu) ----------
+const ncv = $('noise'), nctx = ncv.getContext('2d');
+let staticUntil = 0;
+function cls(c, ms) { crt.classList.add(c); setTimeout(() => crt.classList.remove(c), ms); }
+function glitch(k) {
+  k = k || ['jitter', 'rgb', 'static', 'static', 'roll'][Math.random() * 5 | 0];
+  if (k === 'jitter') cls('jitter', 220);
+  else if (k === 'rgb') cls('rgb', 160);
+  else if (k === 'static') staticUntil = performance.now() + 160;
+  else if (k === 'roll') { crt.classList.remove('rollslip'); void crt.offsetWidth; cls('rollslip', 460); }
+  SND.crackle();
+}
+let nextGlitch = 0;
+function scheduleGlitch(now) { const m = [0, 14000, 6000, 2200][S.glitch | 0]; nextGlitch = m ? now + m * (0.4 + Math.random() * 1.2) : Infinity; }
+function drawStatic(now) {
+  if (ncv.width !== tube.clientWidth) { ncv.width = tube.clientWidth; ncv.height = tube.clientHeight; }
+  nctx.clearRect(0, 0, ncv.width, ncv.height);
+  if (now > staticUntil) return;
+  nctx.fillStyle = noiseColor;
+  for (let i = 0; i < 22; i++) { nctx.globalAlpha = Math.random() * .5; nctx.fillRect(Math.random() * ncv.width * .5, Math.random() * ncv.height, Math.random() * ncv.width, 1 + Math.random() * 2); }
+  nctx.globalAlpha = 1;
+}
+
+// ---------- state ----------
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+const st = {
+  screen: 'lobby',             // lobby | chat
+  focus: 'handle',             // handle | code | msg
+  handle: store.get('gamelab-player-name'),
+  code: '',
+  msg: '',
+  lobbyMsg: '',
+  who: [],
+  lastId: 0,
+  unread: 0,
+};
+const params = new URLSearchParams(location.search);
+if (params.get('c')) st.code = params.get('c').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+let ws = null, ping = null, reconnectTimer = null, wantOpen = false;
+
+// ---------- lobby ----------
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function cursorFor(f) { return st.focus === f ? '<span class="cur"> </span>' : ''; }
+function drawLobby() {
+  const h = st.handle, c = st.code;
+  lobbyEl.innerHTML =
+    'FK-CHAT 1.0\n<span class="dim">(C) 2026 ' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
+    'Everyone with the same channel\ncode talks together. Messages\nare kept 7 days.\n\n' +
+    '<span class="field' + (st.focus === 'handle' ? ' on' : '') + '" data-f="handle">HANDLE  : <span class="val">' + esc(h) + cursorFor('handle') + (h || st.focus === 'handle' ? '' : '<span class="dim">tap to type</span>') + '</span></span>\n' +
+    '<span class="field' + (st.focus === 'code' ? ' on' : '') + '" data-f="code">CHANNEL : <span class="val">' + esc(c) + cursorFor('code') + (c || st.focus === 'code' ? '' : '<span class="dim">----</span>') + '</span></span>\n\n' +
+    '<span class="btn" data-a="new">NEW CHANNEL</span><span class="btn" data-a="join">JOIN</span>\n\n' +
+    (st.lobbyMsg ? '<span class="err">' + esc(st.lobbyMsg) + '</span>' : '');
+}
+lobbyEl.addEventListener('pointerdown', e => {
+  unlock();
+  const f = e.target.closest('[data-f]'), a = e.target.closest('[data-a]');
+  if (f) { st.focus = f.dataset.f; SND.key(); drawLobby(); }
+  if (a) { e.preventDefault(); a.classList.add('hot'); setTimeout(() => a.classList.remove('hot'), 150); a.dataset.a === 'new' ? newChannel() : join(); }
+});
+function newCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', b = new Uint8Array(4);
+  crypto.getRandomValues(b);
+  return Array.from(b, x => chars[x % chars.length]).join('');
+}
+function newChannel() { st.code = newCode(); join(); }
+function join() {
+  st.handle = st.handle.trim();
+  if (!st.handle) { st.lobbyMsg = 'Type a handle first.'; st.focus = 'handle'; SND.err(); glitch('jitter'); drawLobby(); return; }
+  if (!/^[A-Z0-9]{3,8}$/.test(st.code)) {
+    if (!st.code) { st.code = newCode(); }
+    else { st.lobbyMsg = 'Channel code: 3-8 letters or digits.'; st.focus = 'code'; SND.err(); drawLobby(); return; }
+  }
+  store.set('gamelab-player-name', st.handle);
+  st.lobbyMsg = '';
+  st.screen = 'chat'; st.focus = 'msg'; st.msg = ''; st.lastId = 0;
+  history.replaceState(null, '', '?c=' + st.code);
+  lobbyEl.hidden = true; log.hidden = false; inputEl.hidden = false;
+  log.innerHTML = '';
+  sys('FK-CHAT 1.0 · channel #' + st.code);
+  sys('Share the code ' + st.code + ' or press LINK to invite.');
+  sys('Connecting...');
+  glitch('roll');
+  connect();
+  drawInput(); drawStatus(); setShift(true);
+}
+
+// ---------- chat ----------
+function connect() {
+  wantOpen = true;
+  clearTimeout(reconnectTimer);
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/api/chat/' + st.code + '?name=' + encodeURIComponent(st.handle));
+  ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
+  ws.onopen = () => { clearInterval(ping); ping = setInterval(() => ws && ws.readyState === 1 && ws.send('{"type":"ping"}'), 25000); };
+  ws.onclose = () => {
+    clearInterval(ping);
+    if (!wantOpen) return;
+    sys('*** connection lost, redialling...');
+    glitch('static');
+    reconnectTimer = setTimeout(connect, 2500);
+  };
+}
+function onMsg(m) {
+  if (m.type === 'hello') {
+    st.who = m.who || [];
+    const fresh = (m.history || []).filter(h => h.id > st.lastId);
+    if (st.lastId === 0) {
+      if (fresh.length) sys('--- last ' + fresh.length + ' message(s) ---');
+      else sys('No messages yet. Say hi!');
+    }
+    fresh.forEach(h => addLine(h, true));
+    if (st.lastId === 0 && fresh.length) sys('--- you are in #' + m.code + ' ---');
+    sys('*** ' + whoLine());
+    SND.join();
+  } else if (m.type === 'msg') {
+    if (m.id <= st.lastId) return;
+    addLine(m, false);
+    if (m.name !== st.handle) { SND.incoming(); if (document.hidden) { st.unread++; document.title = '(' + st.unread + ') FK-CHAT'; } }
+    else SND.send();
+  } else if (m.type === 'join') {
+    st.who = m.who || st.who; sys('*** ' + m.name + ' joined (' + st.who.length + ' online)'); SND.join();
+  } else if (m.type === 'leave') {
+    st.who = m.who || st.who; sys('*** ' + m.name + ' left (' + st.who.length + ' online)');
+  } else if (m.type === 'nick') {
+    st.who = m.who || st.who; sys('*** ' + m.from + ' is now ' + m.to);
+  } else if (m.type === 'error') {
+    sys('!!! ' + m.message); SND.err();
+  }
+  drawStatus();
+}
+function whoLine() { return st.who.length + ' online: ' + st.who.join(', '); }
+function hhmm(t) { const d = new Date(t), p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()); }
+function atBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 40; }
+function append(html) {
+  const stick = atBottom();
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  log.appendChild(div);
+  while (log.childNodes.length > 400) log.removeChild(log.firstChild);
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+function sys(text) { append('<span class="sys">' + esc(text) + '</span>'); }
+function addLine(m, old) {
+  st.lastId = Math.max(st.lastId, m.id || 0);
+  const mine = m.name === st.handle;
+  const d = new Date(m.at), today = new Date().toDateString() === d.toDateString();
+  const time = (today ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + hhmm(m.at);
+  let body;
+  if (m.text.startsWith('/me ')) body = '<span class="act">* ' + esc(m.name) + ' ' + esc(m.text.slice(4)) + '</span>';
+  else body = '<span class="nm' + (mine ? ' me' : '') + '">&lt;' + esc(m.name) + '&gt;</span> ' + esc(m.text);
+  append('<span class="t">' + time + '</span> ' + body);
+  if (!old && !mine && Math.random() < 0.25) glitch('rgb');
+}
+function send() {
+  const text = st.msg.trim();
+  if (!text) return;
+  if (text[0] === '/' && !text.startsWith('/me ')) { command(text); st.msg = ''; drawInput(); setShift(true); return; }
+  if (!ws || ws.readyState !== 1) { sys('!!! not connected yet'); SND.err(); return; }
+  ws.send(JSON.stringify({ t: 'say', text }));
+  st.msg = ''; drawInput(); setShift(true);
+}
+function command(line) {
+  const [cmd, ...rest] = line.slice(1).split(' '), arg = rest.join(' ').trim();
+  switch (cmd.toLowerCase()) {
+    case 'nick': case 'name':
+      if (!arg) { sys('usage: /nick newname'); break; }
+      st.handle = arg.slice(0, 16); store.set('gamelab-player-name', st.handle);
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'nick', name: st.handle }));
+      break;
+    case 'who': sys('*** ' + whoLine()); break;
+    case 'clear': case 'cls': log.innerHTML = ''; break;
+    case 'link': copyLink(); break;
+    case 'color': case 'colour': nextColor(); break;
+    case 'quit': case 'exit': case 'bye': exit(); break;
+    case 'help': default:
+      sys('commands: /nick NAME  /me ACTION  /who  /link  /clear  /color  /quit');
+  }
+}
+function copyLink() {
+  const link = location.origin + location.pathname + '?c=' + st.code;
+  const done = () => sys('*** invite link copied: ' + link);
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    navigator.share({ title: 'FK-CHAT #' + st.code, text: 'Join my FK-CHAT channel ' + st.code, url: link }).catch(() => {});
+  } else if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, () => sys('*** invite link: ' + link));
+  else sys('*** invite link: ' + link);
+}
+function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings(); applyColors(); glitch('static'); }
+function exit() {
+  wantOpen = false;
+  if (ws) try { ws.close(1000, 'bye'); } catch (e) {}
+  try { sessionStorage.setItem('fkdos-ran', 'FKCHAT'); } catch (e) {}
+  crt.classList.add('off'); tone(60, 0.4, 0.05, 'sine');
+  setTimeout(() => { location.href = '/'; }, 470);
+}
+
+function drawInput() {
+  if (st.screen !== 'chat') return;
+  const n = st.msg.length;
+  inputEl.innerHTML = (n > 240 ? '<span class="count">' + n + '/300</span>' : '') + '#' + esc(st.code) + '&gt; ' + esc(st.msg) + '<span class="cur"> </span>';
+}
+function drawStatus() {
+  const d = new Date(), p = x => String(x).padStart(2, '0');
+  $('stClock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
+  $('stL').textContent = st.screen === 'chat' ? 'FK-CHAT #' + st.code : 'FK-CHAT 1.0';
+  $('stOn').textContent = st.screen === 'chat' ? st.who.length + ' ON' : '';
+}
+
+// ---------- typing ----------
+function target() { return st.screen === 'chat' ? 'msg' : st.focus; }
+function typeText(s) {
+  const t = target();
+  if (t === 'msg') { st.msg = (st.msg + s).slice(0, 300); drawInput(); }
+  else if (t === 'handle') { st.handle = (st.handle + s).slice(0, 16); st.lobbyMsg = ''; drawLobby(); }
+  else if (t === 'code') { st.code = (st.code + s.toUpperCase().replace(/[^A-Z0-9]/g, '')).slice(0, 8); st.lobbyMsg = ''; drawLobby(); }
+}
+function backspace() {
+  const t = target();
+  if (t === 'msg') { st.msg = st.msg.slice(0, -1); drawInput(); if (!st.msg) setShift(true); }
+  else if (t === 'handle') { st.handle = st.handle.slice(0, -1); drawLobby(); }
+  else if (t === 'code') { st.code = st.code.slice(0, -1); drawLobby(); }
+}
+function enter() {
+  if (st.screen === 'chat') return send();
+  if (st.focus === 'handle') { st.focus = 'code'; drawLobby(); if (st.code) join(); return; }
+  join();
+}
+
+// ---------- the on-screen keyboard ----------
+const LAYOUT = {
+  abc: [
+    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CLR', 'fn clr'], ['COL', 'fn col']],
+    '1234567890'.split(''),
+    'qwertyuiop'.split(''),
+    'asdfghjkl?'.split(''),
+    [['SHIFT', 'w2 sm shift'], 'z', 'x', 'c', 'v', 'b', 'n', 'm', ['DEL', 'w2 sm del']],
+    [['SYM', 'w15 sm sym'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']],
+  ],
+  sym: [
+    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CLR', 'fn clr'], ['COL', 'fn col']],
+    '!@#$%&*()='.split(''),
+    '-_+/\\:;"\'~'.split(''),
+    '<>[]{}^|`?'.split(''),
+    [['ABC', 'w15 sm abc'], [':)', 'sm'], [':(', 'sm'], [';)', 'sm'], [':D', 'sm'], ['<3', 'sm'], [':P', 'sm'], ['DEL', 'w15 sm del']],
+    [['ABC', 'w15 sm abc'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']],
+  ],
+};
+let layer = 'abc', shift = false, caps = false, lastShiftTap = 0;
+function buildKbd() {
+  kbd.innerHTML = '';
+  for (const row of LAYOUT[layer]) {
+    const r = document.createElement('div'); r.className = 'krow';
+    for (const k of row) {
+      const [label, cl] = Array.isArray(k) ? k : [k, ''];
+      const b = document.createElement('div');
+      b.className = 'k ' + cl;
+      b.dataset.k = label;
+      if (cl.includes('shift')) b.innerHTML = 'SHIFT<span class="led"></span>';
+      else if (cl.includes('send')) b.textContent = st.screen === 'chat' ? 'SEND' : 'ENTER';
+      else b.textContent = label;
+      r.appendChild(b);
+    }
+    kbd.appendChild(r);
+  }
+  refreshCase();
+}
+function refreshCase() {
+  const up = shift || caps;
+  kbd.querySelectorAll('.k').forEach(b => {
+    const k = b.dataset.k;
+    if (k.length === 1 && /[a-z]/i.test(k)) b.textContent = up ? k.toUpperCase() : k.toLowerCase();
+  });
+  const led = kbd.querySelector('.shift .led');
+  if (led) { led.classList.toggle('on', up); led.classList.toggle('lock', caps); }
+  const sendKey = kbd.querySelector('.send');
+  if (sendKey) sendKey.textContent = st.screen === 'chat' ? 'SEND' : 'ENTER';
+}
+function setShift(on) { if (!caps) shift = on; refreshCase(); }
+function pressKey(k, el) {
+  unlock();
+  if (Math.random() < 0.02) glitch();
+  const isLetter = k.length === 1 && /[a-z]/i.test(k);
+  if (k === 'SHIFT') {
+    const now = performance.now();
+    if (caps) { caps = false; shift = false; }
+    else if (shift && now - lastShiftTap < 400) caps = true;
+    else shift = !shift;
+    lastShiftTap = now; SND.key(); refreshCase(); return;
+  }
+  if (k === 'SYM') { layer = 'sym'; buildKbd(); SND.key(); return; }
+  if (k === 'ABC') { layer = 'abc'; buildKbd(); SND.key(); return; }
+  if (k === 'DEL') { backspace(); SND.key(); return; }
+  if (k === 'SPACE') { typeText(' '); SND.space(); return; }
+  if (k === 'SEND') { enter(); return; }
+  if (k === 'EXIT') { SND.key(); exit(); return; }
+  if (k === 'LINK') { SND.key(); if (st.screen === 'chat') copyLink(); else { st.lobbyMsg = 'Join a channel first.'; drawLobby(); } return; }
+  if (k === 'WHO') { SND.key(); if (st.screen === 'chat') sys('*** ' + whoLine()); return; }
+  if (k === 'CLR') { SND.key(); if (st.screen === 'chat') log.innerHTML = ''; return; }
+  if (k === 'COL') { SND.key(); nextColor(); return; }
+  const up = shift || caps;
+  typeText(isLetter ? (up ? k.toUpperCase() : k.toLowerCase()) : k);
+  SND.key();
+  if (shift && !caps && isLetter) { shift = false; refreshCase(); }
+}
+let repeatT = null;
+kbd.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.k'); if (!b) return;
+  e.preventDefault();
+  b.classList.add('down');
+  try { b.setPointerCapture(e.pointerId); } catch (er) {}
+  pressKey(b.dataset.k, b);
+  if (b.dataset.k === 'DEL') {
+    clearTimeout(repeatT);
+    const rep = () => { backspace(); SND.key(); repeatT = setTimeout(rep, 60); };
+    repeatT = setTimeout(rep, 420);
+  }
+});
+function release(e) {
+  const b = e.target.closest && e.target.closest('.k');
+  kbd.querySelectorAll('.k.down').forEach(x => x.classList.remove('down'));
+  clearTimeout(repeatT);
+}
+kbd.addEventListener('pointerup', release);
+kbd.addEventListener('pointercancel', release);
+kbd.addEventListener('pointerleave', release);
+
+// physical keyboard
+const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (!coarse) { kbd.classList.add('hidden'); $('hint').style.display = 'block'; }
+addEventListener('keydown', e => {
+  unlock();
+  if (e.key === 'F1') { e.preventDefault(); kbd.classList.toggle('hidden'); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape') { e.preventDefault(); if (st.screen === 'chat') exit(); else exit(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); enter(); flash('SEND'); return; }
+  if (e.key === 'Backspace') { e.preventDefault(); backspace(); SND.key(); flash('DEL'); return; }
+  if (e.key === 'Tab' && st.screen === 'lobby') { e.preventDefault(); st.focus = st.focus === 'handle' ? 'code' : 'handle'; drawLobby(); return; }
+  if (e.key.length === 1) {
+    e.preventDefault();
+    typeText(e.key);
+    if (e.key === ' ') SND.space(); else SND.key();
+    flash(e.key.toLowerCase());
+    if (shift && !caps) setShift(false);
+  }
+});
+document.addEventListener('paste', e => {
+  const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
+  if (t) { e.preventDefault(); typeText(t.replace(/\s+/g, ' ')); }
+});
+function flash(k) {
+  const b = Array.from(kbd.querySelectorAll('.k')).find(x => x.dataset.k.toLowerCase() === k);
+  if (!b) return;
+  b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 90);
+}
+function unlock() { if (!unlocked) { unlocked = true; audio(); } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { st.unread = 0; document.title = 'FK-CHAT'; } });
+
+// ---------- start ----------
+applyColors();
+buildKbd();
+crt.classList.add('flicker');
+crt.classList.add('on'); setTimeout(() => crt.classList.remove('on'), 520);
+if (!st.handle) st.focus = 'handle';
+else if (!st.code) st.focus = 'code';
+drawLobby(); drawStatus(); setShift(!st.handle);
+if (st.handle && st.code) join();
+scheduleGlitch(performance.now());
+(function loop(now) {
+  drawStatic(now);
+  if (now > nextGlitch) { glitch(); scheduleGlitch(now); }
+  requestAnimationFrame(loop);
+})(performance.now());
+setInterval(drawStatus, 15000);
+addEventListener('pageshow', e => { if (e.persisted) { crt.classList.remove('off'); if (st.screen === 'chat' && (!ws || ws.readyState > 1)) connect(); } });
+})();
+</script>
+</body>
+</html>

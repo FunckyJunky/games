@@ -35,5 +35,14 @@
     "folder": "online",
     "logo": "wall",
     "added": "2026-11-15T23:44"
+  },
+  {
+    "id": "fk-chat",
+    "title": "FK-Chat",
+    "description": "Text chat. Make a channel code, share it, and everyone with the same code talks together. Own on-screen keyboard.",
+    "path": "apps/fk-chat/",
+    "folder": "apps",
+    "logo": "chat",
+    "added": "2026-11-16T00:40"
   }
 ]

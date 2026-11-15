@@ -7,6 +7,7 @@
 //   PUT  /api/save/<game>/<playerId>           save a player's progress (JSON body)
 //   GET  /api/room/<game>/<CODE>               multiplayer room (WebSocket)
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
+//   GET  /api/chat/<CODE>                      FK-CHAT channel (WebSocket)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -161,6 +162,14 @@ export default {
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
         const room = env.ROOMS.get(env.ROOMS.idFromName(`${game}:${code.toUpperCase()}`));
         return room.fetch(request);
+      }
+
+      m = path.match(/^\/api\/chat\/([^/]+)$/);
+      if (m) {
+        const code = m[1].toUpperCase();
+        if (!ROOM_RE.test(code)) return json({ error: "bad channel code" }, 400);
+        if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
+        return env.CHAT.get(env.CHAT.idFromName(code)).fetch(request);
       }
 
       if (path === "/api/wall") {
@@ -381,5 +390,149 @@ export class PixelWall extends DurableObject {
 
   async webSocketError(ws) {
     this.broadcastOnline(ws);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FK-CHAT: one ChatRoom per channel code. Everyone with the same code
+// talks together. The last messages are kept so newcomers can read back;
+// a channel is wiped after 7 days without messages.
+const CHAT_KEEP = 300;
+const CHAT_HISTORY = 80;
+const CHAT_MAX_LEN = 300;
+const CHAT_COOLDOWN_MS = 350;
+const CHAT_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export class ChatRoom extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
+    this.sql = ctx.storage.sql;
+    this.sql.exec(
+      `CREATE TABLE IF NOT EXISTS msgs (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         at INTEGER NOT NULL,
+         kind TEXT NOT NULL,
+         name TEXT NOT NULL,
+         text TEXT NOT NULL
+       )`
+    );
+  }
+
+  openSockets(except) {
+    return this.ctx.getWebSockets().filter((ws) => ws !== except && ws.readyState === WebSocket.OPEN);
+  }
+
+  who(except) {
+    return this.openSockets(except)
+      .map((ws) => ws.deserializeAttachment()?.name)
+      .filter(Boolean);
+  }
+
+  broadcast(message, except) {
+    const text = JSON.stringify(message);
+    for (const ws of this.openSockets(except)) {
+      try {
+        ws.send(text);
+      } catch {
+        // gone
+      }
+    }
+  }
+
+  save(kind, name, text) {
+    const at = Date.now();
+    const row = this.sql
+      .exec(`INSERT INTO msgs (at, kind, name, text) VALUES (?, ?, ?, ?) RETURNING id`, at, kind, name, text)
+      .one();
+    this.sql.exec(`DELETE FROM msgs WHERE id <= ?`, row.id - CHAT_KEEP);
+    return { id: row.id, at, kind, name, text };
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const code = (url.pathname.split("/").pop() || "").toUpperCase();
+    const name = cleanName(url.searchParams.get("name")) || "guest";
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+
+    if (this.openSockets().length > 64) {
+      server.send(JSON.stringify({ type: "error", message: "channel is full" }));
+      server.close(4000, "channel is full");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    server.serializeAttachment({ name, last: 0 });
+    const history = this.sql
+      .exec(`SELECT id, at, kind, name, text FROM msgs ORDER BY id DESC LIMIT ?`, CHAT_HISTORY)
+      .toArray()
+      .reverse();
+    server.send(JSON.stringify({ type: "hello", code, name, history, who: this.who() }));
+    this.broadcast({ type: "join", name, who: this.who() }, server);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, message) {
+    if (typeof message !== "string" || message.length > 2048) return;
+    let d;
+    try {
+      d = JSON.parse(message);
+    } catch {
+      return;
+    }
+    const me = ws.deserializeAttachment();
+    if (!me || !d) return;
+
+    if (d.t === "say") {
+      const text = String(d.text ?? "")
+        .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "")
+        .trim()
+        .slice(0, CHAT_MAX_LEN);
+      if (!text) return;
+      const now = Date.now();
+      if (now - me.last < CHAT_COOLDOWN_MS) {
+        ws.send(JSON.stringify({ type: "error", message: "slow down" }));
+        return;
+      }
+      me.last = now;
+      ws.serializeAttachment(me);
+      const msg = this.save("msg", me.name, text);
+      this.broadcast({ type: "msg", ...msg });
+      await this.ctx.storage.setAlarm(now + CHAT_EXPIRE_MS);
+    } else if (d.t === "nick") {
+      const to = cleanName(d.name);
+      if (!to || to === me.name) return;
+      const from = me.name;
+      me.name = to;
+      ws.serializeAttachment(me);
+      this.broadcast({ type: "nick", from, to, who: this.who() });
+    }
+  }
+
+  async webSocketClose(ws, code, reason) {
+    this.leave(ws);
+    try {
+      ws.close(code, reason);
+    } catch {
+      // already closed
+    }
+  }
+
+  async webSocketError(ws) {
+    this.leave(ws);
+  }
+
+  leave(ws) {
+    const me = ws.deserializeAttachment();
+    if (!me || me.left) return;
+    ws.serializeAttachment({ ...me, left: true });
+    this.broadcast({ type: "leave", name: me.name, who: this.who(ws) }, ws);
+  }
+
+  // 7 days without a message: forget the channel
+  async alarm() {
+    this.sql.exec(`DELETE FROM msgs`);
   }
 }
