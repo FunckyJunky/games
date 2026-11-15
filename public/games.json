@@ -19,5 +19,12 @@
     "path": "games/pixel-wall/",
     "color": "#7cff6b",
     "tag": "live"
+  },
+  {
+    "title": "Leviathan",
+    "description": "Captain a 260 m airship over an endless land. Best in full screen with a controller.",
+    "path": "games/leviathan/",
+    "color": "#ff9f43",
+    "tag": "3d"
   }
 ]
