@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Pixel Hop · Game Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: #140f2b; color: #f4efff;
+      font-family: "Press Start 2P", monospace;
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .stage {
+      position: fixed; inset: 0;
+      display: grid; place-items: center;
+    }
+    .screen { position: relative; }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border: 4px solid #3a2e6e;
+      box-shadow: 8px 8px 0 #0b0820;
+    }
+    .hud {
+      position: absolute; top: 10px; left: 12px; right: 12px;
+      display: flex; justify-content: space-between;
+      font-size: 12px; text-shadow: 2px 2px 0 #0b0820;
+      pointer-events: none;
+    }
+    .msg {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; text-align: center; pointer-events: none;
+      text-shadow: 3px 3px 0 #0b0820;
+    }
+    .msg h2 { margin: 0; font-size: clamp(16px, 5vw, 26px); color: #ffd23f; }
+    .msg p { margin: 0; font-size: 10px; color: #f4efff; line-height: 1.8; }
+    .blink { animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .hidden { display: none; }
+    .back {
+      position: fixed; top: 12px; left: 12px; z-index: 5;
+      color: #a99fd6; font-size: 10px; text-decoration: none;
+      padding: 8px; background: rgba(20,15,43,.7);
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">&lt; games</a>
+  <div class="stage">
+    <div class="screen" id="screen">
+      <canvas id="c" width="160" height="120"></canvas>
+      <div class="hud"><span id="score">0</span><span id="best">BEST 0</span></div>
+      <div class="msg" id="msg">
+        <h2 id="msgTitle">PIXEL HOP</h2>
+        <p id="msgText"><span class="blink">tap or press space</span></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const W = 160, H = 120, GROUND = 100;
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const msg = document.getElementById('msg');
+    const msgTitle = document.getElementById('msgTitle');
+    const msgText = document.getElementById('msgText');
+
+    // Scale the 160x120 canvas up by whole numbers so pixels stay crisp
+    function fit() {
+      const s = Math.max(1, Math.floor(Math.min((innerWidth - 24) / W, (innerHeight - 90) / H)));
+      canvas.style.width = W * s + 'px';
+      canvas.style.height = H * s + 'px';
+    }
+    addEventListener('resize', fit);
+    fit();
+
+    // Best score is saved in this browser only
+    let best = 0;
+    try { best = parseInt(localStorage.getItem('pixelhop-best') || '0', 10) || 0; } catch (e) {}
+    bestEl.textContent = 'BEST ' + best;
+    function saveBest() { try { localStorage.setItem('pixelhop-best', String(best)); } catch (e) {} }
+
+    // 8x8 player sprite, two running frames
+    const FRAMES = [
+      ["..1111..", ".111111.", ".1.11.1.", ".111111.", "..1111..", ".111111.", "1.1111.1", "..1..1.."],
+      ["..1111..", ".111111.", ".1.11.1.", ".111111.", "..1111..", "1111111.", "..1111.1", ".1....1."]
+    ];
+
+    let state = 'ready';   // ready | play | over
+    let player, obstacles, clouds, speed, dist, spawnIn, frameTick, overAt;
+
+    function reset() {
+      player = { x: 24, y: GROUND - 8, vy: 0, onGround: true };
+      obstacles = [];
+      clouds = Array.from({ length: 5 }, (_, i) => ({ x: i * 40 + Math.random() * 20, y: 10 + Math.random() * 40, w: 10 + Math.random() * 14 }));
+      speed = 1.6;
+      dist = 0;
+      spawnIn = 60;
+      frameTick = 0;
+      scoreEl.textContent = '0';
+    }
+
+    function show(title, text) {
+      msgTitle.textContent = title;
+      msgText.innerHTML = text;
+      msg.classList.remove('hidden');
+    }
+
+    function press() {
+      if (state === 'ready') {
+        state = 'play';
+        msg.classList.add('hidden');
+        jump();
+      } else if (state === 'play') {
+        jump();
+      } else if (state === 'over' && performance.now() - overAt > 500) {
+        reset();
+        state = 'play';
+        msg.classList.add('hidden');
+      }
+    }
+
+    function jump() {
+      if (player.onGround) {
+        player.vy = -4.6;
+        player.onGround = false;
+      }
+    }
+
+    addEventListener('keydown', e => {
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); press(); }
+    });
+    addEventListener('pointerdown', e => {
+      if (e.target.closest('a')) return;
+      e.preventDefault();
+      press();
+    }, { passive: false });
+
+    function spawn() {
+      const h = 6 + Math.floor(Math.random() * 3) * 4;        // 6, 10 or 14 px tall
+      const w = 5 + Math.floor(Math.random() * 3) * 2;        // 5, 7 or 9 px wide
+      obstacles.push({ x: W + 2, y: GROUND - h, w, h });
+      // Sometimes add a second block right behind the first
+      if (Math.random() < 0.18 && speed > 2.1) obstacles.push({ x: W + 2 + w + 1, y: GROUND - 6, w: 5, h: 6 });
+      const minGap = 46 + speed * 10;
+      spawnIn = minGap + Math.random() * 60;
+    }
+
+    function hit(a, b) {
+      const pad = 1; // a little forgiveness
+      return a.x + pad < b.x + b.w && a.x + 8 - pad > b.x && a.y + pad < b.y + b.h && a.y + 8 - pad > b.y;
+    }
+
+    function update() {
+      frameTick++;
+      for (const c of clouds) {
+        c.x -= speed * 0.25;
+        if (c.x + c.w < 0) { c.x = W + Math.random() * 30; c.y = 10 + Math.random() * 40; }
+      }
+      if (state !== 'play') return;
+
+      speed = Math.min(3.6, speed + 0.0009);
+      dist += speed;
+      const score = Math.floor(dist / 10);
+      scoreEl.textContent = score;
+
+      player.vy += 0.26;
+      player.y += player.vy;
+      if (player.y >= GROUND - 8) { player.y = GROUND - 8; player.vy = 0; player.onGround = true; }
+
+      spawnIn -= speed;
+      if (spawnIn <= 0) spawn();
+
+      for (const o of obstacles) o.x -= speed;
+      obstacles = obstacles.filter(o => o.x + o.w > -2);
+
+      for (const o of obstacles) {
+        if (hit(player, o)) {
+          state = 'over';
+          overAt = performance.now();
+          const isBest = score > best;
+          if (isBest) { best = score; saveBest(); bestEl.textContent = 'BEST ' + best; }
+          show('GAME OVER', (isBest ? 'NEW BEST!<br>' : '') + 'score ' + score + '<br><br><span class="blink">tap to retry</span>');
+          break;
+        }
+      }
+    }
+
+    function draw() {
+      // sky
+      ctx.fillStyle = '#1b1534'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#231b45'; ctx.fillRect(0, 40, W, 30);
+      ctx.fillStyle = '#2d2457'; ctx.fillRect(0, 70, W, 30);
+      // stars
+      ctx.fillStyle = '#5d5394';
+      for (let i = 0; i < 18; i++) ctx.fillRect((i * 37 + 11) % W, (i * 23 + 5) % 38, 1, 1);
+      // clouds
+      ctx.fillStyle = '#3a2e6e';
+      for (const c of clouds) {
+        const x = Math.round(c.x), y = Math.round(c.y), w = Math.round(c.w);
+        ctx.fillRect(x, y, w, 3);
+        ctx.fillRect(x + 3, y - 2, w - 6, 2);
+      }
+      // ground
+      ctx.fillStyle = '#ff4d6d'; ctx.fillRect(0, GROUND, W, 1);
+      ctx.fillStyle = '#3a2e6e'; ctx.fillRect(0, GROUND + 1, W, H - GROUND - 1);
+      ctx.fillStyle = '#5d5394';
+      const off = Math.floor(dist) % 12;
+      for (let x = -off; x < W; x += 12) ctx.fillRect(x, GROUND + 5, 4, 1);
+      for (let x = -((Math.floor(dist * 0.6)) % 20); x < W; x += 20) ctx.fillRect(x + 7, GROUND + 12, 2, 1);
+      // obstacles
+      for (const o of obstacles) {
+        const x = Math.round(o.x);
+        ctx.fillStyle = '#ff4d6d'; ctx.fillRect(x, o.y, o.w, o.h);
+        ctx.fillStyle = '#ff8fa3'; ctx.fillRect(x, o.y, o.w, 1); ctx.fillRect(x, o.y, 1, o.h);
+        ctx.fillStyle = '#a3203d'; ctx.fillRect(x + o.w - 1, o.y + 1, 1, o.h - 1);
+      }
+      // player
+      const frame = !player.onGround ? FRAMES[0] : FRAMES[Math.floor(frameTick / 6) % 2];
+      const px = Math.round(player.x), py = Math.round(player.y);
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        if (frame[r][c] === '1') {
+          ctx.fillStyle = '#ffd23f';
+          ctx.fillRect(px + c, py + r, 1, 1);
+        }
+      }
+      // eyes: fill the two gaps in row 2 with dark pixels
+      ctx.fillStyle = '#140f2b';
+      ctx.fillRect(px + 2, py + 2, 1, 1);
+      ctx.fillRect(px + 5, py + 2, 1, 1);
+    }
+
+    // Fixed 60 steps per second so the game runs the same on every screen
+    let last = performance.now(), acc = 0;
+    const STEP = 1000 / 60;
+    function loop(now) {
+      acc += Math.min(100, now - last);
+      last = now;
+      while (acc >= STEP) { update(); acc -= STEP; }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    reset();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>

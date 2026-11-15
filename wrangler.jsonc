@@ -1,0 +1,10 @@
+// Cloudflare settings for the site.
+// "name" must match the project name in the Cloudflare dashboard.
+{
+  "name": "games",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page"
+  }
+}

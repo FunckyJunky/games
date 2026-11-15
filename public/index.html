@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #140f2b;
+      --panel: #1f1842;
+      --line: #3a2e6e;
+      --text: #f4efff;
+      --muted: #a99fd6;
+      --accent: #ffd23f;
+      --pink: #ff4d6d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, #2d2263 0%, transparent 55%),
+        radial-gradient(circle at 90% 100%, #3b1748 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 40px 20px 60px; }
+    header { text-align: center; margin-bottom: 36px; }
+    h1 {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(26px, 7vw, 44px);
+      margin: 0 0 14px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-shadow: 4px 4px 0 var(--pink);
+    }
+    .sub {
+      font-family: "Press Start 2P", monospace;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+    .blink { animation: blink 1.1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--panel);
+      border: 3px solid var(--line);
+      box-shadow: 6px 6px 0 #0b0820;
+      transition: transform .08s, box-shadow .08s, border-color .08s;
+    }
+    .card:hover, .card:focus-visible {
+      transform: translate(-2px, -2px);
+      box-shadow: 8px 8px 0 #0b0820;
+      border-color: var(--c, var(--accent));
+      outline: none;
+    }
+    .card:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 #0b0820; }
+    .thumb {
+      height: 120px;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 4px),
+        linear-gradient(160deg, var(--c, var(--accent)), #140f2b 140%);
+      display: grid;
+      place-items: center;
+      font-family: "Press Start 2P", monospace;
+      font-size: 34px;
+      color: #140f2b;
+      text-shadow: 3px 3px 0 rgba(255,255,255,.35);
+    }
+    .info { padding: 14px 16px 16px; }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .title {
+      font-family: "Press Start 2P", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .tag {
+      font-family: "Press Start 2P", monospace;
+      font-size: 8px;
+      padding: 5px 6px;
+      background: var(--pink);
+      color: #fff;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .desc { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 10px 0 0; }
+    .empty {
+      font-family: "Press Start 2P", monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 2;
+      padding: 30px;
+      border: 3px dashed var(--line);
+    }
+    footer {
+      margin-top: 44px;
+      text-align: center;
+      font-family: "Press Start 2P", monospace;
+      font-size: 9px;
+      color: #5d5394;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>GAME LAB</h1>
+      <div class="sub">test zone for html games<br><span class="blink">&gt; pick a game_</span></div>
+    </header>
+
+    <main id="grid" class="grid" aria-live="polite"></main>
+
+    <footer>made with claude &middot; hosted on cloudflare</footer>
+  </div>
+
+  <script>
+    const grid = document.getElementById('grid');
+
+    function el(tag, cls, text) {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    }
+
+    function render(games) {
+      grid.innerHTML = '';
+      if (!games.length) {
+        grid.className = '';
+        grid.appendChild(el('div', 'empty', 'no games yet... insert coin'));
+        return;
+      }
+      for (const g of games) {
+        const a = el('a', 'card');
+        a.href = g.path;
+        if (g.color) a.style.setProperty('--c', g.color);
+
+        const thumb = el('div', 'thumb', (g.title || '?').trim().charAt(0).toUpperCase());
+        const info = el('div', 'info');
+        const row = el('div', 'title-row');
+        row.appendChild(el('div', 'title', g.title));
+        if (g.tag) row.appendChild(el('span', 'tag', g.tag));
+        info.appendChild(row);
+        if (g.description) info.appendChild(el('p', 'desc', g.description));
+
+        a.appendChild(thumb);
+        a.appendChild(info);
+        grid.appendChild(a);
+      }
+    }
+
+    fetch('games.json', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(render)
+      .catch(() => {
+        grid.className = '';
+        grid.innerHTML = '';
+        grid.appendChild(el('div', 'empty', 'could not load the game list'));
+      });
+  </script>
+</body>
+</html>
