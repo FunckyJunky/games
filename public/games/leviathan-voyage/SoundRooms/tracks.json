@@ -1,8 +1,16 @@
 {
   "tracks": [
     {
+      "file": "manual.mp3",
+      "dur": 1308.47
+    },
+    {
       "file": "radio1.mp3",
       "dur": 2926.08
+    },
+    {
+      "file": "radio2.mp3",
+      "dur": 3555.87
     }
   ]
 }
