@@ -7,7 +7,7 @@
 //   PUT  /api/save/<game>/<playerId>           save a player's progress (JSON body)
 //   GET  /api/room/<game>/<CODE>               multiplayer room (WebSocket)
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
-//   GET  /api/chat/<CODE>                      FK-CHAT channel (WebSocket)
+//   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -394,7 +394,7 @@ export class PixelWall extends DurableObject {
 }
 
 // ---------------------------------------------------------------------------
-// FK-CHAT: one ChatRoom per channel code. Everyone with the same code
+// ERROR-CHAT: one ChatRoom per channel code. Everyone with the same code
 // talks together. The last messages are kept so newcomers can read back;
 // a channel is wiped after 7 days without messages.
 const CHAT_KEEP = 300;

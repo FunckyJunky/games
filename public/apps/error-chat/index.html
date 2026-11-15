@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
-<title>FK-CHAT</title>
+<title>ERROR-CHAT</title>
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 4h10v6H7l-3 3v-3H3z%27 stroke=%27%2339ff7a%27 stroke-width=%271.4%27 fill=%27none%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -126,7 +126,7 @@
 <body>
 <div id="tube">
   <div id="crt">
-    <div class="bar" id="status"><span id="stL">FK-CHAT 1.0</span><span class="r"><span id="stOn"></span><span id="stClock"></span></span></div>
+    <div class="bar" id="status"><span id="stL">ERROR-CHAT 1.0</span><span class="r"><span id="stOn"></span><span id="stClock"></span></span></div>
     <div id="main">
       <div id="lobby"></div>
       <div id="log" hidden></div>
@@ -147,7 +147,7 @@
 const $ = id => document.getElementById(id);
 const crt = $('crt'), tube = $('tube'), log = $('log'), lobbyEl = $('lobby'), inputEl = $('input'), kbd = $('kbd');
 
-// ---------- settings shared with the FK-DOS menu ----------
+// ---------- settings shared with the ERROR-DOS menu ----------
 const SCHEMES = [
   { name: 'GREEN',    fg: '#39ff7a', dim: '#1b7a3c', bg: '#031208', glow: 'rgba(57,255,122,.55)' },
   { name: 'AMBER',    fg: '#ffb43a', dim: '#8a5a12', bg: '#120a02', glow: 'rgba(255,180,58,.5)' },
@@ -156,8 +156,8 @@ const SCHEMES = [
   { name: 'CYAN',     fg: '#45f0ff', dim: '#157a85', bg: '#021014', glow: 'rgba(69,240,255,.5)' },
 ];
 let S = { color: 0, glitch: 1, curved: true, sound: true };
-try { Object.assign(S, JSON.parse(localStorage.getItem('fkdos-settings') || '{}')); } catch (e) {}
-function saveSettings() { try { localStorage.setItem('fkdos-settings', JSON.stringify(S)); } catch (e) {} }
+try { Object.assign(S, JSON.parse(localStorage.getItem('errordos-settings') || localStorage.getItem('fk' + 'dos-settings') || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem('errordos-settings', JSON.stringify(S)); } catch (e) {} }
 function applyColors() {
   const c = SCHEMES[S.color % SCHEMES.length], st = document.documentElement.style;
   st.setProperty('--fg', c.fg); st.setProperty('--dim', c.dim); st.setProperty('--bg', c.bg); st.setProperty('--glow', c.glow);
@@ -249,12 +249,12 @@ function cursorFor(f) { return st.focus === f ? '<span class="cur"> </span>' : '
 function drawLobby() {
   const h = st.handle, c = st.code;
   lobbyEl.innerHTML =
-    'FK-CHAT 1.0 <span class="dim">' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
+    'ERROR-CHAT 1.0 <span class="dim">' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
     '<span class="field' + (st.focus === 'handle' ? ' on' : '') + '" data-f="handle">HANDLE  : <span class="val">' + esc(h) + cursorFor('handle') + (h || st.focus === 'handle' ? '' : '<span class="dim">tap to type</span>') + '</span></span>\n' +
     '<span class="field' + (st.focus === 'code' ? ' on' : '') + '" data-f="code">CHANNEL : <span class="val">' + esc(c) + cursorFor('code') + (c || st.focus === 'code' ? '' : '<span class="dim">----</span>') + '</span></span>\n\n' +
     '<span class="btn" data-a="new">NEW CHANNEL</span><span class="btn" data-a="join">JOIN</span>\n' +
     (st.lobbyMsg ? '<span class="err">' + esc(st.lobbyMsg) + '</span>' : '') + '\n\n' +
-    '<span class="dim">Everyone with the same channel code\ntalks together. Messages are kept\n7 days.</span>';
+    '<span class="dim">Everyone with the same channel code talks together. Messages are kept 7 days.</span>';
 }
 lobbyEl.addEventListener('pointerdown', e => {
   unlock();
@@ -281,7 +281,7 @@ function join() {
   history.replaceState(null, '', '?c=' + st.code);
   lobbyEl.hidden = true; log.hidden = false; inputEl.hidden = false;
   log.innerHTML = '';
-  sys('FK-CHAT 1.0 · channel #' + st.code);
+  sys('ERROR-CHAT 1.0 · channel #' + st.code);
   sys('Share the code ' + st.code + ' or press LINK to invite.');
   sys('Connecting...');
   glitch('roll');
@@ -320,7 +320,7 @@ function onMsg(m) {
   } else if (m.type === 'msg') {
     if (m.id <= st.lastId) return;
     addLine(m, false);
-    if (m.name !== st.handle) { SND.incoming(); if (document.hidden) { st.unread++; document.title = '(' + st.unread + ') FK-CHAT'; } }
+    if (m.name !== st.handle) { SND.incoming(); if (document.hidden) { st.unread++; document.title = '(' + st.unread + ') ERROR-CHAT'; } }
     else SND.send();
   } else if (m.type === 'join') {
     st.who = m.who || st.who; sys('*** ' + m.name + ' joined (' + st.who.length + ' online)'); SND.join();
@@ -385,7 +385,7 @@ function copyLink() {
   const link = location.origin + location.pathname + '?c=' + st.code;
   const done = () => sys('*** invite link copied: ' + link);
   if (navigator.share && matchMedia('(pointer: coarse)').matches) {
-    navigator.share({ title: 'FK-CHAT #' + st.code, text: 'Join my FK-CHAT channel ' + st.code, url: link }).catch(() => {});
+    navigator.share({ title: 'ERROR-CHAT #' + st.code, text: 'Join my ERROR-CHAT channel ' + st.code, url: link }).catch(() => {});
   } else if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, () => sys('*** invite link: ' + link));
   else sys('*** invite link: ' + link);
 }
@@ -393,7 +393,7 @@ function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings();
 function exit() {
   wantOpen = false;
   if (ws) try { ws.close(1000, 'bye'); } catch (e) {}
-  try { sessionStorage.setItem('fkdos-ran', 'FKCHAT'); } catch (e) {}
+  try { sessionStorage.setItem('errordos-ran', 'ERRORC~1'); } catch (e) {}
   crt.classList.add('off'); tone(60, 0.4, 0.05, 'sine');
   setTimeout(() => { location.href = '/'; }, 470);
 }
@@ -406,7 +406,7 @@ function drawInput() {
 function drawStatus() {
   const d = new Date(), p = x => String(x).padStart(2, '0');
   $('stClock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
-  $('stL').textContent = st.screen === 'chat' ? 'FK-CHAT #' + st.code : 'FK-CHAT 1.0';
+  $('stL').textContent = st.screen === 'chat' ? 'ERROR-CHAT #' + st.code : 'ERROR-CHAT 1.0';
   $('stOn').textContent = st.screen === 'chat' ? st.who.length + ' ON' : '';
 }
 
@@ -557,7 +557,7 @@ function flash(k) {
   b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 90);
 }
 function unlock() { if (!unlocked) { unlocked = true; audio(); } }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { st.unread = 0; document.title = 'FK-CHAT'; } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { st.unread = 0; document.title = 'ERROR-CHAT'; } });
 
 // ---------- start ----------
 applyColors();

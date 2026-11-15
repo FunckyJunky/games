@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>FK-DOS · error.blue</title>
+<title>ERROR-DOS · error.blue</title>
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 4l3 3-3 3%27 stroke=%27%2339ff7a%27 stroke-width=%271.6%27 fill=%27none%27/%3E%3Crect x=%277%27 y=%2710%27 width=%276%27 height=%271.6%27 fill=%27%2339ff7a%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -108,7 +108,7 @@
   <div id="glass"></div>
   <canvas id="noise"></canvas>
 </div>
-<noscript>FK-DOS needs JavaScript. Bad command or file name.</noscript>
+<noscript>ERROR-DOS needs JavaScript. Bad command or file name.</noscript>
 
 <script>
 (() => {
@@ -130,9 +130,17 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0 }, store.get('fkdos-settings', {}));
-const stats = store.get('fkdos-stats', {});
-function saveSettings() { store.set('fkdos-settings', S); }
+// settings saved by the old FK-DOS name move over to ERROR-DOS
+try {
+  for (const k of ['settings', 'stats', 'sel']) {
+    const o = localStorage.getItem('fk' + 'dos-' + k);
+    if (o != null && localStorage.getItem('errordos-' + k) == null) localStorage.setItem('errordos-' + k, o);
+    if (o != null) localStorage.removeItem('fk' + 'dos-' + k);
+  }
+} catch (e) {}
+const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0 }, store.get('errordos-settings', {}));
+const stats = store.get('errordos-stats', {});
+function saveSettings() { store.set('errordos-settings', S); }
 
 // ===================================================================
 // elements and layout
@@ -673,7 +681,7 @@ let setupSel = 0, infoData = null, hits = [];
 
 function statusBar() {
   fill(LAY.status, 0, COLS - 1, 'i');
-  put(LAY.status, 1, 'FK-DOS 1.0', 'i');
+  put(LAY.status, 1, 'ERROR-DOS 1.0', 'i');
   if (WIDE) put(LAY.status, 14, location.host.toUpperCase() || 'ERROR.BLUE', 'i');
   const d = new Date(), p = n => String(n).padStart(2, '0');
   const clock = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
@@ -768,7 +776,7 @@ function select(i) {
   const n = Math.max(0, Math.min(list.length - 1, i));
   if (n === sel[F]) { SND.thud(); return; }
   sel[F] = n; marquee = 0; SND.move(); L.tear = 8; dirty = true;
-  store.set('fkdos-sel', { folder, sel });
+  store.set('errordos-sel', { folder, sel });
 }
 function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings(); applyColors(); glitch('static'); }
 
@@ -870,7 +878,7 @@ async function boot(kind) {
   mode = 'boot'; bootLines = []; bootSkip = false;
   if (kind === 0) {
     SND.beep();
-    bootPrint('FK-BIOS (C) 2026 ' + (location.host || 'error.blue').toUpperCase(), '');
+    bootPrint('ERROR-BIOS (C) 2026 ' + (location.host || 'error.blue').toUpperCase(), '');
     bootPrint('');
     bootPrint('CPU     : Cloudflare Edge Worker');
     await sleep(250);
@@ -894,7 +902,7 @@ async function boot(kind) {
     await sleep(350);
     bootPrint('');
   }
-  bootPrint('Starting FK-DOS...');
+  bootPrint('Starting ERROR-DOS...');
   await sleep(kind === 0 ? 500 : 200);
   bootPrint('');
   await typeLine('C:\\>', 'SCAN *.HTM /S');
@@ -942,8 +950,8 @@ async function run() {
   await wait(320);
   const st = stats[g.id] || (stats[g.id] = { runs: 0 });
   st.runs++; st.last = new Date().toISOString();
-  store.set('fkdos-stats', stats);
-  try { sessionStorage.setItem('fkdos-ran', name); } catch (e) {}
+  store.set('errordos-stats', stats);
+  try { sessionStorage.setItem('errordos-ran', name); } catch (e) {}
   crt.classList.remove('on'); crt.classList.add('off');
   tone(60, 0.4, 0.05, 'sine');
   await wait(470);
@@ -1089,7 +1097,7 @@ async function start() {
   } catch (e) { games = []; }
   folders = { games: [], online: [], apps: [] };
   for (const g of games) (folders[FOLDERS.includes(g.folder) ? g.folder : 'games']).push(g);
-  const saved = store.get('fkdos-sel', null);
+  const saved = store.get('errordos-sel', null);
   if (saved) {
     folder = Math.min(FOLDERS.length - 1, Math.max(0, saved.folder | 0));
     for (const F of FOLDERS) sel[F] = Math.min(Math.max(0, (saved.sel && saved.sel[F]) | 0), Math.max(0, folders[F].length - 1));
@@ -1097,19 +1105,19 @@ async function start() {
   if (!folders[FOLDERS[folder]].length) folder = 0;
 
   let ran = null;
-  try { ran = sessionStorage.getItem('fkdos-ran'); sessionStorage.removeItem('fkdos-ran'); } catch (e) {}
+  try { ran = sessionStorage.getItem('errordos-ran'); sessionStorage.removeItem('errordos-ran'); } catch (e) {}
   if (ran) powerOn('Program ended normally');
   else if (S.boot === 2) enterMain(true);
   else {
     let seen = false;
-    try { seen = !!sessionStorage.getItem('fkdos-booted'); sessionStorage.setItem('fkdos-booted', '1'); } catch (e) {}
+    try { seen = !!sessionStorage.getItem('errordos-booted'); sessionStorage.setItem('errordos-booted', '1'); } catch (e) {}
     boot(S.boot === 0 && seen ? 1 : S.boot);
   }
 }
 // coming back with the browser's back button
 addEventListener('pageshow', e => {
   if (e.persisted) {
-    try { sessionStorage.removeItem('fkdos-ran'); } catch (er) {}
+    try { sessionStorage.removeItem('errordos-ran'); } catch (er) {}
     powerOn('Program ended normally');
   }
 });

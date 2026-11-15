@@ -37,10 +37,10 @@
     "added": "2026-11-15T23:44"
   },
   {
-    "id": "fk-chat",
-    "title": "FK-Chat",
+    "id": "error-chat",
+    "title": "Error-Chat",
     "description": "Text chat. Make a channel code, share it, and everyone with the same code talks together. Own on-screen keyboard.",
-    "path": "apps/fk-chat/",
+    "path": "apps/error-chat/",
     "folder": "apps",
     "logo": "chat",
     "added": "2026-11-16T00:40"
