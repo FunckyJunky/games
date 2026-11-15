@@ -1,30 +1,39 @@
 [
   {
+    "id": "pixel-hop",
     "title": "Pixel Hop",
-    "description": "Tap to jump over the blocks. Music + online leaderboard.",
+    "description": "Tap to jump over the blocks. Music and an online leaderboard.",
     "path": "games/pixel-hop/",
-    "color": "#ffd23f",
-    "tag": "demo"
+    "folder": "games",
+    "logo": "hop",
+    "scores": true,
+    "added": "2026-11-15T22:52"
   },
   {
-    "title": "Pixel Party",
-    "description": "Multiplayer test: make a room, share the code, walk around together.",
-    "path": "games/pixel-party/",
-    "color": "#4dd4ff",
-    "tag": "online"
-  },
-  {
-    "title": "Pixel Wall",
-    "description": "One shared wall for everyone. Paint pixels and watch others draw live.",
-    "path": "games/pixel-wall/",
-    "color": "#7cff6b",
-    "tag": "live"
-  },
-  {
+    "id": "leviathan-voyage",
     "title": "Leviathan Voyage",
     "description": "Wake up in the hangar shack, start her up and fly the AP-7 airship over an endless land. Walk her decks. Best full screen with a controller.",
     "path": "games/leviathan-voyage/",
-    "color": "#ff9f43",
-    "tag": "3d"
+    "folder": "games",
+    "logo": "ship",
+    "added": "2026-11-15T23:59"
+  },
+  {
+    "id": "pixel-party",
+    "title": "Pixel Party",
+    "description": "Multiplayer test: make a room, share the code and walk around together.",
+    "path": "games/pixel-party/",
+    "folder": "online",
+    "logo": "party",
+    "added": "2026-11-15T23:14"
+  },
+  {
+    "id": "pixel-wall",
+    "title": "Pixel Wall",
+    "description": "One shared wall for everyone. Paint pixels and watch others draw live.",
+    "path": "games/pixel-wall/",
+    "folder": "online",
+    "logo": "wall",
+    "added": "2026-11-15T23:44"
   }
 ]
