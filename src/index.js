@@ -6,6 +6,7 @@
 //   GET  /api/save/<game>/<playerId>           load a player's saved progress
 //   PUT  /api/save/<game>/<playerId>           save a player's progress (JSON body)
 //   GET  /api/room/<game>/<CODE>               multiplayer room (WebSocket)
+//   GET  /api/wall                             the shared Pixel Wall (WebSocket)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -162,6 +163,11 @@ export default {
         return room.fetch(request);
       }
 
+      if (path === "/api/wall") {
+        if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
+        return env.WALL.get(env.WALL.idFromName("main")).fetch(request);
+      }
+
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 
       return env.ASSETS.fetch(request);
@@ -264,5 +270,116 @@ export class GameRoom extends DurableObject {
     if (!me || me.left) return;
     ws.serializeAttachment({ ...me, left: true });
     this.broadcast({ type: "leave", id: me.id }, ws);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pixel Wall: one shared board that everyone can paint on.
+// The board is saved, so every visitor sees what others painted.
+const WALL_W = 48;
+const WALL_H = 48;
+const WALL_COLORS = 16;
+const PAINT_COOLDOWN_MS = 1000;
+
+export class PixelWall extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'));
+    this.board = new Uint8Array(WALL_W * WALL_H);
+    this.lastBy = null;
+    this.paints = 0;
+    ctx.blockConcurrencyWhile(async () => {
+      const saved = await ctx.storage.get(["board", "lastBy", "paints"]);
+      const board = saved.get("board");
+      if (board instanceof Uint8Array && board.length === WALL_W * WALL_H) this.board = board;
+      this.lastBy = saved.get("lastBy") || null;
+      this.paints = saved.get("paints") || 0;
+    });
+  }
+
+  async fetch(request) {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ last: 0 });
+
+    server.send(
+      JSON.stringify({
+        type: "board",
+        w: WALL_W,
+        h: WALL_H,
+        cooldown: PAINT_COOLDOWN_MS,
+        data: Array.from(this.board, (v) => v.toString(16)).join(""),
+        lastBy: this.lastBy,
+        paints: this.paints,
+      })
+    );
+    this.broadcastOnline();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  openSockets(except) {
+    return this.ctx.getWebSockets().filter((ws) => ws !== except && ws.readyState === WebSocket.OPEN);
+  }
+
+  broadcast(message, except) {
+    const text = JSON.stringify(message);
+    for (const ws of this.openSockets(except)) {
+      try {
+        ws.send(text);
+      } catch {
+        // gone
+      }
+    }
+  }
+
+  broadcastOnline(except) {
+    this.broadcast({ type: "online", n: this.openSockets(except).length }, except);
+  }
+
+  async webSocketMessage(ws, message) {
+    if (typeof message !== "string" || message.length > 512) return;
+    let d;
+    try {
+      d = JSON.parse(message);
+    } catch {
+      return;
+    }
+    if (!d || d.t !== "paint") return;
+
+    const x = Number(d.x), y = Number(d.y), c = Number(d.c);
+    if (![x, y, c].every(Number.isInteger)) return;
+    if (x < 0 || y < 0 || x >= WALL_W || y >= WALL_H || c < 0 || c >= WALL_COLORS) return;
+
+    const me = ws.deserializeAttachment() || { last: 0 };
+    const now = Date.now();
+    const wait = PAINT_COOLDOWN_MS - (now - me.last);
+    if (wait > 50) {
+      ws.send(JSON.stringify({ type: "cooldown", wait }));
+      return;
+    }
+    me.last = now;
+    ws.serializeAttachment(me);
+
+    const name = cleanName(d.name) || "anon";
+    const i = y * WALL_W + x;
+    this.board[i] = c;
+    this.paints += 1;
+    this.lastBy = { name, x, y };
+    await this.ctx.storage.put({ board: this.board, lastBy: this.lastBy, paints: this.paints });
+    this.broadcast({ type: "px", x, y, c, by: name, paints: this.paints });
+  }
+
+  async webSocketClose(ws, code, reason) {
+    this.broadcastOnline(ws);
+    try {
+      ws.close(code, reason);
+    } catch {
+      // already closed
+    }
+  }
+
+  async webSocketError(ws) {
+    this.broadcastOnline(ws);
   }
 }

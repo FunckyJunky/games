@@ -12,5 +12,12 @@
     "path": "games/pixel-party/",
     "color": "#4dd4ff",
     "tag": "online"
+  },
+  {
+    "title": "Pixel Wall",
+    "description": "One shared wall for everyone. Paint pixels and watch others draw live.",
+    "path": "games/pixel-wall/",
+    "color": "#7cff6b",
+    "tag": "live"
   }
 ]

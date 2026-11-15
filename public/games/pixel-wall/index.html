@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Pixel Wall · Game Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0; min-height: 100%;
+      background: #140f2b; color: #f4efff;
+      font-family: "Press Start 2P", monospace;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .back {
+      position: fixed; top: 12px; left: 12px; z-index: 5;
+      color: #a99fd6; font-size: 10px; text-decoration: none;
+      padding: 8px; background: rgba(20,15,43,.7);
+    }
+    .wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 56px 10px 24px; }
+    h1 { margin: 0; font-size: 20px; color: #7cff6b; text-shadow: 3px 3px 0 #2f6bff; }
+    .sub { font-size: 8px; color: #a99fd6; text-align: center; line-height: 1.8; }
+    .status { display: flex; gap: 14px; font-size: 9px; color: #a99fd6; flex-wrap: wrap; justify-content: center; }
+    .status b { color: #7cff6b; font-weight: normal; }
+    .dot { display: inline-block; width: 8px; height: 8px; background: #ff4d6d; margin-right: 6px; vertical-align: -1px; }
+    .dot.on { background: #7cff6b; }
+    .boardwrap { position: relative; }
+    canvas {
+      display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+      border: 4px solid #3a2e6e; box-shadow: 8px 8px 0 #0b0820; cursor: crosshair; touch-action: none;
+    }
+    .cool { width: 100%; height: 6px; background: #2a2156; margin-top: 8px; }
+    .cool div { height: 100%; width: 100%; background: #7cff6b; transform-origin: left; }
+    .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+    .palette button {
+      width: 34px; height: 34px; border: 3px solid #3a2e6e; cursor: pointer; padding: 0;
+      box-shadow: 2px 2px 0 #0b0820;
+    }
+    .palette button.sel { border-color: #fff; transform: translateY(-3px); box-shadow: 2px 5px 0 #0b0820; }
+    .namebox { display: flex; gap: 8px; align-items: center; font-size: 9px; color: #a99fd6; }
+    .namebox input {
+      width: 150px; padding: 8px; font: 10px "Press Start 2P", monospace;
+      background: #1f1842; color: #f4efff; border: 3px solid #3a2e6e; outline: none;
+    }
+    .namebox input:focus { border-color: #7cff6b; }
+    .last { font-size: 8px; color: #5d5394; min-height: 10px; text-align: center; }
+    .toast {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      background: #1f1842; border: 3px solid #3a2e6e; padding: 10px 14px; font-size: 9px;
+      opacity: 0; transition: opacity .2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">&lt; games</a>
+  <div class="wrap">
+    <h1>PIXEL WALL</h1>
+    <div class="sub">one wall for everyone · paint a pixel<br>everyone sees it right away</div>
+    <div class="status">
+      <span><span class="dot" id="dot"></span><span id="conn">connecting...</span></span>
+      <span>ONLINE <b id="online">-</b></span>
+      <span>PIXELS <b id="paints">-</b></span>
+    </div>
+    <div class="boardwrap">
+      <canvas id="c"></canvas>
+      <div class="cool"><div id="cool"></div></div>
+    </div>
+    <div class="palette" id="palette"></div>
+    <label class="namebox">NAME <input id="name" maxlength="16" placeholder="anon" autocomplete="off"></label>
+    <div class="last" id="last"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="/lib/gamelab.js"></script>
+  <script>
+  (() => {
+    const COLORS = [
+      '#1a1530', '#ffffff', '#c8c8d8', '#6b6b8a', '#ff4d6d', '#ff9f43', '#ffd23f', '#7cff6b',
+      '#2bb673', '#4dd4ff', '#2f6bff', '#8a4dff', '#ff7ad9', '#ffc8a8', '#a0522d', '#3a2e6e'
+    ];
+    const $ = id => document.getElementById(id);
+    const canvas = $('c'), ctx = canvas.getContext('2d');
+    let W = 48, H = 48, cell = 8, board = new Uint8Array(W * H);
+    let color = 4, cooldown = 1000, lastPaint = 0, hover = null, ws = null, ready = false;
+
+    // ---- name ----
+    $('name').value = GameLab.playerName();
+    $('name').addEventListener('change', () => GameLab.setPlayerName($('name').value));
+
+    // ---- palette ----
+    COLORS.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.style.background = c;
+      b.title = c;
+      b.onclick = () => { color = i; document.querySelectorAll('.palette button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); };
+      if (i === color) b.classList.add('sel');
+      $('palette').appendChild(b);
+    });
+
+    // ---- drawing ----
+    function fit() {
+      const space = Math.min(innerWidth - 32, innerHeight - 330, 640);
+      cell = Math.max(5, Math.floor(space / W));
+      canvas.width = W * cell;
+      canvas.height = H * cell;
+      canvas.style.width = W * cell + 'px';
+      canvas.style.height = H * cell + 'px';
+      drawAll();
+    }
+    function drawCell(x, y) {
+      ctx.fillStyle = COLORS[board[y * W + x]];
+      ctx.fillRect(x * cell, y * cell, cell, cell);
+      if (cell >= 8) {
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(x * cell, y * cell, cell, 1);
+        ctx.fillRect(x * cell, y * cell, 1, cell);
+      }
+    }
+    function drawAll() {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) drawCell(x, y);
+      drawHover();
+    }
+    function drawHover() {
+      if (!hover) return;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hover.x * cell + 1, hover.y * cell + 1, cell - 2, cell - 2);
+    }
+    addEventListener('resize', fit);
+
+    function cellAt(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - r.left - 4) / cell), y = Math.floor((e.clientY - r.top - 4) / cell);
+      return (x >= 0 && y >= 0 && x < W && y < H) ? { x, y } : null;
+    }
+    canvas.addEventListener('pointermove', e => {
+      if (e.pointerType !== 'mouse') return;
+      const old = hover; hover = cellAt(e);
+      if (old) drawCell(old.x, old.y);
+      drawHover();
+    });
+    canvas.addEventListener('pointerleave', () => { if (hover) { const h = hover; hover = null; drawCell(h.x, h.y); } });
+    canvas.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const p = cellAt(e);
+      if (!p) return;
+      if (!ready) { toast('not connected yet'); return; }
+      const left = cooldown - (performance.now() - lastPaint);
+      if (left > 0) { toast('wait ' + (left / 1000).toFixed(1) + 's'); return; }
+      lastPaint = performance.now();
+      board[p.y * W + p.x] = color;   // show it right away
+      drawCell(p.x, p.y); drawHover();
+      ws.send(JSON.stringify({ t: 'paint', x: p.x, y: p.y, c: color, name: $('name').value || GameLab.playerName() }));
+    });
+
+    // cooldown bar
+    (function tick() {
+      const f = Math.min(1, (performance.now() - lastPaint) / cooldown);
+      $('cool').style.transform = 'scaleX(' + f + ')';
+      $('cool').style.background = f < 1 ? '#ff9f43' : '#7cff6b';
+      requestAnimationFrame(tick);
+    })();
+
+    let toastTimer;
+    function toast(text) {
+      $('toast').textContent = text;
+      $('toast').classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1200);
+    }
+    function showLast(by) {
+      $('last').textContent = by ? 'last pixel by ' + by.name : '';
+    }
+
+    // ---- live connection ----
+    let ping;
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(proto + '//' + location.host + '/api/wall');
+      ws.onmessage = ev => {
+        let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+        if (m.type === 'board') {
+          W = m.w; H = m.h; cooldown = m.cooldown;
+          board = Uint8Array.from(m.data, ch => parseInt(ch, 16));
+          ready = true;
+          $('dot').classList.add('on'); $('conn').textContent = 'live';
+          $('paints').textContent = m.paints;
+          showLast(m.lastBy);
+          fit();
+        } else if (m.type === 'px') {
+          board[m.y * W + m.x] = m.c;
+          drawCell(m.x, m.y);
+          if (hover && hover.x === m.x && hover.y === m.y) drawHover();
+          $('paints').textContent = m.paints;
+          showLast({ name: m.by });
+        } else if (m.type === 'online') {
+          $('online').textContent = m.n;
+        } else if (m.type === 'cooldown') {
+          toast('too fast! wait a moment');
+        }
+      };
+      ws.onopen = () => { ping = setInterval(() => ws.readyState === 1 && ws.send('{"type":"ping"}'), 25000); };
+      ws.onclose = () => {
+        ready = false; clearInterval(ping);
+        $('dot').classList.remove('on'); $('conn').textContent = 'reconnecting...';
+        setTimeout(connect, 2000);
+      };
+    }
+
+    fit();
+    connect();
+  })();
+  </script>
+</body>
+</html>
