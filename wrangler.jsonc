@@ -5,6 +5,12 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
 
+  // The site's own domain (also set in the Cloudflare dashboard).
+  "routes": [
+    { "pattern": "error.blue", "custom_domain": true },
+    { "pattern": "www.error.blue", "custom_domain": true }
+  ],
+
   // Website files. /api/* goes to src/index.js first.
   "assets": {
     "directory": "./public",

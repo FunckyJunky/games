@@ -1,6 +1,6 @@
 # Game Lab
 
-A test site for HTML games, hosted on Cloudflare.
+A test site for HTML games at **https://error.blue**, hosted on Cloudflare.
 Every push to `main` is deployed automatically.
 
 ## How it's organised
