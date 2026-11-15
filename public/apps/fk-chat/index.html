@@ -60,7 +60,7 @@
   #log .nm { font-weight: normal; }
   #log .t { color: var(--dim); text-shadow: none; }
   #log .act { font-style: normal; }
-  #lobby { position: absolute; inset: 0; overflow: hidden; white-space: pre-wrap; }
+  #lobby { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none; white-space: pre-wrap; }
   .field { cursor: pointer; }
   .field.on .val { border-bottom: 2px solid var(--fg); }
   .btn {
@@ -249,12 +249,12 @@ function cursorFor(f) { return st.focus === f ? '<span class="cur"> </span>' : '
 function drawLobby() {
   const h = st.handle, c = st.code;
   lobbyEl.innerHTML =
-    'FK-CHAT 1.0\n<span class="dim">(C) 2026 ' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
-    'Everyone with the same channel\ncode talks together. Messages\nare kept 7 days.\n\n' +
+    'FK-CHAT 1.0 <span class="dim">' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
     '<span class="field' + (st.focus === 'handle' ? ' on' : '') + '" data-f="handle">HANDLE  : <span class="val">' + esc(h) + cursorFor('handle') + (h || st.focus === 'handle' ? '' : '<span class="dim">tap to type</span>') + '</span></span>\n' +
     '<span class="field' + (st.focus === 'code' ? ' on' : '') + '" data-f="code">CHANNEL : <span class="val">' + esc(c) + cursorFor('code') + (c || st.focus === 'code' ? '' : '<span class="dim">----</span>') + '</span></span>\n\n' +
-    '<span class="btn" data-a="new">NEW CHANNEL</span><span class="btn" data-a="join">JOIN</span>\n\n' +
-    (st.lobbyMsg ? '<span class="err">' + esc(st.lobbyMsg) + '</span>' : '');
+    '<span class="btn" data-a="new">NEW CHANNEL</span><span class="btn" data-a="join">JOIN</span>\n' +
+    (st.lobbyMsg ? '<span class="err">' + esc(st.lobbyMsg) + '</span>' : '') + '\n\n' +
+    '<span class="dim">Everyone with the same channel code\ntalks together. Messages are kept\n7 days.</span>';
 }
 lobbyEl.addEventListener('pointerdown', e => {
   unlock();
