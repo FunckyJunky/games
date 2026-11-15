@@ -1,9 +1,16 @@
 [
   {
     "title": "Pixel Hop",
-    "description": "Tap to jump over the blocks. How far can you get?",
+    "description": "Tap to jump over the blocks. Music + online leaderboard.",
     "path": "games/pixel-hop/",
     "color": "#ffd23f",
     "tag": "demo"
+  },
+  {
+    "title": "Pixel Party",
+    "description": "Multiplayer test: make a room, share the code, walk around together.",
+    "path": "games/pixel-party/",
+    "color": "#4dd4ff",
+    "tag": "online"
   }
 ]

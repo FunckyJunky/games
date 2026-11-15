@@ -42,16 +42,56 @@
     .msg p { margin: 0; font-size: 10px; color: #f4efff; line-height: 1.8; }
     .blink { animation: blink 1s steps(1) infinite; }
     @keyframes blink { 50% { opacity: 0; } }
-    .hidden { display: none; }
-    .back {
-      position: fixed; top: 12px; left: 12px; z-index: 5;
-      color: #a99fd6; font-size: 10px; text-decoration: none;
-      padding: 8px; background: rgba(20,15,43,.7);
+    .hidden { display: none !important; }
+    .back, .mute {
+      position: fixed; top: 12px; z-index: 5;
+      color: #a99fd6; font: 10px "Press Start 2P", monospace; text-decoration: none;
+      padding: 8px; background: rgba(20,15,43,.7); border: 0; cursor: pointer;
     }
+    .back { left: 12px; }
+    .mute { right: 12px; }
+    .top { margin-top: 4px; font-size: 9px; line-height: 2; color: #a99fd6; }
+    .top b { color: #ffd23f; font-weight: normal; }
+
+    /* game over panel */
+    .panel {
+      position: fixed; inset: 0; z-index: 10;
+      display: grid; place-items: center;
+      background: rgba(11,8,32,.72);
+    }
+    .box {
+      width: min(340px, 92vw);
+      background: #1f1842; border: 4px solid #3a2e6e; box-shadow: 8px 8px 0 #0b0820;
+      padding: 20px 18px; text-align: center;
+    }
+    .box h2 { margin: 0 0 12px; color: #ff4d6d; font-size: 20px; text-shadow: 3px 3px 0 #0b0820; }
+    .box .big { font-size: 13px; margin-bottom: 16px; line-height: 1.8; }
+    .box .big b { color: #ffd23f; font-weight: normal; }
+    .row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .row input {
+      flex: 1; min-width: 0; padding: 10px; font: 11px "Press Start 2P", monospace;
+      background: #140f2b; color: #f4efff; border: 3px solid #3a2e6e; outline: none;
+      -webkit-user-select: text; user-select: text;
+    }
+    .row input:focus { border-color: #ffd23f; }
+    .btn {
+      padding: 10px 12px; font: 11px "Press Start 2P", monospace; cursor: pointer;
+      background: #ffd23f; color: #140f2b; border: 0; box-shadow: 3px 3px 0 #0b0820;
+    }
+    .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #0b0820; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .btn.alt { background: #ff4d6d; color: #fff; width: 100%; margin-top: 14px; }
+    .note { font-size: 9px; color: #a99fd6; min-height: 14px; margin: -4px 0 10px; line-height: 1.6; }
+    ol.board { list-style: none; margin: 0; padding: 0; font-size: 10px; text-align: left; }
+    ol.board li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 4px; border-bottom: 2px solid #2a2156; }
+    ol.board li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ol.board li.me { color: #ffd23f; }
+    .board-title { font-size: 10px; color: #a99fd6; margin: 4px 0 8px; text-align: left; }
   </style>
 </head>
 <body>
   <a class="back" href="/">&lt; games</a>
+  <button class="mute" id="mute" type="button">♪ ON</button>
   <div class="stage">
     <div class="screen" id="screen">
       <canvas id="c" width="160" height="120"></canvas>
@@ -59,9 +99,27 @@
       <div class="msg" id="msg">
         <h2 id="msgTitle">PIXEL HOP</h2>
         <p id="msgText"><span class="blink">tap or press space</span></p>
+        <div class="top" id="topLine"></div>
       </div>
     </div>
   </div>
+
+  <div class="panel hidden" id="panel">
+    <div class="box">
+      <h2>GAME OVER</h2>
+      <div class="big" id="finalScore"></div>
+      <div class="row" id="saveRow">
+        <input id="nameInput" maxlength="16" placeholder="your name" autocomplete="off">
+        <button class="btn" id="saveBtn" type="button">SAVE</button>
+      </div>
+      <div class="note" id="note"></div>
+      <div class="board-title">TOP 5</div>
+      <ol class="board" id="board"><li><span>loading...</span></li></ol>
+      <button class="btn alt" id="againBtn" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script src="/lib/gamelab.js"></script>
 
   <script>
   (() => {
@@ -115,17 +173,102 @@
       msg.classList.remove('hidden');
     }
 
+    // ---- music (music.mp3 sits in this game's folder) ----
+    const music = GameLab.music('music.mp3', { volume: 0.45 });
+    const muteBtn = document.getElementById('mute');
+    const showMute = () => { muteBtn.textContent = music.muted ? '♪ OFF' : '♪ ON'; };
+    showMute();
+    muteBtn.addEventListener('click', () => { music.toggle(); showMute(); });
+
+    // ---- leaderboard ----
+    const GAME = 'pixel-hop';
+    const panel = document.getElementById('panel');
+    const finalScore = document.getElementById('finalScore');
+    const saveRow = document.getElementById('saveRow');
+    const nameInput = document.getElementById('nameInput');
+    const saveBtn = document.getElementById('saveBtn');
+    const note = document.getElementById('note');
+    const board = document.getElementById('board');
+    const topLine = document.getElementById('topLine');
+    let lastScore = 0, savedName = null;
+
+    function renderBoard(scores) {
+      board.innerHTML = '';
+      if (!scores.length) { board.innerHTML = '<li><span>no scores yet</span></li>'; return; }
+      scores.forEach((s, i) => {
+        const li = document.createElement('li');
+        if (savedName && s.name === savedName && s.score === lastScore) li.className = 'me';
+        const a = document.createElement('span'); a.textContent = (i + 1) + '. ' + s.name;
+        const b = document.createElement('span'); b.textContent = s.score;
+        li.append(a, b);
+        board.appendChild(li);
+      });
+    }
+    function loadBoard() {
+      return GameLab.topScores(GAME, 5).then(renderBoard).catch(() => {
+        board.innerHTML = '<li><span>leaderboard offline</span></li>';
+      });
+    }
+    function loadTopLine() {
+      GameLab.topScores(GAME, 3).then(scores => {
+        topLine.innerHTML = '';
+        scores.forEach((s, i) => {
+          const d = document.createElement('div');
+          d.innerHTML = (i + 1) + '. <b></b> ' + s.score;
+          d.querySelector('b').textContent = s.name;
+          topLine.appendChild(d);
+        });
+      }).catch(() => {});
+    }
+
+    function openPanel(score, isBest) {
+      lastScore = score; savedName = null;
+      finalScore.innerHTML = 'score <b>' + score + '</b>' + (isBest ? '<br>NEW PERSONAL BEST!' : '');
+      saveRow.classList.toggle('hidden', score <= 0);
+      nameInput.value = GameLab.playerName();
+      saveBtn.disabled = false;
+      note.textContent = score > 0 ? 'save your score to the leaderboard' : '';
+      board.innerHTML = '<li><span>loading...</span></li>';
+      panel.classList.remove('hidden');
+      loadBoard();
+    }
+
+    function saveScore() {
+      const name = nameInput.value.trim();
+      if (!name) { note.textContent = 'type a name first'; nameInput.focus(); return; }
+      GameLab.setPlayerName(name);
+      saveBtn.disabled = true;
+      note.textContent = 'saving...';
+      GameLab.submitScore(GAME, name, lastScore).then(r => {
+        savedName = name.slice(0, 16);
+        saveRow.classList.add('hidden');
+        note.textContent = 'saved! you are #' + r.rank;
+        loadBoard();
+      }).catch(() => {
+        saveBtn.disabled = false;
+        note.textContent = 'could not save, try again';
+      });
+    }
+    saveBtn.addEventListener('click', saveScore);
+    nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveScore(); });
+    document.getElementById('againBtn').addEventListener('click', restart);
+
+    function restart() {
+      panel.classList.add('hidden');
+      nameInput.blur();
+      reset();
+      state = 'play';
+      msg.classList.add('hidden');
+    }
+
     function press() {
+      music.play();
       if (state === 'ready') {
         state = 'play';
         msg.classList.add('hidden');
         jump();
       } else if (state === 'play') {
         jump();
-      } else if (state === 'over' && performance.now() - overAt > 500) {
-        reset();
-        state = 'play';
-        msg.classList.add('hidden');
       }
     }
 
@@ -137,13 +280,20 @@
     }
 
     addEventListener('keydown', e => {
-      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); press(); }
+      if (document.activeElement === nameInput) return;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        if (state === 'over') { if (performance.now() - overAt > 500) restart(); }
+        else press();
+      }
     });
     addEventListener('pointerdown', e => {
-      if (e.target.closest('a')) return;
+      if (e.target.closest('a, button, input, .panel')) return;
       e.preventDefault();
       press();
     }, { passive: false });
+
+    loadTopLine();
 
     function spawn() {
       const h = 6 + Math.floor(Math.random() * 3) * 4;        // 6, 10 or 14 px tall
@@ -189,7 +339,7 @@
           overAt = performance.now();
           const isBest = score > best;
           if (isBest) { best = score; saveBest(); bestEl.textContent = 'BEST ' + best; }
-          show('GAME OVER', (isBest ? 'NEW BEST!<br>' : '') + 'score ' + score + '<br><br><span class="blink">tap to retry</span>');
+          openPanel(score, isBest);
           break;
         }
       }

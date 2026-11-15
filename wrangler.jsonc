@@ -2,9 +2,31 @@
 // "name" must match the project name in the Cloudflare dashboard.
 {
   "name": "games",
+  "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+
+  // Website files. /api/* goes to src/index.js first.
   "assets": {
     "directory": "./public",
-    "not_found_handling": "404-page"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Database for scores and saved progress.
+  // Cloudflare creates it automatically on the first deploy.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "game-lab-db"
+    }
+  ],
+
+  // Multiplayer rooms.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+
+  "observability": { "enabled": true }
 }
