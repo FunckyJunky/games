@@ -5,6 +5,9 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
 
+  // Keep the free games.<name>.workers.dev address working too.
+  "workers_dev": true,
+
   // The site's own domain (also set in the Cloudflare dashboard).
   "routes": [
     { "pattern": "error.blue", "custom_domain": true },
