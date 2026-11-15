@@ -14,6 +14,7 @@ public/                 the website
     pixel-hop/          one folder per game (index.html + music, images...)
     pixel-party/
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
+tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
 ```
 
@@ -34,6 +35,23 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 ```
 
 3. Push to `main`. The site updates within about a minute.
+
+## Radio tracks (SoundRooms)
+
+A game can have a `SoundRooms` folder, just like the one on the FunKey's SD card. Leviathan Voyage
+plays the tracks in `public/games/leviathan-voyage/SoundRooms/` on its radios:
+
+- `radio1.mp3`, `radio2.mp3`, ... are the channels, in that order.
+- `manual.mp3` is the MANUAL channel. It also plays as narration while the manual is open.
+- Any other `.mp3` or `.m4a` becomes a channel too, after those, in alphabetical order.
+
+To add one, put the file in that folder and push. On GitHub: open the folder, then
+**Add file → Upload files**. Each file can be up to **25 MB**. A bigger file is left off the site,
+with a warning in the build log. Mono at 22 kHz and 64 kbps sounds the same as on the FunKey and fits
+about 50 minutes in 25 MB.
+
+Before each deploy, `tools/soundrooms.mjs` writes the folder's `tracks.json`, which lists the files and
+how long each one is. You don't need to edit it.
 
 ## Using scores, saves, multiplayer and music in a game
 

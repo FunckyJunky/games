@@ -5,6 +5,9 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
 
+  // Before every deploy: the radio track lists (tools/soundrooms.mjs) for the games' SoundRooms folders.
+  "build": { "command": "node tools/soundrooms.mjs" },
+
   // Keep the free games.<name>.workers.dev address working too.
   "workers_dev": true,
 
