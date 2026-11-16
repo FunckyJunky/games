@@ -139,6 +139,7 @@
       <div class="slots" id="lockSlots"></div>
       <div class="msg" id="lockMsg"></div>
       <div class="pad" id="lockPad"></div>
+      <div class="back" id="lockChange">[C] CHANGE CODE</div>
       <div class="back" id="lockBack">[ESC] BACK</div>
     </div></div>
   </div>
@@ -1001,6 +1002,10 @@ function enterMain(withGlitch) {
       lockState(g).then(st => { if (mode === 'main' && !st.unlocked) openLock(g, st); });
     }
   }
+  if (changeAsk && games.length) {
+    const g = games.find(x => x.id === changeAsk);
+    if (g && g.lock) lockState(g).then(st => { if (mode === 'main') openLock(g, st, true); });
+  }
 }
 
 
@@ -1009,7 +1014,7 @@ function enterMain(withGlitch) {
 // The server checks it and keeps the program's files closed without it.
 // ===================================================================
 const lockEl = document.getElementById('lock');
-const LK = { game: null, code: '', first: '', setup: false, busy: false };
+const LK = { game: null, code: '', first: '', setup: false, busy: false, change: 0, old: '', neu: '' };
 (() => {
   const pad = document.getElementById('lockPad');
   for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'DEL', '0', 'OK']) {
@@ -1019,6 +1024,7 @@ const LK = { game: null, code: '', first: '', setup: false, busy: false };
     pad.appendChild(b);
   }
   document.getElementById('lockBack').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); closeLock(); });
+  document.getElementById('lockChange').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); lockKey('color'); });
   lockEl.addEventListener('pointerdown', e => e.stopPropagation());
 })();
 function lockSay(say, msg, err) {
@@ -1036,19 +1042,25 @@ async function lockState(g) {
   try { const r = await fetch('/api/unlock?game=' + encodeURIComponent(g.id), { cache: 'no-store' }); return await r.json(); }
   catch (e) { return { unlocked: false, offline: true }; }
 }
-function openLock(g, st) {
+function openLock(g, st, change) {
   LK.game = g; LK.code = ''; LK.first = ''; LK.busy = false; LK.setup = !!(st && st.setup);
+  LK.change = 0; LK.old = ''; LK.neu = '';
   mode = 'lock'; lockEl.classList.add('show');
   document.getElementById('lockTitle').textContent = dosName(g) + '.EXE';
   if (LK.setup) lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', 'only you need to know it');
   else lockSay('ACCESS CODE REQUIRED', st && st.offline ? 'NO CONNECTION' : 'ENTER 5 DIGITS', st && st.offline);
-  lockRender(); SND.beep(); dirty = true;
+  if (change && !LK.setup) startChange();
+  lockShowChange(); lockRender(); SND.beep(); dirty = true;
 }
+// [C] CHANGE CODE: the old code, the new code, the new code again
+function lockShowChange() { document.getElementById('lockChange').style.display = LK.setup || LK.change ? 'none' : ''; }
+function startChange() { LK.change = 1; LK.old = ''; LK.neu = ''; LK.code = ''; lockSay('CHANGE CODE: TYPE THE OLD CODE', ''); lockShowChange(); lockRender(); }
 function closeLock() { lockEl.classList.remove('show'); LK.game = null; mode = 'main'; SND.key(); dirty = true; L.reveal = 0; }
 function lockKey(k) {
   if (!LK.game || LK.busy) return;
   unlock();
   if (k === 'esc') return closeLock();
+  if (k === 'color') { if (!LK.setup && !LK.change) { SND.move(); startChange(); } return; }
   if (k === 'DEL' || k === 'back') { LK.code = LK.code.slice(0, -1); SND.key(); lockSay(null, ''); return lockRender(); }
   if (/^\d$/.test(k)) {
     if (LK.code.length >= 5) return;
@@ -1065,6 +1077,7 @@ function lockDenied(text) {
 }
 async function lockSubmit() {
   if (LK.busy || LK.code.length !== 5) return;
+  if (LK.change) return changeSubmit();
   // choosing a new code: type it twice
   if (LK.setup && !LK.first) { LK.first = LK.code; LK.code = ''; lockSay('TYPE THE SAME CODE AGAIN', ''); lockRender(); SND.move(); return; }
   if (LK.setup && LK.code !== LK.first) { LK.first = ''; lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', ''); return lockDenied('THE CODES ARE NOT THE SAME'); }
@@ -1084,9 +1097,34 @@ async function lockSubmit() {
   if (r.status === 409) { LK.setup = !!j.setup; LK.first = ''; lockSay(LK.setup ? 'NEW PROGRAM. CHOOSE A 5-DIGIT CODE' : 'ACCESS CODE REQUIRED', ''); return lockDenied(j.setup ? 'TRY AGAIN' : 'A CODE WAS JUST SET'); }
   lockDenied('ACCESS DENIED' + (j.left != null ? ' · ' + j.left + ' TRIES LEFT' : ''));
 }
+async function changeSubmit() {
+  if (LK.change === 1) { LK.old = LK.code; LK.code = ''; LK.change = 2; lockSay('TYPE THE NEW CODE', ''); lockRender(); SND.move(); return; }
+  if (LK.change === 2) { LK.neu = LK.code; LK.code = ''; LK.change = 3; lockSay('TYPE THE NEW CODE AGAIN', ''); lockRender(); SND.move(); return; }
+  if (LK.code !== LK.neu) { LK.change = 2; LK.neu = ''; lockSay('TYPE THE NEW CODE', ''); return lockDenied('THE CODES ARE NOT THE SAME'); }
+  LK.busy = true; lockSay(null, 'CHECKING...'); lockRender();
+  let r, j = {};
+  try { r = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game: LK.game.id, code: LK.old, newCode: LK.neu }) }); j = await r.json().catch(() => ({})); }
+  catch (e) { LK.busy = false; return lockDenied('NO CONNECTION'); }
+  LK.busy = false;
+  if (r.ok && j.ok) {
+    lockSay('CODE CHANGED', ''); LK.code = ''; LK.change = 0;
+    tone(660, 0.1, 0.05, 'square'); tone(990, 0.16, 0.05, 'square', 0.1);
+    const g = LK.game;
+    setTimeout(() => { lockEl.classList.remove('show'); LK.game = null; mode = 'main'; run(g); }, 800);
+    return;
+  }
+  LK.change = 1; LK.old = ''; LK.neu = '';
+  lockSay('CHANGE CODE: TYPE THE OLD CODE', '');
+  if (r.status === 429) return lockDenied('TOO MANY TRIES. WAIT ' + Math.max(1, Math.ceil((j.wait || 600) / 60)) + ' MIN');
+  if (r.status === 409 && j.fixed) { LK.change = 0; lockSay('ACCESS CODE REQUIRED', ''); lockShowChange(); return lockDenied('THIS CODE IS SET ON THE SERVER'); }
+  if (r.status === 409) { LK.change = 0; LK.setup = true; lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', ''); lockShowChange(); return lockDenied('NO CODE YET'); }
+  lockDenied('WRONG OLD CODE' + (j.left != null ? ' · ' + j.left + ' TRIES LEFT' : ''));
+}
 // sent here by a locked program's page: open the code window for it
 const unlockAsk = new URLSearchParams(location.search).get('unlock');
-if (unlockAsk) history.replaceState(null, '', '/');
+// error.blue/?code=leviathan-voyage: open the code window to change the code (also when this phone is already let in)
+const changeAsk = new URLSearchParams(location.search).get('code');
+if (unlockAsk || changeAsk) history.replaceState(null, '', '/');
 
 // ----- running a program -----
 async function run(unlocked) {

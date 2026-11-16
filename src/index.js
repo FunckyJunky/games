@@ -212,7 +212,21 @@ async function handleUnlock(request, env, url) {
   const t = await triesLeft(env, ip);
   if (t.left <= 0) return json({ ok: false, wait: t.wait }, 429);
   let rec = await lockRecord(env, game);
-  if (!rec) {
+  // changing the code: the old code, then the new one (old cookies stop working)
+  if (body.newCode != null) {
+    const neu = String(body.newCode);
+    if (!/^\d{5}$/.test(neu)) return json({ error: "the code is 5 digits" }, 400);
+    if (!rec) return json({ ok: false, setup: true }, 409);
+    if (rec.fixed) return json({ ok: false, fixed: true }, 409);
+    const db = await lockDb(env);
+    if ((await sha256hex(rec.salt + ":" + code)) !== rec.hash) {
+      await db.prepare("INSERT INTO unlock_tries (ip, ts) VALUES (?, ?)").bind(ip, Date.now()).run();
+      return json({ ok: false, left: t.left - 1 }, 403);
+    }
+    const salt = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    rec = { salt, hash: await sha256hex(salt + ":" + neu) };
+    await db.prepare("UPDATE settings SET v = ? WHERE k = ?").bind(JSON.stringify(rec), "lock:" + game).run();
+  } else if (!rec) {
     // the very first time: this code becomes the code
     if (!body.setup) return json({ ok: false, setup: true }, 409);
     const salt = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");

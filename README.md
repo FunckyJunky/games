@@ -156,9 +156,12 @@ pad asks to choose the code (type it twice). The server keeps only a salted
 hash of it in D1 (table `settings`), never in this repository. A right code
 sets a cookie for 30 days; without it the game's files are closed (pages send
 you back to the menu, other files get 403). 8 wrong tries per 10 minutes, then
-the pad waits. To change the code: delete the row `lock:leviathan-voyage` in
-the D1 table `settings` (Cloudflare dashboard) and choose a new one, or set a
-Worker secret `LEVIATHAN_CODE`, which always wins.
+the pad waits. To change the code: tap [C] CHANGE CODE on the pad (or open
+error.blue/?code=leviathan-voyage, which also works on a phone that is already
+let in), type the old code, then the new one twice; old cookies stop working.
+If the old code is lost: delete the row `lock:leviathan-voyage` in the D1 table
+`settings` (Cloudflare dashboard) and choose a new one, or set a Worker secret
+`LEVIATHAN_CODE`, which always wins.
 
 ## App mode
 
