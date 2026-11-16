@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>STUDIO 3D</title>
+<meta name="theme-color" content="#07060d">
+<link rel="icon" href="/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script src="/lib/fullscreen.js"></script>
+<style>
+/* STUDIO 3D on error.blue: the FunKey S game, compiled to WebAssembly.
+ * The game draws 240 x 240 pixels; the page scales them up crisply and adds
+ * mouse look (desktop) or a stick, look-by-dragging and A / Y buttons (touch). */
+:root {
+  --bg: #07060d; --panel: #110e1c; --rim: #2a2140;
+  --ink: #ece6ff; --dim: #8d84ad;
+  --pink: #ff46be; --cyan: #3cdcff; --green: #39ff7a;
+  --a: #d8384a; --y: #2f9a58;
+  --scr: 480px;                       /* the picture's size, set by the page */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 30%, #17102a 0%, var(--bg) 70%); color: var(--ink);
+  font: 20px 'VT323', ui-monospace, monospace; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+#app { position: fixed; inset: 0; display: grid; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  grid-template: "top top top" auto "left mid right" minmax(0, 1fr) / auto minmax(0, 1fr) auto; gap: 8px; }
+
+/* top bar */
+.top { grid-area: top; display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.back { white-space: nowrap; color: var(--green); text-decoration: none; font-size: 20px; text-shadow: 0 0 6px rgba(57,255,122,.55); padding: 2px 6px; border: 1px solid #1b7a3c; background: rgba(3,18,8,.6); }
+.title { font-size: 26px; letter-spacing: 2px; color: var(--pink); text-shadow: 0 0 10px rgba(255,70,190,.6); margin-right: auto; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) { .title small { display: none; } }
+@media (max-width: 420px) { .top { gap: 6px; } .title { visibility: hidden; } .chip { min-width: 40px; padding: 0 7px; } .back { font-size: 18px; padding: 2px 4px; } }
+.title small { color: var(--dim); font-size: 18px; letter-spacing: 1px; text-shadow: none; margin-left: 6px; }
+.chip { min-width: 46px; height: 34px; padding: 0 10px; border: 1px solid var(--rim); background: var(--panel); border-radius: 8px; cursor: pointer; font-size: 20px; color: var(--ink); touch-action: none; }
+.chip:active, .chip.on { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(60,220,255,.4); }
+.chip.play.on { border-color: var(--green); color: var(--green); box-shadow: 0 0 8px rgba(57,255,122,.45); }
+
+/* the picture */
+.mid { grid-area: mid; display: grid; place-items: center; min-width: 0; min-height: 0; }
+.screen { position: relative; width: var(--scr); height: var(--scr); }
+#cv { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
+  box-shadow: 0 0 0 2px var(--rim), 0 0 40px rgba(255,70,190,.18), 0 0 80px rgba(60,220,255,.10); border-radius: 4px; touch-action: none; cursor: crosshair; }
+body.locked #cv { cursor: none; }
+
+/* start screen over the picture */
+#start { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: rgba(7,6,13,.72); cursor: pointer; border-radius: 4px; }
+#start h1 { margin: 0; font-weight: normal; font-size: calc(var(--scr) * .12); letter-spacing: 3px; color: var(--pink); text-shadow: 0 0 14px rgba(255,70,190,.8); line-height: 1; }
+#start p { margin: .4em 0 0; color: var(--dim); font-size: max(18px, calc(var(--scr) * .042)); }
+#start .go { margin-top: 1em; color: var(--cyan); font-size: max(22px, calc(var(--scr) * .06)); animation: blink 1.1s steps(1) infinite; text-shadow: 0 0 8px rgba(60,220,255,.6); }
+#start .err { color: #ff8080; }
+@keyframes blink { 50% { opacity: .25; } }
+#relock { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 2px 10px; background: rgba(7,6,13,.8); border: 1px solid var(--rim); color: var(--cyan); font-size: 18px; white-space: nowrap; pointer-events: none; }
+
+/* desktop legend */
+.legend { grid-area: right; align-self: center; width: 230px; color: var(--dim); font-size: 19px; line-height: 1.25; }
+.legend h2 { margin: 0 0 6px; font-weight: normal; color: var(--ink); font-size: 22px; letter-spacing: 1px; }
+.legend div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dotted #251d39; padding: 2px 0; }
+.legend b { font-weight: normal; color: var(--cyan); white-space: nowrap; }
+.legend .a b { color: #ff7a88; } .legend .y b { color: #6fe39a; }
+.legend p { margin: 10px 0 0; font-size: 17px; }
+
+/* touch controls */
+.deck { display: none; }
+body.touch .legend { display: none; }
+body.touch .deck { display: flex; touch-action: none; }
+.stickzone { grid-area: left; align-items: center; justify-content: center; }
+.btnzone { grid-area: right; align-items: center; justify-content: center; gap: 14px; }
+.stick { position: relative; width: 136px; height: 136px; border-radius: 50%; border: 2px solid var(--rim); background: radial-gradient(circle, #1a1430 0%, #0d0a18 70%); touch-action: none; }
+.stick::after { content: 'WALK'; position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); color: var(--dim); font-size: 16px; }
+.knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #4a3c74, #241b3d); border: 2px solid #5b4a8c; box-shadow: 0 0 12px rgba(60,220,255,.25); }
+.fn { width: 84px; height: 84px; border-radius: 50%; border: 0; font-size: 40px; color: #fff; touch-action: none; box-shadow: 0 4px 0 rgba(0,0,0,.5); }
+.fn.a { background: radial-gradient(circle at 40% 35%, #f05868, var(--a)); }
+.fn.y { background: radial-gradient(circle at 40% 35%, #48c47a, var(--y)); }
+.fn.down { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.5), 0 0 18px rgba(255,255,255,.35); }
+.fn small { display: block; font-size: 14px; margin-top: -6px; opacity: .85; }
+
+/* phone held upright: picture on top, controls underneath */
+@media (orientation: portrait) {
+  body.touch #app { grid-template: "top top" auto "mid mid" auto "left right" minmax(0, 1fr) / 1fr 1fr; }
+  body.touch .btnzone { flex-direction: row; }
+  body.touch .btnzone .fn.y { margin-bottom: 70px; }
+}
+/* phone on its side: stick left, picture in the middle, A / Y right */
+@media (orientation: landscape) {
+  body.touch .btnzone { flex-direction: column-reverse; }
+  body.touch .btnzone .fn.y { margin-right: 46px; }
+  body.touch .title small { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <a class="back" href="/" id="back">&lt; ERROR-DOS</a>
+    <div class="title">STUDIO 3D<small>a music studio to walk around in</small></div>
+    <button class="chip play" id="b-play" title="Play / stop (Space)">&#9654;</button>
+    <button class="chip" id="b-map" title="Map (hold Tab)">MAP</button>
+    <button class="chip" id="b-menu" title="Menu (Esc)">MENU</button>
+    <button class="chip" id="b-full" title="Full screen (F)">&#x26F6;</button>
+  </div>
+
+  <div class="deck stickzone"><div class="stick" id="stick"><div class="knob" id="knob"></div></div></div>
+
+  <div class="mid">
+    <div class="screen" id="screen">
+      <canvas id="cv" width="240" height="240"></canvas>
+      <div id="start">
+        <div>
+          <h1>STUDIO 3D</h1>
+          <p>drums &middot; 2 synths &middot; 2 sequencers &middot; a master panel</p>
+          <p id="start-hint">walk up to them and play</p>
+          <div class="go" id="start-go">LOADING&hellip;</div>
+        </div>
+      </div>
+      <div id="relock" hidden>CLICK THE PICTURE TO LOOK AROUND</div>
+    </div>
+  </div>
+
+  <div class="legend" id="legend">
+    <h2>CONTROLS</h2>
+    <div><span>look</span><b>MOUSE</b></div>
+    <div><span>walk</span><b>W S</b></div>
+    <div><span>step sideways</span><b>A D</b></div>
+    <div><span>turn</span><b>&larr; &rarr; Q E</b></div>
+    <div class="a"><span>first function</span><b>LEFT CLICK</b></div>
+    <div class="y"><span>second function</span><b>RIGHT CLICK</b></div>
+    <div><span>turn a knob</span><b>WHEEL</b></div>
+    <div><span>play / stop</span><b>SPACE</b></div>
+    <div><span>map</span><b>HOLD TAB</b></div>
+    <div><span>menu, help</span><b>ESC</b></div>
+    <div><span>full screen</span><b>F</b></div>
+    <p>The dot in the middle of the picture picks a control. Walk close, point at it, click.</p>
+  </div>
+
+  <div class="deck btnzone">
+    <button class="fn y" id="b-y">Y<small>2ND</small></button>
+    <button class="fn a" id="b-a">A<small>USE</small></button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const B = { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3, A: 4, B: 5, X: 6, Y: 7, L: 8, R: 9, START: 10, FN: 11, MENU: 12 };
+  const NB = 13, SAVE_KEY = 'studio3d-save', SR = 22050;
+  const cv = $('cv'), ctx2 = cv.getContext('2d'), img = ctx2.createImageData(240, 240), px32 = new Uint32Array(img.data.buffer);
+  const touchFirst = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window && !matchMedia('(pointer: fine)').matches;
+
+  let ex = null, mem = null, ended = false, started = false, mode = touchFirst ? 2 : 1;
+  /* buttons: held now, and pressed since the last frame (so a quick tap is never lost) */
+  const held = new Uint8Array(NB), latched = new Uint8Array(NB), src = { key: new Uint8Array(NB), touch: new Uint8Array(NB), mouse: new Uint8Array(NB), pad: new Uint8Array(NB) };
+  function setBtn(from, b, down) { src[from][b] = down ? 1 : 0; if (down) latched[b] = 1; }
+  function tapBtn(b) { latched[b] = 1; }
+
+  /* ---- the picture: RGB565 -> RGBA through a table ------------------------------- */
+  const LUT = new Uint32Array(65536);
+  for (let i = 0; i < 65536; i++) {
+    const r = (i >> 11) & 31, g = (i >> 5) & 63, b = i & 31;
+    LUT[i] = 0xff000000 | (((b << 3) | (b >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((r << 3) | (r >> 2));
+  }
+  function present() {
+    const s = new Uint16Array(mem.buffer, ex.web_screen(), 240 * 240);
+    for (let i = 0; i < 57600; i++) px32[i] = LUT[s[i]];
+    ctx2.putImageData(img, 0, 0);
+  }
+
+  /* the picture as big as it fits: whole multiples of 240 when there is room */
+  function layout() {
+    const mid = document.querySelector('.mid'), r = mid.getBoundingClientRect();
+    let w = r.width, h = r.height;
+    if (document.body.classList.contains('touch') && matchMedia('(orientation: portrait)').matches) {
+      w = innerWidth - 16; h = Math.min(w, innerHeight * 0.58);
+    }
+    let s = Math.floor(Math.min(w, h));
+    if (s >= 480) s = Math.floor(s / 240) * 240;
+    document.documentElement.style.setProperty('--scr', Math.max(160, s) + 'px');
+  }
+  addEventListener('resize', () => requestAnimationFrame(layout));
+
+  /* ---- sound: the game's 22 kHz, resampled if the browser won't run at that rate ---- */
+  let actx = null, node = null, fifo = new Float32Array(0), fpos = 0, last = 0;
+  function startAudio() {
+    if (actx) { if (actx.state !== 'running') actx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try { actx = new AC({ sampleRate: SR, latencyHint: 'interactive' }); } catch (e) { actx = new AC(); }
+    const ratio = SR / actx.sampleRate;
+    node = actx.createScriptProcessor(1024, 0, 1);
+    node.onaudioprocess = (e) => {
+      const out = e.outputBuffer.getChannelData(0), n = out.length;
+      if (!ex || ended) { out.fill(0); return; }
+      if (ratio === 1) {
+        const p = new Int16Array(mem.buffer, ex.web_audio(n), n);
+        for (let i = 0; i < n; i++) out[i] = p[i] / 32768;
+        return;
+      }
+      /* linear resampling from a small queue of game samples */
+      const need = Math.ceil(fpos + n * ratio) + 2;
+      if (fifo.length < need) {
+        const add = need - fifo.length, p = new Int16Array(mem.buffer, ex.web_audio(add), add), nf = new Float32Array(need);
+        nf.set(fifo); for (let i = 0; i < add; i++) nf[fifo.length + i] = p[i] / 32768;
+        fifo = nf;
+      }
+      for (let i = 0; i < n; i++) {
+        const k = fpos | 0, f = fpos - k;
+        out[i] = fifo[k] + (fifo[k + 1] - fifo[k]) * f;
+        fpos += ratio;
+      }
+      const used = fpos | 0;
+      fifo = fifo.slice(used); fpos -= used;
+    };
+    node.connect(actx.destination);
+    if (actx.state !== 'running') actx.resume();
+  }
+
+  /* ---- saving: in this browser ------------------------------------------------------ */
+  let lastSaved = '';
+  function cstr(p, max) { const b = new Uint8Array(mem.buffer, p, max); let n = 0; while (n < max && b[n]) n++; return new TextDecoder().decode(b.subarray(0, n)); }
+  function save() {
+    if (!ex) return;
+    try { const t = cstr(ex.web_save(), 4096); if (t !== lastSaved) { localStorage.setItem(SAVE_KEY, t); lastSaved = t; } } catch (e) {}
+  }
+  addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); releaseAll(); } });
+  setInterval(save, 5000);
+
+  /* ---- the game ---------------------------------------------------------------------- */
+  async function boot() {
+    try {
+      const res = await fetch('studio3d.wasm?v=1');
+      if (!res.ok) throw new Error('studio3d.wasm: ' + res.status);
+      const bytes = await res.arrayBuffer();
+      const wasi = {
+        fd_close: () => 0, fd_seek: () => 0,
+        fd_write: (fd, iov, n, out) => {
+          const v = new DataView(mem.buffer); let t = 0;
+          for (let i = 0; i < n; i++) t += v.getUint32(iov + i * 8 + 4, true);
+          v.setUint32(out, t, true); return 0;
+        },
+      };
+      const { instance } = await WebAssembly.instantiate(bytes, { wasi_snapshot_preview1: wasi });
+      ex = instance.exports; mem = ex.memory;
+      ex._initialize();
+      ex.web_init(mode);
+      let saved = null;
+      try { saved = localStorage.getItem(SAVE_KEY); } catch (e) {}
+      if (saved) {
+        const enc = new TextEncoder().encode(saved.slice(0, 4000)), p = ex.web_load_buf();
+        const dst = new Uint8Array(mem.buffer, p, 4096); dst.fill(0); dst.set(enc);
+        ex.web_load();
+      }
+      ex.web_start();
+      $('start-go').textContent = touchFirst ? 'TAP TO ENTER' : 'CLICK TO ENTER';
+      $('start-hint').textContent = touchFirst ? 'stick walks, drag looks, tap a control, then A or Y' : 'the mouse looks around; click to use what the dot is on';
+      requestAnimationFrame(frame);
+    } catch (e) {
+      console.error(e);
+      $('start-go').innerHTML = '<span class="err">COULD NOT START: ' + String(e.message || e).replace(/[<>&]/g, '') + '</span>';
+    }
+  }
+
+  let tPrev = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!ex || ended) return;
+    const dt = tPrev ? Math.min(0.1, (now - tPrev) / 1000) : 1 / 60;
+    tPrev = now;
+    pollPads();
+    for (let b = 0; b < NB; b++) {
+      const h = src.key[b] | src.touch[b] | src.mouse[b] | src.pad[b];
+      ex.web_btn(b, h | latched[b]);
+      latched[b] = 0;
+    }
+    if (!ex.web_frame(dt)) { quit(); return; }
+    present();
+    const st = ex.web_state();
+    $('b-play').classList.toggle('on', !!(st & 4));
+    $('b-play').innerHTML = st & 4 ? '&#9632;' : '&#9654;';
+    $('b-map').classList.toggle('on', !!(st & 8));
+    $('b-menu').classList.toggle('on', !!(st & 3));
+    $('relock').hidden = !(started && mode === 1 && !document.pointerLockElement && !(st & 3) && canLock);
+  }
+
+  function quit() {
+    ended = true; save();
+    try { sessionStorage.setItem('errordos-ran', 'STUDIO 3D'); } catch (e) {}
+    if (document.pointerLockElement) document.exitPointerLock();
+    location.href = '/';
+  }
+  $('back').addEventListener('click', () => { save(); try { sessionStorage.setItem('errordos-ran', 'STUDIO 3D'); } catch (e) {} });
+
+  function setMode(m) {
+    if (m === mode) return;
+    mode = m;
+    document.body.classList.toggle('touch', m === 2);
+    if (ex) ex.web_set_mode(m);
+    layout();
+  }
+  document.body.classList.toggle('touch', mode === 2);
+
+  function enter() {
+    startAudio();
+    if (!ex) return;
+    if (!started) { started = true; $('start').hidden = true; }
+    if (mode === 1) lockMouse();
+  }
+  $('start').addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setMode(2); e.preventDefault(); enter(); });
+
+  /* ---- desktop: the mouse looks around (pointer lock) ---------------------------------- */
+  const canLock = 'requestPointerLock' in cv;
+  let unlockAt = 0, selfUnlock = false;
+  function lockMouse() { if (canLock && !document.pointerLockElement) { try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} } }
+  document.addEventListener('pointerlockchange', () => {
+    const on = document.pointerLockElement === cv;
+    document.body.classList.toggle('locked', on);
+    if (!on) {
+      if (!selfUnlock) unlockAt = performance.now();   /* the browser took the mouse back with that Esc */
+      selfUnlock = false;
+      src.mouse.fill(0);
+      /* Esc gave the mouse back: open the game's menu, as Esc would on a console */
+      if (ex && started && !ended && mode === 1 && !(ex.web_state() & 3)) ex.web_menu(1);
+    }
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!ex || document.pointerLockElement !== cv) return;
+    ex.web_look(e.movementX * 0.6, e.movementY * 0.6);
+  });
+  /* without pointer lock (rare): the view turns toward the mouse near the picture's edges */
+  let edge = { x: 0, y: 0 };
+  cv.addEventListener('mousemove', (e) => {
+    if (canLock || mode !== 1) return;
+    const r = cv.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = (e.clientY - r.top) / r.height * 2 - 1;
+    edge.x = Math.abs(nx) > 0.6 ? (nx - Math.sign(nx) * 0.6) * 2.5 : 0;
+    edge.y = Math.abs(ny) > 0.6 ? (ny - Math.sign(ny) * 0.6) * 2.5 : 0;
+  });
+  cv.addEventListener('mouseleave', () => { edge.x = edge.y = 0; });
+  setInterval(() => { if (ex && (edge.x || edge.y)) ex.web_look(edge.x * 6, edge.y * 6); }, 16);
+
+  function toScreen(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * 240, (e.clientY - r.top) / r.height * 240]; }
+  cv.addEventListener('mousedown', (e) => {
+    if (!ex || mode === 2) return;
+    e.preventDefault();
+    startAudio();
+    const st = ex.web_state();
+    if (st & 3) {                                            /* the menu or help: click a row */
+      const [x, y] = toScreen(e);
+      ex.web_menu_tap(x, y);
+      if (!(ex.web_state() & 3)) lockMouse();
+      return;
+    }
+    if (document.pointerLockElement !== cv) { lockMouse(); return; }
+    if (e.button === 0) setBtn('mouse', B.A, 1);
+    if (e.button === 2) setBtn('mouse', B.Y, 1);
+  });
+  addEventListener('mouseup', (e) => { if (e.button === 0) setBtn('mouse', B.A, 0); if (e.button === 2) setBtn('mouse', B.Y, 0); });
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); if (ex && e.deltaY) ex.web_wheel(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+
+  /* keyboard */
+  const KEYS = {
+    KeyW: B.UP, ArrowUp: B.UP, KeyS: B.DOWN, ArrowDown: B.DOWN,
+    ArrowLeft: B.LEFT, KeyQ: B.LEFT, ArrowRight: B.RIGHT, KeyE: B.RIGHT,
+    KeyA: B.L, KeyD: B.R, Space: B.START, Tab: B.FN, Enter: B.A, Backspace: B.B,
+    KeyR: B.X, KeyV: B.B,           /* look up / down without a mouse */
+  };
+  addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (mode === 2) setMode(1);
+    if (!started && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); enter(); return; }
+    if (e.code === 'KeyF') { e.preventDefault(); toggleFull(); return; }
+    if (e.code === 'KeyM') { e.preventDefault(); if (ex) ex.web_toggle_map(); return; }
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (!ex || performance.now() - unlockAt < 400) return;   /* that Esc just gave the mouse back */
+      if (document.pointerLockElement) { selfUnlock = true; document.exitPointerLock(); ex.web_menu(1); return; }   /* (with Keyboard Lock) */
+      if (ex.web_state() & 3) { setBtn('key', B.B, 1); setTimeout(() => setBtn('key', B.B, 0), 60); }
+      else ex.web_menu(1);
+      return;
+    }
+    let b = KEYS[e.code];
+    if (b === undefined) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    if (ex && (ex.web_state() & 3)) {                        /* in the menu: W/S pick, Space and Enter do it */
+      if (e.code === 'Space') b = B.A;
+      if (e.code === 'KeyA') b = B.LEFT;
+      if (e.code === 'KeyD') b = B.RIGHT;
+    }
+    setBtn('key', b, 1);
+  });
+  addEventListener('keyup', (e) => {
+    const b = KEYS[e.code];
+    if (b !== undefined) { setBtn('key', b, 0); if (e.code === 'Space') setBtn('key', B.A, 0); if (e.code === 'KeyA') setBtn('key', B.LEFT, 0); if (e.code === 'KeyD') setBtn('key', B.RIGHT, 0); }
+  });
+  function releaseAll() { for (const k in src) src[k].fill(0); if (ex) ex.web_move(0, 0); padMove = false; }
+  addEventListener('blur', releaseAll);
+
+  /* ---- touch: drag the picture to look, tap a control to aim at it --------------------- */
+  const drags = new Map();
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    e.preventDefault();
+    setMode(2); startAudio();
+    if (!started) enter();
+    cv.setPointerCapture(e.pointerId);
+    drags.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 });
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const d = drags.get(e.pointerId);
+    if (!d || !ex) return;
+    const r = cv.getBoundingClientRect(), k = 240 / r.width;
+    const dx = (e.clientX - d.x) * k, dy = (e.clientY - d.y) * k;
+    d.x = e.clientX; d.y = e.clientY; d.moved += Math.abs(dx) + Math.abs(dy);
+    if (d.moved > 4) ex.web_look(dx * 1.6, dy * 1.6);
+  });
+  function dragEnd(e) {
+    const d = drags.get(e.pointerId);
+    if (!d) return;
+    drags.delete(e.pointerId);
+    if (!ex || e.type === 'pointercancel') return;
+    if (d.moved <= 4 && performance.now() - d.t < 350) {
+      const [x, y] = toScreen(e);
+      if (ex.web_state() & 3) ex.web_menu_tap(x, y); else ex.web_tap(x, y);
+    }
+  }
+  cv.addEventListener('pointerup', dragEnd);
+  cv.addEventListener('pointercancel', dragEnd);
+
+  /* the stick: walk and step sideways */
+  const stick = $('stick'), knob = $('knob');
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), R = r.width / 2;
+    let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+    const l = Math.hypot(dx, dy), max = R * 0.62;
+    if (l > max) { dx *= max / l; dy *= max / l; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    let fx = dx / max, fy = -dy / max;
+    const m = Math.hypot(fx, fy);
+    if (m < 0.18) { fx = 0; fy = 0; } else { const s = (m - 0.18) / 0.82 / m; fx *= s; fy *= s; }
+    if (ex) ex.web_move(fy, fx);
+  }
+  stick.addEventListener('pointerdown', (e) => { e.preventDefault(); setMode(2); startAudio(); if (!started) enter(); stickId = e.pointerId; stick.setPointerCapture(e.pointerId); stickAt(e); });
+  stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) stickAt(e); });
+  function stickEnd(e) { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ''; if (ex) ex.web_move(0, 0); }
+  stick.addEventListener('pointerup', stickEnd);
+  stick.addEventListener('pointercancel', stickEnd);
+
+  /* A and Y: held as long as the finger is on them */
+  function holdButton(el, b) {
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); startAudio(); if (!started) enter(); el.setPointerCapture(e.pointerId); el.classList.add('down'); setBtn('touch', b, 1); });
+    const up = () => { el.classList.remove('down'); setBtn('touch', b, 0); };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+  holdButton($('b-a'), B.A);
+  holdButton($('b-y'), B.Y);
+
+  /* the small buttons on top */
+  function chip(id, fn) { $(id).addEventListener('pointerdown', (e) => { e.preventDefault(); startAudio(); if (!started) enter(); fn(); }); }
+  chip('b-play', () => tapBtn(B.START));
+  chip('b-map', () => { if (ex) ex.web_toggle_map(); });
+  chip('b-menu', () => { if (!ex) return; if (ex.web_state() & 3) ex.web_menu(0); else { if (document.pointerLockElement) document.exitPointerLock(); ex.web_menu(1); } });
+  function toggleFull() {
+    const d = document, FS = window.ErrorFS;                 /* the site's full screen helper, if loaded */
+    if (FS) { if (FS.active()) FS.exit(); else FS.enter(); return; }
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else { const el = d.documentElement; const p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) {}
+  }
+  chip('b-full', toggleFull);
+  if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('b-full').hidden = true;
+  /* in full screen, keep Esc for the game's menu (Chrome, Edge: Keyboard Lock; holding Esc still leaves) */
+  function fsChanged() {
+    const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    try { if (navigator.keyboard && navigator.keyboard.lock) { if (on) navigator.keyboard.lock(['Escape']).catch(() => {}); else navigator.keyboard.unlock(); } } catch (e) {}
+    setTimeout(layout, 50);
+  }
+  document.addEventListener('fullscreenchange', fsChanged);
+  document.addEventListener('webkitfullscreenchange', fsChanged);
+
+  /* ---- gamepads: left stick walks, right stick looks ---------------------------------- */
+  let padMove = false;
+  function pollPads() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let p = null;
+    for (const g of pads) if (g && g.connected && g.mapping === 'standard') { p = g; break; }
+    if (!p) { if (padMove) { padMove = false; ex.web_move(0, 0); } src.pad.fill(0); return; }
+    const dz = (v) => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
+    const bt = (i) => !!(p.buttons[i] && p.buttons[i].pressed);
+    const map = [[12, B.UP], [13, B.DOWN], [14, B.LEFT], [15, B.RIGHT], [0, B.A], [2, B.Y], [1, B.B], [3, B.X], [4, B.L], [5, B.R], [9, B.START], [8, B.MENU], [6, B.FN]];
+    let any = false;
+    for (const [i, b] of map) { const d = bt(i); if (d && !src.pad[b]) latched[b] = 1; src.pad[b] = d ? 1 : 0; any = any || d; }
+    const lx = dz(p.axes[0] || 0), ly = dz(p.axes[1] || 0), rx = dz(p.axes[2] || 0), ry = dz(p.axes[3] || 0);
+    if (lx || ly) { ex.web_move(-ly, lx); padMove = true; } else if (padMove) { ex.web_move(0, 0); padMove = false; }
+    if (rx || ry) ex.web_look(rx * 9, ry * 7);
+    if ((any || lx || ly || rx || ry) && mode !== 0) setMode(0);
+    if (any && !started) enter();
+  }
+
+  /* for the automated tests only (address ending in #test) */
+  if (location.hash === '#test') window.__studio = { ex: () => ex, mem: () => mem, setMode, enter };
+
+  layout();
+  boot();
+})();
+</script>
+</body>
+</html>

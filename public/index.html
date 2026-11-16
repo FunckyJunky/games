@@ -568,7 +568,73 @@ function sceneVgadai(t, seg) {
   for (const s2 of dot) seg.push(s2);
   return { yaw: Math.sin(t * 0.3) * 0.4, pitch: 0.2, dist: 8.6, ty: 1.4 };
 }
-const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai };
+function sceneStudio(t, seg, quads) {
+  // STUDIO 3D: the drum machine with its steps running, two keyboards on stands, the master panel, cables
+  for (let i = -3; i <= 3; i++) seg.push([[i * 1.5, 0, -3], [i * 1.5, 0, 2.6]]);
+  for (let k = 0; k <= 4; k++) seg.push([[-4.5, 0, -3 + k * 1.4], [4.5, 0, -3 + k * 1.4]]);
+  // the drum machine on its table
+  cubeEdges(0, 0.95, 0.7, 3.6, 0.22, 1.3, 0, seg);
+  cubeEdges(0, 0.8, 0.7, 3.9, 0.08, 1.6, 0, seg);
+  seg.push([[-1.6, 0, 0.2], [-1.6, 0.84, 0.2]], [[1.6, 0, 0.2], [1.6, 0.84, 0.2]], [[-1.6, 0, 1.2], [-1.6, 0.84, 1.2]], [[1.6, 0, 1.2], [1.6, 0.84, 1.2]]);
+  const step = Math.floor(t * 7.9) % 16, PAT = [1,0,1,0, 1,0,1,1, 1,0,1,0, 1,0,1,0], y = 1.07;
+  for (let i = 0; i < 16; i++) {
+    const x0 = -1.62 + i * 0.205, z0 = 1.05, w = 0.15;
+    seg.push([[x0, y, z0], [x0 + w, y, z0]], [[x0 + w, y, z0], [x0 + w, y, z0 + w]], [[x0 + w, y, z0 + w], [x0, y, z0 + w]], [[x0, y, z0 + w], [x0, y, z0]]);
+    if (i === step || PAT[i]) quads.push({ p: [[x0, y, z0], [x0 + w, y, z0], [x0 + w, y, z0 + w], [x0, y, z0 + w]], alpha: i === step ? 1 : 0.45 });
+  }
+  for (let v = 0; v < 4; v++) {                       // the pads: one flashes on each beat
+    const x0 = -1.5 + v * 0.8, z0 = 0.45, w = 0.55, hit = v === Math.floor(t * 7.9 / 4) % 4 && (t * 7.9 % 4) < 1.2;
+    seg.push([[x0, y, z0], [x0 + w, y, z0]], [[x0 + w, y, z0], [x0 + w, y, z0 + 0.4]], [[x0 + w, y, z0 + 0.4], [x0, y, z0 + 0.4]], [[x0, y, z0 + 0.4], [x0, y, z0]]);
+    if (hit) quads.push({ p: [[x0, y, z0], [x0 + w, y, z0], [x0 + w, y, z0 + 0.4], [x0, y, z0 + 0.4]], alpha: 0.7 });
+  }
+  // two keyboards on X stands, turned toward the middle; their keys go down with the notes
+  const kb = (cx, cz, ry) => {
+    const T = p => { const q = rotY(p, ry); return [q[0] + cx, q[1], q[2] + cz]; };
+    const box = [];
+    cubeEdges(0, 1.05, 0, 2.2, 0.14, 0.75, 0, box);
+    for (const [a, b] of box) seg.push([T(a), T(b)]);
+    const lit = Math.floor(t * 3.9 + cx) % 10;
+    for (let k = 0; k <= 10; k++) {
+      const x = -1.0 + k * 0.2, dn = (k === lit || k === (lit + 4) % 10) ? 0.05 : 0;
+      seg.push([T([x, 1.12 - dn, 0.37]), T([x, 1.12 - dn, -0.05])]);
+    }
+    seg.push([T([-0.7, 0, -0.35]), T([-0.7, 0.98, 0.3])], [T([-0.7, 0, 0.35]), T([-0.7, 0.98, -0.3])]);
+    seg.push([T([0.7, 0, -0.35]), T([0.7, 0.98, 0.3])], [T([0.7, 0, 0.35]), T([0.7, 0.98, -0.3])]);
+    return T([0, 0.95, -0.38]);
+  };
+  const j1 = kb(-3.1, -1.0, 0.75), j2 = kb(3.1, -1.0, -0.75);
+  // the master panel against the back, with its faders moving
+  cubeEdges(0, 1.0, -2.4, 3.0, 0.3, 0.9, 0, seg);
+  cubeEdges(0, 1.45, -2.82, 3.0, 0.6, 0.12, 0, seg);
+  for (let f = 0; f < 4; f++) {
+    const x = -1.2 + f * 0.8, h = 0.5 + 0.35 * Math.sin(t * 1.3 + f * 1.7);
+    seg.push([[x, 1.16, -2.75], [x, 1.16, -2.05]]);
+    seg.push([[x - 0.12, 1.17, -2.05 - h * 0.7], [x + 0.12, 1.17, -2.05 - h * 0.7]]);
+  }
+  // cables along the floor, with a pulse running to the master
+  const cable = (a, ph) => {
+    const b = [0, 0.95, -2.85], P = [];
+    for (let i = 0; i <= 12; i++) {
+      const u = i / 12, sag = Math.sin(u * Math.PI);
+      P.push([a[0] + (b[0] - a[0]) * u, Math.max(0.02, a[1] * (1 - u) * (1 - u) + b[1] * u * u - sag * 0.6), a[2] + (b[2] - a[2]) * u]);
+    }
+    for (let i = 0; i < 12; i++) seg.push([P[i], P[i + 1]]);
+    const k = Math.floor(((t * 0.9 + ph) % 1) * 12);
+    quads.push({ p: [P[k], [P[k][0] + 0.12, P[k][1], P[k][2]], [P[k + 1][0] + 0.12, P[k + 1][1], P[k + 1][2]], P[k + 1]], alpha: 0.9 });
+  };
+  cable(j1, 0); cable(j2, 0.5); cable([0, 0.9, 0.05], 0.25);
+  // notes rising from the master's monitor side (right of the title)
+  for (let n = 0; n < 3; n++) {
+    const ph = (t * 0.35 + n / 3) % 1, x = 2.2 + n * 0.55 + Math.sin(ph * 6 + n) * 0.25, yy = 1.7 + ph * 1.6, s = 0.2;
+    seg.push([[x, yy, -2.6], [x, yy + s * 2, -2.6]], [[x, yy + s * 2, -2.6], [x + s, yy + s * 1.6, -2.6]]);
+    cubeEdges(x - 0.1, yy, -2.6, 0.2, 0.14, 0.05, 0, seg);
+  }
+  /* built with the player's side at +z; the logo camera looks from -z, so mirror it front to back */
+  for (const sg of seg) for (const q of sg) q[2] = -q[2];
+  for (const qd of quads) for (const q of qd.p) q[2] = -q[2];
+  return { yaw: Math.sin(t * 0.22) * 0.3, pitch: -0.68, dist: 9.6, ty: 0.2 };
+}
+const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio };
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);

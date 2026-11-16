@@ -13,6 +13,7 @@ public/                 the website
   games/
     pixel-hop/          one folder per game (index.html + music, images...)
     pixel-party/
+    studio3d/           STUDIO 3D (the FunKey game, as WebAssembly)
   apps/
     error-chat/         ERROR-CHAT: text chat by channel code
   tusa/                 Туса У Берліні
@@ -39,8 +40,8 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 ```
 
    `folder` is `games`, `online` or `apps` (the three tabs in the ERROR-DOS menu).
-   `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, or leave it
-   out for the name over a synthwave sun.
+   `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, `tusa`, `vgadai`,
+   `studio`, or leave it out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 
@@ -199,6 +200,33 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   lobby, top right of the login). Esc opens the menu (continue, full screen on/off, settings,
   leave the episode, ERROR-DOS); in Chrome and Edge the game keeps Esc in full screen
   (Keyboard Lock), holding Esc still leaves. Phones and tablets don't get the switch
+
+## Studio 3D (error.blue/games/studio3d)
+
+`public/games/studio3d/`: the FunKey S game STUDIO 3D, a music studio to walk around in and
+play (drum machine, two synths with their sequencers, a master panel, all cabled up). The C game
+runs unchanged as `studio3d.wasm`; `index.html` draws its 240 x 240 picture crisp and as big as it
+fits (whole multiples of 240 when there is room), plays its 22 kHz sound, and keeps the song,
+the room's lights, the settings and where you stand in the browser (localStorage `studio3d-save`).
+
+- computer: click the picture and the mouse looks around (pointer lock). W/S walk, A/D step
+  sideways, arrows or Q/E turn, left click = A, right click = Y (hold on knobs and faders), the
+  wheel turns knobs, faders and note sliders a step at a time, Space play/stop, hold Tab for the
+  map (M keeps it on), Esc opens the menu and gives the mouse back, F full screen. R/V look up and
+  down without a mouse. In the menu: arrows or W/S, Enter, Esc, the wheel, or click a row.
+- phone or tablet: the stick (left) walks and steps sideways, dragging the picture looks around,
+  tapping a control turns the view onto it (too far: "COME CLOSER"), then A or Y (held on knobs).
+  ▶, MAP and MENU sit in the top bar; in the menu, tap a row to pick it and again to do it.
+  Upright: picture on top, controls under it; on its side: stick left, picture, A and Y right.
+- gamepad: left stick walks, right stick looks, A (bottom) and X (left) are the game's A and Y,
+  B backs out of menus, LB/RB step sideways, Start plays, Back/Select opens the menu, LT shows the map.
+- the game's hints follow what you use: mouse buttons on a computer, A / Y on touch and gamepads.
+- its menu's last line, SAVE, BACK TO ERROR-DOS, saves and returns to the menu here.
+- ERROR-DOS shows it as STUDIO3D.HTM in GAMES, with its own wireframe logo (`studio`).
+- the source is the game's own (`studio3d-source.tar.gz` in the Funkey S project). After a change:
+  `make web` there (needs the WASI sysroot, see its README), copy `web/studio3d.wasm` here and
+  raise `?v=` where `index.html` loads it: the service worker keeps `.wasm` files, so a new
+  address is what makes phones fetch the new one.
 
 ## Access code (Leviathan)
 
