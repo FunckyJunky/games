@@ -182,7 +182,7 @@ addEventListener('pointerdown', () => { unlockVoice(); audio(); }, { capture: tr
 // =====================================================================
 function show(id) {
   for (const s of ['login', 'lobby', 'app']) $(s).classList.toggle('show', s === id);
-  SCREEN = id;
+  SCREEN = id; document.body.dataset.screen = id;
 }
 let SCREEN = 'login';
 function toast(msg) {
@@ -218,55 +218,53 @@ function dlgKey(e) {
 }
 
 // =====================================================================
-// full screen on a computer: the first key or click goes full screen, and
-// so does every one after that, until you choose to stay in a window.
-// Esc opens the menu (where you can leave full screen).
+// full screen on a computer: F switches it (when you aren't typing), and so
+// does the small ⛶ F button. Esc opens the menu.
 // =====================================================================
 const DESK = matchMedia('(pointer: fine)').matches && !/iPad|iPhone|iPod|Android/i.test(navigator.userAgent)
   && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !matchMedia('(display-mode: fullscreen)').matches;
-const FS = { want: DESK, leaving: false };
-try { if (sessionStorage.getItem('vgadai-window') === '1') FS.want = false; } catch (e) {}
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
 const fsOk = () => DESK && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 let MENU = false;
 function goFull() {
-  if (!FS.want || fsEl() || !fsOk()) return;
+  if (fsEl() || !fsOk()) return;
   const el = document.documentElement, r = el.requestFullscreen || el.webkitRequestFullscreen;
   try { const p = r.call(el, { navigationUI: 'hide' }); if (p && p.then) p.then(lockEsc, () => {}); else lockEsc(); } catch (e) {}
 }
 // in full screen, Esc comes to the game (Chrome, Edge): it opens the menu; holding Esc still leaves
 function lockEsc() { try { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); } catch (e) {} }
 function leaveFull() {
-  FS.want = false;
-  try { sessionStorage.setItem('vgadai-window', '1'); } catch (e) {}
   try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
-  if (fsEl()) { FS.leaving = true; try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
-  toast('🗗 У вікні · Esc → меню → повний екран');
+  if (fsEl()) try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {}
 }
-function backToFull() { FS.want = true; try { sessionStorage.removeItem('vgadai-window'); } catch (e) {} goFull(); }
-addEventListener('pointerdown', e => { if (!e.target.closest('#dlg')) goFull(); }, { capture: true });
-addEventListener('keydown', e => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey && !dlgOpen() && !/^(F\d+|Shift|Control|Alt|Meta|CapsLock|Tab)$/.test(e.key)) goFull(); }, { capture: true });
-function fsChange() {
-  if (fsEl()) { FS.leaving = false; return; }
-  if (FS.leaving) { FS.leaving = false; return; }
-  // the browser left full screen (Esc without the key lock): the menu, to go back or stay in the window
-  if (FS.want && !dlgOpen()) openMenu();
+function toggleFull() { SFX.click(); if (fsEl()) leaveFull(); else goFull(); }
+// typing a name, a question or an answer: then F is just the letter F
+const typingNow = () => SCREEN === 'login' || (SCREEN === 'app' && !!S.field);
+function fsShow() {
+  const on = !!fsEl();
+  for (const id of ['fsBtn', 'fsFix']) {
+    const b = $(id); if (!b) continue;
+    b.style.display = fsOk() ? '' : 'none';
+    b.textContent = (on ? '🗗' : '⛶') + ' F';
+    b.title = on ? 'Вийти з повного екрана (F)' : 'Повний екран (F)';
+  }
 }
-document.addEventListener('fullscreenchange', fsChange);
-document.addEventListener('webkitfullscreenchange', fsChange);
+for (const id of ['fsBtn', 'fsFix']) $(id).addEventListener('click', e => { e.stopPropagation(); toggleFull(); });
+document.addEventListener('fullscreenchange', fsShow);
+document.addEventListener('webkitfullscreenchange', fsShow);
+fsShow();
 function openMenu() {
   const inStudio = SCREEN === 'app', full = !!fsEl();
   const opt = (a, ico, label, sub) => '<button class="opt" data-a="' + a + '"><span class="ico">' + ico + '</span><span>' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span></button>';
   dialog('<h3>⏸ Меню</h3>'
-    + opt('go', '▶', 'Продовжити', full || !FS.want || !fsOk() ? 'Esc' : 'на весь екран')
-    + (fsOk() ? (full ? opt('window', '🗗', 'Вийти з повного екрана', 'гра далі у вікні')
-      : FS.want ? opt('window', '🗗', 'Залишитися у вікні', 'без повного екрана') : opt('full', '🖥', 'Повний екран', 'кожна клавіша знову на весь екран')) : '')
+    + opt('go', '▶', 'Продовжити', 'Esc')
+    + (fsOk() ? (full ? opt('window', '🗗', 'Вийти з повного екрана', 'клавіша F') : opt('full', '⛶', 'Повний екран', 'клавіша F')) : '')
     + opt('set', '⚙', 'Налаштування', 'сповіщення, голос ведучого, звук')
     + (inStudio ? opt('leave', '🚪', 'Вийти з епізоду', esc(epName(S.code)) + ' · бали залишаться') : '')
     + opt('dos', '◄', 'Terug naar ERROR-DOS', ''), {
-    go: () => goFull(),
+    go: () => {},
     window: leaveFull,
-    full: backToFull,
+    full: goFull,
     set: () => { setTimeout(() => openSettings(inStudio), 30); },
     leave: () => leaveEpisode(),
     dos: () => { try { sessionStorage.setItem('errordos-ran', 'VGADAI'); } catch (e) {} location.href = '/'; },
@@ -346,7 +344,7 @@ function showLogin() {
     'Wie ben jij? Typ je naam en druk op ENTER.',
     '',
   ];
-  if (fsOk()) loginLines.splice(loginLines.length - 1, 0, '<span class="dim">Een toets: volledig scherm · ESC: menu</span>');
+  if (fsOk()) loginLines.splice(loginLines.length - 1, 0, '<span class="dim">⛶ F: volledig scherm · ESC: menu</span>');
   loginBusy = false;
   termRender();
 }
@@ -895,14 +893,12 @@ function openSettings(inStudio) {
     + '<button class="opt" data-a="push"><span class="ico">🔔</span><span>Сповіщення<small>нове питання і нова відповідь у твоєму епізоді</small></span>' + sw(PREF.push && PUSH.sub) + '</button>'
     + '<button class="opt" data-a="voice"><span class="ico">🗣</span><span>Ведучий читає питання<small>вголос, українською (коли питання кирилицею)</small></span>' + sw(PREF.voice) + '</button>'
     + '<button class="opt" data-a="sound"><span class="ico">🔊</span><span>Звук<small>кнопки, фанфари, оплески</small></span>' + sw(SET.sound) + '</button>'
-    + (fsOk() ? '<button class="opt" data-a="fs"><span class="ico">🖥</span><span>Повний екран<small>на комп\'ютері: кожна клавіша на весь екран, Esc → меню</small></span>' + sw(FS.want) + '</button>' : '')
     + (standalone ? '' : '<button class="opt" data-a="install"><span class="ico">📲</span><span>Встановити як додаток<small>на головний екран, на весь екран</small></span></button>')
     + (inStudio ? '<button class="opt" data-a="reset"><span class="ico">🔄</span><span>Нова гра в цьому епізоді<small>рейтинг ' + esc(epName(S.code)) + ' на нуль</small></span></button>' : '')
     + '<button class="btn" data-a="close" style="margin-top:4px">ГОТОВО</button>', {
     push: () => { togglePush().then(() => openSettings(inStudio)); return 'keep'; },
     voice: () => { PREF.voice = !PREF.voice; savePref(); if (!PREF.voice) try { speechSynthesis.cancel(); } catch (e) {} else speakTest(); openSettings(inStudio); return 'keep'; },
     sound: () => { setSound(!SET.sound); openSettings(inStudio); return 'keep'; },
-    fs: () => { if (FS.want) leaveFull(); else backToFull(); openSettings(inStudio); return 'keep'; },
     install: () => {
       if (installEv) { installEv.prompt(); installEv = null; return; }
       const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -971,6 +967,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (dlgOpen()) return dlgKey(e);
+  if ((e.key === 'f' || e.key === 'F') && fsOk() && !typingNow()) { e.preventDefault(); toggleFull(); return; }
   if (SCREEN === 'login') {
     if (e.key === 'Enter') { e.preventDefault(); loginKb.flash('SEND'); return loginKey('SEND'); }
     if (e.key === 'Backspace') { e.preventDefault(); return loginKey('DEL'); }

@@ -127,6 +127,15 @@
   #stageWrap { position: relative; flex: 1 1 auto; min-height: 120px; border-radius: 12px; overflow: hidden;
     box-shadow: 0 0 0 3px var(--ink), 0 8px 24px rgba(0,0,0,.5); background: #1a0d33; }
   #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  /* the full screen switch (on a computer): ⛶ F */
+  .fsb { all: unset; cursor: pointer; z-index: 75; padding: 3px 9px; border-radius: 9px; font-family: 'VT323', monospace; font-size: 18px; line-height: 1.1;
+    color: #fbf4e2; background: rgba(20,10,36,.6); border: 2px solid rgba(251,244,226,.35); white-space: nowrap; }
+  .fsb:hover { background: rgba(251,244,226,.25); } .fsb:active { transform: translateY(1px); }
+  #fsBtn { position: absolute; left: 6px; bottom: 6px; z-index: 4; }
+  #fsFix { position: fixed; }
+  body[data-screen="login"] #fsFix { top: calc(env(safe-area-inset-top) + 12px); right: calc(env(safe-area-inset-right) + 14px); color: var(--fg); border-color: var(--dim); background: var(--bg); }
+  body[data-screen="lobby"] #fsFix { left: calc(env(safe-area-inset-left) + 10px); bottom: calc(env(safe-area-inset-bottom) + 10px); }
+  body[data-screen="app"] #fsFix { display: none !important; }
   #reacts { position: absolute; right: 6px; bottom: 6px; z-index: 4; display: flex; gap: 4px; }
   #reacts button {
     all: unset; cursor: pointer; width: 32px; height: 30px; display: grid; place-items: center; font-size: 17px; border-radius: 10px;
@@ -392,6 +401,7 @@
           <div id="banner"><span></span></div>
           <div id="stamp"><span class="s"></span><span class="sub"></span></div>
           <div id="reacts"></div>
+          <button class="fsb" id="fsBtn" style="display:none" aria-label="повний екран">⛶ F</button>
         </div>
         <div id="qcard">
           <div class="tab"></div>
@@ -410,6 +420,7 @@
     </main>
   </div>
 
+  <button class="fsb" id="fsFix" style="display:none" aria-label="повний екран">⛶ F</button>
   <div id="veil"></div>
   <div id="sheet">
     <div class="tabs" data-for="sheet"><button class="t on" data-tab="lead">🏆 ЛІДЕРИ</button><button class="t" data-tab="hist">📜 ІСТОРІЯ</button><button class="hbtn" id="sheetClose" aria-label="sluiten">✕</button></div>

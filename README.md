@@ -182,11 +182,11 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - server: the `VgadaiRoom` Durable Object, one per episode (`/api/vgadai/<SSEE>`);
   `/api/vgadai/<SSEE>/info`, `/api/vgadai/live`, `/api/vgadai/look`
 - installable on its own: `vgadai/manifest.webmanifest` (full screen, no zoom)
-- on a computer it goes full screen with the first key or click, and again with every key or
-  click after that. Esc opens the menu (continue, leave full screen, settings, leave the
-  episode, ERROR-DOS); in Chrome and Edge the game keeps Esc in full screen (Keyboard Lock),
-  holding Esc still leaves. "Stay in a window" holds until the tab is closed, or until ⚙ / the
-  menu turns full screen back on. Phones and tablets are not forced
+- on a computer F switches full screen (when you aren't typing a name, question or answer;
+  then F is a letter), and so does the small ⛶ F button (bottom left of the studio and the
+  lobby, top right of the login). Esc opens the menu (continue, full screen on/off, settings,
+  leave the episode, ERROR-DOS); in Chrome and Edge the game keeps Esc in full screen
+  (Keyboard Lock), holding Esc still leaves. Phones and tablets don't get the switch
 
 ## Access code (Leviathan)
 
