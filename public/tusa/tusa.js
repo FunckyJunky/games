@@ -76,6 +76,7 @@ const SFX = {
   },
   crickets() { for (let i = 0; i < 6; i++) tone(4200, 0.04, 0.012, 'sine', 0.2 + i * 0.09 + (i > 2 ? 0.5 : 0), 4000); },
   knob() { noise(0.03, 0.25, 2400, 1.5); tone(90, 0.05, 0.05, 'square'); },
+  shutter() { noise(0.04, 0.3, 3000, 1.2); noise(0.06, 0.2, 1200, 1, 0.07); tone(1800, 0.05, 0.02, 'square', 0.02); },
   yum() { noise(0.05, 0.1, 1600, 1.2); tone(220, 0.4, 0.035, 'sine', 0.08, 260); tone(330, 0.3, 0.02, 'triangle', 0.25, 300); },
   heart() { tone(880, 0.09, 0.05, 'sine'); tone(1318, 0.16, 0.05, 'sine', 0.09); },
   hug() { tone(392, 0.3, 0.04, 'sine', 0, 523); tone(523, 0.35, 0.03, 'sine', 0.2, 440); },
@@ -319,6 +320,8 @@ function startBase(who, back) {
   G.scene = 'base';
   const H = HOME[who];
   G.base = { who, H, t0: back ? G.t - 2 : G.t, out: !!back, back: !!back, gate: back ? 1 : 0, inside: !back };
+  // home again: a snapshot of the three of you pops up, like a photo taken that moment
+  G.snap = back ? { t0: G.t + 0.6, k: 0, small: false, shot: false } : null;
   G.p = { x: back ? H.gate + 52 : H.door, y: 152, dir: back ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
   G.prompt = '';
   G.npcs = [];
@@ -365,6 +368,10 @@ function updateBase(dt) {
   movePlayerSide(dt, 30, H.gate + 56);
   // home again: the door takes you inside, and that is the end of the evening
   G.prompt = B.back && Math.abs(G.p.x - H.door) < 10 ? 'A  🏠 Зайти додому' : '';
+  if (G.snap) {
+    if (!G.snap.shot && G.t >= G.snap.t0) { G.snap.shot = true; SFX.shutter(); }
+    if (!G.snap.small && G.t - G.snap.t0 > 7) G.snap.small = true;   // then it moves to the corner
+  }
   // the barrier lifts when you come close to the gate
   const nearGate = G.p.x > H.gate - 34 && G.p.x < H.gate + 64;
   B.gate += ((nearGate ? 1 : 0) - B.gate) * Math.min(1, dt * 3);
@@ -1415,6 +1422,7 @@ function press(k) {
   if (k === 'hug' || k === 'heart' || k === 'joke') return emote(k);
   if (k === 'mic') { if ($('micBtn').style.visibility === 'visible') VOICE.on ? voiceStop() : voiceStart(); return; }
   if (G.scene === 'travel') { if (k === 'a' || k === 'b') nextTravel(); return; }
+  if (G.scene === 'base' && G.snap && G.snap.shot && !G.snap.small && (k === 'a' || k === 'b')) { G.snap.small = true; return; }
   if (G.scene === 'base' && G.base.back && (k === 'a' || k === 'up') && Math.abs(G.p.x - G.base.H.door) < 10) return endGame();
   if (G.scene === 'base' && k === 'a' && G.me === 'VITO' && G.base.inside && G.p.x > G.base.H.gate + 10) return startTravel('VITO');
   if (G.scene === 'street' && !G.arrival) {
@@ -1595,6 +1603,7 @@ function drawOverlay() {
     c.globalAlpha = 1 - ph; c.fillText(ph < 0.5 ? '♪' : '♫', S2(G.p.x - G.camX + 6 + ph * 6), S2(G.p.y - 32 - ph * 14 + oy));
     c.globalAlpha = 1; c.textAlign = 'left';
   }
+  if (G.scene === 'base') drawSnapshot();
   if (G.scene === 'end') drawEnd();
   const showToast = G.toast && G.toast.until > G.t;
   if (G.prompt && !dialogOpen()) hint(G.prompt, showToast ? 1 : 0);
@@ -1602,20 +1611,83 @@ function drawOverlay() {
   // fade after leaving
   if (G.fadeUntil > G.t) { c.fillStyle = 'rgba(0,0,0,' + ((G.fadeUntil - G.t) * 2) + ')'; c.fillRect(0, 0, view.width, view.height); }
 }
+// ---------- the snapshot: the photo stands still, the three of you breathe, sway and blink ----------
+const SNAP = { ok: false };
+fetch('snap/snap.json').then(r => r.json()).then(meta => {
+  const load = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  return Promise.all(['bg', 'vito', 'vika', 'olek'].map(n => load('snap/snap-' + n + '.png'))).then(([bg, vito, vika, olek]) => {
+    if (!bg) return;
+    Object.assign(SNAP, { meta, bg, people: { vito, vika, olek } });
+    SNAP.small = document.createElement('canvas'); SNAP.small.width = meta.w; SNAP.small.height = meta.h;
+    SNAP.g = SNAP.small.getContext('2d'); SNAP.ok = true;
+  });
+}).catch(() => {});
+function snapFrame(t) {
+  const g = SNAP.g, M = SNAP.meta;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(SNAP.bg, 0, 0);
+  ['vito', 'vika', 'olek'].forEach((n, i) => {
+    const p = M.people[n], im = SNAP.people[n]; if (!im) return;
+    const bob = Math.round(Math.sin(t * 1.7 + i * 2.1) * 0.75), sway = Math.round(Math.sin(t * 0.8 + i * 1.7) * 0.7);
+    g.drawImage(im, p.x + sway, p.y + bob);
+    if ((t * 1000 + i * 1300) % (3300 + i * 650) < 150) p.eyes.forEach(([ex, ey], k) => { g.fillStyle = p.skin[k]; g.fillRect(ex - 1 + sway, ey + bob, 3, 2); });
+  });
+}
+// a polaroid: white frame, a strip of tape, a handwritten line
+function polaroid(c, cx, cy, pw, rot, alpha, k) {
+  const M = SNAP.meta, ph = pw * M.h / M.w, pad = pw * 0.06, fw = pw + pad * 2, fh = ph + pad * 2 + pw * 0.2;
+  c.save(); c.globalAlpha = alpha; c.translate(cx, cy); c.rotate(rot);
+  c.shadowColor = 'rgba(30,15,5,.45)'; c.shadowBlur = 8 * k; c.shadowOffsetY = 3 * k;
+  c.fillStyle = '#fbf8f0'; c.fillRect(-fw / 2, -fh / 2, fw, fh);
+  c.shadowColor = 'transparent';
+  c.strokeStyle = 'rgba(51,36,27,.5)'; c.lineWidth = Math.max(1, k * 0.4); c.strokeRect(-fw / 2, -fh / 2, fw, fh);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(SNAP.small, -fw / 2 + pad, -fh / 2 + pad, pw, ph);
+  c.imageSmoothingEnabled = true;
+  c.strokeStyle = 'rgba(51,36,27,.35)'; c.strokeRect(-fw / 2 + pad, -fh / 2 + pad, pw, ph);
+  c.fillStyle = 'rgba(255,170,190,.55)'; c.save(); c.translate(0, -fh / 2); c.rotate(0.05); c.fillRect(-pw * 0.16, -pw * 0.035, pw * 0.32, pw * 0.07); c.restore();
+  c.fillStyle = INKC; c.textAlign = 'center'; c.font = '800 ' + Math.max(9, pw * 0.07) + 'px ' + FONT;
+  c.fillText('Туса У Берліні · Hoongy', 0, fh / 2 - pw * 0.075);
+  c.restore();
+}
+function drawSnapshot() {
+  const S = G.snap; if (!S || !SNAP.ok || G.t < S.t0) return;
+  const c = vctx, w = view.width, h = view.height, k = SCALE * DPR, el = G.t - S.t0;
+  const dt = Math.min(0.1, el - (S.last == null ? el : S.last)); S.last = el;
+  S.k += ((S.small ? 0 : 1) - S.k) * Math.min(1, dt * 5);
+  snapFrame(G.t);
+  // camera flash
+  if (el < 0.4) { c.fillStyle = 'rgba(255,255,255,' + (1 - el / 0.4) + ')'; c.fillRect(0, 0, w, h); }
+  const pop = Math.min(1, el / 0.35), ease2 = 1 - Math.pow(1 - pop, 3);
+  const bigW = Math.min(w * 0.68, h * 0.62 * SNAP.meta.w / SNAP.meta.h), smallW = Math.min(w, h) * 0.2;
+  const pw = smallW + (bigW - smallW) * S.k;
+  const bx = w / 2, by = h * 0.47, sx = smallW * 0.75 + 6 * k, sy = 15 * k + smallW * 0.75;
+  const cx = sx + (bx - sx) * S.k, cy = sy + (by - sy) * S.k;
+  if (S.k > 0.02) { c.fillStyle = 'rgba(20,12,6,' + (0.35 * S.k) + ')'; c.fillRect(0, 0, w, h); }
+  polaroid(c, cx, cy, pw * (0.7 + 0.3 * ease2), -0.035 - (1 - S.k) * 0.05, 1, k);
+  if (!S.small && el > 1.2) hint('A  ✓', 0);
+}
 function drawEnd() {
   const c = vctx, el = G.t - G.end.t0, w = view.width, h = view.height, k = SCALE * DPR;
   const f = Math.min(1, Math.max(0, (el - 0.6) / 1.4));
   c.fillStyle = 'rgba(251,244,226,' + (f * 0.92) + ')'; c.fillRect(0, 0, w, h);
   if (f <= 0) return;
   A.paper(c, w, h, f);
+  let r = Math.min(w, h) * 0.13, cx = w / 2, cy = h * 0.2 + r;
+  if (SNAP.ok) {
+    snapFrame(G.t);
+    const pw = Math.min(w * 0.6, h * 0.4 * SNAP.meta.w / SNAP.meta.h);
+    polaroid(c, w / 2, h * 0.32, pw, -0.03, f, k);
+    r = pw * 0.15; cx = w / 2 + pw * 0.48; cy = h * 0.32 + pw * 0.22;
+  }
   c.save(); c.globalAlpha = f;
-  const r = Math.min(w, h) * 0.13, cx = w / 2, cy = h * 0.2 + r;
   c.translate(cx, cy); c.rotate(-0.08);
   c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = '#cf3a2a'; c.fill();
   c.lineWidth = r * 0.06; c.strokeStyle = '#fbf4e2'; c.beginPath(); c.arc(0, 0, r * 0.84, 0, 7); c.stroke();
   c.fillStyle = '#fbf4e2'; c.font = '900 ' + r * 1.05 + 'px "M PLUS Rounded 1c", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText('終', 0, r * 0.06);
   c.restore();
+  if (SNAP.ok) return;
   c.save(); c.globalAlpha = f; c.textAlign = 'center'; c.fillStyle = INKC;
   c.font = '900 ' + 9 * k + 'px ' + FONT; c.fillText('Туса У Берліні', cx, cy + r + 12 * k);
   c.restore();

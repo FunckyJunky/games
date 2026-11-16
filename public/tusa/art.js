@@ -232,9 +232,12 @@ const ART = (() => {
   // the three friends (and the waiter): chibi style, big heads, big eyes
   // =====================================================================
   const LOOK = {
-    VITO:    { skin: '#efc29e', skin2: '#d9a179', hair: '#1c1714', hair2: '#3a302a', top: '#3d6a94', top2: '#2c5175', legs: '#2b3247', shoe: '#1d1d22', hood: true, style: 'vito' },
-    VIKA:    { skin: '#fbdcc3', skin2: '#eebc9a', hair: '#f7dc7a', hair2: '#e0b44c', top: '#ee7fa0', top2: '#d0607f', legs: '#4a4266', shoe: '#7a3450', plump: true, style: 'vika', collar: '#fff4ec' },
-    OLEKSIY: { skin: '#f0c19b', skin2: '#d89e78', hair: '#6a4428', hair2: '#4f321c', top: '#678a3c', top2: '#4d6c2a', legs: '#2f2f33', shoe: '#4a3020', hat: '#557a32', hat2: '#3e5c22', must: '#6a3d1c', coat: true, style: 'olek' },
+    // like the photo: Vito with long dark hair in an olive zip hoodie over a white T-shirt;
+    // Vika blond, sunglasses on her head, navy top, necklace, a light open jacket;
+    // Oleksiy with a brown felt hat, a big beard and a curled moustache, olive jacket, white shirt
+    VITO:    { skin: '#efc29e', skin2: '#d9a179', hair: '#3a2a1e', hair2: '#5a4232', top: '#525a3a', top2: '#40462c', legs: '#2b3247', shoe: '#1d1d22', hood: true, tee: '#f4f2ea', style: 'vito' },
+    VIKA:    { skin: '#fbdcc3', skin2: '#eebc9a', hair: '#e8c886', hair2: '#b8915a', top: '#232a48', top2: '#181d34', legs: '#3a3f5a', shoe: '#2a2a30', plump: true, style: 'vika', jacket: '#ddd6c8', jacket2: '#bdb6a8', sleeve: '#ddd6c8', sleeve2: '#bdb6a8' },
+    OLEKSIY: { skin: '#f0c19b', skin2: '#d89e78', hair: '#7a5232', hair2: '#5a3a20', top: '#4e4a32', top2: '#3c3924', legs: '#2f2f33', shoe: '#4a3020', hat: '#56462e', hat2: '#3d3121', must: '#7a4e2c', beard: '#8a5a32', beard2: '#6a4426', shirt: '#f4f2ea', coat: true, style: 'olek' },
     WAITER:  { skin: '#f3c9a3', skin2: '#d9a983', hair: '#1b1b1f', hair2: '#33333a', top: '#24242a', top2: '#17171c', legs: '#1f1f24', shoe: '#101014', apron: '#f4f1e8', style: 'bun' },
   };
   const LAUGH_TEAR = '#7fcfff';
@@ -276,7 +279,7 @@ const ART = (() => {
     else if (rofl) { fh = [sx + 4 + Math.sin(t * 15) * 2, -21 + Math.cos(t * 15) * 2]; bh = [-sx - 4 + Math.sin(t * 13) * 2, -20 + Math.cos(t * 13) * 2]; }
     else if (laugh >= 2) { fh = [bw - 0.5, -9.5]; bh = [-1.5, -9]; }
     else { fh = [sx + Math.sin(sw) * 6, -15.5 + Math.cos(sw) * 6.3]; bh = [-sx + Math.sin(-sw) * 6, -15.5 + Math.cos(-sw) * 6.3]; }
-    const sleeve = L.top2 || L.top;
+    const sleeve = L.sleeve2 || L.top2 || L.top;
     const arm = (sxp, h, col) => { limb([[sxp, -15.6], [(sxp + h[0]) / 2 + (h[1] > -12 ? -0.6 : 0.4), (h[1] - 15.6) / 2 - 0.4], h], col, 2.5); circle(h[0], h[1], 1.25, L.skin, 0.6); };
     arm(-sx, bh, sleeve);
 
@@ -293,38 +296,47 @@ const ART = (() => {
     if (L.plump) {
       blob(0, -11.6, bw, 6.3, L.top, 0.9, 41);
       within(() => { R(-bw - 2, -19, 3.4, 12, L.top2); });
-      shape([[-3.2, -17.6], [0, -15.4], [3.2, -17.6], [0, -16.6]], L.collar, 0.6, 3, 0.05);
+      if (L.jacket) {
+        shape([[-bw - 0.8, -16.2], [-bw + 3, -17.6], [-bw + 2.4, -6], [-bw - 0.4, -7]], L.jacket2, 0.7, 43, 0.05);
+        shape([[bw - 3.2, -17.6], [bw + 0.8, -16.4], [bw + 0.6, -7], [bw - 2.6, -6]], L.jacket, 0.7, 44, 0.05);
+        stroke([[-1.8, -17.2], [-0.6, -14.6], [1.4, -13.2], [3, -14.6], [3.8, -17.2]], '#d8dce2', 0.4, 0, 0);
+        circle(1.4, -12.6, 0.75, '#e8ecf0', 0.3);
+      }
     } else if (L.coat) {
       shape([[-bw + 0.6, -17.4], [bw - 0.6, -17.4], [bw + 0.8, -4.6], [-bw - 0.8, -4.6]], L.top, 0.9, 7, 0.15);
       within(() => { R(-bw - 2, -18, 3.2, 14, L.top2); });
-      line(1.2, -17, 1.2, -5.2, L.top2, 0.6);
-      for (const by of [-14.5, -11, -7.5]) circle(2.3, by, 0.55, '#d8c27a', 0.3);
-      shape([[-1.2, -17.5], [1.4, -14.5], [3.6, -17.5]], L.top2, 0.6, 9, 0.05); // collar
+      line(1.4, -14.6, 1.2, -5.2, L.top2, 0.6);
+      if (L.shirt) shape([[-0.6, -17.5], [1.5, -14], [3.8, -17.5]], L.shirt, 0.5, 9, 0.03);
+      shape([[-1.6, -17.6], [0.6, -14.6], [-0.4, -17.6]], L.top2, 0.5, 10, 0.02);
+      shape([[4.2, -17.6], [2.6, -14.6], [3.2, -17.6]], L.top2, 0.5, 11, 0.02);
       line(-bw - 0.3, -9.5, bw + 0.3, -9.5, L.top2, 1); // belt
     } else {
       shape([[-bw + 0.8, -17.4], [bw - 0.8, -17.4], [bw, -10], [bw - 0.4, -6.2], [-bw + 0.4, -6.2], [-bw, -10]], L.top, 0.9, 11, 0.12);
       within(() => { R(-bw - 2, -18, 3.1, 13, L.top2); });
-      if (L.hood) { ell(-2.8, -17.2, 3.4, 1.6, -0.2, L.top2, 0.7); line(1.6, -16.5, 1.4, -12.6, '#e8e8e8', 0.5); line(3.2, -16.5, 3.3, -12.8, '#e8e8e8', 0.5); }
+      if (L.hood) {
+        ell(-2.8, -17.2, 3.4, 1.6, -0.2, L.top2, 0.7);
+        if (L.tee) shape([[-0.2, -17.5], [1.6, -14.4], [3.6, -17.5]], L.tee, 0.5, 47, 0.03);
+        line(1.6, -14.4, 1.6, -6.6, '#26281c', 0.5);
+        line(3.2, -13.6, 4.2, -13, '#f4f2ea', 0.5);
+      }
       if (L.apron) { shape([[-1.6, -12.6], [bw + 0.1, -12.6], [bw + 0.5, -5.4], [-1.8, -5.4]], L.apron, 0.6, 5, 0.05); line(-bw + 0.4, -12.4, -1.6, -12.4, L.apron, 0.7); }
     }
 
     // ---- head ----
     head(L, o, t, laugh, an, rofl);
-    if (an !== 'salute') arm(sx, fh, L.top);
+    if (an !== 'salute') arm(sx, fh, L.sleeve || L.top);
   }
 
   function head(L, o, t, laugh, an, rofl) {
     const hx = 0.7, hy = -24.6, r = L.plump ? 8.1 : 7.8;
     // hair behind the head
     if (L.style === 'vito') {
-      const sway = Math.sin(t * 3.1) * 0.8;
-      shape([[-5.5, -28], [-8.6, -25], [-10 + sway, -19], [-9.6 + sway, -14.5], [-7.8 + sway * 0.6, -16], [-6.6, -21], [-5, -24.5]], L.hair, 0.8, 21, 0.1);
-      circle(-6.6, -26.1, 1.1, '#d8323a', 0.5);
+      const sway = Math.sin(t * 3.1) * 0.6;
+      shape([[-4.8, -30], [-8.8, -26.6], [-9.8 + sway, -21], [-9.6 + sway, -15.4], [-7.4 + sway, -14.6], [-5.6, -17.4], [-4.6, -22], [-3.4, -26]], L.hair, 0.8, 21, 0.1);
+      stroke([[-7.6, -25], [-8.4 + sway, -19], [-8 + sway, -16]], L.hair2, 0.5, 22, 0);
     } else if (L.style === 'vika') {
-      const ring = [];
-      for (let i = 0; i < 9; i++) { const a = Math.PI * (0.62 + i * 0.2); ring.push([hx + Math.cos(a) * 7.6, hy + Math.sin(a) * 7.2 - 0.6, 3.6 + (i % 2) * 0.5]); }
-      ring.push([hx - 6.4, hy + 3.2, 3.1], [hx + 7.4, hy + 2.6, 2.6]);
-      puffs(ring, L.hair, 0.85);
+      shape([[hx - 1, hy - 9.4], [hx - 6.8, hy - 7.2], [hx - 9.6, hy - 1.4], [hx - 10, hy + 4.6], [hx - 8.6, hy + 8.8], [hx - 4.8, hy + 8.4], [hx - 3.6, hy + 3.4], [hx + 2, hy + 1], [hx + 8.4, hy + 3], [hx + 9.6, hy + 7.4], [hx + 10.4, hy + 2], [hx + 9.4, hy - 4.6], [hx + 5.6, hy - 8.8]], L.hair, 0.85, 25, 0.1);
+      within(() => { ell(hx - 7, hy + 4, 3, 5, 0, L.hair2); });
     } else if (L.style === 'bun') {
       circle(-4.6, -31.5, 2.7, L.hair, 0.8);
     } else if (L.style === 'long') {
@@ -360,6 +372,9 @@ const ART = (() => {
       if (L.style === 'vito') line(mx - 1.7, my - 0.2, mx + 1.7, my - 0.3, '#ffffff', 0.7);
     } else if (o.talk) {
       ell(mx, my + 0.6, 1.1, 1.2, 0, '#8a2a2a', 0.5);
+    } else if (L.style === 'vito' && (t % 7) < 1.1) {
+      shape([[mx - 2.2, my - 0.4], [mx + 2.2, my - 0.5], [mx + 1.2, my + 1.4], [mx - 1.2, my + 1.4]], '#8a2a2a', 0.6, 34, 0.05);
+      ell(mx + 0.2, my + 1.8, 1.3, 1.1, 0, '#ff8a9a', 0.5);
     } else if (L.style === 'vito') {
       // the big smile
       shape([[mx - 2.4, my - 0.4], [mx + 2.4, my - 0.5], [mx + 1.4, my + 1.6], [mx - 1.4, my + 1.6]], '#ffffff', 0.6, 33, 0.05);
@@ -385,23 +400,33 @@ const ART = (() => {
     }
     // hair in front, hats, mustache
     if (L.style === 'vito') {
-      shape([[hx - 7.8, hy + 1.5], [hx - 8.2, hy - 4], [hx - 4.5, hy - 8.4], [hx + 1, hy - 9], [hx + 5.6, hy - 7.2], [hx + 8.6, hy - 2.6], [hx + 6.4, hy - 4.6], [hx + 5.6, hy - 2.4],
-        [hx + 3.8, hy - 5.2], [hx + 2.4, hy - 2.9], [hx + 0.6, hy - 5.4], [hx - 2.6, hy - 3.8], [hx - 4, hy - 0.6]], L.hair, 0.85, 51, 0.1);
-      stroke([[hx - 2, hy - 7.2], [hx + 2, hy - 7.6], [hx + 4.6, hy - 6]], L.hair2, 0.6, 52, 0);
+      shape([[hx - 7.9, hy + 3], [hx - 8.4, hy - 3], [hx - 5, hy - 8.6], [hx + 1, hy - 9.4], [hx + 5.8, hy - 7.6], [hx + 8, hy - 4.2], [hx + 6.6, hy - 5.2], [hx + 3.4, hy - 6.4], [hx - 0.6, hy - 6], [hx - 3.4, hy - 3.8], [hx - 4.4, hy + 0.6], [hx - 5.2, hy + 5]], L.hair, 0.85, 51, 0.1);
+      stroke([[hx - 4, hy - 7.6], [hx + 1, hy - 8.2], [hx + 5, hy - 6.6]], L.hair2, 0.6, 52, 0);
+      stroke([[hx - 6, hy - 2], [hx - 6.6, hy + 3]], L.hair2, 0.5, 53, 0);
     } else if (L.style === 'vika') {
-      puffs([[hx - 3.6, hy - 6.4, 3.4], [hx + 0.2, hy - 7.6, 3.5], [hx + 3.9, hy - 6.9, 3.2], [hx + 6.6, hy - 4.6, 2.5], [hx - 6.2, hy - 3.6, 2.9]], L.hair, 0.85);
-      stroke([[hx - 2, hy - 8.6], [hx + 1, hy - 9.4], [hx + 3.6, hy - 8.4]], '#fff3c0', 0.8, 61, 0);
+      shape([[hx - 7.4, hy - 1], [hx - 5.6, hy - 7.4], [hx + 0.4, hy - 9.4], [hx + 6.2, hy - 7.6], [hx + 9, hy - 2.6], [hx + 9, hy + 3.6], [hx + 7.8, hy + 6.4], [hx + 7.2, hy + 1.2], [hx + 5.6, hy - 2.6], [hx + 2, hy - 4.4], [hx - 2, hy - 3.2], [hx - 4.8, hy - 0.6]], L.hair, 0.85, 61, 0.1);
+      stroke([[hx - 3, hy - 7.6], [hx + 1.6, hy - 8.6], [hx + 5.6, hy - 6.6]], '#fff1c4', 0.8, 62, 0);
+      stroke([[hx + 7.6, hy - 1], [hx + 8, hy + 4.6]], L.hair2, 0.5, 63, 0);
+      // sunglasses pushed up on her head
+      line(hx - 4.6, hy - 6.2, hx + 6.8, hy - 7.6, '#1a1a1e', 0.7);
+      ell(hx + 1.6, hy - 7.6, 2, 1.2, -0.12, '#1e1e24', 0.5); ell(hx + 5.8, hy - 8, 1.8, 1.1, -0.12, '#1e1e24', 0.5);
+      line(hx + 0.8, hy - 8.2, hx + 1.6, hy - 8.4, '#8a8a98', 0.4);
     } else if (L.style === 'olek') {
       shape([[hx - 7.6, hy + 2], [hx - 7.8, hy - 3], [hx - 5, hy - 4], [hx - 4.4, hy + 0.5]], L.hair, 0.7, 71, 0.08);
       // the hat: brim and crown with a dent
       ell(hx + 0.4, hy - 5.6, 10.2, 2.1, -0.04, L.hat2, 0.85);
       shape([[hx - 5.6, hy - 5.8], [hx - 5.2, hy - 10.8], [hx - 2, hy - 12.1], [hx + 1, hy - 11.2], [hx + 4, hy - 12.3], [hx + 6, hy - 10.6], [hx + 6.2, hy - 5.8]], L.hat, 0.85, 72, 0.08);
       R(hx - 5.5, hy - 7.9, 11.6, 1.5, L.hat2);
-      // handlebar mustache with curled tips
+      // a big full beard
+      shape([[hx - 4.8, hy + 0.6], [hx - 3.8, hy + 5.6], [hx - 1.4, hy + 9.8], [hx + 2.2, hy + 12.6], [hx + 5.6, hy + 11.6], [hx + 8, hy + 7.4], [hx + 8.6, hy + 2.2], [hx + 7, hy + 3.4], [hx + 4.6, hy + 4.6], [hx + 2, hy + 4.4], [hx - 0.6, hy + 3.4], [hx - 2.8, hy + 1.2]], L.beard, 0.8, 73, 0.15);
+      within(() => { ell(hx + 4, hy + 10, 4, 3, 0, L.beard2); });
+      for (let i = 0; i < 6; i++) stroke([[hx - 1.6 + i * 1.6, hy + 6 + (i % 2)], [hx - 1 + i * 1.6, hy + 8.6 + (i % 3)]], L.beard2, 0.4, 74 + i, 0.2);
+      if (laugh >= 1 || o.talk || rofl) { ell(hx + 3.6, hy + 5.8, 1.6, o.talk && !laugh ? 1 : 1.5, 0, '#6a1e1e', 0.5); ell(hx + 3.6, hy + 6.6, 0.9, 0.5, 0, '#ff8a8a'); }
+      // the handlebar moustache with curled tips
       const mx2 = hx + 3.6, my2 = hy + 3.4;
-      limb([[mx2, my2], [mx2 + 3, my2 + 0.9], [mx2 + 5.2, my2 - 1.6]], L.must, 1.25, 0.55);
-      limb([[mx2, my2], [mx2 - 2.6, my2 + 0.9], [mx2 - 4.4, my2 - 1.4]], L.must, 1.25, 0.55);
-      circle(mx2 + 5.1, my2 - 1.9, 0.55, L.must); circle(mx2 - 4.3, my2 - 1.7, 0.55, L.must);
+      limb([[mx2, my2], [mx2 + 3.4, my2 + 0.6], [mx2 + 5.8, my2 - 2]], L.must, 1.35, 0.55);
+      limb([[mx2, my2], [mx2 - 3, my2 + 0.6], [mx2 - 5, my2 - 1.8]], L.must, 1.35, 0.55);
+      circle(mx2 + 5.6, my2 - 2.5, 0.75, L.must, 0.4); circle(mx2 - 4.8, my2 - 2.3, 0.75, L.must, 0.4);
     } else if (L.style === 'bun') {
       shape([[hx - 7.8, hy + 1], [hx - 7.6, hy - 4.6], [hx - 2, hy - 8.8], [hx + 4, hy - 8], [hx + 8, hy - 3.4], [hx + 3, hy - 5], [hx - 3, hy - 4.2], [hx - 4.4, hy]], L.hair, 0.85, 81, 0.1);
     } else if (L.style === 'short' || L.style === 'long') {
@@ -475,21 +500,21 @@ const ART = (() => {
   function topHead(L, x, y, a, t, rofl, o) {
     const r = 5.2;
     if (L.style === 'vito') {
-      const s = Math.sin(t * 3) * 1.2;
-      shape([[x - 3, y - 1.6], [x - 9.6, y - 0.6 + s], [x - 10.2, y + 0.8 + s], [x - 3, y + 1.6]], L.hair, 0.7, 5, 0.05);
-      circle(x - 4.2, y, 0.9, '#d8323a', 0.4);
+      const s = Math.sin(t * 3) * 0.8;
+      shape([[x - 2.6, y - 3.4], [x - 9.4, y - 2.6 + s], [x - 10, y + 2.6 + s], [x - 2.6, y + 3.4]], L.hair, 0.7, 5, 0.05);
     }
     if (L.style === 'bun') circle(x - 4.6, y, 2.3, L.hair, 0.7);
     circle(x, y, r, L.skin, 0.85);
     if (L.style === 'vika') {
-      const ring = [];
-      for (let i = 0; i < 8; i++) { const an = Math.PI * 0.45 + i * Math.PI * 1.1 / 7; ring.push([x + Math.cos(an) * 4.3 - 0.8, y + Math.sin(an) * 4.3, 2.6]); }
-      ring.push([x - 1.5, y, 3.4]);
-      puffs(ring, L.hair, 0.75, INK, L.hair2 + '55');
+      blob(x - 1, y, 6.2, 6, L.hair, 0.8, 7);
+      within(() => { ell(x - 3.4, y, 3, 5, 0, L.hair2 + '88'); });
+      stroke([[x - 4, y - 2], [x + 2, y - 3]], '#fff1c4', 0.7, 8, 0);
+      ell(x + 2.4, y - 1.9, 1.3, 1.1, 0, '#1e1e24', 0.4); ell(x + 2.4, y + 1.9, 1.3, 1.1, 0, '#1e1e24', 0.4);   // sunglasses
     } else if (L.style === 'olek') {
-      circle(x, y, 6.8, L.hat2, 0.8); circle(x - 0.4, y, 4.2, L.hat, 0.7);
+      ell(x + 5.6, y, 2.2, 3.2, 0, L.beard, 0.6);                     // the beard sticks out in front
+      circle(x, y, 7, L.hat2, 0.8); circle(x - 0.4, y, 4.2, L.hat, 0.7);
       line(x - 2.6, y, x + 1.8, y, L.hat2, 0.7);
-      line(x + 5.6, y - 2.6, x + 7.2, y - 3.6, L.must, 1.1); line(x + 5.6, y + 2.6, x + 7.2, y + 3.6, L.must, 1.1);
+      line(x + 6.2, y - 2.6, x + 7.6, y - 4, L.must, 1.1); line(x + 6.2, y + 2.6, x + 7.6, y + 4, L.must, 1.1);
     } else {
       c.beginPath(); c.arc(x - 0.8, y, r + 0.25, Math.PI * 0.2, Math.PI * 1.8); c.closePath(); fillInk(L.hair, 0.8);
       circle(x + 4.6, y, 0.6, L.skin2);

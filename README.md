@@ -129,6 +129,9 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - all three at one table: the camera moves in; friends enjoy every bite (sparkles)
 - camps have a fence, a guard and an exit gate: through the gate you leave for
   Berlin, and come home
+- the friends are drawn after a real photo of Vito, Vika and Oleksiy; coming home
+  shows that photo as a pixel-art polaroid (`snap/`): the picture stands still and
+  the three of them breathe, sway and blink; it is also on the end card
 - talking: the 🎙 PRATEN button (or M) turns the microphone on; everyone with the
   microphone on is in one call (WebRTC, set up through /api/tusa), and the
   speaker's mouth moves
