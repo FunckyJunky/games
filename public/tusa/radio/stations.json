@@ -1,4 +1,6 @@
 [
-  { "name": "HOONGY FM", "file": "hoongy-fm.mp3", "note": "lo-fi · чіл · rustig" },
-  { "name": "РАДІО GEZELLIG", "file": "gezellig.mp3", "note": "disco · диско · dansen!" }
+  { "name": "RADIO WĘGORZ", "freq": "88.4", "file": "radio-wegorz.mp3", "dur": 243.12, "note": "Cypis · Gdzie jest biały węgorz" },
+  { "name": "ТУСА FM", "freq": "93.7", "file": "radio-tusa.mp3", "dur": 561.76, "note": "non-stop · без зупинки" },
+  { "name": "HOONGY FM", "freq": "101.2", "file": "hoongy-fm.mp3", "dur": 46.89, "note": "lo-fi · чіл · rustig" },
+  { "name": "РАДІО GEZELLIG", "freq": "106.6", "file": "gezellig.mp3", "dur": 40.75, "note": "disco · диско · dansen!" }
 ]

@@ -736,7 +736,8 @@ export class TusaRoom extends DurableObject {
       case "radio": {
         const ch = Number(d.ch);
         if (!Number.isInteger(ch) || ch < 0 || ch > 30) return;
-        this.g.radio = { ch, since: now };
+        // like a real radio: on/off and the channel; the songs keep their own time
+        this.g.radio = { ch, since: now, last: ch || this.g.radio.last || 1 };
         await this.saveG();
         return;
       }

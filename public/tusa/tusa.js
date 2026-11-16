@@ -202,6 +202,7 @@ function onNet(m) {
     NET.g = m.g;
     radioSync();
     sendState(true);
+    updateRadioBtn();
   } else if (m.type === 'p') {
     if (m.p.char === G.me) { G.p.seat = m.p.seat; G.order = m.p.order; return; }
     addOther(m.p, false);
@@ -943,12 +944,15 @@ function drawOtherTop(o) {
 function bubbleTalking(ch) { const b = G.bubbles[ch]; return b && b.until > G.t && b.kind === 'joke' && (G.t * 8 | 0) % 2 === 0; }
 
 // =====================================================================
-// the radio: everyone hears the same station
+// the radio: like a real one. Every station is always "on air": the song
+// position comes from the clock, so switching on or changing channel drops
+// you into the middle of whatever is playing — the same moment for everyone.
+// The server keeps which channel is on (0 = off), shared by all players.
 // =====================================================================
 let STATIONS = [];
 fetch('radio/stations.json', { cache: 'no-store' }).then(r => r.json()).then(j => { STATIONS = j; radioSync(); }).catch(() => {});
-const radioEl = new Audio(); radioEl.loop = true; radioEl.preload = 'auto'; radioEl.crossOrigin = 'anonymous';
-let radioNode = null, radioFilter = null, radioGain = null, radioCh = -1;
+const radioEl = new Audio(); radioEl.loop = true; radioEl.preload = 'auto';
+let radioNode = null, radioFilter = null, radioGain = null, radioCh = -1, radioCheck = 0;
 function radioGraph() {
   const a = audio(); if (!a || radioNode) return;
   try {
@@ -958,46 +962,109 @@ function radioGraph() {
     radioNode.connect(radioFilter).connect(radioGain).connect(master);
   } catch (e) {}
 }
+function onAir(ch) {
+  // where the song on channel ch is right now (seconds)
+  const st = STATIONS[ch - 1]; if (!st) return 0;
+  const dur = radioEl.duration && isFinite(radioEl.duration) && radioCh === ch ? radioEl.duration : st.dur || 60;
+  return ((snow() / 1000 + ch * 137.3) % dur + dur) % dur;
+}
+function tuneNoise(len) {
+  // the hiss and whistle between stations
+  noise(len || 0.45, 0.07, 2600, 0.4); noise(len || 0.45, 0.05, 900, 0.6);
+  tone(1800, len || 0.45, 0.012, 'sine', 0, 600);
+}
+// the whole song is fetched once (the host can't serve parts of a file), so we
+// can jump straight to the spot that is "on air"; meanwhile you hear tuning static
+const songs = {};
+function songURL(file) {
+  if (!songs[file]) songs[file] = fetch('radio/' + file).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(b => URL.createObjectURL(b));
+  return songs[file];
+}
+let hiss = null;
+function hissOn() {
+  const a = audio(); if (!a || hiss) return;
+  if (!nbuf) noise(0.01, 0.0001, 1000, 1);
+  const src = a.createBufferSource(); src.buffer = nbuf; src.loop = true;
+  const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 0.5;
+  const g = a.createGain(); g.gain.value = 0.035;
+  const lfo = a.createOscillator(), lg = a.createGain(); lfo.frequency.value = 0.7; lg.gain.value = 900; lfo.connect(lg).connect(f.frequency); lfo.start();
+  src.connect(f).connect(g).connect(master); src.start();
+  hiss = { src, lfo, g };
+}
+function hissOff() {
+  if (!hiss || !ac) return;
+  const h = hiss; hiss = null;
+  h.g.gain.setTargetAtTime(0, ac.currentTime, 0.08);
+  setTimeout(() => { try { h.src.stop(); h.lfo.stop(); } catch (e) {} }, 400);
+}
 function radioSync() {
   const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
   const ch = NET.g.radio ? NET.g.radio.ch : 0;
-  if (!at || !ch || !STATIONS[ch - 1]) { radioStop(); return; }
+  updateRadioBtn();
+  if (!at || !ch || !STATIONS[ch - 1]) { if (radioCh > 0 && at) { tone(220, 0.08, 0.04); } radioStop(); return; }
+  if (!unlocked) return;            // browsers only play sound after a tap
   radioGraph();
   const st = STATIONS[ch - 1];
-  const start = () => {
-    const off = ((snow() - NET.g.radio.since) / 1000) % (radioEl.duration || 1e9);
-    try { radioEl.currentTime = Math.max(0, off); } catch (e) {}
-    radioEl.play().catch(() => {});
-  };
   if (radioCh !== ch) {
     radioCh = ch;
-    radioEl.src = 'radio/' + st.file;
-    radioEl.onloadedmetadata = start;
-    radioEl.load();
-  } else if (radioEl.paused) start();
+    try { radioEl.pause(); } catch (e) {}
+    tuneNoise(); hissOn();
+    songURL(st.file).then(url => {
+      if (radioCh !== ch) return;   // turned to another station meanwhile
+      radioEl.onloadedmetadata = () => {
+        if (radioCh !== ch) return;
+        try { radioEl.currentTime = onAir(ch); } catch (e) {}
+        radioEl.play().then(hissOff).catch(hissOff);
+      };
+      radioEl.src = url; radioEl.load();
+    }).catch(() => { hissOff(); bubble(G.me, '📻 ...kshhhh...', 1.5); });
+  } else if (radioEl.paused && radioEl.src) {
+    try { radioEl.currentTime = onAir(ch); } catch (e) {}
+    radioEl.play().catch(() => {});
+  }
 }
-function radioStop() { radioCh = -1; try { radioEl.pause(); } catch (e) {} }
+function radioStop() { radioCh = -1; hissOff(); try { radioEl.pause(); } catch (e) {} updateRadioBtn(); }
+function radioDrift() {
+  // keep every phone on the same spot of the song
+  if (radioCh <= 0 || radioEl.paused || !radioEl.duration) return;
+  const want = onAir(radioCh), d = Math.abs(radioEl.currentTime - want);
+  if (d > 2.5 && d < radioEl.duration - 2.5) { try { radioEl.currentTime = want; } catch (e) {} }
+}
 function radioMix() {
+  if (G.t - radioCheck > 5) { radioCheck = G.t; radioDrift(); }
   if (!radioFilter || !ac) return;
   const inside = G.scene === 'inside';
   radioFilter.frequency.setTargetAtTime(inside ? 18000 : 700, ac.currentTime, 0.3);
-  radioGain.gain.setTargetAtTime(inside ? 0.55 : 0.35, ac.currentTime, 0.3);
+  radioGain.gain.setTargetAtTime(inside ? 0.6 : 0.35, ac.currentTime, 0.3);
+}
+function updateRadioBtn() {
+  const b = $('radioBtn'), ch = NET.g.radio ? NET.g.radio.ch : 0, st = STATIONS[ch - 1];
+  const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
+  b.textContent = at && st ? '📻 ' + st.freq : '📻 RADIO';
+  b.style.borderColor = at && st ? '#ffe23a' : '';
 }
 function openRadio() {
   unlock();
   const at = G.scene === 'street' || G.scene === 'inside';
   if (!at) { showDialog({ title: '📻 RADIO', text: mix('De radio speelt in Hoongy. Eerst naar Berlijn!', 'Радіо грає в Hoongy. Спершу до Берліна!'), opts: [{ ico: '👍', label: 'OK', key: 'A', act: () => {} }] }); return; }
-  const cur = NET.g.radio ? NET.g.radio.ch : 0;
+  const r = NET.g.radio || { ch: 0 }, cur = r.ch, st = STATIONS[cur - 1];
+  const last = r.last || 1;
   showDialog({
-    title: '📻 RADIO HOONGY',
-    text: mix('Iedereen hoort dezelfde zender.', 'Усі слухають ту саму хвилю.'),
-    opts: [{ ico: '⏻', label: 'OFF · ВИМК', sel: cur === 0, act: () => setRadio(0) }]
-      .concat(STATIONS.map((s, i) => ({ ico: '♫', label: s.name, small: s.note || '', sel: cur === i + 1, act: () => setRadio(i + 1) }))),
+    title: '📻 RADIO HOONGY  ' + (st ? st.freq + ' MHz' : '— OFF —'),
+    text: (st ? '♫ ' + st.name + (st.note ? ' · ' + st.note : '') + '\n' : '') + mix('Iedereen in Hoongy hoort dezelfde zender.', 'Усі в Hoongy чують ту саму хвилю.'),
+    opts: [
+      { ico: '⏻', label: cur ? mix('Radio uit', 'Вимкнути радіо') : mix('Radio aan', 'Увімкнути радіо'), key: 'A', act: () => setRadio(cur ? 0 : last) },
+      { ico: '◄', label: 'CH −', act: () => setRadio(cur ? ((cur - 2 + STATIONS.length) % STATIONS.length) + 1 : last), keep: true },
+      { ico: '►', label: 'CH +', act: () => setRadio(cur ? (cur % STATIONS.length) + 1 : last), keep: true },
+    ].concat(STATIONS.map((s, i) => ({ ico: cur === i + 1 ? '🔊' : '·', label: s.freq + '  ' + s.name, small: s.note || '', sel: cur === i + 1, act: () => setRadio(i + 1), keep: true }))),
   });
 }
 function setRadio(ch) {
+  unlock();
   if (NET.ok) send({ t: 'radio', ch });
-  else { NET.g.radio = { ch, since: snow() }; radioSync(); }
+  else { NET.g.radio = { ch, since: snow(), last: ch || (NET.g.radio && NET.g.radio.last) || 1 }; radioSync(); }
+  if (ch === 0) tone(180, 0.06, 0.05);
+  setTimeout(() => { if (dialogOpen() && dlg.dataset.radio === '1') openRadio(); }, 250);
 }
 
 // =====================================================================
@@ -1006,16 +1073,18 @@ function setRadio(ch) {
 let dlgOpts = [], dlgSel = 0;
 function showDialog(d) {
   dlgOpts = d.opts; dlgSel = Math.max(0, d.opts.findIndex(o => o.sel));
-  dlg.innerHTML = '<h3>' + esc(d.title) + '</h3>' + (d.text ? '<p>' + esc(d.text) + '</p>' : '') +
+  dlg.innerHTML = '<h3>' + esc(d.title) + '</h3>' + (d.text ? '<p>' + esc(d.text).replace(/\n/g, '<br>') + '</p>' : '') +
     '<div class="opts">' + d.opts.map((o, i) =>
       '<button class="opt' + (i === dlgSel ? ' sel' : '') + '" data-i="' + i + '"><span class="ico">' + (o.ico || '') + '</span><span>' + esc(o.label) +
       (o.small ? '<small>' + esc(o.small) + '</small>' : '') + '</span>' + (o.key ? '<span class="k">' + o.key + '</span>' : '') + '</button>').join('') + '</div>';
+  dlg.dataset.radio = d.title.indexOf('RADIO HOONGY') >= 0 ? '1' : '';
   dlg.classList.add('show');
 }
 function closeDialog() { dlg.classList.remove('show'); dlgOpts = []; }
 function dialogOpen() { return dlg.classList.contains('show'); }
 function chooseDialog(i) {
-  const o = dlgOpts[i]; closeDialog(); SFX.click();
+  const o = dlgOpts[i]; SFX.click();
+  if (!(o && o.keep)) closeDialog();
   if (o && o.act) o.act();
 }
 dlg.addEventListener('click', e => { const b = e.target.closest('.opt'); if (b) chooseDialog(+b.dataset.i); });
