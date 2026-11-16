@@ -99,6 +99,13 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   chat and multiplayer always go to the server
 - `public/lib/appback.js`: added to every game page by the server; in the
   installed app it shows a small "< ERROR-DOS" button on pages without a back link
+- `public/lib/fullscreen.js`: FULL SCREEN in ERROR-DOS setup (saved as `full` in
+  `errordos-settings`). The menu loads it, the server adds it to every game page, and
+  TUSA, Вгадай що?! and ERROR-CHAT load it themselves. Browsers only allow full screen
+  after a tap or a key and leave it when a new page opens, so with FULL SCREEN on each
+  page goes full screen at its first tap or key. Leaving full screen yourself (Esc, the
+  back gesture) turns the setting off. Where full screen isn't possible (iPhone), setup
+  shows N/A and points to INSTALL APP.
 
 ## Туса У Берліні (error.blue/tusa)
 

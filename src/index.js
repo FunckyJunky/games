@@ -503,7 +503,7 @@ export default {
           })
           .on("body", {
             element(el) {
-              el.append('<script src="/lib/appback.js" defer></script>', { html: true });
+              el.append('<script src="/lib/appback.js" defer></script><script src="/lib/fullscreen.js" defer></script>', { html: true });
             },
           })
           .transform(res);

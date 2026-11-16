@@ -125,6 +125,7 @@
   #lock .back:active { background: var(--fg); color: var(--bg); }
 </style>
 <script src="/lib/nozoom.js"></script>
+<script src="/lib/fullscreen.js"></script>
 </head>
 <body>
 <div id="tube">
@@ -178,7 +179,7 @@ try {
     if (o != null) localStorage.removeItem('fk' + 'dos-' + k);
   }
 } catch (e) {}
-const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0 }, store.get('errordos-settings', {}));
+const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0, full: false }, store.get('errordos-settings', {}));
 const stats = store.get('errordos-stats', {});
 function saveSettings() { store.set('errordos-settings', S); }
 
@@ -873,11 +874,35 @@ function setupRows() {
     ['COLOUR', SCHEMES[S.color].name, d => { S.color = (S.color + d + SCHEMES.length) % SCHEMES.length; applyColors(); }],
     ['GLITCH', GLITCH[S.glitch], d => { S.glitch = (S.glitch + d + 4) % 4; scheduleGlitch(performance.now()); }],
     ['SCREEN', S.curved ? 'CURVED' : 'FLAT', () => { S.curved = !S.curved; applyColors(); }],
+    ...fullRow(),
     ['SOUND', S.sound ? 'ON' : 'OFF', () => { S.sound = !S.sound; }],
     ['BOOT', BOOT[S.boot], d => { S.boot = (S.boot + d + 3) % 3; }],
     ...(isApp() ? [] : [['INSTALL APP', '', () => installApp()]]),
     ['CLOSE', '', () => closeOverlay()],
   ];
+}
+// FULL SCREEN: the whole display, without the browser's bars. Saved, and used by
+// every program started from here too (lib/fullscreen.js): browsers only allow it
+// after a tap or a key, so each page goes full screen at its first one.
+function fullRow() {
+  const FS = window.ErrorFS;
+  if (!FS || !FS.supported()) {
+    if (isApp()) return [];                       // the installed app is already as full as it gets
+    return [['FULL SCREEN', 'N/A', () => {
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      message = ios ? 'iPhone: INSTALL APP for full screen' : 'No full screen in this browser';
+      messageUntil = performance.now() + 6000; dirty = true;
+    }]];
+  }
+  return [['FULL SCREEN', S.full ? 'ON' : 'OFF', () => {
+    S.full = !S.full; saveSettings();
+    if (S.full) FS.enter(); else FS.exit();
+    glitch('static');
+  }]];
+}
+if (window.ErrorFS) {
+  ErrorFS.hold = () => mode === 'setup';          // in setup, a key or tap is for the setting
+  ErrorFS.onchange = () => { S.full = ErrorFS.get(); dirty = true; };
 }
 function openSetup() { if (mode !== 'main') return; mode = 'setup'; setupSel = 0; SND.key(); dirty = true; }
 function drawSetup() {
@@ -887,7 +912,7 @@ function drawSetup() {
   box(r0, c0, r0 + h - 1, c0 + w - 1, 'SETUP', true);
   rows.forEach(([name, val, act], i) => {
     const r = r0 + 2 + i, on = i === setupSel;
-    const line = ' ' + name.padEnd(9) + (val ? '< ' + val.padEnd(9) + ' >' : '');
+    const line = ' ' + name.padEnd(12) + (val ? '< ' + val.padEnd(9) + ' >' : '');
     if (on) fill(r, c0 + 2, c0 + w - 3, 'i');
     put(r, c0 + 2, line, on ? 'i' : '');
     hits.push({ r, c0: c0 + 1, c1: c0 + w - 2, act: () => { setupSel = i; act(1); saveSettings(); SND.key(); dirty = true; } });
