@@ -136,3 +136,20 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   microphone on is in one call (WebRTC, set up through /api/tusa), and the
   speaker's mouth moves
 
+## Access code (Leviathan)
+
+`games.json` marks a program with `"lock": true`. ERROR-DOS then asks for a
+5-digit code on its own number pad before it runs it. The very first time, the
+pad asks to choose the code (type it twice). The server keeps only a salted
+hash of it in D1 (table `settings`), never in this repository. A right code
+sets a cookie for 30 days; without it the game's files are closed (pages send
+you back to the menu, other files get 403). 8 wrong tries per 10 minutes, then
+the pad waits. To change the code: delete the row `lock:leviathan-voyage` in
+the D1 table `settings` (Cloudflare dashboard) and choose a new one, or set a
+Worker secret `LEVIATHAN_CODE`, which always wins.
+
+## App mode
+
+Every page behaves like an installed app: no double-tap or pinch zoom
+(`/lib/nozoom.js`, `touch-action: manipulation`); game pages get this added by
+the Worker as they are served.

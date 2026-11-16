@@ -11,6 +11,7 @@
   },
   {
     "id": "leviathan-voyage",
+    "lock": true,
     "title": "Leviathan Voyage",
     "description": "Wake up in the hangar shack, start her up and fly the AP-7 airship over an endless land. Walk her decks. Best full screen with a controller.",
     "path": "games/leviathan-voyage/",

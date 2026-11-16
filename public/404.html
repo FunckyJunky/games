@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>Bad command or file name</title>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
-  html, body { margin: 0; height: 100%; background: #000; }
+  html, body { margin: 0; height: 100%; background: #000; touch-action: manipulation; }
   body { display: grid; place-items: center; font-family: VT323, ui-monospace, monospace; }
   .crt {
     width: min(640px, 92vw); padding: 28px 30px; box-sizing: border-box;
@@ -21,6 +24,7 @@
   .cur { animation: blink 1.06s steps(1) infinite; background: #39ff7a; }
   @keyframes blink { 50% { opacity: 0; } }
 </style>
+<script src="/lib/nozoom.js"></script>
 </head>
 <body>
 <div class="crt">C:\&gt;<span id="cmd"></span>

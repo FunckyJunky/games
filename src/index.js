@@ -139,6 +139,103 @@ async function handleSave(request, env, game, player) {
   return json({ error: "method not allowed" }, 405);
 }
 
+
+// ---------------------------------------------------------------------------
+// Programs with an access code (Leviathan). The 5-digit code is chosen the
+// first time someone opens the game; only a salted hash is kept, in D1 (not in
+// this public repository). A Worker secret LEVIATHAN_CODE, if set, wins.
+// A right code sets a cookie for 30 days; the game's files need that cookie.
+// ---------------------------------------------------------------------------
+const LOCKED = { "leviathan-voyage": "lv_key" };
+// added to every game page: app mode, no zoom on double-tap or pinch
+const NO_ZOOM_HEAD = '<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">' +
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
+  '<style>html,body{touch-action:manipulation;overscroll-behavior:none;-webkit-text-size-adjust:100%}*{-webkit-tap-highlight-color:transparent}</style>' +
+  '<script src="/lib/nozoom.js"></script>';
+const LOCK_TRIES = 8, LOCK_WINDOW_MS = 10 * 60 * 1000;
+async function sha256hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function lockedGame(path) {
+  const m = path.match(/^\/games\/([a-z0-9-]+)\//);
+  return m && LOCKED[m[1]] ? m[1] : null;
+}
+let lockTables = false;
+async function lockDb(env) {
+  if (!lockTables) {
+    await env.DB.batch([
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)"),
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS unlock_tries (ip TEXT NOT NULL, ts INTEGER NOT NULL)"),
+    ]);
+    lockTables = true;
+  }
+  return env.DB;
+}
+// what the code must hash to: { salt, hash } or null if no code was chosen yet
+async function lockRecord(env, game) {
+  if (env.LEVIATHAN_CODE && game === "leviathan-voyage") return { salt: "secret", hash: await sha256hex("secret:" + env.LEVIATHAN_CODE), fixed: true };
+  const db = await lockDb(env);
+  const row = await db.prepare("SELECT v FROM settings WHERE k = ?").bind("lock:" + game).first();
+  return row ? JSON.parse(row.v) : null;
+}
+async function lockToken(rec, game) { return sha256hex("cookie:" + game + ":" + rec.hash); }
+function readCookie(request, name) {
+  const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + name + "=([a-f0-9]{64})"));
+  return m ? m[1] : null;
+}
+async function isUnlocked(request, env, game) {
+  const rec = await lockRecord(env, game);
+  if (!rec) return false;
+  const c = readCookie(request, LOCKED[game]);
+  return !!c && c === (await lockToken(rec, game));
+}
+async function triesLeft(env, ip) {
+  const db = await lockDb(env), since = Date.now() - LOCK_WINDOW_MS;
+  const row = await db.prepare("SELECT COUNT(*) AS n, MIN(ts) AS first FROM unlock_tries WHERE ip = ? AND ts > ?").bind(ip, since).first();
+  return { left: LOCK_TRIES - (row ? row.n : 0), wait: row && row.first ? Math.ceil((row.first + LOCK_WINDOW_MS - Date.now()) / 1000) : 0 };
+}
+async function handleUnlock(request, env, url) {
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (request.method === "GET") {
+    const game = url.searchParams.get("game") || "";
+    if (!LOCKED[game]) return json({ unlocked: true });
+    const rec = await lockRecord(env, game);
+    return json({ unlocked: rec ? await isUnlocked(request, env, game) : false, setup: !rec });
+  }
+  if (request.method !== "POST") return json({ error: "use GET or POST" }, 405);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "bad request" }, 400); }
+  const game = String(body.game || ""), code = String(body.code || "");
+  if (!LOCKED[game]) return json({ error: "unknown program" }, 400);
+  if (!/^\d{5}$/.test(code)) return json({ error: "the code is 5 digits" }, 400);
+  const t = await triesLeft(env, ip);
+  if (t.left <= 0) return json({ ok: false, wait: t.wait }, 429);
+  let rec = await lockRecord(env, game);
+  if (!rec) {
+    // the very first time: this code becomes the code
+    if (!body.setup) return json({ ok: false, setup: true }, 409);
+    const salt = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    rec = { salt, hash: await sha256hex(salt + ":" + code) };
+    const db = await lockDb(env);
+    const res = await db.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES (?, ?)").bind("lock:" + game, JSON.stringify(rec)).run();
+    if (!res.meta || !res.meta.changes) return json({ ok: false, setup: false }, 409);   // someone was quicker
+  } else if ((await sha256hex(rec.salt + ":" + code)) !== rec.hash) {
+    const db = await lockDb(env);
+    await db.prepare("INSERT INTO unlock_tries (ip, ts) VALUES (?, ?)").bind(ip, Date.now()).run();
+    await db.prepare("DELETE FROM unlock_tries WHERE ts < ?").bind(Date.now() - LOCK_WINDOW_MS).run();
+    return json({ ok: false, left: t.left - 1 }, 403);
+  }
+  const token = await lockToken(rec, game);
+  return new Response(JSON.stringify({ ok: true }), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Set-Cookie": LOCKED[game] + "=" + token + "; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax",
+    },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -183,12 +280,36 @@ export default {
         return env.WALL.get(env.WALL.idFromName("main")).fetch(request);
       }
 
+      if (path === "/api/unlock") return handleUnlock(request, env, url);
+
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
+
+      // a program with an access code: no code, no files
+      const lockedId = lockedGame(path);
+      if (lockedId && !(await isUnlocked(request, env, lockedId))) {
+        const page = request.mode === "navigate" || (request.headers.get("Accept") || "").includes("text/html") || path.endsWith("/") || path.endsWith(".html");
+        return page
+          ? new Response(null, { status: 302, headers: { Location: "/?unlock=" + lockedId, "Cache-Control": "no-store" } })
+          : new Response("locked", { status: 403, headers: { "Cache-Control": "no-store" } });
+      }
 
       const res = await env.ASSETS.fetch(request);
       // game pages get a small back button when the site runs as an installed app
       if (path.startsWith("/games/") && (res.headers.get("content-type") || "").includes("text/html")) {
+        // ...and they behave like an app: no zooming in by double-tapping or pinching
+        let viewport = false;
         return new HTMLRewriter()
+          .on('meta[name="viewport"]', {
+            element(el) {
+              viewport = true;
+              el.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, viewport-fit=cover, user-scalable=no");
+            },
+          })
+          .on("head", {
+            element(el) {
+              el.append(NO_ZOOM_HEAD, { html: true });
+            },
+          })
           .on("body", {
             element(el) {
               el.append('<script src="/lib/appback.js" defer></script>', { html: true });

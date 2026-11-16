@@ -99,7 +99,32 @@
     100% { transform: scale(1, 1); filter: brightness(1); }
   }
   noscript { color: #39ff7a; font-family: monospace; }
+
+  /* ---------- access code for locked programs: a DOS window with a number pad ---------- */
+  #lock { position: absolute; inset: 0; z-index: 6; display: none; place-items: center; background: rgba(3,18,8,.72);
+    font-family: 'VT323', ui-monospace, monospace; color: var(--fg); text-shadow: 0 0 5px var(--glow); touch-action: manipulation; }
+  #lock.show { display: grid; }
+  #lock .win { background: var(--bg); border: 3px double var(--fg); box-shadow: 0 0 10px var(--glow), inset 0 0 8px var(--glow);
+    width: min(88vw, 340px); padding: 10px 14px 12px; box-sizing: border-box; text-align: center; }
+  #lock .win.shake { animation: lockshake .38s; }
+  @keyframes lockshake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+  #lock h2 { margin: -10px -14px 8px; padding: 2px 0; background: var(--fg); color: var(--bg); text-shadow: none; font-weight: normal; font-size: clamp(22px, 5.4vmin, 28px); letter-spacing: 1px; }
+  #lock .say { margin: 2px 0; font-size: clamp(19px, 4.6vmin, 24px); }
+  #lock .slots { display: flex; gap: 8px; justify-content: center; margin: 8px 0 6px; }
+  #lock .slot { width: 1.5em; height: 1.75em; border: 2px solid var(--fg); display: grid; place-items: center; font-size: clamp(26px, 6.4vmin, 34px); line-height: 1; }
+  #lock .slot.cur { box-shadow: inset 0 -5px 0 var(--fg); animation: lockcur 1.06s steps(1) infinite; }
+  @keyframes lockcur { 50% { box-shadow: none; } }
+  #lock .msg { min-height: 1.15em; font-size: clamp(18px, 4.4vmin, 22px); }
+  #lock .msg.err { color: #ff5a6a; text-shadow: 0 0 6px rgba(255,90,106,.6); }
+  #lock .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 6px; }
+  #lock .pad div { border: 2px solid var(--fg); font-size: clamp(26px, 6.6vmin, 34px); padding: 3px 0 1px; cursor: pointer; user-select: none; -webkit-user-select: none;
+    box-shadow: inset 0 0 6px var(--glow); touch-action: manipulation; }
+  #lock .pad div.fn { font-size: clamp(18px, 4.4vmin, 22px); display: grid; place-items: center; }
+  #lock .pad div.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  #lock .back { margin-top: 8px; font-size: clamp(18px, 4.2vmin, 21px); cursor: pointer; opacity: .85; }
+  #lock .back:active { background: var(--fg); color: var(--bg); }
 </style>
+<script src="/lib/nozoom.js"></script>
 </head>
 <body>
 <div id="tube">
@@ -108,6 +133,14 @@
     <div id="boxes"></div>
     <div id="text"></div>
     <div id="glitch"></div>
+    <div id="lock"><div class="win">
+      <h2 id="lockTitle">LEVIATHAN.EXE</h2>
+      <div class="say" id="lockSay">ACCESS CODE REQUIRED</div>
+      <div class="slots" id="lockSlots"></div>
+      <div class="msg" id="lockMsg"></div>
+      <div class="pad" id="lockPad"></div>
+      <div class="back" id="lockBack">[ESC] BACK</div>
+    </div></div>
   </div>
   <div id="scan"></div>
   <div id="roll"></div>
@@ -959,12 +992,112 @@ async function typeLine(prompt, cmd) {
 function enterMain(withGlitch) {
   mode = 'main'; L.reveal = 0; dirty = true;
   if (withGlitch) burst(3);
+  // came back from a locked program: show its code window
+  if (unlockAsk && games.length) {
+    const g = games.find(x => x.id === unlockAsk);
+    if (g && g.lock) {
+      const fi = FOLDERS.indexOf(g.folder || 'games');
+      if (fi >= 0) { folder = fi; const i = folders[FOLDERS[fi]].indexOf(g); if (i >= 0) sel[FOLDERS[fi]] = i; }
+      lockState(g).then(st => { if (mode === 'main' && !st.unlocked) openLock(g, st); });
+    }
+  }
 }
 
+
+// ===================================================================
+// programs with an access code: a 5-digit code on a DOS number pad.
+// The server checks it and keeps the program's files closed without it.
+// ===================================================================
+const lockEl = document.getElementById('lock');
+const LK = { game: null, code: '', first: '', setup: false, busy: false };
+(() => {
+  const pad = document.getElementById('lockPad');
+  for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'DEL', '0', 'OK']) {
+    const b = document.createElement('div'); b.textContent = k === 'DEL' ? '◄ DEL' : k; b.dataset.k = k;
+    if (k.length > 1) b.className = 'fn';
+    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 120); lockKey(k); });
+    pad.appendChild(b);
+  }
+  document.getElementById('lockBack').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); closeLock(); });
+  lockEl.addEventListener('pointerdown', e => e.stopPropagation());
+})();
+function lockSay(say, msg, err) {
+  if (say != null) document.getElementById('lockSay').textContent = say;
+  const m = document.getElementById('lockMsg'); m.textContent = msg || ''; m.classList.toggle('err', !!err);
+}
+function lockRender() {
+  const el = document.getElementById('lockSlots'); el.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const d = document.createElement('div'); d.className = 'slot' + (i === LK.code.length && !LK.busy ? ' cur' : '');
+    d.textContent = i < LK.code.length ? '*' : ''; el.appendChild(d);
+  }
+}
+async function lockState(g) {
+  try { const r = await fetch('/api/unlock?game=' + encodeURIComponent(g.id), { cache: 'no-store' }); return await r.json(); }
+  catch (e) { return { unlocked: false, offline: true }; }
+}
+function openLock(g, st) {
+  LK.game = g; LK.code = ''; LK.first = ''; LK.busy = false; LK.setup = !!(st && st.setup);
+  mode = 'lock'; lockEl.classList.add('show');
+  document.getElementById('lockTitle').textContent = dosName(g) + '.EXE';
+  if (LK.setup) lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', 'only you need to know it');
+  else lockSay('ACCESS CODE REQUIRED', st && st.offline ? 'NO CONNECTION' : 'ENTER 5 DIGITS', st && st.offline);
+  lockRender(); SND.beep(); dirty = true;
+}
+function closeLock() { lockEl.classList.remove('show'); LK.game = null; mode = 'main'; SND.key(); dirty = true; L.reveal = 0; }
+function lockKey(k) {
+  if (!LK.game || LK.busy) return;
+  unlock();
+  if (k === 'esc') return closeLock();
+  if (k === 'DEL' || k === 'back') { LK.code = LK.code.slice(0, -1); SND.key(); lockSay(null, ''); return lockRender(); }
+  if (/^\d$/.test(k)) {
+    if (LK.code.length >= 5) return;
+    LK.code += k; SND.key(); lockSay(null, ''); lockRender();
+    if (LK.code.length === 5) setTimeout(lockSubmit, 160);
+    return;
+  }
+  if ((k === 'OK' || k === 'enter') && LK.code.length === 5) lockSubmit();
+}
+function lockDenied(text) {
+  const w = lockEl.querySelector('.win'); w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
+  tone(140, 0.35, 0.07, 'square'); burst(2);
+  lockSay(null, text, true); LK.code = ''; lockRender();
+}
+async function lockSubmit() {
+  if (LK.busy || LK.code.length !== 5) return;
+  // choosing a new code: type it twice
+  if (LK.setup && !LK.first) { LK.first = LK.code; LK.code = ''; lockSay('TYPE THE SAME CODE AGAIN', ''); lockRender(); SND.move(); return; }
+  if (LK.setup && LK.code !== LK.first) { LK.first = ''; lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', ''); return lockDenied('THE CODES ARE NOT THE SAME'); }
+  LK.busy = true; lockSay(null, 'CHECKING...'); lockRender();
+  let r, j = {};
+  try { r = await fetch('/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game: LK.game.id, code: LK.code, setup: LK.setup }) }); j = await r.json().catch(() => ({})); }
+  catch (e) { LK.busy = false; return lockDenied('NO CONNECTION'); }
+  LK.busy = false;
+  if (r.ok && j.ok) {
+    lockSay(LK.setup ? 'CODE SAVED' : 'ACCESS GRANTED', ''); LK.code = '';
+    tone(660, 0.1, 0.05, 'square'); tone(990, 0.16, 0.05, 'square', 0.1);
+    const g = LK.game;
+    setTimeout(() => { lockEl.classList.remove('show'); LK.game = null; mode = 'main'; run(g); }, 650);
+    return;
+  }
+  if (r.status === 429) return lockDenied('TOO MANY TRIES. WAIT ' + Math.max(1, Math.ceil((j.wait || 600) / 60)) + ' MIN');
+  if (r.status === 409) { LK.setup = !!j.setup; LK.first = ''; lockSay(LK.setup ? 'NEW PROGRAM. CHOOSE A 5-DIGIT CODE' : 'ACCESS CODE REQUIRED', ''); return lockDenied(j.setup ? 'TRY AGAIN' : 'A CODE WAS JUST SET'); }
+  lockDenied('ACCESS DENIED' + (j.left != null ? ' · ' + j.left + ' TRIES LEFT' : ''));
+}
+// sent here by a locked program's page: open the code window for it
+const unlockAsk = new URLSearchParams(location.search).get('unlock');
+if (unlockAsk) history.replaceState(null, '', '/');
+
 // ----- running a program -----
-async function run() {
-  const g = current();
+async function run(unlocked) {
+  const g = unlocked && unlocked.id ? unlocked : current();
   if (mode !== 'main' || !g) return;
+  if (g.lock && !(unlocked && unlocked.id)) {
+    mode = 'check';
+    const st = await lockState(g);
+    mode = 'main';
+    if (!st.unlocked) return openLock(g, st);
+  }
   mode = 'run';
   const name = dosName(g);
   typed = '';
@@ -1017,6 +1150,7 @@ function unlock() { if (!audioUnlocked) { audioUnlocked = true; audio(); } }
 function key(k) {
   unlock();
   if (mode === 'boot') { bootSkip = true; return; }
+  if (mode === 'lock') return lockKey(k);
   if (mode === 'setup') return setupKey(k === 'esc' || k === 'setup' ? 'back' : k);
   if (mode === 'info') { if (k === 'enter' || k === 'back' || k === 'esc' || k === 'info') closeOverlay(); return; }
   if (mode !== 'main') return;
@@ -1039,6 +1173,7 @@ const KEYMAP = {
   Escape: 'esc', Backspace: 'back', KeyO: 'setup', F2: 'setup', KeyG: 'glitch', PageUp: 'pgup', PageDown: 'pgdn',
 };
 addEventListener('keydown', e => {
+  if (mode === 'lock' && /^[0-9]$/.test(e.key)) { e.preventDefault(); return lockKey(e.key); }
   let k = KEYMAP[e.code];
   if (!k) { if (mode === 'boot') { bootSkip = true; unlock(); } return; }
   e.preventDefault();
@@ -1047,6 +1182,7 @@ addEventListener('keydown', e => {
 
 tube.addEventListener('pointerdown', e => {
   unlock();
+  if (mode === 'lock' || mode === 'check') return;
   if (mode === 'boot') { bootSkip = true; return; }
   const rect = textEl.getBoundingClientRect();
   const r = Math.floor((e.clientY - rect.top) / LH), c = Math.floor((e.clientX - rect.left) / CW);
