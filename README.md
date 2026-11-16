@@ -222,6 +222,30 @@ the room's lights, the settings and where you stand in the browser (localStorage
   B backs out of menus, LB/RB step sideways, Start plays, Back/Select opens the menu, LT shows the map.
 - the game's hints follow what you use: mouse buttons on a computer, A / Y on touch and gamepads.
 - its menu's last line, SAVE, BACK TO ERROR-DOS, saves and returns to the menu here.
+- JAM ONLINE (on the start screen): play the same studio together, up to 16 people, in a
+  GameLab room (`GameLab.joinRoom('studio3d', CODE)`, no server state). NEW ROOM makes a 4-letter
+  code; INVITE shares or copies a link `?room=CODE` that opens the join panel with the code in.
+  - shared: the whole song (every knob, pattern, step and note, mute/solo, the drum kit), PLAY
+    and STOP, and the room's LEDs and neon. Each change goes out as short `key=value` lines
+    (`web_net_diff`), the others apply them (`web_net_apply`).
+  - the player who has been in the room longest holds the song (♫ in the room list): a newcomer
+    gets it from them (`hello` -> `state`), they send the clock every second and the whole song
+    every 4 s, so everyone ends up the same even if two people turned one knob at once (what you
+    changed in the last 1.5 s is not overwritten). When they leave, the next one holds it.
+  - the clock: every player renders the song themselves, in step with the holder's clock. Each
+    one measures the way to the holder (half the quicker round trips) and adds that to the
+    clock they receive; far off, they jump at once; a little off (over 20 ms), only after three
+    readings in a row agree. Someone else's PLAY starts that far into the first step.
+  - notes and drum hits played by hand are sent as they happen (`ev`); each player's spot, view,
+    and the control under their dot go out 10 times a second (`pose`) and the others see a robot
+    in that player's colour with the name over its head (A-Z, Cyrillic spelled out), sitting
+    when they sit, with a beam to what they point at; the map shows them as coloured dots.
+  - your own song is not touched: in a room the jam is kept as `studio3d-jam-CODE`, and LEAVE
+    (✕) goes back to your own. The holder who comes back to an empty room gets the jam back.
+  - tap the room code for the list of who is in, INVITE and LEAVE. On a phone the room gets a
+    row of its own under the top bar.
+  - test: `npx wrangler dev`, then `python3 tools/jamtest.py http://127.0.0.1:8787 out` in the
+    game's source (two players, one on a computer and one on a phone).
 - ERROR-DOS shows it as STUDIO3D.HTM in GAMES, with its own wireframe logo (`studio`).
 - the source is the game's own (`studio3d-source.tar.gz` in the Funkey S project). After a change:
   `make web` there (needs the WASI sysroot, see its README), copy `web/studio3d.wasm` here and
