@@ -291,6 +291,7 @@ function dmContent() {
     else if (sc === 'inside' && G.p.seat >= 0 && !c) info.push('KEUKEN DICHT');
     if (voicePlaying()) info.push('COMMENTAAR SPEELT');
     if (VOICE.on) info.push('MIC AAN');
+    else if (tableBuddy()) info.push('SAMEN AAN TAFEL: TIK OP DE MIC EN PRAAT');
     if (noseReady()) info.push('NEUSJE-NEUSJE KAN NU');
     if (G.ride) info.push('OP DE STEP');
     if (!NET.ok) info.push('GEEN VERBINDING');
@@ -1083,6 +1084,16 @@ function updateInside(dt) {
   sendState(false);
 }
 // all three friends at the same table? then the camera moves in a little
+// am I sitting at a table together with at least one friend? (then it's time to talk)
+function tableBuddy() {
+  if (G.scene !== 'inside' || G.p.seat < 0 || !IN.seats[G.p.seat]) return false;
+  const tb = IN.seats[G.p.seat].table;
+  for (const ch in G.others) {
+    const o = G.others[ch];
+    if (o.scene === 'inside' && o.seat >= 0 && IN.seats[o.seat] && IN.seats[o.seat].table === tb) return true;
+  }
+  return false;
+}
 function sharedTable() {
   const chars = presentChars();
   if (chars.length < 3) return -1;
@@ -1646,6 +1657,8 @@ function updateMicBtn() {
   b.style.display = show ? '' : 'none';
   b.textContent = '🎙';
   b.classList.toggle('live', VOICE.on);
+  // two or more at the same table and your mic still off: the button flashes and pulses
+  b.classList.toggle('call', show && !VOICE.on && tableBuddy());
 }
 
 // iPhones only let a sound element play after it was started from a tap,
