@@ -1044,23 +1044,23 @@ async function lockState(g) {
 }
 function openLock(g, st, change) {
   LK.game = g; LK.code = ''; LK.first = ''; LK.busy = false; LK.setup = !!(st && st.setup);
-  LK.change = 0; LK.old = ''; LK.neu = '';
+  LK.change = 0; LK.old = ''; LK.neu = ''; LK.fixed = !!(st && st.fixed);
   mode = 'lock'; lockEl.classList.add('show');
   document.getElementById('lockTitle').textContent = dosName(g) + '.EXE';
   if (LK.setup) lockSay('NEW PROGRAM. CHOOSE A 5-DIGIT CODE', 'only you need to know it');
   else lockSay('ACCESS CODE REQUIRED', st && st.offline ? 'NO CONNECTION' : 'ENTER 5 DIGITS', st && st.offline);
-  if (change && !LK.setup) startChange();
+  if (change && !LK.setup && !LK.fixed) startChange();
   lockShowChange(); lockRender(); SND.beep(); dirty = true;
 }
 // [C] CHANGE CODE: the old code, the new code, the new code again
-function lockShowChange() { document.getElementById('lockChange').style.display = LK.setup || LK.change ? 'none' : ''; }
+function lockShowChange() { document.getElementById('lockChange').style.display = LK.setup || LK.change || LK.fixed ? 'none' : ''; }
 function startChange() { LK.change = 1; LK.old = ''; LK.neu = ''; LK.code = ''; lockSay('CHANGE CODE: TYPE THE OLD CODE', ''); lockShowChange(); lockRender(); }
 function closeLock() { lockEl.classList.remove('show'); LK.game = null; mode = 'main'; SND.key(); dirty = true; L.reveal = 0; }
 function lockKey(k) {
   if (!LK.game || LK.busy) return;
   unlock();
   if (k === 'esc') return closeLock();
-  if (k === 'color') { if (!LK.setup && !LK.change) { SND.move(); startChange(); } return; }
+  if (k === 'color') { if (!LK.setup && !LK.change && !LK.fixed) { SND.move(); startChange(); } return; }
   if (k === 'DEL' || k === 'back') { LK.code = LK.code.slice(0, -1); SND.key(); lockSay(null, ''); return lockRender(); }
   if (/^\d$/.test(k)) {
     if (LK.code.length >= 5) return;

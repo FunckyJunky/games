@@ -172,9 +172,15 @@ async function lockDb(env) {
   }
   return env.DB;
 }
+// programs with a fixed code: only a salted hash of it is written here (it's a
+// fun lock, not strong security)
+const LOCK_FIXED = {
+  "leviathan-voyage": { salt: "a3e2a88b9906e46afc3adb34115d9eff", hash: "e6674910dc64ccfc2a5c0a589ce404c5d4ea77d1153a6d98095ab40109cf1334" },
+};
 // what the code must hash to: { salt, hash } or null if no code was chosen yet
 async function lockRecord(env, game) {
   if (env.LEVIATHAN_CODE && game === "leviathan-voyage") return { salt: "secret", hash: await sha256hex("secret:" + env.LEVIATHAN_CODE), fixed: true };
+  if (LOCK_FIXED[game]) return { ...LOCK_FIXED[game], fixed: true };
   const db = await lockDb(env);
   const row = await db.prepare("SELECT v FROM settings WHERE k = ?").bind("lock:" + game).first();
   return row ? JSON.parse(row.v) : null;
@@ -201,7 +207,7 @@ async function handleUnlock(request, env, url) {
     const game = url.searchParams.get("game") || "";
     if (!LOCKED[game]) return json({ unlocked: true });
     const rec = await lockRecord(env, game);
-    return json({ unlocked: rec ? await isUnlocked(request, env, game) : false, setup: !rec });
+    return json({ unlocked: rec ? await isUnlocked(request, env, game) : false, setup: !rec, fixed: !!(rec && rec.fixed) });
   }
   if (request.method !== "POST") return json({ error: "use GET or POST" }, 405);
   let body;
