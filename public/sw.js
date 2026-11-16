@@ -1,6 +1,6 @@
 // ERROR-DOS service worker: lets error.blue work as an installed app
 // and open the menu (and games you've played) without a connection.
-const CACHE = 'errordos-v1';
+const CACHE = 'errordos-v2';
 const SHELL = ['/', '/games.json', '/lib/gamelab.js', '/lib/appback.js', '/404.html', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

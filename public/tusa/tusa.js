@@ -9,48 +9,15 @@ const stage = $('stage'), dlg = $('dlg');
 let LW = 240, LH = 180, SCALE = 2, DPR = 1, CW = 480, CH = 360;
 
 // =====================================================================
-// words: Dutch and Ukrainian, mixed at random
+// words. Instructions are always plain English, one clear line; the
+// Dutch and Ukrainian live in the names, signs and the menu.
 // =====================================================================
 const pick = a => a[Math.random() * a.length | 0];
-const mix = (nl, uk) => (Math.random() < 0.5 ? nl : uk);
-const JOKES = [
-  'Ik heb een grap over de Deutsche Bahn... maar die komt later.',
-  'Мій борщ сильніший за мій вайфай.',
-  'Mijn dieet? Ik eet alleen op dagen die eindigen op -dag.',
-  'Кава — це не напій. Це стратегія.',
-  'Berlijn is zo cool, zelfs de duiven dragen een zonnebril.',
-  'Я не лінивий. Я в режимі енергозбереження.',
-  'Hoe noem je een slapende dinosaurus? Een dino-snurk!',
-  'Мій будильник і я — у складних стосунках.',
-  'De Mango-Lassi fluistert tegen mij: "drink mij"...',
-  'Їжак пішов у спортзал. Тепер він їжачок-качок!',
-  'Mijn Oekraïens is perfect: борщ, вареники, смачного!',
-  'Ik zei: één visje graag. Hij bracht een vis... met de hele familie.',
-  'Чому кіт сидить на ноутбуці? Стежить за мишкою!',
-  'Ik ben niet te laat. Iedereen anders is gewoon te vroeg.',
-  'Скільки треба друзів, щоб замовити піцу? Троє: один замовляє, двоє сперечаються.',
-  'Waarom staat Oleksiy\'s snor nooit stil? Hij heeft een eigen wind.',
-  'Віка каже, що не їсть після шостої. Тому вона їсть о 18:01.',
-  'Vito lacht zo breed, de tram stopt om ruimte te maken.',
-  'Мій улюблений спорт — сидіти в Hoongy. Олімпійський рівень!',
-  'Weet je wat Berlijn en mijn koelkast gemeen hebben? Altijd open, altijd leeg om 3 uur \'s nachts.',
-];
-const LAUGH = [
-  ['hehe', 'хі-хі', 'haha!', 'ги-ги'],
-  ['HAHAHA!', 'ХА-ХА-ХА!', 'Ik lach me rot!', 'Ой, не можу!'],
-  ['Ik lig dubbel!', 'Помираю від сміху!', 'Ik huil van het lachen!', 'Сльози з очей!'],
-  ['*rolt over de vloer*', '*качається по підлозі*', 'HAHAHAHA STOP!', 'Я ЗАРАЗ ЛОПНУ!'],
-];
-const HUGS = ['Knuffel!', 'Обійми!', 'Aww!', 'Мур-мур!', 'Lekker knuffelen!', 'Іди сюди!'];
-const THANKS = ['Dank je!', 'Дякую!', 'Ooh, lief!', 'Серденько!', 'Wat schattig!', 'Ой, як мило!'];
-const HELLOS = ['Привіт, Берлін!', 'Hallo Berlijn!', 'Daar ben ik!', 'Я тут!', 'Gezellig!', 'Туса починається!'];
-const CHILL = ['♪ ♫', '♪', '♫ ♪ ♫'];
-const AIR = ['*knuffelt de lucht*', '*обіймає повітря*'];
 const FOOD = {
-  lassi: { ico: '🥭', nl: 'Mango-Lassi', uk: 'Манго-ласі', d: mix('exotische mango-cocktail', 'екзотичний манговий коктейль'), p: '5,90' },
-  coffee: { ico: '☕', nl: 'Vietnamese koffie', uk: "В'єтнамська кава", d: mix('sterk en zoet, met gecondenseerde melk', 'міцна й солодка, зі згущенкою'), p: '4,50' },
-  shrimp: { ico: '🍤', nl: 'Garnalen', uk: 'Креветки', d: mix('knapperig, met chili en limoen', 'хрусткі, з чилі та лаймом'), p: '12,90' },
-  fish: { ico: '🐟', nl: 'Vis', uk: 'Риба', d: mix('hele vis met gember', 'ціла риба з імбиром'), p: '15,50' },
+  lassi: { ico: '🥭', name: 'Mango-Lassi · Манго-ласі', d: 'cold mango yoghurt drink', p: '5,90' },
+  coffee: { ico: '☕', name: "Vietnamese koffie · В'єтнамська кава", d: 'strong and sweet, with condensed milk', p: '4,50' },
+  shrimp: { ico: '🍤', name: 'Garnalen · Креветки', d: 'crispy, with chili and lime', p: '12,90' },
+  fish: { ico: '🐟', name: 'Vis · Риба', d: 'whole fish with ginger', p: '15,50' },
 };
 const NAMES = {
   VITO: ['VITO'],
@@ -102,10 +69,12 @@ function noise(d, v, f, q, when) {
 const SFX = {
   click() { noise(0.02, 0.2, 3600, 0.8); },
   joke() { tone(150, 0.12, 0.12, 'sine', 0, 90); tone(120, 0.14, 0.12, 'sine', 0.16, 70); noise(0.35, 0.1, 7000, 0.6, 0.34); },
-  laugh(char) {
-    const base = { VITO: 300, VIKA: 520, OLEKSIY: 230 }[char] || 400;
-    for (let i = 0; i < 4; i++) tone(base * (1 + (i % 2) * 0.15), 0.08, 0.035, 'triangle', i * 0.12, base * 0.8);
+  laugh(char, lv) {
+    const base = { VITO: 300, VIKA: 520, OLEKSIY: 230 }[char] || 400, n = 3 + (lv || 1) * 3;
+    for (let i = 0; i < n; i++) tone(base * (1 + (i % 2) * 0.15 + (lv >= 3 ? 0.1 : 0)), 0.08, 0.03 + (lv || 1) * 0.006, 'triangle', i * (lv >= 3 ? 0.1 : 0.12), base * 0.8);
   },
+  crickets() { for (let i = 0; i < 6; i++) tone(4200, 0.04, 0.012, 'sine', 0.2 + i * 0.09 + (i > 2 ? 0.5 : 0), 4000); },
+  knob() { noise(0.03, 0.25, 2400, 1.5); tone(90, 0.05, 0.05, 'square'); },
   heart() { tone(880, 0.09, 0.05, 'sine'); tone(1318, 0.16, 0.05, 'sine', 0.09); },
   hug() { tone(392, 0.3, 0.04, 'sine', 0, 523); tone(523, 0.35, 0.03, 'sine', 0.2, 440); },
   door() { tone(1568, 0.25, 0.04, 'sine'); tone(1175, 0.4, 0.04, 'sine', 0.18); },
@@ -154,7 +123,7 @@ const G = {
   camX: 0, camY: 0,
   base: null, travel: null, arrival: null, trans: null,
   npcs: [], cars: [], leaves: [], hearts: [], notes: [],
-  bubbles: {}, jokes: {}, blush: {}, hugs: {},
+  talk: {}, jokes: {}, blush: {}, hugs: {}, toast: null,
   others: {},
   nextPed: 0, nextCar: 0, nextTram: 8, nextSoldier: 0,
   prompt: '', closedShown: false,
@@ -188,7 +157,8 @@ function send(obj) { if (NET.ok && NET.ws && NET.ws.readyState === 1) NET.ws.sen
 function sendState(force) {
   const now = performance.now();
   if (!force && now - NET.lastSent < 110) return;
-  const s = { t: 'st', x: Math.round(G.p.x * 10) / 10, y: Math.round(G.p.y * 10) / 10, dir: G.p.dir, scene: G.scene === 'inside' ? 'inside' : 'street', anim: G.p.anim || (G.p.moving ? 'walk' : '') };
+  const s = { t: 'st', x: Math.round(G.p.x * 10) / 10, y: Math.round(G.p.y * 10) / 10, dir: G.p.dir, scene: G.scene === 'inside' ? 'inside' : 'street', anim: G.p.anim || (G.p.moving ? 'walk' : ''),
+    ride: G.ride ? 1 : 0, scoot: G.scootX == null ? -1 : Math.round(G.scootX), sd: G.scootDir || 1 };
   const key = JSON.stringify(s);
   if (!force && key === NET.lastKey) return;
   NET.lastKey = key; NET.lastSent = now;
@@ -200,6 +170,9 @@ function onNet(m) {
     G.others = {};
     for (const p of m.players) addOther(p, true);
     NET.g = m.g;
+    NET.welcomed = true;
+    // friends already here? then nobody is being waited for: no commentary
+    if (m.players.length) G.voiceDone = true;
     radioSync();
     sendState(true);
     updateRadioBtn();
@@ -208,29 +181,30 @@ function onNet(m) {
     addOther(m.p, false);
   } else if (m.type === 'gone') {
     const o = G.others[m.char];
-    if (o) { bubble(m.char, mix('Tot ziens!', 'Бувай!'), 2); delete G.others[m.char]; }
+    if (o) delete G.others[m.char];
   } else if (m.type === 'emote') {
     handleEmote(m);
   } else if (m.type === 'g') {
     const was = NET.g.clockStart;
     NET.g = m.g;
-    if (!was && m.g.clockStart) { bubble(G.me, mix('De klok tikt! 18:00', 'Годинник пішов! 18:00'), 2.5); SFX.bell(); }
+    if (!was && m.g.clockStart) { toast('18:00 · The evening starts, the kitchen is open!', 3.5); SFX.bell(); }
     radioSync();
   } else if (m.type === 'taken') {
-    bubble(G.me, mix('Bezet!', 'Зайнято!'), 1.5);
+    toast('That seat is taken', 2);
   } else if (m.type === 'kicked') {
     NET.want = false;
-    showDialog({ title: 'ERROR', text: mix('Je bent ergens anders ingelogd.', 'Ти увійшов з іншого пристрою.'), opts: [{ ico: '↩', label: 'OK', act: () => location.reload() }] });
+    showDialog({ title: 'ERROR', text: 'You logged in on another device.', opts: [{ ico: '↩', label: 'OK', act: () => location.reload() }] });
   }
 }
 function addOther(p, initial) {
   let o = G.others[p.char];
   const fresh = !o;
   if (!o) o = G.others[p.char] = { char: p.char, x: p.x, y: p.y, phase: 0 };
-  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt });
+  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt, ride: !!p.ride, scoot: p.scoot, sd: p.sd });
   if (fresh) {
     o.x = p.x; o.y = p.y;
-    if (!initial && p.scene === 'street') setTimeout(() => bubble(p.char, pick(HELLOS), 2.5), arrivingFor(o) ? 2600 : 200);
+    // the first friend has arrived: the waiting is over
+    if (!initial) G.voiceDone = true;
   }
 }
 function arrivingFor(o) { return o.arrive && snow() - o.arriveAt < 6500; }
@@ -250,9 +224,9 @@ function updateClock() {
   if (!at) { el.innerHTML = (HOME[G.me] ? HOME[G.me].title : 'TUSA') + ' <small>' + (G.scene === 'travel' ? '→ BERLIN' : '') + '</small>'; return; }
   const c = clockInfo();
   if (!c) G.closedShown = false;
-  if (!c) { el.innerHTML = '18:00 <small>' + (Math.floor(G.t / 4) % 2 ? 'wachten op vrienden…' : 'чекаємо друзів…') + '</small>'; return; }
+  if (!c) { el.innerHTML = '18:00 <small>' + (voicePlaying() ? '🎙 ' : '') + 'waiting…</small>'; return; }
   const hh = String(c.h).padStart(2, '0') + ':' + String(c.m).padStart(2, '0');
-  el.innerHTML = hh + (c.closed ? ' <small>' + mix('GESLOTEN', 'ЗАЧИНЕНО') + '</small>' : '');
+  el.innerHTML = hh + (c.closed ? ' <small>CLOSED</small>' : '');
 }
 
 // =====================================================================
@@ -283,14 +257,14 @@ function tryLogin() {
   const who = whoIs(typed);
   loginLines.push('LOGIN: ' + esc(typed));
   if (!who) {
-    loginLines.push('<span class="err">' + mix('TOEGANG GEWEIGERD', 'ДОСТУП ЗАБОРОНЕНО') + '. Bad command or file name.</span>');
-    loginLines.push('<span class="dim">' + mix('Alleen voor', 'Тільки для') + ': VIKA · VITO · OLEKSIY</span>');
+    loginLines.push('<span class="err">ACCESS DENIED. Bad command or file name.</span>');
+    loginLines.push('<span class="dim">Only for: VIKA · VITO · OLEKSIY</span>');
     typed = ''; SFX.pop(); termRender(); return;
   }
   try { localStorage.setItem('tusa-name', typed.trim()); } catch (e) {}
   loginBusy = true;
   loginLines.push('');
-  loginLines.push(mix('Welkom', 'Ласкаво просимо') + ', ' + who + '!');
+  loginLines.push('Welcome, ' + who + '!');
   termRender();
   let i = 0;
   const bar = () => {
@@ -305,6 +279,7 @@ function tryLogin() {
 function showLogin() {
   G.scene = 'login';
   $('login').classList.add('show');
+  document.body.classList.add('at-login'); layout(); globalThis.__LH = LH;
   try { typed = localStorage.getItem('tusa-name') || ''; } catch (e) { typed = ''; }
   loginLines = [
     '<span class="dim">ERROR-DOS 1.0 · C:\\ONLINE\\TUSA.EXE</span>',
@@ -312,8 +287,8 @@ function showLogin() {
     '<span class="big">Туса У Берліні</span>',
     '<span class="dim">(c) 2026 Hoongy &amp; vrienden · друзі</span>',
     '',
-    mix('Drie vrienden. Eén café in Berlijn.', 'Троє друзів. Одне кафе в Берліні.'),
-    mix('Wie ben jij?', 'Хто ти?'),
+    'Three friends. One café in Berlin.',
+    'Who are you? Type your name, then ENTER.',
     '',
   ];
   loginBusy = false;
@@ -326,6 +301,7 @@ function showLogin() {
 function startBase(who) {
   G.me = who;
   $('login').classList.remove('show');
+  if (document.body.classList.contains('at-login')) { document.body.classList.remove('at-login'); layout(); globalThis.__LH = LH; }
   G.scene = 'base';
   const H = HOME[who];
   G.base = { who, H, t0: G.t, out: false };
@@ -347,16 +323,16 @@ function spawnSoldier(anywhere) {
 function updateBase(dt) {
   const B = G.base, H = B.H;
   if (G.t - B.t0 < 0.9) { G.p.x = H.door + (G.t - B.t0) * 18; G.p.moving = true; G.p.phase += dt * 2; G.p.dir = 1; return; }
-  if (!B.out) { B.out = true; bubble(G.me, pick(CHILL) + ' ' + mix('Zo, vrij!', 'Нарешті вихідний!'), 2.5); }
+  if (!B.out) B.out = true;
   movePlayerSide(dt, 30, H.W + 30);
   if (G.p.x > H.W + 10 && !dialogOpen()) {
     if (G.me === 'VITO') {
       showDialog({
-        title: mix('Vliegen naar Berlijn?', 'Летіти до Берліна?'),
-        text: 'Бухарест (OTP) → Berlin (BER) · ✈ 2u05',
+        title: 'Fly to Berlin?',
+        text: 'Bucharest (OTP) → Berlin (BER) · ✈ 2h05',
         opts: [
-          { ico: '✈', label: mix('Vliegen!', 'Летимо!'), key: 'A', act: () => startTravel('VITO') },
-          { ico: '↩', label: mix('Nog even chillen', 'Ще трохи почилити'), key: 'B', act: () => { G.p.x = H.W - 20; G.p.dir = -1; } },
+          { ico: '✈', label: 'Fly!', key: 'A', act: () => startTravel('VITO') },
+          { ico: '↩', label: 'Stay a bit longer', key: 'B', act: () => { G.p.x = H.W - 20; G.p.dir = -1; } },
         ],
       });
     } else startTravel(G.me);
@@ -393,17 +369,17 @@ function drawBase() {
 const TRIPS = {
   VITO: [
     { k: 'europe', d: 5, cap: () => 'Бухарест → Берлін · Boekarest → Berlijn' },
-    { k: 'airport', d: 3.6, cap: () => 'BER · ' + mix('Welkom in Berlijn!', 'Вітаємо в Берліні!') },
+    { k: 'airport', d: 3.6, cap: () => 'BER · Welcome to Berlin!' },
     { k: 'city', d: 3, cap: () => 'TAXI → Hoongy' },
   ],
   VIKA: [
     { k: 'mapDrive', d: 5, cap: () => 'Altengrabow → Berlin · A2 · 🚙 Amarok' },
-    { k: 'drive', d: 3.6, cap: () => mix('Nog 42 km!', 'Ще 42 км!') },
+    { k: 'drive', d: 3.6, cap: () => 'Only 42 km to go!' },
     { k: 'city', d: 2.6, cap: () => 'Berlin · Берлін' },
   ],
   OLEKSIY: [
     { k: 'mapTrain', d: 5, cap: () => 'Lehnin → Brück → Berlin Hbf · RE7' },
-    { k: 'train', d: 3.6, cap: () => 'RE7 · ' + mix('Volgende halte: Berlin Hbf', 'Наступна зупинка: Berlin Hbf') },
+    { k: 'train', d: 3.6, cap: () => 'RE7 · Next stop: Berlin Hbf' },
     { k: 'hbf', d: 2.6, cap: () => 'Berlin Hbf · 🛴 → Hoongy' },
   ],
 };
@@ -493,14 +469,19 @@ const ARR = { taxi: { from: -80, stop: 318, y: 170, leave: S.W + 120 }, amarok: 
 function arriveBerlin() {
   G.scene = 'street';
   const kind = ARRIVE[G.me], a = ARR[kind];
-  G.p = { x: a.stop + (kind === 'scooter' ? -6 : 4), y: S.feet, dir: kind === 'amarok' ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
+  G.p = { x: a.stop + (kind === 'scooter' ? 0 : 4), y: S.feet, dir: kind === 'amarok' ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
   G.arrival = { kind, t0: G.t };
+  // Oleksiy keeps riding his step around the street until he parks it
+  G.ride = kind === 'scooter'; G.scootX = null; G.scootDir = 1;
   G.order = null;
   G.npcs = []; G.cars = []; G.leaves = [];
   for (let i = 0; i < 4; i++) spawnPed(true);
   G.camX = clamp(G.p.x - LW / 2, 0, S.W - LW);
   connect(kind, G.p.x);
-  setTimeout(() => { if (G.scene === 'street') bubble(G.me, pick(HELLOS), 2.5); }, 2800);
+  // a new visit: the commentary starts from the beginning
+  G.voiceDone = false; NET.welcomed = false;
+  voiceLoad();
+  try { if (voiceReady && !voiceOn) voiceEl.currentTime = 0; } catch (e) {}
 }
 function arrivalState(kind, t0, now) {
   // returns { vx, show (character visible), vehicle visible }
@@ -529,15 +510,16 @@ function updateStreet(dt) {
     if (arr.kind === 'taxi' && now - arr.t0 > 2.2 && !arr.sounded) { arr.sounded = true; SFX.door(); }
     if (st.show && now - arr.t0 > (arr.kind === 'scooter' ? 3.1 : 2.9)) G.arrival = null;
   } else if (!dialogOpen()) {
-    movePlayerSide(dt, -20, S.W + 20);
+    movePlayerSide(dt, -20, S.W + 20, G.ride ? 96 : 46);
+    if (G.ride && animFor(G.me).anim === 'rofl') parkScooter();   // laughing too hard to stay on
     // walked off the street: home or stay?
     if (G.p.x < -8 || G.p.x > S.W + 8) {
       showDialog({
-        title: mix('Terug naar de basis?', 'Назад на базу?'),
-        text: mix('Of blijf je nog even gezellig?', 'Чи ще трохи потусуєш?'),
+        title: 'Go back to base?',
+        text: 'Or stay in Berlin a bit longer?',
         opts: [
-          { ico: '🏠', label: mix('Naar huis', 'Додому, на базу'), key: 'A', act: () => { disconnect(); startBase(G.me); } },
-          { ico: '🍜', label: mix('Blijven!', 'Залишаюсь!'), key: 'B', act: () => { G.p.x = clamp(G.p.x, 12, S.W - 12); G.p.dir *= -1; } },
+          { ico: '🏠', label: 'Go home', key: 'A', act: () => { disconnect(); startBase(G.me); } },
+          { ico: '🍜', label: 'Stay!', key: 'B', act: () => { G.p.x = clamp(G.p.x, 12, S.W - 12); G.p.dir *= -1; } },
         ],
       });
     }
@@ -578,9 +560,11 @@ function updateStreet(dt) {
   if (G.leaves.length > 160) G.leaves.splice(0, G.leaves.length - 160);
   // the door
   G.prompt = '';
-  if (!G.arrival && Math.abs(G.p.x - S.door) < 14) {
+  if (!G.arrival && G.ride) G.prompt = Math.abs(G.p.x - S.door) < 14 ? 'A  🛴 Park the scooter, then go in' : 'A  🛴 Park the scooter here';
+  else if (!G.arrival && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) G.prompt = 'A  🛴 Ride the scooter';
+  else if (!G.arrival && Math.abs(G.p.x - S.door) < 14) {
     const c = clockInfo();
-    G.prompt = c && c.closed ? '🔒 ' + mix('Gesloten tot morgen', 'Зачинено до завтра') : 'A ▲ ' + mix('naar binnen', 'всередину');
+    G.prompt = c && c.closed ? '🔒 Closed until tomorrow' : 'A  Go inside';
   }
   G.camX = clamp(G.p.x - LW / 2, 0, S.W - LW);
   sendState(false);
@@ -594,8 +578,13 @@ function drawStreet() {
   A.street(LW, 180, cx, t, { doorOpen: G.doorUntil > t });
   A.outdoorTables(cx, t);
   // the parked e-scooter while Oleksiy is here
-  const olek = G.me === 'OLEKSIY' ? (G.arrival ? null : true) : (G.others.OLEKSIY && G.others.OLEKSIY.scene && !arrivingFor(G.others.OLEKSIY));
-  if (olek) A.scooter(528 - cx, S.feet, -1, null, 0);
+  // Oleksiy's step, where he parked it
+  if (G.me === 'OLEKSIY' && !G.arrival && !G.ride && G.scootX != null) A.scooter(G.scootX - cx, S.feet, G.scootDir, null, 0);
+  const ol = G.others.OLEKSIY;
+  if (ol && ol.scene && !ol.ride && !(arrivingFor(ol) && ol.scoot == null)) {
+    const sx = typeof ol.scoot === 'number' ? ol.scoot : 528;
+    if (sx >= 0) A.scooter(sx - cx, S.feet, ol.sd || -1, null, 0);
+  }
   const list = [];
   for (const n of G.npcs) list.push({ y: n.y, d: () => A.person(n.x - cx, n.y, n.look, n.phase, true, n.dir, t) });
   // friends
@@ -644,9 +633,20 @@ function drawVehicle(v) {
 // =====================================================================
 // entering and leaving Hoongy
 // =====================================================================
+function parkScooter() {
+  if (!G.ride) return;
+  G.ride = false; G.scootX = G.p.x; G.scootDir = G.p.dir;
+  G.p.x = clamp(G.p.x - G.p.dir * 9, -10, S.W + 10);
+  SFX.knob(); sendState(true);
+}
+function rideScooter() {
+  G.ride = true; G.p.x = G.scootX; G.p.dir = G.scootDir; G.scootX = null;
+  tone(300, 0.25, 0.03, 'sawtooth', 0, 620); sendState(true);
+}
 function enterHoongy() {
+  if (G.ride) { toast('Park the scooter first: press A', 2.2); return; }
   const c = clockInfo();
-  if (c && c.closed) { bubble(G.me, mix('Gesloten! Morgen weer.', 'Зачинено! Завтра знову.'), 2); return; }
+  if (c && c.closed) { toast('Hoongy is closed. See you tomorrow!', 2.5); return; }
   G.scene = 'enter'; G.trans = { t0: G.t, dir: 'in' };
   G.doorUntil = G.t + 1.2; SFX.door();
 }
@@ -656,7 +656,7 @@ function updateEnter() {
     G.scene = 'inside';
     G.p.x = A.IN.door.x; G.p.y = A.IN.H - 24; G.p.angle = -Math.PI / 2; G.p.seat = -1;
     sendState(true);
-    setTimeout(() => { if (G.scene === 'inside') bubble(G.me, mix('Wat gezellig hier!', 'Як тут затишно!'), 2.2); }, 300);
+    radioSync();
   }
 }
 function drawEnter() {
@@ -677,7 +677,7 @@ function drawEnter() {
   } else {
     // ...and rises up: the view turns to look down from the ceiling
     const k = ease((p - 0.55) / 0.45);
-    const endY = clamp(A.IN.H - 24 - LH / 2, 0, A.IN.H - LH);
+    const endY = A.IN.H <= LH ? (A.IN.H - LH) / 2 : clamp(A.IN.H - 24 - LH / 2, 0, A.IN.H - LH);
     G.camX = clamp(A.IN.door.x - LW / 2, Math.min(0, (A.IN.W - LW) / 2), Math.max(0, A.IN.W - LW));
     G.camY = (A.IN.H - LH) + 60 * (1 - k) - ((A.IN.H - LH) - endY) * k;
     drawInsideWorld();
@@ -691,6 +691,7 @@ function leaveHoongy() {
   G.doorUntil = G.t + 1; SFX.door();
   G.fadeUntil = G.t + 0.5;
   sendState(true);
+  radioSync();
 }
 
 // =====================================================================
@@ -700,6 +701,7 @@ const IN = A.IN;
 function insideBlocked(x, y) {
   if (x < 18 || x > IN.W - 18 || y < 54 || y > IN.H - 16) return true;
   for (const tb of IN.tables) if (Math.abs(x - tb.x) < tb.w / 2 + 4 && Math.abs(y - tb.y) < tb.h / 2 + 4) return true;
+  for (const [x0, y0, x1, y1] of IN.solid) if (x > x0 - 3 && x < x1 + 3 && y > y0 - 3 && y < y1 + 3) return true;
   return false;
 }
 function seatTakenMap() {
@@ -707,6 +709,14 @@ function seatTakenMap() {
   for (const ch in G.others) { const o = G.others[ch]; if (o.scene === 'inside' && o.seat >= 0) m[o.seat] = ch; }
   if (G.p.seat >= 0) m[G.p.seat] = G.me;
   return m;
+}
+// stand right in front of the radio cabinet to use it
+const RADIO_SPOT = { x: 46, y: 133 };
+function nearRadio() { return G.scene === 'inside' && G.p.seat < 0 && Math.hypot(G.p.x - RADIO_SPOT.x, G.p.y - RADIO_SPOT.y) < 16; }
+function radioPrompt() {
+  const cur = NET.g.radio ? NET.g.radio.ch : 0, n = STATIONS.length;
+  if (!cur) return 'A  📻 Turn the radio on';
+  return cur < n ? 'A  📻 Next channel (' + STATIONS[cur].freq + ')' : 'A  📻 Turn the radio off';
 }
 function nearSeat() {
   const taken = seatTakenMap();
@@ -718,7 +728,7 @@ function updateInside(dt) {
   const c = clockInfo();
   if (c && c.closed && !G.closedShown) {
     G.closedShown = true;
-    showDialog({ title: '22:00 · Hoongy ' + mix('sluit!', 'зачиняється!'), text: mix('Dank jullie wel en tot morgen! Doei!', 'Дякуємо, до завтра! Па-па!'), opts: [{ ico: '🚪', label: 'OK', key: 'A', act: leaveHoongy }] });
+    showDialog({ title: '22:00 · Hoongy is closing!', text: 'Thank you and see you tomorrow!', opts: [{ ico: '🚪', label: 'OK', key: 'A', act: leaveHoongy }] });
   }
   if (G.p.seat >= 0) {
     const s = IN.seats[G.p.seat];
@@ -726,21 +736,22 @@ function updateInside(dt) {
     // the waiter brings the menu
     const o = G.order;
     if (o && o.ph === 'wait' && snow() >= o.t + 3800 && G.menuShownFor !== o.t && !dialogOpen()) { G.menuShownFor = o.t; openMenu(); }
-    if (!o) G.prompt = '';
-    else if (o.ph === 'wait') G.prompt = snow() < o.t + 3800 ? '🧑‍🍳 ' + mix('de ober komt eraan…', 'офіціант іде…') : 'A 📋 ' + mix('menukaart', 'меню');
-    else if (o.ph === 'cook' && snow() < o.t + 10500) G.prompt = '🍳 ' + mix('wordt bereid…', 'готується…');
-    else if (o.ph === 'cook' && (o.bites || 0) < 5) G.prompt = 'A 😋 ' + mix('eten!', 'їсти!') + '   B ' + mix('opstaan', 'встати');
-    else G.prompt = 'A ' + mix('nog iets bestellen', 'замовити ще') + '   B ' + mix('opstaan', 'встати');
+    if (!o) G.prompt = NET.g.clockStart ? 'B  Stand up' : '⏳ Kitchen opens when a friend arrives';
+    else if (o.ph === 'wait') G.prompt = snow() < o.t + 3800 ? 'The waiter is coming…' : 'A  📋 Menu';
+    else if (o.ph === 'cook' && snow() < o.t + 10500) G.prompt = '🍳 Cooking…';
+    else if (o.ph === 'cook' && (o.bites || 0) < 5) G.prompt = 'A  Eat     B  Stand up';
+    else G.prompt = 'A  Order more     B  Stand up';
   } else {
     movePlayerTop(dt);
     const ns = nearSeat();
     G.hiSeat = ns;
-    G.prompt = ns >= 0 ? 'A 🪑 ' + mix('gaan zitten', 'сісти') : '';
-    if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) G.prompt = 'A 🚪 ' + mix('naar buiten', 'вийти');
+    G.prompt = ns >= 0 ? 'A  🪑 Sit down' : '';
+    if (nearRadio()) G.prompt = radioPrompt();
+    if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) G.prompt = 'A  🚪 Go outside';
     if (Math.abs(G.p.x - IN.door.x) < 12 && G.p.y >= IN.H - 17 && G.inputDown) leaveHoongy();
   }
   G.camX = IN.W <= LW ? (IN.W - LW) / 2 : clamp(G.p.x - LW / 2, 0, IN.W - LW);
-  G.camY = clamp(G.p.y - LH / 2, 0, IN.H - LH);
+  G.camY = IN.H <= LH ? (IN.H - LH) / 2 : clamp(G.p.y - LH / 2, 0, IN.H - LH);
   sendState(false);
 }
 function drawInsideWorld() {
@@ -748,7 +759,7 @@ function drawInsideWorld() {
   lctx.fillStyle = '#120c08'; lctx.fillRect(0, 0, LW, LH);
   lctx.save(); lctx.translate(-Math.round(G.camX), -Math.round(G.camY));
   const taken = seatTakenMap();
-  A.inside(G.t, { seatTaken: taken, hiSeat: G.scene === 'inside' && G.p.seat < 0 ? G.hiSeat : -1, doorOpen: G.doorUntil > G.t });
+  A.inside(G.t, { seatTaken: taken, hiSeat: G.scene === 'inside' && G.p.seat < 0 ? G.hiSeat : -1, doorOpen: G.doorUntil > G.t, radioOn: NET.g.radio ? NET.g.radio.ch : 0, hiRadio: nearRadio() });
   // dishes on the tables
   const diners = [];
   if (G.p.seat >= 0) diners.push([G.p.seat, G.order]);
@@ -772,7 +783,7 @@ function drawInsideWorld() {
     list.push({ y: o.y, d: () => drawOtherTop(o) });
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.d());
-  A.insideTop(G.t);
+  A.insideTop(G.t, { x: G.camX, y: G.camY, w: LW, h: LH });
   lctx.restore();
 }
 // the waiter: where is he right now?
@@ -807,12 +818,12 @@ function waiterPos() {
 function openMenu() {
   SFX.pop();
   showDialog({
-    title: '📋 HOONGY · ' + mix('Menukaart', 'Меню'),
-    text: mix('Wat mag het zijn?', 'Що бажаєте?') + ' 🙂',
+    title: '📋 HOONGY · Menu',
+    text: 'What would you like?',
     opts: Object.keys(FOOD).map(k => ({
-      ico: FOOD[k].ico, label: FOOD[k].nl + ' · ' + FOOD[k].uk, small: FOOD[k].d + ' — ' + FOOD[k].p + ' €',
-      act: () => { send({ t: 'order', item: k }); if (!NET.ok) G.order = { ph: 'cook', item: k, t: snow(), bites: 0 }; bubble(G.me, mix('Eén ' + FOOD[k].nl + ', graag!', FOOD[k].uk + ', будь ласка!'), 2.2); },
-    })).concat([{ ico: '⏳', label: mix('Nog even kijken', 'Ще подумаю'), key: 'B', act: () => {} }]),
+      ico: FOOD[k].ico, label: FOOD[k].name, small: FOOD[k].d + ' — ' + FOOD[k].p + ' €',
+      act: () => { send({ t: 'order', item: k }); if (!NET.ok) G.order = { ph: 'cook', item: k, t: snow(), bites: 0 }; },
+    })).concat([{ ico: '⏳', label: 'Not yet', key: 'B', act: () => {} }]),
   });
 }
 
@@ -820,13 +831,13 @@ function openMenu() {
 // moving
 // =====================================================================
 const keys = { left: false, right: false, up: false, down: false };
-function movePlayerSide(dt, minX, maxX) {
+function movePlayerSide(dt, minX, maxX, speed) {
   const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-  const an = animFor(G.me).anim;
-  if (an === 'rofl' || an === 'hug') { G.p.moving = false; return; }
+  if (animFor(G.me).anim === 'hug') { G.p.moving = false; return; }
   if (dx) {
-    G.p.x = clamp(G.p.x + dx * 46 * dt, minX, maxX); G.p.dir = dx; G.p.moving = true; G.p.phase += dt * 2.4; G.p.idle = 0;
-    if ((G.p.phase % 0.5) < dt * 2.4) SFX.step();
+    stopLaughing(G.me);
+    G.p.x = clamp(G.p.x + dx * (speed || 46) * dt, minX, maxX); G.p.dir = dx; G.p.moving = true; G.p.phase += dt * 2.4; G.p.idle = 0;
+    if ((G.p.phase % 0.5) < dt * 2.4 && !G.ride) SFX.step();
   } else { G.p.moving = false; G.p.idle += dt; }
   G.inputDown = keys.down;
 }
@@ -834,6 +845,8 @@ function movePlayerTop(dt) {
   const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
   G.inputDown = keys.down;
   if (!dx && !dy) { G.p.moving = false; G.p.idle += dt; return; }
+  if (animFor(G.me).anim === 'hug') { G.p.moving = false; return; }
+  stopLaughing(G.me);
   const l = Math.hypot(dx, dy), sp = 40 * dt;
   const nx = G.p.x + dx / l * sp, ny = G.p.y + dy / l * sp;
   if (!insideBlocked(nx, G.p.y)) G.p.x = nx;
@@ -869,45 +882,49 @@ function emote(kind) {
   if (!(G.scene === 'street' || G.scene === 'inside' || G.scene === 'base')) return;
   unlock();
   const to = nearestFriend(kind === 'hug' ? 46 : 1e9) || '';
-  const j = Math.random() * JOKES.length | 0;
-  if (NET.ok) send({ t: 'emote', kind, to, j });
-  else handleEmote({ from: G.me, kind, to, j, t: snow() });
+  if (NET.ok) send({ t: 'emote', kind, to, j: 0 });
+  else handleEmote({ from: G.me, kind, to, j: 0, t: snow() });
 }
+// jokes heard in the last 25 seconds; 3 of them and you are on the floor
+const ROFL_AT = 3;
 function laughLevel(ch) {
   const list = (G.jokes[ch] || []).filter(t => snow() - t < 25000);
   G.jokes[ch] = list;
   return Math.min(4, list.length);
 }
 function lastJoke(ch) { const l = G.jokes[ch] || []; return l.length ? snow() - l[l.length - 1] : 1e9; }
+function stopLaughing(ch) { if (G.jokes[ch] && G.jokes[ch].length) G.jokes[ch] = []; }
 function handleEmote(e) {
   const from = e.from;
   if (e.kind === 'joke') {
-    bubble(from, JOKES[e.j % JOKES.length], 4.2, 'joke');
+    // the teller pulls a funny face and gestures; everyone else laughs harder with every joke
+    G.talk[from] = G.t + 2.2;
     SFX.joke();
-    for (const ch of presentChars()) {
-      if (ch === from) continue;
+    const listeners = presentChars().filter(ch => ch !== from);
+    for (const ch of listeners) {
       (G.jokes[ch] = G.jokes[ch] || []).push(e.t || snow());
       const lv = laughLevel(ch);
-      setTimeout(() => { bubble(ch, pick(LAUGH[Math.max(0, lv - 1)]), 2.4); SFX.laugh(ch); }, 1500 + Math.random() * 900);
+      setTimeout(() => SFX.laugh(ch, lv), 1300 + Math.random() * 700);
     }
-    if (presentChars().length < 2) setTimeout(() => bubble(from, mix('...niemand lacht? 🦗', '...ніхто не сміється? 🦗'), 2), 2200);
+    if (!listeners.length) SFX.crickets();
   } else if (e.kind === 'heart') {
     SFX.heart();
     const a = posOf(from), b = e.to ? posOf(e.to) : null;
     if (a) G.hearts.push({ x: a.x, y: a.y - (scenePlace() === 'inside' ? 6 : 30), tx: b ? b.x : a.x, ty: b ? b.y - (scenePlace() === 'inside' ? 6 : 26) : a.y - 70, t0: G.t, place: a.scene });
     setAnim(from, 'heart', 0.8);
-    if (e.to) { G.blush[e.to] = G.t + 3; setTimeout(() => bubble(e.to, pick(THANKS), 2), 900); }
+    if (e.to) G.blush[e.to] = G.t + 3;
   } else if (e.kind === 'hug') {
     if (e.to) {
       SFX.hug();
       setAnim(from, 'hug', 2.2); setAnim(e.to, 'hug', 2.2);
       G.hugs[from] = { with: e.to, until: G.t + 2.2 }; G.hugs[e.to] = { with: from, until: G.t + 2.2 };
+      stopLaughing(from); stopLaughing(e.to);
       const a = posOf(from), b = posOf(e.to);
       if (from === G.me && b) { G.p.dir = b.x >= G.p.x ? 1 : -1; if (G.scene === 'street') G.p.x = b.x - G.p.dir * 11; }
       if (e.to === G.me && a) { G.p.dir = a.x >= G.p.x ? 1 : -1; }
-      bubble(from, pick(HUGS), 2); setTimeout(() => bubble(e.to, pick(HUGS), 2), 600);
+      G.blush[from] = G.t + 2.5; G.blush[e.to] = G.t + 2.5;
       if (a && b) for (let i = 0; i < 5; i++) G.hearts.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - (a.scene === 'inside' ? 4 : 26), tx: (a.x + b.x) / 2 + (Math.random() - 0.5) * 30, ty: (a.y + b.y) / 2 - 60, t0: G.t + i * 0.12, place: a.scene, small: true });
-    } else { bubble(from, pick(AIR), 2); setAnim(from, 'hug', 1.2); }
+    } else setAnim(from, 'hug', 1.2);
   }
 }
 function scenePlace() { return G.scene === 'inside' ? 'inside' : 'street'; }
@@ -915,58 +932,77 @@ function setAnim(ch, anim, dur) {
   if (ch === G.me) { G.p.anim = anim; G.p.animUntil = G.t + dur; }
   else if (G.others[ch]) { G.others[ch].localAnim = anim; G.others[ch].localAnimUntil = G.t + dur; }
 }
-function bubble(ch, text, dur, kind) { if (ch) G.bubbles[ch] = { text, until: G.t + (dur || 2.5), kind }; }
+// a short line at the bottom of the screen (never above a character)
+function toast(text, dur) { G.toast = { text, until: G.t + (dur || 2.5) }; }
 
 function animFor(ch) {
-  const lv = laughLevel(ch), recent = lastJoke(ch) < 9000;
+  const lv = laughLevel(ch), since = lastJoke(ch);
   const isMe = ch === G.me;
-  const a = isMe ? (G.p.animUntil > G.t ? G.p.anim : '') : ((G.others[ch].localAnimUntil || 0) > G.t ? G.others[ch].localAnim : '');
-  if (lv >= 4 && recent && a !== 'hug') return { anim: 'rofl', laugh: 4 };
-  return { anim: a, laugh: recent ? lv : 0 };
+  const a = isMe ? (G.p.animUntil > G.t ? G.p.anim : '') : ((G.others[ch] && (G.others[ch].localAnimUntil || 0) > G.t) ? G.others[ch].localAnim : '');
+  if (lv >= ROFL_AT && since < 20000 && a !== 'hug') return { anim: 'rofl', laugh: 4 };
+  return { anim: a, laugh: since < 9000 ? lv : 0 };
+}
+function talking(ch) { return G.talk[ch] > G.t && (G.t * 8 | 0) % 2 === 0; }
+function drawRider(ch, x, y, dir, moving, st) {
+  A.scooter(x, y, dir, null, moving ? G.t : 0);
+  A.friend(ch, x - dir, y - 3, { dir, t: G.t, anim: st.anim === 'hug' || st.anim === 'heart' ? st.anim : (G.talk[ch] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[ch] > G.t, talk: talking(ch) });
 }
 function drawMe(x, y) {
   const st = animFor(G.me);
-  A.friend(G.me, x, y, { dir: G.p.dir, phase: G.p.phase, moving: G.p.moving, anim: st.anim, laugh: st.laugh, blush: G.blush[G.me] > G.t, t: G.t, talk: bubbleTalking(G.me) });
+  if (G.ride && G.scene === 'street' && st.anim !== 'rofl') return drawRider(G.me, x, y, G.p.dir, G.p.moving, st);
+  A.friend(G.me, x, y, { dir: G.p.dir, phase: G.p.phase, moving: G.p.moving, anim: st.anim || (G.talk[G.me] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[G.me] > G.t, t: G.t, talk: talking(G.me) });
 }
 function drawOther(o, x, y) {
   const st = animFor(o.char);
-  A.friend(o.char, x, y, { dir: o.dir, phase: o.phase, moving: o.moving, anim: st.anim, laugh: st.laugh, blush: G.blush[o.char] > G.t, t: G.t, talk: bubbleTalking(o.char) });
+  if (o.ride && o.scene === 'street' && st.anim !== 'rofl') return drawRider(o.char, x, y, o.dir, o.moving, st);
+  A.friend(o.char, x, y, { dir: o.dir, phase: o.phase, moving: o.moving, anim: st.anim || (G.talk[o.char] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[o.char] > G.t, t: G.t, talk: talking(o.char) });
 }
+// on the floor next to the chair when rolling with laughter at the table
+function floorSpot(seat, x, y) { const s = IN.seats[seat]; return s ? [x + (s.face === 0 ? -9 : 9), y + 3] : [x, y]; }
 function drawMeTop(x, y) {
   const st = animFor(G.me);
-  A.friendTop(G.me, x, y, { angle: G.p.angle, moving: G.p.moving, phase: G.p.phase, laugh: st.laugh, t: G.t });
+  if (st.anim === 'rofl' && G.p.seat >= 0) [x, y] = floorSpot(G.p.seat, x, y);
+  A.friendTop(G.me, x, y, { angle: G.p.angle, moving: G.p.moving, phase: G.p.phase, laugh: st.laugh, anim: st.anim, t: G.t });
 }
 function drawOtherTop(o) {
   const st = animFor(o.char);
   const ang = o.seat >= 0 ? IN.seats[o.seat].face : (o.dir > 0 ? 0 : Math.PI);
-  A.friendTop(o.char, o.x, o.y, { angle: o.angleLive != null ? o.angleLive : ang, moving: o.moving, phase: o.phase, laugh: st.laugh, t: G.t });
+  let x = o.x, y = o.y;
+  if (st.anim === 'rofl' && o.seat >= 0) [x, y] = floorSpot(o.seat, x, y);
+  A.friendTop(o.char, x, y, { angle: o.angleLive != null && o.seat < 0 ? o.angleLive : ang, moving: o.moving, phase: o.phase, laugh: st.laugh, anim: st.anim, t: G.t });
 }
-function bubbleTalking(ch) { const b = G.bubbles[ch]; return b && b.until > G.t && b.kind === 'joke' && (G.t * 8 | 0) % 2 === 0; }
 
 // =====================================================================
-// the radio: like a real one. Every station is always "on air": the song
-// position comes from the clock, so switching on or changing channel drops
-// you into the middle of whatever is playing — the same moment for everyone.
-// The server keeps which channel is on (0 = off), shared by all players.
+// the radio stands in Hoongy, on a cabinet by the left wall. Like a real
+// radio every station is always on air: when the evening starts each song
+// is at 20% and from then on it keeps playing (and looping) in the
+// background, whether the radio is on or not. Switching on or changing
+// channel drops you into whatever is playing right now, the same moment for
+// everyone. The server keeps which channel is on (0 = off). You only hear
+// it inside, louder when you stand close to it.
 // =====================================================================
 let STATIONS = [];
-fetch('radio/stations.json', { cache: 'no-store' }).then(r => r.json()).then(j => { STATIONS = j; radioSync(); }).catch(() => {});
+fetch('radio/stations.json', { cache: 'no-store' }).then(r => r.json()).then(j => { STATIONS = j; radioSync(); updateRadioBtn(); }).catch(() => {});
 const radioEl = new Audio(); radioEl.loop = true; radioEl.preload = 'auto';
 let radioNode = null, radioFilter = null, radioGain = null, radioCh = -1, radioCheck = 0;
+const localEpoch = Date.now();
 function radioGraph() {
   const a = audio(); if (!a || radioNode) return;
   try {
     radioNode = a.createMediaElementSource(radioEl);
-    radioFilter = a.createBiquadFilter(); radioFilter.type = 'lowpass'; radioFilter.frequency.value = 900;
-    radioGain = a.createGain(); radioGain.gain.value = 0.5;
+    radioFilter = a.createBiquadFilter(); radioFilter.type = 'lowpass'; radioFilter.frequency.value = 12000;
+    radioGain = a.createGain(); radioGain.gain.value = 0.6;
     radioNode.connect(radioFilter).connect(radioGain).connect(master);
   } catch (e) {}
 }
+function stationDur(ch) {
+  const st = STATIONS[ch - 1]; if (!st) return 60;
+  return radioEl.duration && isFinite(radioEl.duration) && radioCh === ch ? radioEl.duration : st.dur || 60;
+}
 function onAir(ch) {
-  // where the song on channel ch is right now (seconds)
-  const st = STATIONS[ch - 1]; if (!st) return 0;
-  const dur = radioEl.duration && isFinite(radioEl.duration) && radioCh === ch ? radioEl.duration : st.dur || 60;
-  return ((snow() / 1000 + ch * 137.3) % dur + dur) % dur;
+  // where the song on channel ch is right now (seconds): 20% in at the start of the evening, then onwards
+  const dur = stationDur(ch), epoch = (NET.g.radio && NET.g.radio.epoch) || localEpoch;
+  return ((dur * 0.2 + (snow() - epoch) / 1000) % dur + dur) % dur;
 }
 function tuneNoise(len) {
   // the hiss and whistle between stations
@@ -998,10 +1034,10 @@ function hissOff() {
   setTimeout(() => { try { h.src.stop(); h.lfo.stop(); } catch (e) {} }, 400);
 }
 function radioSync() {
-  const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
+  const hear = G.scene === 'inside';
   const ch = NET.g.radio ? NET.g.radio.ch : 0;
   updateRadioBtn();
-  if (!at || !ch || !STATIONS[ch - 1]) { if (radioCh > 0 && at) { tone(220, 0.08, 0.04); } radioStop(); return; }
+  if (!hear || !ch || !STATIONS[ch - 1]) { radioStop(); return; }
   if (!unlocked) return;            // browsers only play sound after a tap
   radioGraph();
   const st = STATIONS[ch - 1];
@@ -1011,19 +1047,20 @@ function radioSync() {
     tuneNoise(); hissOn();
     songURL(st.file).then(url => {
       if (radioCh !== ch) return;   // turned to another station meanwhile
-      radioEl.onloadedmetadata = () => {
+      const go = () => {
         if (radioCh !== ch) return;
         try { radioEl.currentTime = onAir(ch); } catch (e) {}
         radioEl.play().then(hissOff).catch(hissOff);
       };
-      radioEl.src = url; radioEl.load();
-    }).catch(() => { hissOff(); bubble(G.me, '📻 ...kshhhh...', 1.5); });
+      if (radioEl.src === url && radioEl.readyState >= 1) go();
+      else { radioEl.onloadedmetadata = go; radioEl.src = url; radioEl.load(); }
+    }).catch(() => hissOff());
   } else if (radioEl.paused && radioEl.src) {
     try { radioEl.currentTime = onAir(ch); } catch (e) {}
     radioEl.play().catch(() => {});
   }
 }
-function radioStop() { radioCh = -1; hissOff(); try { radioEl.pause(); } catch (e) {} updateRadioBtn(); }
+function radioStop() { radioCh = -1; hissOff(); try { radioEl.pause(); } catch (e) {} }
 function radioDrift() {
   // keep every phone on the same spot of the song
   if (radioCh <= 0 || radioEl.paused || !radioEl.duration) return;
@@ -1032,40 +1069,77 @@ function radioDrift() {
 }
 function radioMix() {
   if (G.t - radioCheck > 5) { radioCheck = G.t; radioDrift(); }
-  if (!radioFilter || !ac) return;
-  const inside = G.scene === 'inside';
-  radioFilter.frequency.setTargetAtTime(inside ? 18000 : 700, ac.currentTime, 0.3);
-  radioGain.gain.setTargetAtTime(inside ? 0.6 : 0.35, ac.currentTime, 0.3);
+  if (!radioFilter || !ac || G.scene !== 'inside') return;
+  // louder and brighter close to the radio
+  const d = Math.hypot(G.p.x - IN.radio.x, G.p.y - IN.radio.y), k = clamp(1 - (d - 24) / 260, 0, 1);
+  radioFilter.frequency.setTargetAtTime(2500 + k * k * 15500, ac.currentTime, 0.3);
+  radioGain.gain.setTargetAtTime(0.22 + k * 0.6, ac.currentTime, 0.3);
 }
 function updateRadioBtn() {
   const b = $('radioBtn'), ch = NET.g.radio ? NET.g.radio.ch : 0, st = STATIONS[ch - 1];
   const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
-  b.textContent = at && st ? '📻 ' + st.freq : '📻 RADIO';
+  b.textContent = at && st ? '📻 ' + st.freq : '📻 OFF';
   b.style.borderColor = at && st ? '#ffe23a' : '';
 }
-function openRadio() {
+function radioInfo() {
   unlock();
-  const at = G.scene === 'street' || G.scene === 'inside';
-  if (!at) { showDialog({ title: '📻 RADIO', text: mix('De radio speelt in Hoongy. Eerst naar Berlijn!', 'Радіо грає в Hoongy. Спершу до Берліна!'), opts: [{ ico: '👍', label: 'OK', key: 'A', act: () => {} }] }); return; }
-  const r = NET.g.radio || { ch: 0 }, cur = r.ch, st = STATIONS[cur - 1];
-  const last = r.last || 1;
-  showDialog({
-    title: '📻 RADIO HOONGY  ' + (st ? st.freq + ' MHz' : '— OFF —'),
-    text: (st ? '♫ ' + st.name + (st.note ? ' · ' + st.note : '') + '\n' : '') + mix('Iedereen in Hoongy hoort dezelfde zender.', 'Усі в Hoongy чують ту саму хвилю.'),
-    opts: [
-      { ico: '⏻', label: cur ? mix('Radio uit', 'Вимкнути радіо') : mix('Radio aan', 'Увімкнути радіо'), key: 'A', act: () => setRadio(cur ? 0 : last) },
-      { ico: '◄', label: 'CH −', act: () => setRadio(cur ? ((cur - 2 + STATIONS.length) % STATIONS.length) + 1 : last), keep: true },
-      { ico: '►', label: 'CH +', act: () => setRadio(cur ? (cur % STATIONS.length) + 1 : last), keep: true },
-    ].concat(STATIONS.map((s, i) => ({ ico: cur === i + 1 ? '🔊' : '·', label: s.freq + '  ' + s.name, small: s.note || '', sel: cur === i + 1, act: () => setRadio(i + 1), keep: true }))),
-  });
+  const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
+  if (!at) return toast('The radio is in Hoongy, in Berlin.', 2.5);
+  toast(G.scene === 'inside' ? 'The radio is on the left wall. Walk to it and press A.' : 'The radio is inside Hoongy. Go in to hear it.', 3);
 }
-function setRadio(ch) {
-  unlock();
-  if (NET.ok) send({ t: 'radio', ch });
-  else { NET.g.radio = { ch, since: snow(), last: ch || (NET.g.radio && NET.g.radio.last) || 1 }; radioSync(); }
-  if (ch === 0) tone(180, 0.06, 0.05);
-  setTimeout(() => { if (dialogOpen() && dlg.dataset.radio === '1') openRadio(); }, 250);
+// off → first channel → second channel → … → off
+function cycleRadio() {
+  unlock(); SFX.knob();
+  const cur = NET.g.radio ? NET.g.radio.ch : 0;
+  const next = (cur + 1) % (STATIONS.length + 1);
+  if (NET.ok) send({ t: 'radio', ch: next });
+  else { NET.g.radio = { ch: next, since: snow(), last: next || 1, epoch: (NET.g.radio && NET.g.radio.epoch) || localEpoch }; radioSync(); }
+  if (next === 0) tone(180, 0.06, 0.05);
+  toast(next ? '📻 ' + STATIONS[next - 1].freq + ' · ' + STATIONS[next - 1].name : '📻 Radio off', 2);
 }
+
+// =====================================================================
+// the Hoongy commentary: plays on the street while you wait alone,
+// and stops for good when the first friend arrives
+// =====================================================================
+const voiceEl = new Audio(); voiceEl.preload = 'auto';
+let voiceURL = null, voiceNode = null, voiceGain = null, voiceOn = false, voiceReady = false;
+function voiceLoad() {
+  if (voiceURL) return;
+  voiceURL = fetch('voice/hoongy-commentary.mp3').then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+    .then(b => { const u = URL.createObjectURL(b); voiceEl.src = u; voiceEl.load(); voiceReady = true; return u; }).catch(() => { voiceURL = null; });
+}
+function voicePlaying() { return voiceOn && !voiceEl.paused; }
+function voiceWanted() {
+  return unlocked && SET.sound && G.scene === 'street' && !G.arrival && NET.welcomed && !G.voiceDone && !Object.keys(G.others).length && !voiceEl.ended;
+}
+function voiceUpdate() {
+  const want = voiceWanted();
+  if (want && !voiceOn && voiceReady) {
+    const a = audio(); if (!a) return;
+    if (!voiceNode) { try { voiceNode = a.createMediaElementSource(voiceEl); voiceGain = a.createGain(); voiceGain.gain.value = 0; voiceNode.connect(voiceGain).connect(master); } catch (e) {} }
+    voiceOn = true;
+    if (voiceGain) voiceGain.gain.setTargetAtTime(0.95, a.currentTime, 0.15);
+    voiceEl.play().catch(() => { voiceOn = false; });
+  } else if (!want && voiceOn) {
+    voiceOn = false;
+    if (voiceGain && ac) voiceGain.gain.setTargetAtTime(0, ac.currentTime, 0.12);
+    setTimeout(() => { if (!voiceOn) try { voiceEl.pause(); } catch (e) {} }, 450);
+  }
+}
+
+// iPhones only let a sound element play after it was started from a tap,
+// so on the first taps both players are started silently once
+let primed = false;
+function primeMedia() {
+  if (primed) return; primed = true;
+  const silent = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+  for (const el of [radioEl, voiceEl]) {
+    if (el.src) continue;
+    try { el.src = silent; el.muted = true; el.play().then(() => { el.pause(); el.muted = false; }).catch(() => { el.muted = false; }); } catch (e) {}
+  }
+}
+for (const ev of ['touchend', 'click', 'keydown']) addEventListener(ev, () => { primeMedia(); unlock(); }, { capture: true });
 
 // =====================================================================
 // dialogs (DOS style)
@@ -1107,10 +1181,11 @@ function press(k) {
   if (G.scene === 'login') return;
   if (dialogOpen()) return dialogKey(k);
   if (k === 'hug' || k === 'heart' || k === 'joke') return emote(k);
-  if (k === 'radio') return openRadio();
   if (G.scene === 'travel') { if (k === 'a' || k === 'b') nextTravel(); return; }
   if (G.scene === 'base' && k === 'a' && G.me === 'VITO' && G.p.x > G.base.H.W - 30) return startTravel('VITO');
   if (G.scene === 'street' && !G.arrival) {
+    if (k === 'a' && G.ride) return parkScooter();
+    if (k === 'a' && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) return rideScooter();
     if ((k === 'a' || k === 'up') && Math.abs(G.p.x - S.door) < 14) return enterHoongy();
   }
   if (G.scene === 'inside') {
@@ -1119,31 +1194,33 @@ function press(k) {
       if (k === 'b' || k === 'left' || k === 'right' || k === 'up' || k === 'down') { standUp(); return; }
       if (k === 'a') {
         if (o && o.ph === 'wait' && snow() >= o.t + 3800) openMenu();
-        else if (o && o.ph === 'cook' && snow() >= o.t + 10500 && (o.bites || 0) < 5) { send({ t: 'eat' }); if (!NET.ok) o.bites = (o.bites || 0) + 1; SFX.eat(); if ((o.bites || 0) >= 4) setTimeout(() => bubble(G.me, mix('Heerlijk! 😋', 'Смакота! 😋'), 2), 200); }
+        else if (o && o.ph === 'cook' && snow() >= o.t + 10500 && (o.bites || 0) < 5) { send({ t: 'eat' }); if (!NET.ok) o.bites = (o.bites || 0) + 1; SFX.eat(); }
         else if (o && o.ph === 'cook' && (o.bites || 0) >= 5) { send({ t: 'more' }); if (!NET.ok) G.order = { ph: 'wait', t: snow() }; }
       }
       return;
     }
     if (k === 'a') {
       if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) return leaveHoongy();
+      if (nearRadio()) return cycleRadio();
       const s = nearSeat();
       if (s >= 0) sitDown(s);
     }
   }
 }
 function sitDown(s) {
-  G.p.seat = s; G.order = { ph: 'wait', t: snow() };
+  // the waiter only comes once a friend has arrived and the evening has started
+  G.p.seat = s; G.order = NET.g.clockStart ? { ph: 'wait', t: snow() } : null;
   const st = IN.seats[s]; G.p.x = st.x; G.p.y = st.y; G.p.angle = st.face;
   send({ t: 'sit', seat: s }); sendState(true);
-  bubble(G.me, mix('Hè hè, zitten!', 'Ох, нарешті сісти!'), 1.8);
 }
 function standUp() {
   const s = IN.seats[G.p.seat];
   G.p.seat = -1; G.order = null; send({ t: 'stand' });
+  stopLaughing(G.me);
   if (s) { G.p.x = s.x + (s.face === 0 ? -10 : 10); if (insideBlocked(G.p.x, G.p.y)) G.p.y += 14; }
   sendState(true);
 }
-const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke', KeyR: 'radio' };
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke' };
 addEventListener('keydown', e => {
   if (G.scene === 'login') {
     unlock();
@@ -1171,6 +1248,7 @@ view.addEventListener('pointerdown', e => {
   if (G.scene !== 'inside' || dialogOpen()) return;
   const r = view.getBoundingClientRect();
   const wx = (e.clientX - r.left) / SCALE + G.camX, wy = (e.clientY - r.top) / SCALE + G.camY;
+  if (nearRadio() && Math.hypot(wx - IN.radio.x, wy - IN.radio.y) < 16) return cycleRadio();
   const taken = seatTakenMap();
   const s = IN.seats.findIndex((st, i) => !taken[i] && Math.hypot(st.x - wx, st.y - wy) < 9);
   if (s >= 0 && G.p.seat < 0 && Math.hypot(IN.seats[s].x - G.p.x, IN.seats[s].y - G.p.y) < 40) sitDown(s);
@@ -1178,14 +1256,14 @@ view.addEventListener('pointerdown', e => {
 $('dosBtn').addEventListener('click', () => {
   unlock();
   showDialog({
-    title: mix('Terug naar ERROR-DOS?', 'Назад до ERROR-DOS?'),
+    title: 'Back to ERROR-DOS?',
     opts: [
-      { ico: '◄', label: mix('Ja, afsluiten', 'Так, вийти'), key: 'A', act: () => { disconnect(); try { sessionStorage.setItem('errordos-ran', 'TUSA'); } catch (e) {} location.href = '/'; } },
-      { ico: '🍜', label: mix('Nee, blijven', 'Ні, залишаюсь'), key: 'B', act: () => {} },
+      { ico: '◄', label: 'Yes, quit the game', key: 'A', act: () => { disconnect(); try { sessionStorage.setItem('errordos-ran', 'TUSA'); } catch (e) {} location.href = '/'; } },
+      { ico: '🍜', label: 'No, keep playing', key: 'B', act: () => {} },
     ],
   });
 });
-$('radioBtn').addEventListener('click', openRadio);
+$('radioBtn').addEventListener('click', radioInfo);
 // game controller
 const padPrev = {};
 function pollPad() {
@@ -1193,7 +1271,7 @@ function pollPad() {
   for (const p of navigator.getGamepads()) {
     if (!p) continue;
     const b = i => !!(p.buttons[i] && p.buttons[i].pressed), ax = p.axes || [];
-    const st = { left: b(14) || ax[0] < -0.5, right: b(15) || ax[0] > 0.5, up: b(12) || ax[1] < -0.5, down: b(13) || ax[1] > 0.5, a: b(0), b: b(1), joke: b(2), heart: b(3), hug: b(4) || b(5), radio: b(9) };
+    const st = { left: b(14) || ax[0] < -0.5, right: b(15) || ax[0] > 0.5, up: b(12) || ax[1] < -0.5, down: b(13) || ax[1] > 0.5, a: b(0), b: b(1), joke: b(2), heart: b(3), hug: b(4) || b(5) };
     const prev = padPrev[p.index] || {};
     for (const k in st) {
       if (k in keys) { if (st[k] && !prev[k] && (dialogOpen() || (G.scene === 'inside' && G.p.seat >= 0) || k === 'up')) press(k); keys[k] = st[k] || (prev[k] && !st[k] ? false : keys[k]); if (!st[k] && prev[k]) keys[k] = false; }
@@ -1220,17 +1298,18 @@ function drawOverlay() {
       c.fillText(H.sign, S2(G.base.signX + G.base.signW / 2), S2(G.base.signY + G.base.signH * 0.72 + oy));
       c.textAlign = 'left';
     }
-    if (G.p.x > H.W - 70) hint('► ' + mix('Naar Berlijn', 'До Берліна') + ' ►');
+    if (G.p.x > H.W - 70 && !dialogOpen()) hint(G.me === 'VITO' ? 'Keep walking ► to the airport' : 'Keep walking ► to Berlin');
   }
   if (G.scene === 'travel') {
     const st = G.travel.steps[G.travel.i];
-    capText(st.cap(), mix('A: overslaan', 'A: пропустити'));
+    capText(st.cap(), 'A: skip');
     if (G.mapPins && (st.k === 'mapDrive' || st.k === 'mapTrain' || st.k === 'europe')) {
       c.font = (6 * k) + 'px "Pixelify Sans", monospace'; c.fillStyle = '#9cff9c';
       for (const [n, [x, y]] of G.mapPins) { const w = c.measureText(n).width; c.fillText(n, Math.min(S2(x + 3), view.width - w - 4), S2(y - 2)); }
     }
   }
   if (G.scene === 'street' || G.scene === 'inside') {
+    const placed = [];
     for (const ch of presentChars()) {
       const p = posOf(ch); if (!p) continue;
       if ((G.scene === 'inside') !== (p.scene === 'inside')) continue;
@@ -1240,17 +1319,14 @@ function drawOverlay() {
         if (!arrivalState(o.arrive, t0, G.t).show) continue;
       }
       if (ch === G.me && G.arrival && !arrivalState(G.arrival.kind, G.arrival.t0, G.t).show) continue;
-      const top = G.scene === 'inside' ? sy - 9 : sy - 34;
+      let top = G.scene === 'inside' ? sy - 9 : sy - 34;
+      // friends standing close together: stack the names instead of overlapping them
+      while (placed.some(([px, py]) => Math.abs(px - sx) < 30 && Math.abs(py - top) < 6)) top -= 7;
+      placed.push([sx, top]);
       nameTag(ch, sx, top);
-      const b = G.bubbles[ch];
-      if (b && b.until > G.t) speech(b.text, sx, top - 4, b.kind === 'joke');
     }
   }
-  if (G.scene === 'base') {
-    const b = G.bubbles[G.me];
-    if (b && b.until > G.t) speech(b.text, G.p.x - G.camX, G.p.y - 38 + oy);
-    nameTag(G.me, G.p.x - G.camX, G.p.y - 34 + oy);
-  }
+  if (G.scene === 'base') nameTag(G.me, G.p.x - G.camX, G.p.y - 34 + oy);
   // hearts
   for (const h of G.hearts) {
     const el = G.t - h.t0; if (el < 0) continue;
@@ -1270,7 +1346,9 @@ function drawOverlay() {
     c.globalAlpha = 1 - ph; c.fillText(ph < 0.5 ? '♪' : '♫', S2(G.p.x - G.camX + 6 + ph * 6), S2(G.p.y - 32 - ph * 14 + oy));
     c.globalAlpha = 1; c.textAlign = 'left';
   }
-  if (G.prompt && !dialogOpen()) hint(G.prompt);
+  const showToast = G.toast && G.toast.until > G.t;
+  if (G.prompt && !dialogOpen()) hint(G.prompt, showToast ? 1 : 0);
+  if (showToast && !dialogOpen()) hint(G.toast.text, 0, true);
   // fade after leaving
   if (G.fadeUntil > G.t) { c.fillStyle = 'rgba(0,0,0,' + ((G.fadeUntil - G.t) * 2) + ')'; c.fillRect(0, 0, view.width, view.height); }
 }
@@ -1282,14 +1360,17 @@ function capText(a, b) {
   const aw = c.measureText(a).width;
   if (b) { c.font = (6 * k) + 'px "Pixelify Sans", monospace'; if (aw + c.measureText(b).width + 16 * k < view.width) { c.fillStyle = '#e8e0c8'; c.textAlign = 'right'; c.fillText(b, view.width - 5 * k, 10 * k); c.textAlign = 'left'; } }
 }
-function hint(txt) {
+// one line at the bottom of the picture; row 1 sits just above row 0
+function hint(txt, row, info) {
   const c = vctx, k = SCALE * DPR;
-  c.font = '600 ' + (7 * k) + 'px "Pixelify Sans", monospace';
-  const w = c.measureText(txt).width + 10 * k;
-  const x = (view.width - w) / 2, y = view.height - 15 * k;
-  c.fillStyle = 'rgba(3,18,8,.85)'; c.fillRect(x, y, w, 11 * k);
-  c.strokeStyle = '#39ff7a'; c.lineWidth = k * 0.6; c.strokeRect(x, y, w, 11 * k);
-  c.fillStyle = '#c8ffd4'; c.fillText(txt, x + 5 * k, y + 8 * k);
+  let fs = 7 * k;
+  c.font = '600 ' + fs + 'px "Pixelify Sans", monospace';
+  let w = c.measureText(txt).width + 10 * k;
+  if (w > view.width - 6 * k) { fs *= (view.width - 16 * k) / (w - 10 * k); c.font = '600 ' + fs + 'px "Pixelify Sans", monospace'; w = c.measureText(txt).width + 10 * k; }
+  const x = Math.round((view.width - w) / 2), y = Math.round(view.height - 15 * k - (row || 0) * 14 * k);
+  c.fillStyle = info ? 'rgba(30,22,4,.9)' : 'rgba(3,18,8,.88)'; c.fillRect(x, y, w, 11 * k);
+  c.strokeStyle = info ? '#ffe23a' : '#39ff7a'; c.lineWidth = k * 0.6; c.strokeRect(x, y, w, 11 * k);
+  c.fillStyle = info ? '#fff3c4' : '#c8ffd4'; c.textAlign = 'left'; c.fillText(txt, x + 5 * k, y + 5.5 * k + fs * 0.36);
 }
 function nameTag(ch, x, y) {
   const c = vctx, k = SCALE * DPR;
@@ -1297,22 +1378,6 @@ function nameTag(ch, x, y) {
   c.fillStyle = 'rgba(0,0,0,.5)'; c.fillText(ch, S2(x) + k * 0.5, S2(y) + k * 0.5);
   c.fillStyle = TAG[ch] || '#fff'; c.fillText(ch, S2(x), S2(y));
   c.textAlign = 'left';
-}
-function speech(text, x, y, joke) {
-  const c = vctx, k = SCALE * DPR;
-  const fs = 6.2 * k, maxW = Math.min(110, LW * 0.62) * k;
-  c.font = (joke ? '600 ' : '') + fs + 'px "Pixelify Sans", monospace';
-  const words = text.split(' '), lines = []; let line = '';
-  for (const w of words) { const tt = line ? line + ' ' + w : w; if (c.measureText(tt).width > maxW && line) { lines.push(line); line = w; } else line = tt; }
-  if (line) lines.push(line);
-  const w = Math.max(...lines.map(l => c.measureText(l).width)) + 8 * k, h = lines.length * fs * 1.15 + 6 * k;
-  let bx = S2(x) - w / 2; bx = Math.max(2 * k, Math.min(view.width - w - 2 * k, bx));
-  const by = Math.max(16 * k, S2(y) - h - 4 * k);
-  c.fillStyle = joke ? '#fff7c8' : '#ffffff'; c.strokeStyle = '#1a1a1a'; c.lineWidth = k * 0.7;
-  roundRect(c, bx, by, w, h, 3 * k); c.fill(); c.stroke();
-  c.beginPath(); c.moveTo(S2(x) - 3 * k, by + h); c.lineTo(S2(x), by + h + 4 * k); c.lineTo(S2(x) + 3 * k, by + h); c.closePath(); c.fill();
-  c.fillStyle = '#1a1a1a'; c.textAlign = 'left';
-  lines.forEach((l, i) => c.fillText(l, bx + 4 * k, by + 3 * k + fs * (i + 0.9) * 1.1));
 }
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
@@ -1331,6 +1396,7 @@ function frame(now) {
     if (d > 80) { o.x = o.tx; o.y = o.ty; }
     else { o.x += dx * Math.min(1, dt * 10); o.y += dy * Math.min(1, dt * 10); }
     o.moving = d > 0.6 || o.anim === 'walk';
+    if (o.moving) stopLaughing(ch);   // walking away stops the laughing
     if (o.moving) { o.phase += dt * 2.4; if (Math.abs(dx) + Math.abs(dy) > 0.3) o.angleLive = Math.atan2(dy, dx); }
   }
   if (G.scene === 'base') updateBase(dt);
@@ -1339,6 +1405,7 @@ function frame(now) {
   else if (G.scene === 'enter') { updateStreet(0); updateEnter(); }
   else if (G.scene === 'inside') updateInside(dt);
   radioMix();
+  voiceUpdate();
   // draw
   lctx.imageSmoothingEnabled = false;
   if (G.scene === 'base') drawBase();
@@ -1371,4 +1438,5 @@ if (q.get('as') && whoIs(q.get('as'))) {
   setTimeout(() => { startBase(who); if (q.get('skip')) { startTravel(who); G.travel.i = G.travel.steps.length - 1; nextTravel(); } }, 50);
 }
 window.__tusa = G;
+window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, STATIONS: () => STATIONS };
 })();

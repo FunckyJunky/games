@@ -1,0 +1,18 @@
+{
+  "id": "/tusa/",
+  "name": "Туса У Берліні",
+  "short_name": "Туса",
+  "description": "Three friends meet at Hoongy in Berlin. An online pixel game on error.blue.",
+  "start_url": "/tusa/",
+  "scope": "/tusa/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/tusa/icons/tusa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/tusa/icons/tusa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/tusa/icons/tusa-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

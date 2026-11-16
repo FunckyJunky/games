@@ -571,7 +571,7 @@ export class TusaRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"type":"pong"}'));
-    this.g = { clockStart: 0, radio: { ch: 0, since: 0 } };
+    this.g = { clockStart: 0, radio: { ch: 0, since: 0, epoch: 0 } };
     ctx.blockConcurrencyWhile(async () => {
       const g = await ctx.storage.get("g");
       if (g) this.g = g;
@@ -617,13 +617,23 @@ export class TusaRoom extends DurableObject {
   async updateClock() {
     const n = this.players().length;
     if (n === 0) {
-      if (this.g.clockStart || this.g.radio.ch) {
-        this.g = { clockStart: 0, radio: { ch: 0, since: 0 } };
+      if (this.g.clockStart || this.g.radio.ch || this.g.radio.epoch) {
+        this.g = { clockStart: 0, radio: { ch: 0, since: 0, epoch: 0 } };
         await this.ctx.storage.put("g", this.g);
       }
     } else if (n >= 2 && !this.g.clockStart) {
-      this.g.clockStart = Date.now();
+      const now = Date.now();
+      this.g.clockStart = now;
       await this.saveG();
+      // the kitchen opens: whoever is already sitting gets the waiter now
+      for (const ws of this.live()) {
+        const a = ws.deserializeAttachment();
+        if (a.seat >= 0 && !a.order) {
+          a.order = { ph: "wait", t: now };
+          ws.serializeAttachment(a);
+          this.broadcast({ type: "p", p: a, now });
+        }
+      }
     }
   }
 
@@ -659,12 +669,21 @@ export class TusaRoom extends DurableObject {
       dir: 1,
       scene: "street",
       anim: "",
+      ride: arrive === "scooter",
+      scoot: -1,
+      sd: 1,
       seat: -1,
       order: null,
       arrive,
       arriveAt: now,
     };
     server.serializeAttachment(me);
+    // a new evening: every radio station starts at 20% of its song and keeps going from here
+    if (!this.g.radio.epoch || this.players(server).length === 0) {
+      if (this.players(server).length === 0) this.g = { clockStart: 0, radio: { ch: 0, since: 0, epoch: now } };
+      else this.g.radio.epoch = now;
+      await this.ctx.storage.put("g", this.g);
+    }
     this.send(server, { type: "welcome", now, you: me, players: this.players(server), g: this.g });
     this.broadcast({ type: "p", p: me, now }, server);
     await this.updateClock();
@@ -691,6 +710,11 @@ export class TusaRoom extends DurableObject {
         me.dir = d.dir === -1 ? -1 : 1;
         if (d.scene === "street" || d.scene === "inside") me.scene = d.scene;
         me.anim = typeof d.anim === "string" ? d.anim.slice(0, 12) : "";
+        // Oleksiy's e-scooter: riding it, or where it is parked (-1 = not parked)
+        me.ride = d.ride === 1 && me.char === "OLEKSIY";
+        const sc = Number(d.scoot);
+        me.scoot = Number.isFinite(sc) && sc >= 0 ? Math.min(900, Math.round(sc)) : -1;
+        me.sd = d.sd === -1 ? -1 : 1;
         if (me.scene === "street") { me.seat = -1; me.order = null; }
         ws.serializeAttachment(me);
         this.broadcast({ type: "p", p: me, now }, ws);
@@ -704,7 +728,8 @@ export class TusaRoom extends DurableObject {
           return;
         }
         me.seat = seat;
-        me.order = { ph: "wait", t: now };
+        // the kitchen only opens once a friend has arrived (the evening clock runs)
+        me.order = this.g.clockStart ? { ph: "wait", t: now } : null;
         break;
       }
       case "stand":
@@ -712,7 +737,7 @@ export class TusaRoom extends DurableObject {
         me.order = null;
         break;
       case "order":
-        if (me.seat < 0 || !TUSA_ITEMS.includes(d.item)) return;
+        if (me.seat < 0 || !this.g.clockStart || !TUSA_ITEMS.includes(d.item)) return;
         me.order = { ph: "cook", item: d.item, t: now, bites: 0 };
         break;
       case "eat":
@@ -720,7 +745,7 @@ export class TusaRoom extends DurableObject {
         me.order.bites = Math.min(5, (me.order.bites || 0) + 1);
         break;
       case "more":
-        if (me.seat < 0) return;
+        if (me.seat < 0 || !this.g.clockStart) return;
         me.order = { ph: "wait", t: now };
         break;
       case "emote": {
@@ -737,7 +762,7 @@ export class TusaRoom extends DurableObject {
         const ch = Number(d.ch);
         if (!Number.isInteger(ch) || ch < 0 || ch > 30) return;
         // like a real radio: on/off and the channel; the songs keep their own time
-        this.g.radio = { ch, since: now, last: ch || this.g.radio.last || 1 };
+        this.g.radio = { ch, since: now, last: ch || this.g.radio.last || 1, epoch: this.g.radio.epoch || now };
         await this.saveG();
         return;
       }

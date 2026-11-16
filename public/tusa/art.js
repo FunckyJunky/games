@@ -134,6 +134,24 @@ const ART = (() => {
     o = o || {};
     const L = LOOK[who] || LOOK.VITO, t = o.t || 0;
     const a = o.angle || 0, ca = Math.cos(a), sa = Math.sin(a);
+    if (o.anim === 'rofl') {
+      // lying on the floor, rolling from side to side, legs kicking
+      const roll = Math.sin(t * 9), kick = Math.sin(t * 17);
+      c.save(); c.translate(x + Math.cos(a + 1.57) * roll * 2.2, y + Math.sin(a + 1.57) * roll * 2.2); c.rotate(a + roll * 0.3);
+      c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.ellipse(1, 2, 12, 5, 0, 0, 7); c.fill();
+      R(-13, -3 + kick, 7, 2, L.legs); R(-13, 1 - kick, 7, 2, L.legs); R(-14, -3 + kick, 2, 2, L.shoe); R(-14, 1 - kick, 2, 2, L.shoe);
+      c.fillStyle = L.top; c.beginPath(); c.ellipse(-2, 0, 6, who === 'VIKA' ? 5 : 4.2, 0, 0, 7); c.fill();
+      c.fillStyle = L.top2 || L.top; c.beginPath(); c.ellipse(-2, roll * 1.5, 4, 1.6, 0, 0, 7); c.fill();
+      R(0, -7 - kick, 2, 3, L.skin); R(0, 4 + kick, 2, 3, L.skin); // arms holding the belly / flailing
+      c.fillStyle = who === 'OLEKSIY' ? L.hat : L.hair; c.beginPath(); c.arc(6, 0, who === 'VIKA' ? 4.8 : 4, 0, 7); c.fill();
+      R(6 + roll * 1.5, -1.5 + roll * 1.5, 3, 3, L.skin);
+      if (who === 'OLEKSIY') R(8 + roll * 1.5, -1 + roll * 1.5, 2, 1, L.must);
+      if (who === 'VITO') { c.strokeStyle = L.hair; c.lineWidth = 1.4; c.beginPath(); c.moveTo(9, 0); c.lineTo(12, roll * 3); c.stroke(); }
+      const k = (t * 3) % 1;
+      R(9 + k * 4, -3 - k * 3, 1, 1, '#7fd3ff'); R(9 + k * 4, 3 + k * 3, 1, 1, '#7fd3ff'); // tears of laughter
+      c.restore();
+      return;
+    }
     const shake = (o.laugh || 0) >= 2 ? Math.sin(t * 30) * 0.7 : 0;
     x += shake;
     c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.ellipse(x + 1, y + 2, 7, 5, 0, 0, 7); c.fill();
@@ -609,78 +627,328 @@ const ART = (() => {
   }
 
   // =====================================================================
-  // inside Hoongy, seen from above
+  // inside Hoongy, seen from above: wood, washi paper, red lanterns and two
+  // big neon koi that swim under the ceiling
   // =====================================================================
   const IN = {
     W: 320, H: 236,
     door: { x: 40, y: 222 },
     bar: { x: 200, y: 52 }, kitchen: { x: 296, y: 46 },
+    radio: { x: 24, y: 133 },               // the old tube radio on its cabinet, left wall
     tables: [
       { x: 80, y: 104, w: 20, h: 26 }, { x: 160, y: 104, w: 20, h: 26 }, { x: 240, y: 104, w: 20, h: 26 },
       { x: 120, y: 172, w: 20, h: 18 },
     ],
     seats: [],
+    // furniture you can't walk through: [x0, y0, x1, y1]
+    solid: [[10, 118, 38, 148], [8, 178, 33, 203], [280, 130, 312, 155], [276, 186, 312, 222]],
   };
   IN.tables.forEach((tb, ti) => {
     const four = ti < 3;
     const dy = four ? [-6, 6] : [0];
     for (const side of [-1, 1]) for (const d of dy) IN.seats.push({ x: tb.x + side * 17, y: tb.y + d, table: ti, face: side < 0 ? 0 : Math.PI });
   });
+
+  // ---------- the neon koi: where their bodies are at time t ----------
+  const KOI = [
+    { body: '#ff7a2a', spot: '#ff3d7a', fin: '#ffd36a', speed: 0.11, off: 0, len: 66 },
+    { body: '#4fd8ff', spot: '#b98cff', fin: '#d8f6ff', speed: 0.11, off: Math.PI, len: 62 },
+  ];
+  function koiPath(u) {
+    const r = 1 + Math.sin(u * 3) * 0.07;
+    return [162 + Math.cos(u) * 104 * r, 140 + Math.sin(u) * 50 * r];
+  }
+  function koiSpine(k, t) {
+    const K = KOI[k], N = 14, seg = K.len / N;
+    let u = t * K.speed + K.off;
+    let [px, py] = koiPath(u);
+    const pts = [[px, py]];
+    let acc = 0;
+    while (pts.length <= N) {
+      u -= 0.004;
+      const [qx, qy] = koiPath(u);
+      acc += Math.hypot(qx - px, qy - py); px = qx; py = qy;
+      if (acc >= seg) { pts.push([qx, qy]); acc = 0; }
+    }
+    // swimming: the body waves more towards the tail
+    return pts.map((p, j) => {
+      const a = pts[Math.max(0, j - 1)], b = pts[Math.min(N, j + 1)];
+      const tx = a[0] - b[0], ty = a[1] - b[1], l = Math.hypot(tx, ty) || 1;
+      const nx = -ty / l, ny = tx / l, s = j / N;
+      const w = Math.sin(t * 4.2 - j * 0.55 + k) * (0.4 + 3.2 * s * s);
+      return { x: p[0] + nx * w, y: p[1] + ny * w, nx, ny, tx: tx / l, ty: ty / l };
+    });
+  }
+  function koiWidth(s) {
+    // blunt round head, plump body, thin before the tail
+    if (s < 0.12) return 8 * (0.62 + 0.38 * Math.sqrt(s / 0.12));
+    if (s < 0.4) return 8;
+    return 8 * (1 - (s - 0.4) / 0.6 * 0.8);
+  }
+  function neonStroke(col, draw, a) {
+    c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.strokeStyle = rgba(col, 0.13 * a); c.lineWidth = 5; draw(); c.stroke();
+    c.strokeStyle = rgba(col, 0.45 * a); c.lineWidth = 2.2; draw(); c.stroke();
+    c.strokeStyle = rgba('#ffffff', 0.75 * a); c.lineWidth = 0.7; draw(); c.stroke();
+    c.restore();
+  }
+  function koiDraw(k, t) {
+    const K = KOI[k], P = koiSpine(k, t), N = P.length - 1;
+    // neon tubes buzz now and then
+    const a = hash((t * 9 | 0) + k * 977) > 0.985 ? 0.45 : 1;
+    const side = (j, sd, extra) => { const p = P[j], w = koiWidth(j / N) * sd + (extra || 0) * sd; return [p.x + p.nx * w, p.y + p.ny * w]; };
+    const L = P.map((p, j) => side(j, 1)), Rt = P.map((p, j) => side(j, -1));
+    const nose = [P[0].x + P[0].tx * 5, P[0].y + P[0].ty * 5];
+    const end = P[N], bx = -end.tx, by = -end.ty, nx = end.nx, ny = end.ny;
+    const sw = Math.sin(t * 4.2 - N * 0.55 + k) * 4;
+    const at = (b, n) => [end.x + bx * b + nx * n, end.y + by * b + ny * n];
+    const smooth = pts => { for (let i = 1; i < pts.length - 1; i++) c.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2); c.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]); };
+    // body: round head, smooth sides
+    neonStroke(K.body, () => {
+      c.beginPath(); c.moveTo(L[N][0], L[N][1]);
+      smooth(L.slice().reverse());
+      c.quadraticCurveTo(nose[0] + P[0].nx * 5, nose[1] + P[0].ny * 5, nose[0], nose[1]);
+      c.quadraticCurveTo(nose[0] - P[0].nx * 5, nose[1] - P[0].ny * 5, Rt[0][0], Rt[0][1]);
+      smooth(Rt);
+    }, a);
+    // a big flowing fan tail: two soft round lobes that ripple
+    neonStroke(K.fin, () => {
+      const t1 = at(17, 11 + sw), t2 = at(17, -11 + sw), notch = at(11, sw * 0.6);
+      c.beginPath(); c.moveTo(L[N][0], L[N][1]);
+      c.bezierCurveTo(...at(4, 9), ...at(11, 15 + sw), ...t1);
+      c.bezierCurveTo(...at(21, 8 + sw), ...at(16, 2 + sw), ...notch);
+      c.bezierCurveTo(...at(16, -2 + sw), ...at(21, -8 + sw), ...t2);
+      c.bezierCurveTo(...at(11, -15 + sw), ...at(4, -9), Rt[N][0], Rt[N][1]);
+      // rays in the tail
+      for (const n of [-6, 0, 6]) { c.moveTo(...at(2, n * 0.3)); c.quadraticCurveTo(...at(9, n + sw * 0.5), ...at(14, n * 1.4 + sw)); }
+    }, a * 0.9);
+    // round paddle fins, gently rowing
+    const fin = (j, sd, size, ph) => {
+      const p = P[j], f = Math.sin(t * 2.6 + ph) * 0.3;
+      const [x0, y0] = side(j, sd);
+      // pointing outwards and a little backwards
+      const th = 0.7 + f, ux = p.nx * sd * Math.cos(th) - p.tx * Math.sin(th), uy = p.ny * sd * Math.cos(th) - p.ty * Math.sin(th);
+      const ang = Math.atan2(uy, ux);
+      const cx = x0 + ux * size * 0.55 - p.tx * 1.5, cy = y0 + uy * size * 0.55 - p.ty * 1.5;
+      c.moveTo(cx + ux * size * 0.55, cy + uy * size * 0.55);
+      c.ellipse(cx, cy, size * 0.55, size * 0.36, ang, 0, 7);
+    };
+    neonStroke(K.fin, () => { c.beginPath(); fin(3, 1, 10, 0); fin(3, -1, 10, 1.6); fin(8, 1, 6, 2); fin(8, -1, 6, 3.6); }, a);
+    // short line along the back, whiskers at the mouth
+    neonStroke(K.fin, () => {
+      c.beginPath(); c.moveTo(P[4].x, P[4].y); for (let j = 5; j <= 8; j++) c.lineTo(P[j].x, P[j].y);
+      for (const sd of [1, -1]) { const p = P[0]; c.moveTo(nose[0] + p.nx * sd * 2, nose[1] + p.ny * sd * 2); c.quadraticCurveTo(nose[0] + p.tx * 3 + p.nx * sd * 4, nose[1] + p.ty * 3 + p.ny * sd * 4, nose[0] + p.tx * 2 + p.nx * sd * 7 + Math.sin(t * 3) * 0.8, nose[1] + p.ty * 2 + p.ny * sd * 7); }
+    }, a * 0.7);
+    neonStroke(K.spot, () => {
+      c.beginPath();
+      for (const [j, sd, r] of [[2, 0.15, 3.2], [5, -0.35, 2.8], [7, 0.4, 2.2], [10, -0.1, 1.6]]) {
+        const p = P[j], w = koiWidth(j / N) * sd;
+        c.moveTo(p.x + p.nx * w + r, p.y + p.ny * w); c.ellipse(p.x + p.nx * w, p.y + p.ny * w, r, r * 0.8, Math.atan2(p.ty, p.tx), 0, 7);
+      }
+    }, a);
+    // eyes
+    for (const sd of [1, -1]) {
+      const p = P[1], ex = p.x + p.nx * sd * 3.6 + p.tx * 1.5, ey = p.y + p.ny * sd * 3.6 + p.ty * 1.5;
+      c.save(); c.globalCompositeOperation = 'lighter'; glow(ex, ey, 3, '#ffffff', 0.6 * a); c.restore();
+      R(ex - 0.5, ey - 0.5, 1, 1, '#ffffff');
+    }
+  }
+  function koiLight(t) {
+    // the colour the neon throws on the floor below
+    c.save(); c.globalCompositeOperation = 'lighter';
+    KOI.forEach((K, k) => { const P = koiSpine(k, t); for (const j of [2, 7, 12]) glow(P[j].x, P[j].y, 26, K.body, 0.075); });
+    c.restore();
+  }
+
+  // ---------- little helpers for the decorations ----------
+  function disc(x, y, r, col) { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); }
+  function seigaiha(x0, y0, w, h, bg, fg, sz) {
+    R(x0, y0, w, h, bg);
+    c.save(); c.beginPath(); c.rect(x0, y0, w, h); c.clip();
+    c.strokeStyle = fg; c.lineWidth = 0.6;
+    for (let row = 0, y = y0 + h; y > y0 - sz; row++, y -= sz / 2) {
+      for (let x = x0 - sz + (row % 2) * sz; x < x0 + w + sz; x += sz * 2) {
+        for (const r of [sz, sz * 0.66, sz * 0.33]) { c.beginPath(); c.arc(x, y, r, Math.PI, 0); c.stroke(); }
+      }
+    }
+    c.restore();
+  }
+  function shoji(x, y, w, h) {
+    R(x, y, w, h, '#2a1a10');
+    R(x + 1, y + 1, w - 2, h - 2, '#d8c497');
+    for (let yy = y + 4; yy < y + h - 1; yy += 4) R(x + 1, yy, w - 2, 1, '#6b4a2c');
+    for (let xx = x + 3; xx < x + w - 1; xx += 3) R(xx, y + 1, 1, h - 2, '#6b4a2c');
+  }
+  function fan(x, y, r, col) {
+    c.fillStyle = col; c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, Math.PI * 1.1, Math.PI * 1.9); c.closePath(); c.fill();
+    c.strokeStyle = '#e8c35a'; c.lineWidth = 0.4;
+    for (let k = 0; k <= 6; k++) { const a = Math.PI * (1.1 + k * 0.8 / 6); c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); c.stroke(); }
+    R(x - 1, y - 1, 2, 2, '#3a2416');
+  }
+
+  // s: { seatTaken, hiSeat, doorOpen, radioOn, hiRadio }
   function inside(t, s) {
     s = s || {};
     const W = IN.W, H = IN.H;
-    // floor
-    R(0, 0, W, H, '#4a3222');
-    for (let y = 0; y < H; y += 6) { R(0, y, W, 1, '#3d2a1c'); for (let x = (y / 6 % 2) * 20; x < W; x += 40) R(x, y, 1, 6, '#3d2a1c'); }
-    for (let i = 0; i < 80; i++) R(hash(i + 900) * W, hash(i + 901) * H, 3, 1, 'rgba(255,220,180,.05)');
-    // walls
-    R(0, 0, W, 14, '#18302e'); R(0, 0, 10, H, '#18302e'); R(W - 10, 0, 10, H, '#18302e');
-    R(0, 14, W, 2, '#24423f'); R(10, 0, 1, H, '#24423f'); R(W - 11, 0, 1, H, '#24423f');
-    // the bar with lit shelves
-    R(120, 16, 168, 6, '#2b1d14');
-    for (let b = 0; b < 40; b++) R(122 + b * 4, 17, 3, 4, ['#d8a040', '#7ab0a0', '#e0e0d0', '#a04040', '#c8c060'][b % 5]);
-    c.save(); c.globalCompositeOperation = 'lighter'; glow(205, 20, 70, '#fff0c0', 0.2); c.restore();
-    R(120, 30, 168, 12, '#5a3b26'); R(120, 30, 168, 2, '#7a5236'); R(120, 41, 168, 1, '#2b1d14');
-    for (let k = 0; k < 7; k++) { c.fillStyle = '#2f4a48'; c.beginPath(); c.arc(132 + k * 22, 46, 3, 0, 7); c.fill(); } // bar stools
-    // kitchen door
-    R(W - 18, 30, 8, 26, '#2b1d14'); R(W - 17, 31, 6, 24, '#6b4a33'); R(W - 16, 42, 4, 3, '#cbd8d8');
-    // neon sign on the left wall top
+    // dark wooden floor
+    R(0, 0, W, H, '#3a281b');
+    for (let y = 0; y < H; y += 6) { R(0, y, W, 1, '#2e2015'); for (let x = (y / 6 % 2) * 20; x < W; x += 40) R(x, y, 1, 6, '#2e2015'); }
+    for (let i = 0; i < 90; i++) R(hash(i + 900) * W, hash(i + 901) * H, 3, 1, 'rgba(255,220,180,.05)');
+    // indigo rug with the wave pattern down the middle
+    R(55, 125, 214, 30, '#c9a24a');
+    seigaiha(56, 126, 212, 28, '#1b2a4e', '#3d5f97', 5);
+    // colour from the neon koi above
+    koiLight(t);
+
+    // ---- walls ----
+    R(0, 0, W, 15, '#24160e'); R(0, 15, W, 1, '#4a301c');
+    seigaiha(112, 1, 198, 12, '#15254a', '#2f4f88', 4);
+    R(112, 1, 198, 1, '#8a2a20'); R(112, 12, 198, 1, '#8a2a20');
+    fan(150, 12, 9, '#c4302b'); fan(272, 12, 9, '#c4302b'); fan(211, 12, 7, '#e8e0cc');
+    // washi-paper walls left and right, lit softly from behind
+    for (let y = 16; y < H - 14; y += 14) { shoji(0, y, 10, 13); if (y < 26 || y > 60) shoji(W - 10, y, 10, 13); }
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (let y = 30; y < H - 20; y += 40) { glow(4, y, 18, '#ffd9a0', 0.12); glow(W - 4, y + 20, 18, '#ffd9a0', 0.12); }
+    c.restore();
+    // neon HOONGY on the back wall
     R(16, 2, 92, 11, '#0f1a19');
     neonText('HOONGY', 22, 3, 8, '#ffe23a', t, 1);
-    // ginkgo trees in pots
-    for (const [px, py] of [[24, 34], [W - 28, 200], [22, 150]]) {
-      R(px - 5, py - 5, 10, 10, '#3a2a20');
-      for (let i = 0; i < 60; i++) { const a = hash(i + px) * 6.28, r = Math.sqrt(hash(i + py)) * 13; R(px + Math.cos(a) * r, py + Math.sin(a) * r, 2, 2, ['#c9b23a', '#e2cc4a', '#a89a2a', '#f0dc6a', '#e09a2a'][i % 5]); }
+
+    // ---- the corner garden: bamboo, a small stone pond with real koi, a stone lantern ----
+    R(10, 16, 104, 38, '#2b2a24');
+    for (let i = 0; i < 70; i++) R(10 + hash(i + 40) * 104, 16 + hash(i + 41) * 38, 1, 1, ['#4a4840', '#5a5850', '#3a3830'][i % 3]); // gravel
+    // the pond
+    c.fillStyle = '#6a6a62'; c.beginPath(); c.ellipse(66, 35, 27, 15, 0, 0, 7); c.fill();
+    c.fillStyle = '#0d3b42'; c.beginPath(); c.ellipse(66, 35, 24, 12.5, 0, 0, 7); c.fill();
+    for (let i = 0; i < 14; i++) { const a = i / 14 * 6.28; disc(66 + Math.cos(a) * 25.5, 35 + Math.sin(a) * 13.8, 2 + hash(i + 7) * 1.2, ['#7a7a70', '#8a8a80', '#5e5e56'][i % 3]); }
+    c.strokeStyle = 'rgba(160,230,230,.25)'; c.lineWidth = 0.5;
+    for (let i = 0; i < 3; i++) { const k = (t * 0.25 + i / 3) % 1; c.beginPath(); c.ellipse(58 + i * 9, 33 + (i % 2) * 4, 2 + k * 8, 1 + k * 4, 0, 0, 7); c.globalAlpha = 1 - k; c.stroke(); c.globalAlpha = 1; }
+    disc(78, 30, 3.2, '#3f7a3a'); R(78, 29, 3, 1, '#0d3b42'); disc(80, 39, 1.2, '#f4a8c0'); // lily pad and flower
+    for (let i = 0; i < 3; i++) {
+      const a = t * (0.6 + i * 0.15) + i * 2.1, fx = 66 + Math.cos(a) * (13 - i * 3), fy = 35 + Math.sin(a) * (6 - i);
+      const hx = Math.cos(a + 1.57), hy = Math.sin(a + 1.57);
+      c.strokeStyle = ['#ff8a2a', '#f4f0e8', '#ffb43a'][i]; c.lineWidth = 1.6; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(fx + hx * 2.5, fy + hy * 2.5); c.lineTo(fx - hx * 2.5, fy - hy * 2.5); c.stroke();
+      R(fx - hx * 2, fy - hy * 2, 1, 1, '#e8302a');
     }
-    // tables, chairs and candles
+    c.lineCap = 'butt';
+    // stone lantern, lit
+    R(100, 33, 12, 12, '#77756c'); R(101, 34, 10, 10, '#8a887e'); R(103, 36, 6, 6, '#2a2620'); R(104, 37, 4, 4, '#ffcf6a');
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(106, 39, 16, '#ffbe5a', 0.35); c.restore();
+    // bamboo in the corner, swaying
+    for (let i = 0; i < 9; i++) {
+      const bx = 14 + hash(i + 300) * 22, by = 19 + hash(i + 301) * 32;
+      disc(bx, by, 2, '#3d6b2a'); disc(bx, by, 1.2, '#6aa04a');
+      const sway = Math.sin(t * 1.3 + i) * 1.5;
+      c.strokeStyle = '#7cc05a'; c.lineWidth = 1;
+      for (let l = 0; l < 3; l++) { const a = hash(i * 3 + l + 330) * 6.28; c.beginPath(); c.moveTo(bx, by); c.lineTo(bx + Math.cos(a) * 7 + sway, by + Math.sin(a) * 5); c.stroke(); }
+    }
+
+    // ---- the bar ----
+    R(120, 16, 168, 6, '#2b1d14');
+    for (let b = 0; b < 40; b++) R(122 + b * 4, 17, 3, 4, ['#d8a040', '#7ab0a0', '#e0e0d0', '#a04040', '#c8c060'][b % 5]);
+    disc(276, 19, 2.6, '#d42a2a'); R(275, 18, 2, 2, '#f4ead0'); // daruma on the shelf
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(205, 20, 70, '#fff0c0', 0.2); c.restore();
+    R(120, 30, 168, 12, '#5a3b26'); R(120, 30, 168, 2, '#7a5236'); R(120, 41, 168, 1, '#2b1d14');
+    for (let k = 0; k < 7; k++) disc(132 + k * 22, 46, 3, '#7a2a22'); // bar stools, red tops
+    for (let k = 0; k < 7; k++) disc(132 + k * 22, 46, 1.5, '#9a3a2e');
+    // sake set and a little teapot on the counter
+    R(228, 33, 3, 5, '#f0ece0'); R(233, 35, 2, 2, '#f0ece0'); R(236, 35, 2, 2, '#f0ece0');
+    disc(184, 36, 2.6, '#2f3a3a'); R(186, 35, 2, 1, '#2f3a3a');
+    // maneki-neko waving at the guests
+    const paw = Math.sin(t * 5) > 0 ? -1 : 0;
+    disc(126, 36, 3.4, '#f6f2ea'); disc(126, 32.5, 2.6, '#f6f2ea');
+    R(124, 29, 1, 2, '#f6f2ea'); R(128, 29, 1, 2, '#f6f2ea'); R(124, 30, 1, 1, '#f4a0a8'); R(128, 30, 1, 1, '#f4a0a8');
+    R(124, 35, 5, 1, '#d42a2a'); R(126, 36, 1, 1, '#ffd23a');
+    R(129, 33 + paw, 2, 2, '#f6f2ea');
+    R(125, 32, 1, 1, '#1a1a1a'); R(127, 32, 1, 1, '#1a1a1a');
+    // kitchen door with a noren curtain that moves a little
+    R(W - 18, 28, 8, 30, '#2b1d14'); R(W - 17, 29, 6, 28, '#6b4a33');
+    for (let i = 0; i < 3; i++) {
+      const sw = Math.sin(t * 1.6 + i * 1.3) * 0.7;
+      R(W - 21 + sw, 29 + i * 9.5, 5, 9, '#1f3a6e'); R(W - 21 + sw, 29 + i * 9.5, 1, 9, '#2c4f8f');
+      disc(W - 18.5 + sw, 33.5 + i * 9.5, 1.3, '#f2efe6');
+    }
+
+    // ---- the radio cabinet ----
+    R(11, 119, 26, 28, '#2a1a10'); R(12, 120, 24, 26, '#5e3b22'); R(12, 120, 24, 2, '#7a5030');
+    R(15, 125, 18, 15, '#3a2414'); R(16, 126, 16, 13, '#8a5a2e'); R(16, 126, 16, 1, '#a8743e');
+    for (let yy = 128; yy < 138; yy += 2) for (let xx = 17; xx < 24; xx += 2) R(xx, yy, 1, 1, '#4a2e18'); // speaker cloth
+    const on = !!s.radioOn;
+    R(25, 128, 6, 4, on ? '#ffc35a' : '#5a4a30'); R(25 + (on ? (s.radioOn % 2 ? 1 : 4) : 2), 128, 1, 4, '#c03020'); // dial
+    disc(26.5, 135.5, 1.2, '#2a1a10'); disc(29.5, 135.5, 1.2, '#2a1a10');
+    if (on) {
+      c.save(); c.globalCompositeOperation = 'lighter'; glow(28, 130, 12, '#ffb84a', 0.35); c.restore();
+      for (let i = 0; i < 4; i++) R(17 + i * 2, 141 - Math.abs(Math.sin(t * 7 + i * 1.7)) * 3, 1, 3, '#ffd36a');
+    }
+    if (s.hiRadio) { c.strokeStyle = '#ffe23a'; c.lineWidth = 1; c.strokeRect(9.5, 117.5, 29, 31); }
+
+    // ---- plants: ginkgo by the door, bonsai on a stand, sakura in the far corner ----
+    R(15, 185, 11, 11, '#3a2a20'); R(16, 186, 9, 9, '#4a3628');
+    for (let i = 0; i < 60; i++) { const a = hash(i + 20) * 6.28, r = Math.sqrt(hash(i + 190)) * 12; R(20 + Math.cos(a) * r, 190 + Math.sin(a) * r, 2, 2, ['#c9b23a', '#e2cc4a', '#a89a2a', '#f0dc6a', '#e09a2a'][i % 5]); }
+    R(281, 131, 30, 23, '#2a1a10'); R(282, 132, 28, 21, '#4a2e1c');
+    R(288, 137, 16, 11, '#2c5f8a'); R(289, 138, 14, 9, '#3f78a8');
+    c.strokeStyle = '#5a3a22'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(296, 143); c.quadraticCurveTo(290, 139, 292, 135); c.moveTo(296, 143); c.quadraticCurveTo(302, 141, 303, 137); c.stroke();
+    for (const [bx, by, r] of [[291, 135, 4], [303, 136, 3.6], [297, 139, 3], [287, 139, 2.6]]) { disc(bx, by, r, '#2f5a2a'); disc(bx - 1, by - 1, r * 0.6, '#4a8a3a'); }
+    R(288, 196, 13, 13, '#5a2a20'); R(289, 197, 11, 11, '#7a3a2a');
+    c.strokeStyle = '#4a2a1a'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(294, 202); c.lineTo(284, 192); c.moveTo(294, 202); c.lineTo(302, 190); c.moveTo(294, 202); c.lineTo(292, 186); c.stroke();
+    for (const [bx, by, r] of [[284, 192, 8], [302, 190, 7.5], [292, 185, 7], [298, 200, 6], [286, 202, 5.5]]) { disc(bx, by, r, '#e48aa8'); disc(bx - 1, by - 1, r * 0.72, '#f6b3c8'); }
+    for (let i = 0; i < 46; i++) { const a = hash(i + 500) * 6.28, r = Math.sqrt(hash(i + 501)) * 15; R(293 + Math.cos(a) * r, 194 + Math.sin(a) * r * 0.9, 1, 1, ['#ffe2ea', '#fbe4ea', '#d8698c'][i % 3]); }
+    // petals drifting over the floor
+    for (let i = 0; i < 12; i++) {
+      const k = (t * 0.06 + hash(i + 600)) % 1;
+      const px = 290 - k * (90 + hash(i + 601) * 120), py = 196 + Math.sin(k * 9 + i) * 6 - k * (hash(i + 602) * 60 - 20);
+      c.globalAlpha = Math.min(1, (1 - k) * 2); R(px, py, 1, 1, '#ffc3d3'); c.globalAlpha = 1;
+    }
+
+    // ---- tables with cushions, a tea light and a tiny ikebana ----
     IN.seats.forEach((st, i) => {
       const taken = s.seatTaken && s.seatTaken[i];
-      R(st.x - 5, st.y - 5, 10, 10, '#2f5a57'); R(st.x - 5, st.y - 5, 10, 2, '#3d726e');
+      R(st.x - 5, st.y - 5, 10, 10, '#2a1a10');
+      R(st.x - 4, st.y - 4, 8, 8, i % 2 ? '#9b2335' : '#23396b'); R(st.x - 4, st.y - 4, 8, 1, i % 2 ? '#b8384a' : '#34508c');
+      R(st.x - 0.5, st.y - 0.5, 1, 1, '#e8c35a');
       if (!taken && s.hiSeat === i) { c.strokeStyle = '#ffe23a'; c.lineWidth = 1; c.strokeRect(st.x - 6.5, st.y - 6.5, 13, 13); }
     });
     IN.tables.forEach((tb, i) => {
       R(tb.x - tb.w / 2 + 1, tb.y - tb.h / 2 + 2, tb.w, tb.h, 'rgba(0,0,0,.35)');
-      R(tb.x - tb.w / 2, tb.y - tb.h / 2, tb.w, tb.h, '#9a6a3c'); R(tb.x - tb.w / 2, tb.y - tb.h / 2, tb.w, 2, '#b98450');
-      R(tb.x - 2, tb.y - 2, 4, 4, '#e0283a');
-      c.save(); c.globalCompositeOperation = 'lighter'; glow(tb.x, tb.y, 12 + Math.sin(t * 8 + i) * 1.5, '#ff5060', 0.35); c.restore();
-      R(tb.x - 6, tb.y - 8, 2, 4, '#f0e8d8'); R(tb.x - 6, tb.y - 10, 2, 2, '#e46f90'); // little vase
+      R(tb.x - tb.w / 2, tb.y - tb.h / 2, tb.w, tb.h, '#8a5a32'); R(tb.x - tb.w / 2, tb.y - tb.h / 2, tb.w, 2, '#a8723f');
+      R(tb.x - tb.w / 2 + 2, tb.y - 1, tb.w - 4, 2, '#c4302b'); // red runner
+      R(tb.x - 2, tb.y - 2, 4, 4, '#f0e8d8'); R(tb.x - 1, tb.y - 1, 2, 2, '#ffcf6a');
+      c.save(); c.globalCompositeOperation = 'lighter'; glow(tb.x, tb.y, 11 + Math.sin(t * 8 + i) * 1.2, '#ffb060', 0.35); c.restore();
+      R(tb.x + 4, tb.y - 9, 2, 3, '#2a2a2a'); R(tb.x + 3, tb.y - 11, 2, 2, '#f4a8c0'); R(tb.x + 5, tb.y - 12, 1, 2, '#5a8a3a'); // ikebana
     });
-    // front window along the bottom, with the street glow, and the door
+
+    // ---- front window along the bottom, with the street glow, and the door ----
     R(10, H - 12, W - 20, 12, '#13161a');
     for (let x = 60; x < W - 20; x += 40) R(x, H - 12, 2, 12, '#2a1c14');
     c.save(); c.globalCompositeOperation = 'lighter'; glow(W / 2, H, 90, '#ffcf80', 0.12); c.restore();
     R(IN.door.x - 12, H - 12, 24, 12, s.doorOpen ? '#e0a65a' : '#6b4a33');
     R(IN.door.x - 12, H - 13, 24, 1, '#c9b46a');
-    // window seat: the HOONGY sign backwards from inside
     c.save(); c.globalAlpha = 0.25; neonText('HOONGY', W / 2 - 24, H - 10, 6, '#ffe23a', t, 0.8); c.restore();
   }
-  // things that hang above people: paper lanterns
-  function insideTop(t) {
-    for (const [lx, ly] of [[80, 92], [160, 92], [240, 92], [120, 160], [200, 160], [60, 60]]) {
-      c.save(); c.globalCompositeOperation = 'lighter'; glow(lx, ly, 24, '#ffd6a0', 0.22); c.restore();
-      c.fillStyle = '#f7ecd8'; c.beginPath(); c.arc(lx, ly, 5, 0, 7); c.fill();
-      c.strokeStyle = 'rgba(176,138,90,.6)'; c.lineWidth = 0.6; c.beginPath(); c.arc(lx, ly, 3, 0, 7); c.stroke();
-    }
+
+  // things that hang from the ceiling: red lanterns and the neon koi.
+  // They are closer to the camera, so they are drawn a bit bigger and drift
+  // against the floor when the view moves: that is what makes them look 3D.
+  function lift(cam, k, fn) {
+    const cx = cam ? cam.x + cam.w / 2 : IN.W / 2, cy = cam ? cam.y + cam.h / 2 : IN.H / 2;
+    c.save(); c.translate(cx, cy); c.scale(k, k); c.translate(-cx, -cy); fn(); c.restore();
+  }
+  function chochin(x, y, col, rib, t, i) {
+    const sx = x + Math.sin(t * 0.9 + i) * 0.6;
+    c.save(); c.globalCompositeOperation = 'lighter'; glow(sx, y, 26, col === '#f4ecd8' ? '#ffe6b8' : '#ff8a5a', 0.22); c.restore();
+    disc(sx, y, 5.5, col);
+    c.strokeStyle = rib; c.lineWidth = 0.5;
+    for (const r of [4.4, 3.2, 2]) { c.beginPath(); c.arc(sx, y, r, 0, 7); c.stroke(); }
+    disc(sx, y, 1.4, '#1a1410');
+  }
+  function insideTop(t, cam) {
+    lift(cam, 1.1, () => {
+      IN.tables.forEach((tb, i) => chochin(tb.x, tb.y, '#d0362a', '#8a1e16', t, i));
+      for (const [i, x, y] of [[5, 150, 30], [6, 205, 30], [7, 260, 30]]) chochin(x, y, '#d0362a', '#8a1e16', t, i);
+      for (const [i, x, y] of [[8, 44, 196], [9, 200, 168], [10, 40, 80]]) chochin(x, y, '#f4ecd8', '#b89a6a', t, i);
+    });
+    lift(cam, 1.24, () => { koiDraw(0, t); koiDraw(1, t); });
   }
   // food on the table (top-down)
   function dish(item, x, y, left, t) {

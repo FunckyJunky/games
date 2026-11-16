@@ -105,5 +105,16 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - log in as VIKA (also VICA, VICTORIA), VITO or OLEKSIY
 - `art.js` draws everything; `tusa.js` is the game; `radio/` holds the stations
 - the shared restaurant is the `TusaRoom` Durable Object at `/api/tusa`
-- radio: put an mp3 in `public/tusa/radio/` and add it to `radio/stations.json`
+- radio: put an mp3 in `public/tusa/radio/` and add it to `radio/stations.json`.
+  The radio stands on a cabinet inside Hoongy (left wall): walk to it and press A to
+  go off → 88.4 → 93.7 → off. It is only heard inside, louder close by. Every station
+  starts at 20% of its song when the evening begins and keeps playing (and looping)
+  in the background, the same for everyone.
+- `voice/hoongy-commentary.mp3` plays on the street while you wait alone; it stops
+  for good when the first friend arrives
+- 3 jokes within 25 seconds make the other friends roll on the floor laughing;
+  walking cancels the laughing. Nobody talks in words: no speech bubbles
+- the kitchen only opens once a friend has arrived (the 18:00 clock is running)
+- Oleksiy rides his step around the street until he parks it (A); A next to it to ride again
+- installable on its own: `tusa/manifest.webmanifest` (start /tusa/, full screen, no zoom)
 
