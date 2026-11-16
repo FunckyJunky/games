@@ -1,4 +1,4 @@
-// Radio tracks for the games: every public/games/<game>/SoundRooms folder gets a tracks.json that
+// Radio tracks for the games: every SoundRooms folder of a game (public/games/<game>/ or public/<game>/) gets a tracks.json that
 // lists its .mp3 and .m4a files and how long each one is (the game reads it to find its channels).
 //
 // It runs by itself before every deploy (wrangler.jsonc "build"), so adding a track is only:
@@ -65,18 +65,23 @@ function seconds(path) {
 }
 
 // ---------------------------------------------------------------- every game's SoundRooms
+// (a game in public/games/<game>/ or at its own short address, public/<game>/, like error.blue/voyage)
 const tooBig = [];
-let games = [];
-try { games = readdirSync(join(PUBLIC, 'games')); } catch (e) {}
+const games = [];
+for (const base of ['games', '.']) {
+  let names = [];
+  try { names = readdirSync(join(PUBLIC, base)); } catch (e) {}
+  for (const n of names) games.push(base === '.' ? n : `games/${n}`);
+}
 for (const g of games) {
-  const dir = join(PUBLIC, 'games', g, 'SoundRooms');
+  const dir = join(PUBLIC, g, 'SoundRooms');
   if (!existsSync(dir) || !statSync(dir).isDirectory()) continue;
   const tracks = [];
   for (const f of readdirSync(dir).sort()) {
     if (!AUDIO.test(f) || f.startsWith('.')) continue;
     const path = join(dir, f), size = statSync(path).size;
     if (size > MAX) {
-      tooBig.push(`games/${g}/SoundRooms/${f}`);
+      tooBig.push(`${g}/SoundRooms/${f}`);
       console.warn(`soundrooms: ${g}/${f} is ${(size / 1048576).toFixed(1)} MB, over 25 MB: left off the site`);
       continue;
     }
