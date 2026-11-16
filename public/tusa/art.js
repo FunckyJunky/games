@@ -446,15 +446,31 @@ const ART = (() => {
       return;
     }
     const shake = (o.laugh || 0) >= 2 ? Math.sin(t * 30) * 0.7 : 0;
-    c.translate(shake, 0); c.rotate(a);
+    const yum = o.yum || 0;            // > 0 while enjoying a bite
+    c.translate(shake, 0); c.rotate(a + (yum ? Math.sin(t * 13) * 0.2 : 0));
     c.fillStyle = 'rgba(50,25,10,.22)'; c.beginPath(); c.ellipse(1, 1.6, 7.5, 7, 0, 0, Math.PI * 2); c.fill();
     const swing = o.moving ? Math.sin((o.phase || 0) * Math.PI * 2) * 2.2 : 0;
-    circle(swing + 1, -7, 1.6, L.skin, 0.6); circle(-swing + 1, 7, 1.6, L.skin, 0.6);
+    if (yum) {
+      // chopsticks from the plate to the mouth, the other hand on the belly
+      const k = (Math.sin(t * 9) + 1) / 2;
+      circle(4.5 + k * 3.5, -5 + k * 2.5, 1.6, L.skin, 0.6); line(5 + k * 3.5, -5 + k * 2.5, 9 + k * 4, -6 + k * 3.2, '#c89a5a', 0.6);
+      circle(2.2, 5.2, 1.6, L.skin, 0.6);
+    } else { circle(swing + 1, -7, 1.6, L.skin, 0.6); circle(-swing + 1, 7, 1.6, L.skin, 0.6); }
     ell(0, 0, L.plump ? 5.4 : 4.6, L.plump ? 8 : 7.2, 0, L.top, 0.85);
     within(() => { R(-7, -9, 4, 18, L.top2); });
     if (L.apron) ell(2.4, 0, 1.8, 4.4, 0, L.apron, 0.5);
     topHead(L, 0.6, 0, 0, t, false, o);
+    if (yum) { ell(3.4, -3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); ell(3.4, 3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); }
     c.restore();
+    // little sparkles of joy around the head
+    if (yum) for (let i = 0; i < (yum > 2 ? 6 : 4); i++) {
+      const an = i / (yum > 2 ? 6 : 4) * Math.PI * 2 + t * 2.2, r = 9.5 + Math.sin(t * 7 + i * 2) * 1.6;
+      sparkle(x + Math.cos(an) * r, y + Math.sin(an) * r, 1.4 + Math.sin(t * 9 + i) * 0.5, i % 2 ? '#ffe070' : '#ffffff');
+    }
+  }
+  function sparkle(x, y, s, col) {
+    c.beginPath(); c.moveTo(x, y - s * 1.6); c.quadraticCurveTo(x, y, x + s * 1.6, y); c.quadraticCurveTo(x, y, x, y + s * 1.6); c.quadraticCurveTo(x, y, x - s * 1.6, y); c.quadraticCurveTo(x, y, x, y - s * 1.6);
+    fillInk(col, 0.35);
   }
   function topHead(L, x, y, a, t, rofl, o) {
     const r = 5.2;
@@ -627,9 +643,60 @@ const ART = (() => {
     box(x, y, w, h, col, 0.6, x + 1, 0.8);
   }
 
-  // ----- Camp Lion, Romania: white container buildings, an aircon at every window
-  const CL_BLOCKS = [[20, 4], [260, 5]];
-  function campLion(W, H, camX, t) {
+  // ----- the camp gate: posts, a board with the camp's name, a guard booth and
+  // a red-and-white barrier that lifts when you come close. Through the gate you leave.
+  function gateStill(gx, board, signTxt, signCol) {
+    // the road out
+    R(gx - 6, 150, 200, 9, '#8e8a84'); line(gx - 6, 150.3, gx + 194, 150.3, INK, 0.7); line(gx - 6, 159, gx + 194, 159, 'rgba(50,40,30,.5)', 0.6);
+    for (let x = gx + 40; x < gx + 194; x += 14) line(x, 154.6, x + 6, 154.6, '#f4f0e6', 0.8);
+    // guard booth
+    box(gx - 27, 122, 19, 28, '#f2eee4', 0.85, 101, 0.8);
+    within(() => wcFill(gx - 27, 122, 19, 28, '#9aa8b8', 101, 0.08));
+    windowPane(gx - 24, 127, 13, 9, true);
+    for (let i = 0; i < 5; i++) box(gx - 29 + i * 4.6, 118.6, 4.6, 3.6, i % 2 ? '#f4f0e6' : '#c8322c', 0.5, 102 + i, 0.3);
+    box(gx - 29.5, 117.4, 23, 1.6, '#4a4a50', 0.6, 107, 0.3);
+    // gate posts and the board over the gate
+    limb([[gx - 4, 150], [gx - 4, 100]], '#6a6e74', 2.8, 0.7);
+    limb([[gx + 30, 150], [gx + 30, 100]], '#6a6e74', 2.8, 0.7);
+    box(gx - 10, 94, 46, 16, '#6a4a30', 0.9, 108, 1.2);
+    box(gx - 8.6, 95.4, 43.2, 13.2, board, 0.6, 109, 0.8);
+    box(gx + 26, 140, 8, 10, '#55595f', 0.7, 110, 0.6);           // barrier stand
+    // the road sign outside
+    limb([[gx + 66, 151], [gx + 66, 120]], '#8a8e94', 1.4, 0.5);
+    box(gx + 40, 108, 52, 12, signCol, 0.8, 111, 1);
+    box(gx + 41.6, 109.6, 48.8, 8.8, null, 0.5, 112, 0.8, signCol === '#f2c21b' ? '#1a1a1a' : '#f4f0e6');
+    c.save(); c.font = '900 4.6px "M PLUS Rounded 1c", sans-serif'; c.textAlign = 'center'; c.fillStyle = signCol === '#f2c21b' ? '#1a1a1a' : '#ffffff';
+    c.fillText(signTxt, gx + 66, 115.6); c.restore();
+  }
+  function gateLive(gx, t, open, guardLook) {
+    // the guard salutes while the gate is open
+    guardLook.salute = open > 0.5;
+    person(gx - 36, 151, guardLook, 0, false, 1, t);
+    // the barrier
+    const px = gx + 30, py = 136, ang = Math.PI - open * 1.35, L = 31;
+    const ex = px + Math.cos(ang) * L, ey = py - Math.sin(ang) * L;
+    const dx = (ex - px) / 6, dy = (ey - py) / 6;
+    limb([[px, py], [ex, ey]], '#f4f0e6', 2.4, 0.7);
+    for (let k = 0; k < 6; k += 2) { c.beginPath(); c.moveTo(px + dx * k, py + dy * k); c.lineTo(px + dx * (k + 1), py + dy * (k + 1)); c.strokeStyle = '#c8322c'; c.lineWidth = 2.4; c.lineCap = 'butt'; c.stroke(); }
+    circle(px, py, 2.4, '#3a3d42', 0.6);
+  }
+  const GUARD = {
+    VITO: { skin: '#e0b090', top: '#6b6a45', legs: '#6b6a45', camo: '#4a4a30', hat: 'helmet', hatc: '#4d5a32', seed: 4 },
+    VIKA: { skin: '#f0c8a0', top: '#6e7350', legs: '#3f4a2c', camo: '#3f4a2c', hat: 'beret', hatc: '#7a1f2b', seed: 6 },
+    OLEKSIY: { skin: '#c8946a', top: '#5d6b44', legs: '#3a462a', camo: '#3a462a', hat: 'cap', hatc: '#3a462a', seed: 8 },
+  };
+  function backFence(x0, x1) {
+    for (let x = x0; x <= x1; x += 12) limb([[x, 150], [x, 132]], '#8b9096', 1, 0.4);
+    c.strokeStyle = 'rgba(110,115,120,.45)'; c.lineWidth = 0.3;
+    for (let x = x0; x < x1; x += 2.6) { c.beginPath(); c.moveTo(x, 132); c.lineTo(x + 2.6, 150); c.moveTo(x + 2.6, 132); c.lineTo(x, 150); c.stroke(); }
+    line(x0, 132, x1, 132, '#8b9096', 0.7);
+    for (let x = x0; x < x1; x += 3) { c.beginPath(); c.arc(x + 1.5, 130.4, 1.1, 0, Math.PI * 2); c.strokeStyle = '#9aa0a6'; c.lineWidth = 0.35; c.stroke(); }
+  }
+
+  // ----- Camp Lion, Romania: rows of white containers, an aircon at every window
+  const CL_BLOCKS = [[20, 4], [262, 5]];
+  function campLion(W, H, camX, t, gateOpen, gx) {
+    gx = gx || 468;
     sky(W, 150, [[0, '#4f8fd6'], [0.55, '#8fc0ec'], [1, '#ffe2b0']], 3);
     sun(W * 0.82 - camX * 0.05, 28, 9);
     clouds(W, camX, t, 26, 5);
@@ -639,7 +706,8 @@ const ART = (() => {
     mist(W, 124, 7, 0.55);
     hills(W, camX, 0.3, 132, 5, '#a8c483', 2, 'rgba(70,90,50,.6)');
     c.save(); c.translate(-camX, 0);
-    layer('campLion', -60, 60, W + 140, 125, () => {
+    layer('campLion2', -60, 60, gx + 260, 125, () => {
+      backFence(-60, gx - 6);
       for (const [bx, n] of CL_BLOCKS) {
         for (let lvl = 0; lvl < 2; lvl++) for (let i = 0; i < n; i++) {
           const x = bx + i * 34, y = 150 - (lvl + 1) * 30;
@@ -652,7 +720,6 @@ const ART = (() => {
           line(x + 21.5, y + 15.6, x + 30.5, y + 15.6, '#a8adb1', 0.5);
           circle(x + 26, y + 12.6, 2.8, '#b8bfc4', 0.5);
         }
-        // the walkway and stairs to the upper level
         box(bx - 2, 118, n * 34 + 4, 3, '#8c9298', 0.7, bx, 0.4);
         for (let k = 0; k <= n * 34; k += 5) line(bx + k, 118, bx + k, 112, '#8c9298', 0.6);
         line(bx - 2, 112, bx + n * 34 + 2, 112, '#8c9298', 0.8);
@@ -664,12 +731,9 @@ const ART = (() => {
       box(69, 131, 12, 19, '#cfd5d8', 0.8, 3, 0.6); box(70.5, 132.5, 9, 17, '#e6eaec', 0.6, 4, 0.5);
       circle(78, 141.5, 0.6, INK);
       box(65, 128.5, 20, 2.6, '#9aa1a6', 0.7, 5, 0.6);
-      // the sign
-      signBoard(150, 100, 70, 16, '#3f6a3a');
-      fence(-50, 18, 150);
-      ground(-60, W + 80, 150, '#cdbf9f', '#8a7a5a', 21, 160);
-      for (let i = 0; i < 60; i++) circle(-60 + hash(i + 77) * (W + 140), 154 + hash(i + 78) * 24, 0.5 + hash(i + 79) * 0.7, i % 2 ? '#b0a283' : '#e2d8bf');
-      tufts(-60, 18, 148, '#7a9a4a', 31, 20);
+      ground(-60, gx + 200, 150, '#cdbf9f', '#8a7a5a', 21, 160);
+      for (let i = 0; i < 60; i++) circle(-60 + hash(i + 77) * (gx + 260), 154 + hash(i + 78) * 24, 0.5 + hash(i + 79) * 0.7, i % 2 ? '#b0a283' : '#e2d8bf');
+      gateStill(gx, '#3f6a3a', 'Aeroport OTP ✈', '#2f5fa8');
     });
     // spinning aircon fans and the odd drip
     for (const [bx, n] of CL_BLOCKS) for (let lvl = 0; lvl < 2; lvl++) for (let i = 0; i < n; i++) {
@@ -678,14 +742,16 @@ const ART = (() => {
       for (let b = 0; b < 3; b++) { const a = sp + b * 2.09; line(fx, fy, fx + Math.cos(a) * 2.3, fy + Math.sin(a) * 2.3, '#6d7479', 0.7); }
       if ((t * 1.5 + i + lvl) % 3 < 0.25) ell(x + 30, y + 18 + ((t * 20) % 5), 0.4, 0.6, 0, '#7fb0e0');
     }
-    flag(232, 150, ['#002b7f', '#fcd116', '#ce1126'], t);
-    flag(246, 150, ['#003399'], t + 1, false, true);
+    flag(222, 150, ['#002b7f', '#fcd116', '#ce1126'], t);
+    flag(240, 150, ['#003399'], t + 1, false, true);
+    gateLive(gx, t, gateOpen || 0, GUARD.VITO);
     c.restore();
-    return { signX: 150 - camX, signY: 100, signW: 70, signH: 16 };
+    return { signX: gx - 8.6 - camX, signY: 95.4, signW: 43.2, signH: 13.2 };
   }
 
   // ----- Altengrabow: a long three-storey building in the pine woods
-  function altengrabow(W, H, camX, t) {
+  function altengrabow(W, H, camX, t, gateOpen, gx) {
+    gx = gx || 370;
     sky(W, 150, [[0, '#5a90d8'], [0.6, '#9cc6ee'], [1, '#ffd9a8']], 7);
     sun(W * 0.2 - camX * 0.05, 34, 8);
     clouds(W, camX, t, 22, 4);
@@ -697,7 +763,8 @@ const ART = (() => {
     c.restore();
     c.save(); c.translate(-camX, 0);
     const bx = 20, bw = 230, by = 72;
-    layer('altengrabow', -60, 60, W + 140, 125, () => {
+    layer('altengrabow2', -60, 60, gx + 260, 125, () => {
+      backFence(-60, gx - 6);
       box(bx, by, bw, 78, '#e8dfcc', 0.9, 7, 0.6);
       within(() => { wcFill(bx, by, bw, 78, '#b09870', 17, 0.08); splatter(bx, by, bw, 78, '#6a5a40', 3, 12); });
       R(bx + 0.5, by + 0.5, 6, 77, 'rgba(160,140,110,.25)');
@@ -711,29 +778,32 @@ const ART = (() => {
           line(wx - 1, wy + 13.6, wx + 13, wy + 13.6, '#a8a090', 0.9);
         }
       }
-      // entrance with canopy (Vika's door)
+      // entrance with canopy (Vika's door) and the name of the building
       box(bx + 51, 127, 16, 23, '#7a5236', 0.85, 9, 0.6); box(bx + 52.5, 128.5, 13, 21.5, '#946644', 0.5, 10, 0.4);
       line(bx + 59, 128.5, bx + 59, 150, '#6a4228', 0.5); circle(bx + 63, 139.5, 0.6, '#e8d8a0');
       box(bx + 46, 123.5, 26, 3.4, '#7b7f84', 0.8, 11, 0.6);
-      signBoard(bx + 36, 110, 46, 11, '#2f4f78');
-      // a military truck
-      const tx = 300;
+      // a parking place with the military truck, near the gate
+      const tx = 284;
+      R(tx - 6, 150, 62, 9, '#9a968c');
       box(tx, 127, 48, 17, '#5d6a44', 0.9, 12, 1.4); box(tx, 118, 17, 14, '#56623f', 0.9, 13, 1.4);
       windowPane(tx + 2.5, 120.5, 10, 6, false, '#56623f');
       poly([[tx + 19, 127], [tx + 20, 114], [tx + 47, 115], [tx + 48, 127]], '#6e7a50', 0.8, 14, 0.2);
       for (let k = 0; k < 5; k++) line(tx + 22 + k * 5.5, 115, tx + 22 + k * 5.5, 127, 'rgba(0,0,0,.18)', 0.6);
       for (const wx of [tx + 9, tx + 38]) { circle(wx, 146, 4.4, '#26262a', 0.8); circle(wx, 146, 1.8, '#77777d', 0.4); }
-      ground(-60, W + 80, 150, '#8fae62', '#4f6a35', 31, 90);
+      ground(-60, gx + 200, 150, '#8fae62', '#4f6a35', 31, 90);
       poly([[bx + 49, 150.4], [bx + 69, 150.4], [bx + 84, 182], [bx + 34, 182]], '#d2c6a8', 0.6, 15, 0.3);
-      tufts(-60, W + 80, 151, '#5f8a3a', 41, 70);
+      tufts(-60, gx + 200, 151, '#5f8a3a', 41, 70);
+      gateStill(gx, '#2f4f78', 'Berlin 105 km →', '#f2c21b');
     });
-    flag(270, 150, ['#1a1a1a', '#dd0000', '#ffce00'], t, true);
+    flag(266, 150, ['#1a1a1a', '#dd0000', '#ffce00'], t, true);
+    gateLive(gx, t, gateOpen || 0, GUARD.VIKA);
     c.restore();
-    return { signX: bx + 36 - camX, signY: 110, signW: 46, signH: 11 };
+    return { signX: gx - 8.6 - camX, signY: 95.4, signW: 43.2, signH: 13.2 };
   }
 
   // ----- Lehnin: two-storey dark red brick houses with steep roofs, pines
-  function lehnin(W, H, camX, t) {
+  function lehnin(W, H, camX, t, gateOpen, gx) {
+    gx = gx || 350;
     sky(W, 150, [[0, '#6aa0dc'], [0.6, '#a6cdee'], [1, '#ffd0a0']], 9);
     sun(W * 0.7 - camX * 0.05, 26, 8);
     clouds(W, camX, t, 30, 4);
@@ -743,7 +813,8 @@ const ART = (() => {
     layer('lehninPines', -20, 40, 560, 115, () => { for (let i = 0; i < 21; i++) pine(i * 25 + 4, 150, 62 + (i % 4) * 9, '#2c6340', '#21502f'); });
     c.restore();
     c.save(); c.translate(-camX, 0);
-    layer('lehnin', -60, 50, W + 140, 135, () => {
+    layer('lehnin2', -60, 50, gx + 260, 135, () => {
+      backFence(-60, gx - 6);
       const house = (hx, hw, door) => {
         const top = 104;
         box(hx, top, hw, 46, '#8a3328', 0.9, hx, 0.4);
@@ -763,115 +834,101 @@ const ART = (() => {
         if (door) { box(door - 1, 127, 14, 23, '#efe8d8', 0.8, door, 0.4); box(door + 0.5, 128.5, 11, 21.5, '#3f5236', 0.6, door + 1, 0.3); circle(door + 9, 139.5, 0.6, '#d8c27a'); box(door - 3, 124.5, 18, 2.6, '#43434c', 0.7, door + 2, 0.4); }
       };
       house(10, 120, 56); house(170, 100, 0);
-      signBoard(38, 114, 48, 10, '#33402c');
-      pine(150, 152, 72); pine(290, 152, 82); pine(330, 152, 66); pine(-8, 152, 62);
-      ground(-60, W + 80, 150, '#7f9a52', '#4a5f30', 51, 80);
+      pine(150, 152, 72); pine(296, 152, 82); pine(-8, 152, 62); pine(gx + 96, 152, 70);
+      ground(-60, gx + 200, 150, '#7f9a52', '#4a5f30', 51, 80);
       poly([[52, 150.4], [72, 150.4], [84, 182], [40, 182]], '#c8bd9f', 0.6, 16, 0.3);
-      for (let i = 0; i < 40; i++) ell(-60 + hash(i + 90) * (W + 140), 153 + hash(i + 29) * 24, 0.9, 0.5, hash(i) * 3, '#9b6a3a');
-      tufts(-60, W + 80, 151, '#5a7a36', 61, 60);
+      for (let i = 0; i < 40; i++) ell(-60 + hash(i + 90) * (gx + 260), 153 + hash(i + 29) * 24, 0.9, 0.5, hash(i) * 3, '#9b6a3a');
+      tufts(-60, gx + 200, 151, '#5a7a36', 61, 60);
+      gateStill(gx, '#33402c', 'Brück · Berlin →', '#f2c21b');
     });
-    flag(300, 150, ['#1a1a1a', '#dd0000', '#ffce00'], t, true);
+    flag(312, 150, ['#1a1a1a', '#dd0000', '#ffce00'], t, true);
+    gateLive(gx, t, gateOpen || 0, GUARD.OLEKSIY);
     c.restore();
-    return { signX: 38 - camX, signY: 114, signW: 48, signH: 10 };
+    return { signX: gx - 8.6 - camX, signY: 95.4, signW: 43.2, signH: 13.2 };
   }
 
   // =====================================================================
-  // Berlin street with Hoongy (evening, end of summer)
+  // Berlin street with Hoongy, late twilight. The street is drawn in three
+  // passes: the still background (cached), then a blue "dusk" wash over
+  // everything except the lit windows, then the lights on top (neon,
+  // lanterns, lamps, headlights). People and cars get their own soft tint.
   // =====================================================================
   const STREET = { W: 760, door: 274, shop0: 290, shop1: 470, feet: 150 };
   const treesAt = [90, 560, 700];
   const FACADES = [[-100, 128, '#e9dcc0'], [128, 290, '#e2b9b0'], [290, 470, '#e6c98f'], [470, 600, '#b9c4cf'], [600, 860, '#efe3c6']];
+  // every upper window, and whether someone is home (the light is on)
+  const WINDOWS = [];
+  for (const [x0, x1] of FACADES) {
+    const roof = -112 + hash(x0) * 14;
+    for (let row = 0; row < 4; row++) {
+      const wy = 2 - row * 34;
+      if (wy < roof + 6) continue;
+      for (let x = x0 + 8; x + 18 < x1 - 4; x += 34) WINDOWS.push({ x, y: wy, row, lit: hash(x * 7 + row) > 0.45, balcony: hash(x + row * 3) > 0.7 && row > 0, flowers: hash(x) > 0.5 });
+    }
+  }
+  const X0 = STREET.shop0, X1 = STREET.shop1, DOOR = STREET.door;
+  // places that glow by themselves: the dusk wash leaves them bright
+  const GLOWING = [[X0 + 4, 66, X1 - X0 - 8, 60], [DOOR - 11, 56, 22, 80], [136, 44, 92, 76], [234.5, 54, 21, 80], [626, 66, 70, 52], [DOOR - 15, 38.5, 30, 11]];
+  for (const w of WINDOWS) if (w.lit) GLOWING.push([w.x, w.y, 18, 19]);
+
   function facades() {
-    // the sky above the roofs (only tall phones see it)
-    c.fillStyle = grad(0, TOP, 0, -100, [[0, '#1b2350'], [0.6, '#3e3d73'], [1, '#8a5d86']]); c.fillRect(-100, TOP, 960, 60);
-    for (let i = 0; i < 40; i++) circle(-100 + hash(i + 5) * 960, TOP + hash(i + 6) * 40, 0.4 + hash(i + 7) * 0.4, '#fff6d8');
+    // the sky above the roofs (only tall phones see it): late twilight
+    c.fillStyle = grad(0, TOP, 0, -100, [[0, '#141a3e'], [0.55, '#2e2f66'], [1, '#7a4f78']]); c.fillRect(-100, TOP, 960, -100 - TOP + 2);
+    for (let i = 0; i < 50; i++) circle(-100 + hash(i + 5) * 960, TOP + hash(i + 6) * 60, 0.35 + hash(i + 7) * 0.45, '#fff6d8');
     for (const [x0, x1, col] of FACADES) {
       const roof = -112 + hash(x0) * 14;
       box(x0, roof, x1 - x0, 140 - roof, col, 0.9, x0, 0.3);
       within(() => { wcFill(x0, roof, x1 - x0, 140 - roof, shadeOf(col), x0, 0.1); splatter(x0, roof, x1 - x0, 140 - roof, '#5a4030', x0, 10); });
       R(x0 + 0.5, roof, 6, 136 - roof, 'rgba(90,60,40,.12)');
-      // cornice and the stone band above the shops
       box(x0 - 1, roof - 3, x1 - x0 + 2, 4, shadeOf(col), 0.8, x0 + 1, 0.4);
       box(x0 - 1, 24, x1 - x0 + 2, 6, shadeOf(col), 0.8, x0 + 2, 0.4);
       for (let k = x0 + 4; k < x1 - 2; k += 6) line(k, 25, k, 29, 'rgba(60,40,30,.25)', 0.5);
-      // rows of tall old windows
-      for (let row = 0; row < 4; row++) {
-        const wy = 2 - row * 34;
-        if (wy < roof + 6) continue;
-        for (let x = x0 + 8; x + 18 < x1 - 4; x += 34) {
-          const lit = hash(x * 7 + row) > 0.5;
-          poly([[x - 2, wy - 2], [x + 9, wy - 6.5], [x + 20, wy - 2]], shadeOf(col), 0.6, x + row, 0.1);
-          box(x - 1.5, wy - 1, 21, 21.5, '#f6f0e2', 0.7, x + row * 5, 0.5);
-          box(x, wy, 18, 19, lit ? '#ffcf7a' : '#3c4a68', 0.6, x + row * 9, 0.4);
-          if (lit) {
-            glow(x + 9, wy + 10, 16, '#ffb050', 0.18);
-            shape([[x, wy], [x + 5, wy], [x + 3.5, wy + 19], [x, wy + 19]], '#e6735a', 0.4, x, 0.05);   // curtains
-            shape([[x + 18, wy], [x + 13, wy], [x + 14.5, wy + 19], [x + 18, wy + 19]], '#e6735a', 0.4, x + 1, 0.05);
-          } else stroke([[x + 4, wy + 19], [x + 14, wy]], 'rgba(255,255,255,.18)', 2, 0, 0);
-          line(x + 9, wy, x + 9, wy + 19, '#f6f0e2', 0.8); line(x, wy + 7, x + 18, wy + 7, '#f6f0e2', 0.7);
-          if (hash(x + row * 3) > 0.7 && row > 0) { // a small balcony
-            box(x - 4, wy + 19, 26, 2, '#6b6f78', 0.6, x, 0.3);
-            for (let b = 0; b <= 26; b += 3) line(x - 4 + b, wy + 19, x - 4 + b, wy + 13, '#4a4e57', 0.5);
-            line(x - 4, wy + 13, x + 22, wy + 13, '#4a4e57', 0.7);
-            if (hash(x) > 0.5) puffs([[x - 1, wy + 12, 2.2], [x + 2, wy + 11, 2.4], [x + 19, wy + 12, 2]], '#e8506a', 0.5, INK);
-          }
-        }
-      }
       line(x1, roof, x1, 136, INK, 0.9);
     }
-    // ---- shops on the ground floor ----
-    // left: a big old house door and a closed shop
+    for (const w of WINDOWS) {
+      const { x, y: wy, row, lit } = w, col = FACADES.find(f => x >= f[0] && x < f[1])[2];
+      poly([[x - 2, wy - 2], [x + 9, wy - 6.5], [x + 20, wy - 2]], shadeOf(col), 0.6, x + row, 0.1);
+      box(x - 1.5, wy - 1, 21, 21.5, '#f6f0e2', 0.7, x + row * 5, 0.5);
+      box(x, wy, 18, 19, lit ? '#ffcf7a' : '#2e3a58', 0.6, x + row * 9, 0.4);
+      if (lit) {
+        glow(x + 9, wy + 10, 9, '#fff0c0', 0.5);
+        shape([[x, wy], [x + 5, wy], [x + 3.5, wy + 19], [x, wy + 19]], '#e6735a', 0.4, x, 0.05);
+        shape([[x + 18, wy], [x + 13, wy], [x + 14.5, wy + 19], [x + 18, wy + 19]], '#e6735a', 0.4, x + 1, 0.05);
+        if (hash(x + row) > 0.6) { circle(x + 9, wy + 14, 2.4, '#3a2a20'); R(x + 6.6, wy + 14, 4.8, 5, '#3a2a20'); } // somebody at home
+      } else stroke([[x + 4, wy + 19], [x + 14, wy]], 'rgba(255,255,255,.14)', 2, 0, 0);
+      line(x + 9, wy, x + 9, wy + 19, '#f6f0e2', 0.8); line(x, wy + 7, x + 18, wy + 7, '#f6f0e2', 0.7);
+      if (w.balcony) {
+        box(x - 4, wy + 19, 26, 2, '#6b6f78', 0.6, x, 0.3);
+        for (let b = 0; b <= 26; b += 3) line(x - 4 + b, wy + 19, x - 4 + b, wy + 13, '#4a4e57', 0.5);
+        line(x - 4, wy + 13, x + 22, wy + 13, '#4a4e57', 0.7);
+        if (w.flowers) puffs([[x - 1, wy + 12, 2.2], [x + 2, wy + 11, 2.4], [x + 19, wy + 12, 2]], '#e8506a', 0.5, INK);
+      }
+    }
+    // ---- ground floor: an old house door and a closed shop ----
     box(30, 52, 34, 84, '#6a4428', 0.9, 31, 1); box(33, 56, 13, 78, '#7f5434', 0.6, 32, 0.6); box(48, 56, 13, 78, '#7f5434', 0.6, 33, 0.6);
     poly([[30, 52], [47, 40], [64, 52]], '#efe3c6', 0.8, 34, 0.1);
     circle(45, 96, 0.8, '#d8c27a'); circle(49, 96, 0.8, '#d8c27a');
     box(76, 46, 46, 84, '#6f7681', 0.9, 35, 0.6);
     for (let y = 48; y < 128; y += 3) line(77, y, 121, y, 'rgba(40,40,50,.35)', 0.5);
     stroke([[82, 100], [90, 92], [98, 104], [108, 90], [114, 98]], '#ff8fb8', 1.6, 36, 0.4);
-    // the Späti
+    // the Späti, full of bottles
     box(130, 34, 136, 102, '#3a302a', 0.9, 40, 0.6);
-    box(136, 44, 92, 76, '#f0c27a', 0.8, 41, 0.6);
-    glow(182, 80, 60, '#ffd890', 0.3);
+    box(136, 44, 92, 76, '#f6d08a', 0.8, 41, 0.6);
+    glow(182, 80, 50, '#fff0c0', 0.4);
     for (let sh = 0; sh < 4; sh++) {
       line(138, 58 + sh * 15, 226, 58 + sh * 15, '#7a4a24', 1.2);
       for (let b = 0; b < 21; b++) box(139.5 + b * 4.1, 50.5 + sh * 15, 3, 7.4, ['#b8443a', '#3f7aa0', '#e8d070', '#4f9a54', '#f4f0e6', '#c86ab0'][(b * 7 + sh * 3) % 6], 0.45, b + sh * 31, 0.6);
     }
-    box(232, 50, 26, 86, '#2a2420', 0.9, 42, 0.6); box(234.5, 54, 21, 80, '#f7cf86', 0.6, 43, 0.4);
-    glow(245, 92, 22, '#ffc870', 0.3);
+    box(232, 50, 26, 86, '#2a2420', 0.9, 42, 0.6); box(234.5, 54, 21, 80, '#ffd890', 0.6, 43, 0.4);
     line(236, 94, 253, 94, '#8a6030', 0.6); circle(252, 96, 0.8, '#7a5a30');
-    // Hoongy: the shopfront
-    const X0 = STREET.shop0, X1 = STREET.shop1;
-    box(X0, 30, X1 - X0, 106, '#3a2518', 1, 50, 0.6);
-    box(X0 + 3, 36, X1 - X0 - 6, 25, '#1d2026', 0.7, 51, 0.4);
-    box(X0, 61, X1 - X0, 5, '#4f3322', 0.8, 52, 0.3);
-    // inside, seen through the big window
-    const wy0 = 66, wy1 = 126;
-    c.save(); c.beginPath(); c.rect(X0 + 4, wy0, X1 - X0 - 8, wy1 - wy0); c.clip();
-    c.fillStyle = grad(0, wy0, 0, wy1, [[0, '#3a2f2a'], [0.55, '#6a4a32'], [1, '#4a3424']]); c.fillRect(X0 + 4, wy0, X1 - X0 - 8, wy1 - wy0);
-    glow(X0 + 115, 90, 70, '#ffdc9a', 0.35);
-    box(X0 + 70, 96, 92, 15, '#5a3a24', 0.7, 53, 0.6);
-    for (let sh = 0; sh < 3; sh++) { line(X0 + 72, 95 - sh * 5, X0 + 160, 95 - sh * 5, '#f6e2b0', 0.8); for (let b = 0; b < 20; b++) box(X0 + 73 + b * 4.3, 90.6 - sh * 5, 2.2, 4, ['#d8a040', '#7ab0a0', '#f0ece0', '#b84a40', '#c8c060'][(b + sh) % 5], 0.3, b * 3 + sh, 0.4); }
-    for (let i = 0; i < 6; i++) { const lx = X0 + 60 + i * 17; line(lx, wy0, lx, 80, 'rgba(40,30,20,.6)', 0.4); circle(lx, 82, 2.6, '#f7d79a', 0.5); glow(lx, 82, 7, '#ffcf8a', 0.4); }
-    // a ginkgo in a pot, inside
-    puffs([[X0 + 22, 84, 7], [X0 + 30, 82, 7.5], [X0 + 26, 76, 7], [X0 + 18, 90, 5.5], [X0 + 33, 90, 5.5]], '#e8cf4a', 0.6, INK, '#c9a830');
-    limb([[X0 + 26, 118], [X0 + 26, 92]], '#6a4a30', 1.6, 0.5); box(X0 + 20, 114, 12, 10, '#a85a3a', 0.6, 54, 0.6);
-    // the red paper fan decoration
-    c.save(); c.translate(X0 + 118, 74);
-    for (let k = 0; k < 9; k++) { const a = Math.PI * (1.08 + k * 0.105); shape([[0, 0], [Math.cos(a) * 15, Math.sin(a) * 11], [Math.cos(a + 0.1) * 15, Math.sin(a + 0.1) * 11]], k % 2 ? '#d8323a' : '#e8504a', 0.4, k, 0.05); }
-    for (let k = 0; k < 9; k++) { const a = Math.PI * (-0.08 - k * 0.105); shape([[0, 0], [Math.cos(a) * 15, Math.sin(a) * 11], [Math.cos(a - 0.1) * 15, Math.sin(a - 0.1) * 11]], k % 2 ? '#d8323a' : '#e8504a', 0.4, k + 20, 0.05); }
-    ell(0, 0, 4.6, 3.2, 0, '#c42a30', 0.6);
-    c.restore();
-    // a cosy couple at the window table
-    const din = (x, col, hair, dir) => { c.save(); c.translate(x, 126); c.scale(dir, 1); shape([[-5.5, 0], [-5, -14], [5, -14], [5.5, 0]], col, 0.6, x, 0.2); circle(0.6, -18.5, 5, '#f0c8a0', 0.6); c.beginPath(); c.arc(0, -19.2, 5.3, Math.PI * 0.95, Math.PI * 2.05); c.closePath(); fillInk(hair, 0.6); circle(2.6, -18, 0.6, INK); c.restore(); };
-    din(X0 + 58, '#3a4a6a', '#3a2a1e', 1); din(X0 + 134, '#6a7a3a', '#c8a060', -1);
-    box(X0 + 68, 115, 56, 3, '#8a5a30', 0.6, 55, 0.4);
-    box(X0 + 90, 110, 3, 5, '#ffe2a0', 0.4, 56, 0.4); box(X0 + 97, 111, 2.5, 4, '#f4f4f0', 0.4, 57, 0.4);
-    // the sign plate inside the window (the neon is lit later)
-    box(X0 + 48, 79, 90, 22, 'rgba(10,12,14,.88)', 0.8, 58, 1.2);
-    // glass reflection
-    c.fillStyle = 'rgba(255,255,255,.07)'; c.beginPath(); c.moveTo(X0 + 20, wy0); c.lineTo(X0 + 44, wy0); c.lineTo(X0 + 14, wy1); c.lineTo(X0 + 4, wy1); c.fill();
-    c.restore();
-    c.strokeStyle = INK; c.lineWidth = 0.9; c.strokeRect(X0 + 4, wy0, X1 - X0 - 8, wy1 - wy0);
-    box(X0, wy1, X1 - X0, 10, '#3a2518', 0.9, 59, 0.4);
+    // ---- Hoongy's shopfront: dark wood, a glass transom, the big window ----
+    box(X0, 30, X1 - X0, 106, '#232a24', 1, 50, 0.6);
+    R(X0 + 1.5, 31, 4, 104, 'rgba(255,255,255,.06)');
+    box(X0 + 3, 34, X1 - X0 - 6, 27, '#1a2024', 0.7, 51, 0.4);
+    box(X0, 61, X1 - X0, 5, '#2e3630', 0.8, 52, 0.3);
+    R(X0 + 4, 66, X1 - X0 - 8, 60, '#1c1612');
+    box(X0, 126, X1 - X0, 10, '#232a24', 0.9, 59, 0.4);
+    line(X0 + 4, 131, X1 - 4, 131, 'rgba(255,255,255,.08)', 0.8);
     // the wall to the right (the graffiti circle gets its words later)
     circle(X1 + 60, 88, 31, '#1a1a20', 1);
     circle(X1 + 60, 88, 28.5, null, 0.8, '#f0f0f0');
@@ -879,17 +936,15 @@ const ART = (() => {
     stroke([[X1 + 92, 50], [X1 + 104, 47], [X1 + 112, 51]], '#9cff6b', 1.4, 61, 0.3);
     // far right: a bakery with a striped awning
     box(620, 46, 120, 90, '#5a3f2e', 0.9, 62, 0.6);
-    box(626, 66, 70, 52, '#ffe0a8', 0.7, 63, 0.5); glow(660, 92, 40, '#ffd890', 0.3);
+    box(626, 66, 70, 52, '#ffe0a8', 0.7, 63, 0.5); glow(660, 92, 30, '#fff0c0', 0.35);
     for (let i = 0; i < 7; i++) puffs([[634 + i * 9.5, 112, 3.4]], '#c88a48', 0.5, INK, '#a86a30');
     for (let i = 0; i < 12; i++) shape([[616 + i * 10.6, 40], [626.6 + i * 10.6, 40], [626.6 + i * 10.6, 52], [621.3 + i * 10.6, 55], [616 + i * 10.6, 52]], i % 2 ? '#f4efe4' : '#3d7a5a', 0.6, 64 + i, 0.05);
     box(704, 66, 26, 70, '#7a5236', 0.8, 65, 0.6);
-    // street lamps (old Berlin style)
+    // street lamps (old Berlin style; the glass is lit later)
     for (const lx of [200, 640]) {
       limb([[lx, 150], [lx, 52]], '#2f4a3c', 2.4, 0.7);
       box(lx - 3.5, 146, 7, 4, '#2f4a3c', 0.7, lx, 0.6);
-      shape([[lx - 5, 54], [lx - 3.5, 42], [lx + 3.5, 42], [lx + 5, 54]], '#ffe6a8', 0.8, lx + 1, 0.05);
       shape([[lx - 6, 42], [lx, 36], [lx + 6, 42]], '#2f4a3c', 0.8, lx + 2, 0.05);
-      line(lx, 42, lx, 54, '#2f4a3c', 0.6);
     }
     // tree trunks (the yellow tops come in front later)
     for (const tx of treesAt) { limb([[tx, 150], [tx + 1, 92], [tx - 1, 60]], '#5a4030', 4.2, 0.8); limb([[tx, 80], [tx + 9, 66]], '#5a4030', 2, 0.6); limb([[tx, 74], [tx - 8, 62]], '#5a4030', 1.8, 0.6); }
@@ -907,42 +962,131 @@ const ART = (() => {
     line(-100, 166, 860, 166, '#8a8a92', 0.8); line(-100, 170, 860, 170, '#8a8a92', 0.8);
     for (let x = -100; x < 860; x += 30) line(x, 175.5, x + 14, 175.5, '#e8e8e8', 1);
   }
+
+  // ---- what you see through Hoongy's window: a real room, in perspective ----
+  // The window is a hole in the wall; the room behind it is a 3D box. The eye
+  // follows the camera, so walking past the window shows the room from new angles.
+  function hoongyWindow(camX, W, t) {
+    const ex = Math.max(X0 - 160, Math.min(X1 + 160, camX + W / 2)), ey = 104, D = 150;
+    const P = (x, y, z) => { const f = D / (D + z); return [ex + (x - ex) * f, ey + (y - ey) * f, f]; };
+    const L = 262, Rr = 498, TOPY = 52, FLOOR = 142, BACK = 150;
+    const quad = (a, b, c2, d, fill, lw) => { poly([a, b, c2, d], fill, lw, 0, 0); };
+    c.save(); c.beginPath(); c.rect(X0 + 4, 66, X1 - X0 - 8, 60); c.clip();
+    // back wall, ceiling, floor, side walls
+    const b00 = P(L, TOPY, BACK), b10 = P(Rr, TOPY, BACK), b11 = P(Rr, FLOOR, BACK), b01 = P(L, FLOOR, BACK);
+    const f00 = P(L, TOPY, 0), f10 = P(Rr, TOPY, 0), f11 = P(Rr, FLOOR, 0), f01 = P(L, FLOOR, 0);
+    quad(f00, f10, b10, b00, '#241a14', 0);                       // ceiling
+    quad(f01, f11, b11, b01, '#3a2a1e', 0);                       // floor
+    quad(f00, b00, b01, f01, '#5a3a26', 0);                       // left wall
+    quad(f10, b10, b11, f11, '#4a3424', 0);                       // right wall
+    quad(b00, b10, b11, b01, '#6a4630', 0.6);                     // back wall
+    for (let k = 1; k < 6; k++) { const a = P(L + (Rr - L) * k / 6, FLOOR, 0), b = P(L + (Rr - L) * k / 6, FLOOR, BACK); line(a[0], a[1], b[0], b[1], 'rgba(0,0,0,.25)', 0.4); }
+    // the bar at the back with lit shelves full of bottles
+    const s0 = P(352, 82, BACK - 1), s1 = P(462, 108, BACK - 1);
+    box(s0[0], s0[1], s1[0] - s0[0], s1[1] - s0[1], '#3a2416', 0.4, 1, 0.3);
+    for (let sh = 0; sh < 3; sh++) {
+      const a = P(352, 88 + sh * 8, BACK - 1), b = P(462, 88 + sh * 8, BACK - 1);
+      line(a[0], a[1], b[0], b[1], '#fff4d0', 1 * a[2] * 1.4);
+      for (let i = 0; i < 18; i++) { const p = P(355 + i * 6, 84 + sh * 8, BACK - 1); box(p[0], p[1], 3 * p[2], 4 * p[2], ['#d8a040', '#7ab0a0', '#f0ece0', '#b84a40', '#c8c060'][(i + sh) % 5], 0, i, 0.2); }
+    }
+    const c0 = P(345, 112, 128), c1 = P(470, 142, 128);
+    box(c0[0], c0[1], c1[0] - c0[0], c1[1] - c0[1], '#5a3a24', 0.5, 2, 0.4);
+    // the round neon on the right wall
+    const rn = P(Rr - 1, 92, 70);
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.beginPath(); c.ellipse(rn[0], rn[1], 3.6 * rn[2], 13 * rn[2], 0, 0, Math.PI * 2); c.strokeStyle = 'rgba(160,255,220,.35)'; c.lineWidth = 3 * rn[2]; c.stroke();
+    c.strokeStyle = 'rgba(230,255,245,.9)'; c.lineWidth = 0.9 * rn[2]; c.stroke();
+    c.restore();
+    // things in the room, far to near: tables with green chairs, people, round paper lamps
+    const items = [];
+    for (const z of [118, 92, 66, 40]) for (const x of [300, 345, 395, 445]) {
+      if (z < 50 && x > 330 && x < 430) continue;          // the window table is there
+      items.push({ z, d: () => {
+        const tp = P(x, 120, z), tq = P(x + 22, 120, z);
+        const w = tq[0] - tp[0];
+        for (const sx of [-6, 28]) { const ch = P(x + sx, 111, z); box(ch[0], ch[1], 6 * ch[2], 14 * ch[2], '#2f6a5a', 0.3, x + sx, 0.4); }
+        box(tp[0], tp[1], w, 2.4 * tp[2], '#8a5a34', 0.3, x + z, 0.2);
+        const lg = P(x + 11, 142, z); line(tp[0] + w / 2, tp[1], lg[0], lg[1], '#2a1c14', 0.8 * tp[2]);
+        if (hash(x * 3 + z) > 0.45) { // somebody eating there
+          const hp = P(x + 3, 104, z); circle(hp[0], hp[1], 3.4 * hp[2], '#f0c8a0', 0.3); c.beginPath(); c.arc(hp[0], hp[1] - 0.6 * hp[2], 3.6 * hp[2], Math.PI, 0); c.fillStyle = ['#2a1e18', '#c8a060', '#7a3a2a'][(x + z) % 3]; c.fill();
+          const bp = P(x - 1, 109, z); box(bp[0], bp[1], 8 * bp[2], 11 * bp[2], ['#4a5a7a', '#a04a4a', '#5a7a4a'][(x * 7 + z) % 3], 0.3, x, 1);
+          circle(tp[0] + w * 0.6, tp[1] - 0.6, 1.2 * tp[2], '#ff6a50');
+        }
+      } });
+    }
+    for (const z of [140, 115, 90, 65, 40, 18]) for (let x = 290 + (z % 2) * 15; x < 480; x += 32) {
+      items.push({ z: z - 0.5, d: () => {
+        const top = P(x, TOPY, z), p = P(x, 66 + hash(x + z) * 8, z);
+        line(top[0], top[1], p[0], p[1], 'rgba(20,14,10,.6)', 0.4);
+        glowAdd(p[0], p[1], 10 * p[2], '#ffd890', 0.4);
+        circle(p[0], p[1], 3.2 * p[2], '#ffe2a8', 0.4 * p[2]);
+      } });
+    }
+    // the ginkgo tree on the left, inside the window
+    items.push({ z: 26, d: () => {
+      const base = P(312, 142, 26), top = P(314, 90, 26);
+      limb([[base[0], base[1]], [top[0], top[1]]], '#5a4030', 2.2 * base[2], 0.4);
+      const pf = [];
+      for (let i = 0; i < 16; i++) { const p = P(300 + hash(i + 3) * 46, 70 + hash(i + 4) * 46, 18 + hash(i + 5) * 20); pf.push([p[0], p[1], (7 + hash(i + 6) * 5) * p[2]]); }
+      puffs(pf, '#d8c84a', 0.5, INK, '#a8a830');
+      for (let i = 0; i < 20; i++) { const p = P(298 + hash(i + 30) * 50, 70 + hash(i + 31) * 44, 14); ell(p[0], p[1], 1.2, 0.8, hash(i) * 3, '#f4e070'); }
+    } });
+    // the couple at the window table, a Mango-Lassi and a candle
+    items.push({ z: 14, d: () => {
+      const tz = 14, tA = P(352, 121, tz), tB = P(430, 121, tz), f = tA[2];
+      const pers = (x, face, top, hair, bun) => {
+        const hp = P(x, 99, tz + 3), f2 = hp[2];
+        box(hp[0] - 7 * f2, hp[1] + 5 * f2, 14 * f2, 16 * f2, top, 0.6, x, 3.4 * f2);
+        ell(hp[0] - face * 3.4 * f2, hp[1] + 1.6 * f2, 2.6 * f2, 4.2 * f2, 0, hair, 0.5);
+        circle(hp[0], hp[1], 5.4 * f2, '#f0c8a0', 0.6);
+        c.beginPath(); c.arc(hp[0] - face * 0.7 * f2, hp[1] - 0.2 * f2, 5.9 * f2, Math.PI, Math.PI * 2); c.closePath(); fillInk(hair, 0.5);
+        if (bun) circle(hp[0] - face * 4.4 * f2, hp[1] - 4.8 * f2, 2.5 * f2, hair, 0.5);
+        circle(hp[0] + face * 2.8 * f2, hp[1] + 0.8 * f2, 0.6, INK);
+        ell(hp[0] + face * 3 * f2, hp[1] + 2.6 * f2, 1.1, 0.6, 0, 'rgba(255,130,150,.6)');
+        limb([[hp[0] + face * 4 * f2, hp[1] + 9 * f2], [hp[0] + face * 10 * f2, tA[1] - 0.6]], top, 2.2 * f2, 0.4);
+      };
+      pers(360, 1, '#2a2a34', '#5a3a26', false);
+      pers(424, -1, '#6a7a4a', '#c8a060', true);
+      box(tA[0] - 4, tA[1], tB[0] - tA[0] + 8, 2.6, '#a8784a', 0.6, 9, 0.3);
+      const g1 = P(388, 112, tz); box(g1[0], g1[1], 3.2, 8.4, '#ffc93a', 0.4, 4, 0.6); line(g1[0] + 2.4, g1[1] - 2.4, g1[0] + 1.6, g1[1] + 2, '#ff3a6a', 0.6);
+      const g2 = P(396, 114, tz); box(g2[0], g2[1], 2.6, 6.4, 'rgba(220,240,255,.7)', 0.4, 5, 0.5);
+      const cd = P(404, 116, tz); box(cd[0], cd[1], 3, 3.6, '#e02838', 0.4, 6, 0.6); glowAdd(cd[0] + 1.5, cd[1], 7, '#ff6a50', 0.5);
+    } });
+    // the red decoration hanging above the sign
+    items.push({ z: 8, d: () => {
+      const p = P(392, 71, 8), f = p[2];
+      for (let k = 0; k < 7; k++) { const a = -0.9 + k * 0.3; shape([[p[0] + 4 * f, p[1]], [p[0] + 4 * f + Math.cos(a) * 15 * f, p[1] + Math.sin(a) * 7 * f], [p[0] + 4 * f + Math.cos(a + 0.12) * 14 * f, p[1] + Math.sin(a + 0.12) * 7 * f]], k % 2 ? '#e8504a' : '#d23a34', 0.35, k, 0.02); }
+      blob(p[0], p[1], 6.4 * f, 5.4 * f, '#e8403a', 0.6, 3);
+      for (let k = 0; k < 6; k++) circle(p[0] - 3 + (k % 3) * 3, p[1] - 2 + Math.floor(k / 3) * 3.4, 0.6, '#ff9a8a');
+    } });
+    items.sort((a, b) => b.z - a.z).forEach(it => it.d());
+    // warm light filling the room, and the glass
+    glowAdd((X0 + X1) / 2, 92, 80, '#ffcf80', 0.18);
+    c.fillStyle = 'rgba(255,255,255,.06)'; c.beginPath(); c.moveTo(X0 + 20, 66); c.lineTo(X0 + 44, 66); c.lineTo(X0 + 14, 126); c.lineTo(X0 + 4, 126); c.fill();
+    c.restore();
+    c.strokeStyle = INK; c.lineWidth = 0.9; c.strokeRect(X0 + 4, 66, X1 - X0 - 8, 60);
+  }
+
   function street(W, H, camX, t, s) {
     s = s || {};
     c.save(); c.translate(-camX, 0);
     layer('street', -100, TOP, 960, 180 - TOP + 4, facades);
-    const X0 = STREET.shop0, X1 = STREET.shop1, D = STREET.door;
-    // light from windows and lamps
-    c.save(); c.globalCompositeOperation = 'lighter';
-    for (const lx of [200, 640]) glow(lx, 48, 46, '#ffcf80', 0.3);
-    glow(D, 95, 34, '#ffb15a', 0.22); glow((X0 + X1) / 2, 165, 46, '#ffe23a', 0.07);
-    c.restore();
-    // Hoongy's door, with a noren curtain
-    box(D - 14, 50, 28, 86, '#2a1a12', 0.9, 70, 0.6);
-    if (s.doorOpen) { box(D - 11, 56, 22, 80, '#ffd890', 0.6, 71, 0.4); glowAdd(D, 96, 26, '#ffcf80', 0.4); box(D - 11, 56, 5, 80, '#7a5236', 0.6, 72, 0.3); }
-    else { box(D - 11, 56, 22, 80, '#f2c27a', 0.6, 73, 0.4); line(D - 10, 92, D + 10, 92, '#8a6030', 0.6); circle(D + 7, 96, 0.9, '#a07830'); }
+    if (camX + W > X0 - 20 && camX < X1 + 20) hoongyWindow(camX, W, t);
+    // Hoongy's glass door, with a noren curtain
+    box(DOOR - 14, 50, 28, 86, '#232a24', 0.9, 70, 0.6);
+    if (s.doorOpen) { box(DOOR - 11, 56, 22, 80, '#ffe0a0', 0.6, 71, 0.4); box(DOOR - 11, 56, 5, 80, '#3a4440', 0.6, 72, 0.3); }
+    else {
+      box(DOOR - 11, 56, 22, 80, '#e8b870', 0.6, 73, 0.4);
+      for (let i = 0; i < 4; i++) box(DOOR - 9 + i * 5, 110 - i * 9, 3, 9 + i * 9, 'rgba(90,60,40,.25)', 0, i, 0.4);   // shelves inside
+      line(DOOR - 10, 92, DOOR + 10, 92, '#2e3630', 0.8); circle(DOOR + 7, 96, 0.9, '#d8c27a');
+    }
     for (let i = 0; i < 3; i++) {
       const sw = Math.sin(t * 1.5 + i) * 0.5 + (s.doorOpen ? (i - 1) * 2 : 0);
-      shape([[D - 11 + i * 7.4, 56], [D - 4.4 + i * 7.4, 56], [D - 4.4 + i * 7.4 + sw, 72], [D - 11 + i * 7.4 + sw, 72]], '#24447a', 0.6, 74 + i, 0.05);
+      shape([[DOOR - 11 + i * 7.4, 56], [DOOR - 4.4 + i * 7.4, 56], [DOOR - 4.4 + i * 7.4 + sw, 72], [DOOR - 11 + i * 7.4 + sw, 72]], '#24447a', 0.6, 74 + i, 0.05);
     }
-    circle(D, 63, 2.4, null, 0.8, '#f4f0e6');
-    // lanterns over the shopfront and the little lights
-    for (let i = 0; i < 4; i++) {
-      const lx = X0 + 30 + i * 40, ly = 40 + Math.sin(t * 1.2 + i) * 0.4;
-      glowAdd(lx, ly + 8, 22, '#fff1d0', 0.32);
-      blob(lx, ly + 8.5, 6.2, 8.4, '#fbf4e2', 0.75, i);
-      for (let k = -2; k <= 2; k++) { c.beginPath(); c.ellipse(lx, ly + 8.5 + k * 3, 6 - Math.abs(k) * 0.6, 0.6, 0, 0, Math.PI * 2); c.strokeStyle = 'rgba(180,150,110,.45)'; c.lineWidth = 0.4; c.stroke(); }
-      box(lx - 3.5, ly - 0.6, 7, 1.8, '#3a2518', 0.5, i, 0.4); box(lx - 3.5, ly + 16, 7, 1.8, '#3a2518', 0.5, i + 9, 0.4);
-    }
-    for (let k = 0; k <= 16; k++) {
-      const x = X0 - 6 + k * ((X1 - X0 + 12) / 16), sag = Math.sin((k % 4) / 4 * Math.PI) * 3;
-      if (k) { const px = X0 - 6 + (k - 1) * ((X1 - X0 + 12) / 16), ps = Math.sin(((k - 1) % 4) / 4 * Math.PI) * 3; line(px, 33 + ps, x, 33 + sag, 'rgba(40,30,20,.7)', 0.4); }
-      const on = 0.7 + 0.3 * Math.sin(t * 3 + k * 1.7);
-      glowAdd(x, 34 + sag, 6, '#ffc070', 0.5 * on); circle(x, 34 + sag, 0.9, '#fff3c0');
-    }
-    // neon signs and the graffiti words
-    neonText('HOONGY', X0 + 56, 84, 12, '#ffe23a', t, 1.4);
-    neonText('SPÄTI', 150, 37, 5.5, '#ff4d6d', t + 3, 1.1);
+    circle(DOOR, 63, 2.4, null, 0.8, '#f4f0e6');
+    box(DOOR - 13, 134, 26, 3, '#2a2a2e', 0.5, 76, 0.3);   // doormat
+    // the graffiti words
     tag('ТУСА', X1 + 60, 82, 11, '#ffffff', -0.08);
     tag('GEZELLIG', X1 + 60, 100, 8.5, '#7fd3ff', 0.05);
     c.restore();
@@ -954,7 +1098,80 @@ const ART = (() => {
     c.fillStyle = col; c.fillText(txt, 0, 0);
     c.restore();
   }
-  // tables outside (behind the people)
+
+  // ---- the evening: a blue wash over everything that doesn't glow by itself ----
+  function dusk(camX, oy, W, H) {
+    c.save(); c.translate(-camX, oy);
+    c.beginPath();
+    c.rect(camX - 10, -oy - 10, W + 20, H + 20);
+    for (const [x, y, w, h] of GLOWING) if (x + w > camX - 10 && x < camX + W + 10) c.rect(x, y, w, h);
+    c.globalCompositeOperation = 'multiply';
+    c.fillStyle = grad(0, -oy, 0, 180, [[0, '#3c4486'], [0.55, '#5a62a6'], [1, '#6c72b0']]);
+    c.fill('evenodd');
+    c.restore();
+  }
+  // people and cars: a softer version of the same evening colour
+  function duskActors(ctx, w, h) {
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(36,44,104,.36)'; ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+  // ---- the lights, on top of everything ----
+  // vehicles: [{ kind: 'car'|'tram'|'bus', x, y, dir }]
+  function streetLights(camX, t, s, vehicles) {
+    s = s || {};
+    c.save(); c.translate(-camX, 0);
+    c.save(); c.globalCompositeOperation = 'lighter';
+    // lit windows upstairs, the shops, the door
+    for (const w of WINDOWS) if (w.lit && w.x > camX - 40 && w.x < camX + 600) glow(w.x + 9, w.y + 10, 15, '#ffb050', 0.22);
+    glow(182, 82, 64, '#ffd890', 0.25); glow(245, 92, 24, '#ffc870', 0.3); glow(660, 92, 44, '#ffd890', 0.25);
+    glow(DOOR, 96, 30, '#ffcf80', s.doorOpen ? 0.45 : 0.25);
+    // light falling out of Hoongy's window onto the pavement
+    c.fillStyle = grad(0, 126, 0, 160, [[0, 'rgba(255,190,110,.32)'], [1, 'rgba(255,190,110,0)']]);
+    c.beginPath(); c.moveTo(X0 + 4, 136); c.lineTo(X1 - 4, 136); c.lineTo(X1 + 30, 162); c.lineTo(X0 - 26, 162); c.closePath(); c.fill();
+    glow((X0 + X1) / 2, 165, 50, '#ffe23a', 0.08);
+    // street lamps: light cones
+    for (const lx of [200, 640]) {
+      glow(lx, 48, 50, '#ffcf80', 0.35);
+      c.fillStyle = grad(0, 50, 0, 152, [[0, 'rgba(255,215,140,.22)'], [1, 'rgba(255,215,140,0)']]);
+      c.beginPath(); c.moveTo(lx - 5, 52); c.lineTo(lx + 5, 52); c.lineTo(lx + 34, 152); c.lineTo(lx - 34, 152); c.closePath(); c.fill();
+      ell(lx, 152, 30, 4, 0, 'rgba(255,215,140,.18)');
+    }
+    for (const tx of TABLES) glow(tx, 125, 10 + Math.sin(t * 9 + tx) * 1.2, '#ff6070', 0.45);
+    c.restore();
+    for (const lx of [200, 640]) { shape([[lx - 5, 54], [lx - 3.5, 42], [lx + 3.5, 42], [lx + 5, 54]], '#fff2c8', 0.8, lx + 1, 0.05); line(lx, 42, lx, 54, '#2f4a3c', 0.6); }
+    for (const tx of TABLES) box(tx - 1.6, 123.8, 3.2, 3.2, '#ff7a6a', 0, tx, 0.6);
+    // the entrance sign over the door
+    box(DOOR - 15, 38.5, 30, 11, '#fbf4e2', 0.8, 77, 1.4);
+    glowAdd(DOOR, 44, 20, '#fff4d0', 0.35);
+    c.save(); c.textAlign = 'center'; c.fillStyle = INK;
+    c.font = '900 4.6px "M PLUS Rounded 1c", sans-serif'; c.fillText('INGANG', DOOR, 43.4);
+    c.font = '900 3.6px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#cf3a2a'; c.fillText('▼ ВХІД ▼', DOOR, 48);
+    c.restore();
+    // four tall paper lanterns and the little lights along the top
+    for (let i = 0; i < 4; i++) {
+      const lx = X0 + 30 + i * 40, ly = 38 + Math.sin(t * 1.2 + i) * 0.3;
+      glowAdd(lx, ly + 10, 24, '#fff1d0', 0.45);
+      box(lx - 5.4, ly + 0.5, 10.8, 19, '#fffaf0', 0.7, i, 4.2);
+      for (let k = 1; k < 6; k++) line(lx - 5, ly + 0.8 + k * 3.1, lx + 5, ly + 0.8 + k * 3.1, 'rgba(200,170,130,.4)', 0.4);
+      box(lx - 3.6, ly - 1, 7.2, 2, '#2a2420', 0.4, i + 9, 0.5); box(lx - 3.6, ly + 18.8, 7.2, 2, '#2a2420', 0.4, i + 19, 0.5);
+      line(lx, ly + 20.8, lx, ly + 23, '#f2efe6', 0.8);
+    }
+    for (let k = 0; k <= 16; k++) {
+      const x = X0 - 6 + k * ((X1 - X0 + 12) / 16), sag = Math.sin((k % 4) / 4 * Math.PI) * 3;
+      if (k) { const px = X0 - 6 + (k - 1) * ((X1 - X0 + 12) / 16), ps = Math.sin(((k - 1) % 4) / 4 * Math.PI) * 3; line(px, 33 + ps, x, 33 + sag, 'rgba(20,16,12,.8)', 0.4); }
+      const on = 0.75 + 0.25 * Math.sin(t * 3 + k * 1.7);
+      glowAdd(x, 34 + sag, 7, '#ffc070', 0.6 * on); circle(x, 34 + sag, 1, '#fff3c0');
+    }
+    // neon signs
+    neonText('HOONGY', X0 + 56, 84, 12, '#ffe23a', t, 1.4);
+    neonText('SPÄTI', 150, 37, 5.5, '#ff4d6d', t + 3, 1.1);
+    // headlights, tail lights, lit windows in trams and buses
+    for (const v of vehicles || []) vehicleLights(v, t);
+    c.restore();
+  }
+
+  // tables outside (behind the people); their candles glow in the light pass
   const TABLES = [236, 336, 436, 520];
   function outdoorTables(camX, t) {
     c.save(); c.translate(-camX, 0);
@@ -964,15 +1181,16 @@ const ART = (() => {
           const cx = tx + side * 17;
           shape([[cx - 5, 133], [cx + 5, 133], [cx + 5, 135], [cx - 5, 135]], '#c08848', 0.6, cx, 0.05);
           box(cx - 5, 125.5, 10, 7, '#b07a40', 0.6, cx + 1, 0.6);
+          for (let k = 0; k < 3; k++) line(cx - 4.4, 127.4 + k * 2, cx + 4.4, 127.4 + k * 2, 'rgba(90,50,20,.45)', 0.4);
           line(cx - 4, 135, cx + 4, 146, INK, 0.8); line(cx + 4, 135, cx - 4, 146, INK, 0.8);
           line(cx + side * 5, 124.5, cx + side * 5, 135, INK, 0.8);
         }
         box(tx - 12.5, 127.4, 25, 3, '#d09858', 0.7, tx, 0.6);
+        for (let k = -10; k < 12; k += 3) line(tx + k, 127.6, tx + k, 130.2, 'rgba(90,50,20,.4)', 0.4);
         line(tx - 9, 131, tx + 9, 147, INK, 0.9); line(tx + 9, 131, tx - 9, 147, INK, 0.9);
-        box(tx - 2.2, 123.4, 4.4, 4.2, '#e0283a', 0.5, tx + 3, 0.6);
+        box(tx - 2.2, 123.4, 4.4, 4.2, '#c02030', 0.5, tx + 3, 0.6);
       }
     });
-    for (const tx of TABLES) glowAdd(tx, 125, 10 + Math.sin(t * 9 + tx) * 1.2, '#ff6070', 0.45);
     c.restore();
   }
   // the yellow ginkgo tops, in front of everyone
@@ -988,7 +1206,125 @@ const ART = (() => {
     c.restore();
   }
 
-  // neon letters as glass tubes, like the real sign
+  // =====================================================================
+  // vehicles: round and friendly, but the size of real ones
+  // =====================================================================
+  const CAR = 1.45, AMAROK = 1.35;
+  function wheel(x, y, r, t) {
+    circle(x, y, r, '#26262c', 0.8); circle(x, y, r * 0.5, '#b8bcc4', 0.5);
+    for (let k = 0; k < 3; k++) { const a = t + k * 2.09; line(x, y, x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.45, '#6a6e78', 0.5); }
+  }
+  function car(x, y, col, dir, t) {
+    c.save(); c.translate(x, y); c.scale(dir * CAR, CAR);
+    shape([[-20, -4], [-20.5, -10], [-17, -12.5], [-10, -13], [-6, -19.5], [7, -19.5], [11.5, -13], [19, -12], [21, -8], [20.5, -4]], col, 0.8, 3, 0.15);
+    within(() => { R(-22, -7.5, 44, 4, shadeOf(col)); });
+    shape([[-8.3, -13.2], [-5, -18.2], [-0.6, -18.2], [-0.6, -13.2]], '#a8d0ee', 0.5, 4, 0.05);
+    shape([[0.8, -13.2], [0.8, -18.2], [6.2, -18.2], [9.6, -13.2]], '#a8d0ee', 0.5, 5, 0.05);
+    line(-4, -17, -2.5, -14.4, 'rgba(255,255,255,.7)', 0.7);
+    line(0.1, -12.6, 0.1, -5, 'rgba(0,0,0,.25)', 0.4);
+    line(-6, -10.6, -3.6, -10.6, '#2a2a2e', 0.6); line(4, -10.6, 6.4, -10.6, '#2a2a2e', 0.6);
+    ell(19.6, -9.4, 1.3, 1, 0, '#fff4c0', 0.35); ell(-19.8, -9.4, 0.9, 1.1, 0, '#e02828', 0.35);
+    wheel(-12, -3, 3.6, t * 10); wheel(12, -3, 3.6, t * 10);
+    c.restore();
+  }
+  function taxi(x, y, dir, t) {
+    car(x, y, '#f4ecd0', dir, t);
+    c.save(); c.translate(x, y - 19.5 * CAR); c.scale(CAR, CAR);
+    box(-4.5, -3.2, 9, 3.4, '#ffd84a', 0.6, 9, 0.6);
+    c.font = '800 2.6px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#2a2016'; c.textAlign = 'center'; c.fillText('TAXI', 0, -0.6);
+    c.restore();
+  }
+  function amarok(x, y, dir, t, driver) {
+    c.save(); c.translate(x, y); c.scale(dir * AMAROK, AMAROK);
+    const col = '#4c7a3e';
+    poly([[-27.5, -4.6], [-27.5, -14.2], [-2.5, -14.2], [-0.6, -22.6], [16.6, -22.6], [20.6, -15], [27, -13.8], [28.4, -10], [28.4, -4.6]], col, 0.85, 11, 0.12);
+    within(() => { R(-29, -9, 58, 5, '#3a6230'); });
+    line(-26, -11.5, -3, -11.5, '#3a6230', 0.8);
+    poly([[1.6, -21.4], [15.8, -21.4], [19.2, -15.4], [1.6, -15.4]], '#a8d0ee', 0.5, 12, 0.05);
+    box(-26, -18.4, 2, 4.4, col, 0.6, 14, 0.4); box(-6, -18.4, 2, 4.4, col, 0.6, 15, 0.4); line(-25, -17.4, -5, -17.4, INK, 0.6);
+    line(10, -21.4, 10, -15.4, col, 1);
+    if (driver && LOOK[driver]) { circle(6, -17.6, 2.6, LOOK[driver].skin, 0.4); c.beginPath(); c.arc(6, -18.4, 2.9, Math.PI, 0); fillInk(LOOK[driver].hair, 0.4); }
+    line(4, -20.6, 7, -16.4, 'rgba(255,255,255,.6)', 0.6);
+    ell(27, -11, 1.4, 1.4, 0, '#fff4c0', 0.35); ell(-27, -11, 1, 1.6, 0, '#e02828', 0.35);
+    box(-28, -6, 57, 2.4, '#2a2a2e', 0.5, 13, 0.6);
+    wheel(-16, -3.4, 4.8, t * 9); wheel(16, -3.4, 4.8, t * 9);
+    c.restore();
+  }
+  // a BVG tram: three straight yellow cars, a sloped nose, a pantograph
+  const TRAM_S = 1.3, BUS_S = 1.35;
+  function tram(x, y, dir, t) { c.save(); c.translate(x, y); c.scale(TRAM_S, TRAM_S); tramBody(0, 0, dir, t); c.restore(); return 150 * TRAM_S; }
+  function bus(x, y, dir, t) { c.save(); c.translate(x, y); c.scale(BUS_S, BUS_S); busBody(0, 0, dir, t); c.restore(); return 100 * BUS_S; }
+  function tramBody(x, y, dir, t) {
+    for (let s = 0; s < 3; s++) {
+      const sx = x + s * 51 * dir, front = s === 2;
+      c.save(); c.translate(sx, y); c.scale(dir, 1);
+      poly(front ? [[0, -4], [0, -38], [42, -38], [48.6, -31], [51, -18], [51, -4]] : [[0, -4], [0, -38], [50, -38], [50, -4]], '#f4c41c', 0.9, s + 21, 0.08);
+      R(0.4, -37.6, front ? 41 : 49.2, 2.2, '#ffe070');
+      box(0, -10, front ? 51 : 50, 6, '#3a3a42', 0.6, s + 24, 0.4);
+      for (const wx of [2.5, 31.5]) box(wx, -33, 13, 14, '#ffe8b4', 0.55, s * 9 + wx, 0.6);
+      box(17, -34, 12, 24, '#f8d860', 0.55, s * 5 + 3, 0.6);
+      box(18.2, -32.4, 4.4, 12, '#ffe8b4', 0.4, s + 40, 0.4); box(23.4, -32.4, 4.4, 12, '#ffe8b4', 0.4, s + 41, 0.4);
+      line(23, -34, 23, -10, '#8a7020', 0.5);
+      if (front) poly([[43, -36.6], [48, -31], [50, -20], [44, -20]], '#cfe6f6', 0.55, 31, 0.03);
+      box(8, -41.5, 14, 3.6, '#9aa0a8', 0.5, s + 50, 0.6);
+      for (const wx of [10, 40]) { box(wx - 6, -5.6, 12, 3, '#26262c', 0.4, s + wx, 0.6); circle(wx - 3, -3.4, 1.8, '#26262c', 0.5); circle(wx + 3, -3.4, 1.8, '#26262c', 0.5); }
+      c.restore();
+    }
+    // the destination display (not mirrored)
+    const dx = x + dir * (102 + 36.5);
+    box(dx - 5, y - 36.5, 10, 4, '#141418', 0.5, 33, 0.6);
+    c.save(); c.font = '800 3.2px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#ffb000'; c.textAlign = 'center'; c.fillText('M10', dx, y - 33.4); c.restore();
+    // the pantograph on the middle car
+    const px = x + dir * 76;
+    line(px - 6, y - 41.5, px, y - 52, '#333', 0.7); line(px + 6, y - 41.5, px, y - 52, '#333', 0.7); line(px - 7, y - 52, px + 7, y - 52, '#333', 0.9);
+    return 150;
+  }
+  // a yellow BVG bendy bus
+  function busBody(x, y, dir, t) {
+    const seg = (sx, len, front) => {
+      c.save(); c.translate(sx, y); c.scale(dir, 1);
+      poly(front ? [[0, -5], [0, -33], [len - 3, -33], [len, -29], [len + 0.6, -6], [len - 1, -5]] : [[0, -5], [0, -33], [len, -33], [len, -5]], '#f4c41c', 0.9, sx, 0.08);
+      R(0.4, -32.6, len - 1, 2, '#ffe070');
+      box(0, -14, len, 2.4, '#26262c', 0.4, sx + 1, 0.3);
+      const nw = Math.floor((len - 14) / 9);
+      for (let i = 0; i < nw; i++) box(2 + i * 9, -29.4, 7.6, 12.6, '#ffe8b4', 0.5, sx + i, 0.6);
+      box(len - 12, -29.6, 9, 24, '#e8c030', 0.5, sx + 5, 0.4);
+      line(len - 7.5, -29.6, len - 7.5, -5.6, '#8a7020', 0.5);
+      box(len - 11, -28, 3.4, 10, '#ffe8b4', 0.35, sx + 6, 0.4); box(len - 6.8, -28, 3.4, 10, '#ffe8b4', 0.35, sx + 7, 0.4);
+      if (front) { poly([[len - 2.6, -31.6], [len - 0.4, -28], [len, -17], [len - 3, -17]], '#cfe6f6', 0.5, 9, 0.02); box(len - 13, -32.6, 9, 3, '#141418', 0.4, 11, 0.4); }
+      box(-0.4, -5.6, len + 0.8, 1.8, '#26262c', 0.4, sx + 3, 0.3);
+      for (const wx of front ? [8, len - 18] : [10]) { c.beginPath(); c.arc(wx, -5, 5, Math.PI, 0); c.fillStyle = '#26262c'; c.fill(); wheel(wx, -3.6, 3.6, t * 10); }
+      c.restore();
+    };
+    seg(x, 46, false);
+    // the bellow between the two parts
+    const bx = x + dir * 46;
+    c.save(); c.translate(bx, y); c.scale(dir, 1); box(0, -31, 4, 25, '#3a3a40', 0.6, 3, 0.4); for (let k = 0; k < 4; k++) line(k + 0.5, -30, k + 0.5, -7, '#5a5a62', 0.4); c.restore();
+    seg(x + dir * 50, 50, true);
+    const dx = x + dir * (50 + 41.5);
+    c.save(); c.font = '800 2.6px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#ffb000'; c.textAlign = 'center'; c.fillText('M29', dx, y - 30.4); c.restore();
+    return 100;
+  }
+  // lights of a vehicle in the evening (drawn in the light pass)
+  function vehicleLights(v, t) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const d = v.dir;
+    if (v.kind === 'tram' || v.kind === 'bus') {
+      const S = v.kind === 'tram' ? TRAM_S : BUS_S, len = (v.kind === 'tram' ? 152 : 100) * S, fx = v.x + d * len, hy = v.y - (v.kind === 'tram' ? 12 : 10) * S;
+      glow(fx + d * 6, hy, 16, '#fff3c0', 0.5);
+      c.fillStyle = grad(fx, 0, fx + d * 60, 0, [[0, 'rgba(255,240,190,.22)'], [1, 'rgba(255,240,190,0)']]);
+      c.beginPath(); c.moveTo(fx, hy - 2); c.lineTo(fx + d * 60, hy - 9); c.lineTo(fx + d * 60, hy + 8); c.lineTo(fx, hy + 2); c.closePath(); c.fill();
+      for (let k = 0; k < (v.kind === 'tram' ? 3 : 2); k++) glow(v.x + d * (25 + k * 51) * S, v.y - 24 * S, 30, '#ffe0a0', 0.2);
+      glow(v.x - d * 1, v.y - 10, 5, '#ff3030', 0.45);
+    } else {
+      const s = v.s || CAR, len = 21 * s, hy = v.y - 9.4 * s, fx = v.x + d * len;
+      glow(fx, hy, 7, '#fff8d0', 0.7);
+      c.fillStyle = grad(fx, 0, fx + d * 50, 0, [[0, 'rgba(255,240,190,.3)'], [1, 'rgba(255,240,190,0)']]);
+      c.beginPath(); c.moveTo(fx, hy - 1.5); c.lineTo(fx + d * 50, hy - 8); c.lineTo(fx + d * 50, hy + 10); c.lineTo(fx, hy + 1.5); c.closePath(); c.fill();
+      glow(v.x - d * len, hy, 6, '#ff2020', 0.55);
+    }
+    c.restore();
+  }
   const NEON = {
     H: [[[0, 0], [0, 8]], [[5, 0], [5, 8]], [[0, 4], [5, 4]]],
     O: [[[1.5, 0], [3.5, 0], [5, 1.5], [5, 6.5], [3.5, 8], [1.5, 8], [0, 6.5], [0, 1.5], [1.5, 0]]],
@@ -1022,64 +1358,6 @@ const ART = (() => {
   // =====================================================================
   // vehicles: round and friendly
   // =====================================================================
-  function wheel(x, y, r, t) {
-    circle(x, y, r, '#26262c', 0.8); circle(x, y, r * 0.5, '#b8bcc4', 0.5);
-    for (let k = 0; k < 3; k++) { const a = t + k * 2.09; line(x, y, x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.45, '#6a6e78', 0.5); }
-  }
-  function car(x, y, col, dir, t, night) {
-    c.save(); c.translate(x, y); c.scale(dir, 1);
-    shape([[-20, -4], [-20.5, -10], [-17, -12.5], [-10, -13], [-6, -19.5], [7, -19.5], [11.5, -13], [19, -12], [21, -8], [20.5, -4]], col, 0.9, 3, 0.15);
-    within(() => { R(-22, -7.5, 44, 4, shadeOf(col)); });
-    shape([[-8.3, -13.2], [-5, -18.2], [-0.6, -18.2], [-0.6, -13.2]], '#a8d0ee', 0.6, 4, 0.05);
-    shape([[0.8, -13.2], [0.8, -18.2], [6.2, -18.2], [9.6, -13.2]], '#a8d0ee', 0.6, 5, 0.05);
-    line(-4, -17, -2.5, -14.4, 'rgba(255,255,255,.7)', 0.8);
-    line(0.1, -12.6, 0.1, -5, 'rgba(0,0,0,.25)', 0.5);
-    ell(19.6, -9.4, 1.3, 1, 0, '#fff4c0', 0.4); ell(-19.8, -9.4, 0.9, 1.1, 0, '#e02828', 0.4);
-    c.restore();
-    if (night) { c.save(); c.globalCompositeOperation = 'lighter'; glow(x + dir * 26, y - 8, 16, '#fff3c0', 0.35); glow(x - dir * 22, y - 8, 6, '#ff2020', 0.4); c.restore(); }
-    wheel(x - 12 * dir, y - 3, 3.6, t * 10 * dir); wheel(x + 12 * dir, y - 3, 3.6, t * 10 * dir);
-  }
-  function taxi(x, y, dir, t) {
-    car(x, y, '#f4ecd0', dir, t, true);
-    box(x - 4.5, y - 22.6, 9, 3.4, '#ffd84a', 0.6, 9, 0.6);
-    c.save(); c.font = '800 2.6px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#2a2016'; c.textAlign = 'center'; c.fillText('TAXI', x, y - 20); c.restore();
-  }
-  function amarok(x, y, dir, t, driver) {
-    c.save(); c.translate(x, y); c.scale(dir, 1);
-    const col = '#4c7a3e';
-    poly([[-27.5, -4.6], [-27.5, -14.2], [-2.5, -14.2], [-0.6, -22.6], [16.6, -22.6], [20.6, -15], [27, -13.8], [28.4, -10], [28.4, -4.6]], col, 0.95, 11, 0.12);
-    within(() => { R(-29, -9, 58, 5, '#3a6230'); });
-    line(-27, -14, -2, -14, INK, 0.8); line(-26, -11.5, -3, -11.5, '#3a6230', 0.8);
-    poly([[1.6, -21.4], [15.8, -21.4], [19.2, -15.4], [1.6, -15.4]], '#a8d0ee', 0.6, 12, 0.05);
-    box(-26, -18.4, 2, 4.4, col, 0.7, 14, 0.4); box(-6, -18.4, 2, 4.4, col, 0.7, 15, 0.4); line(-25, -17.4, -5, -17.4, INK, 0.7);
-    line(10, -21.5, 10, -15.4, col, 1);
-    if (driver && LOOK[driver]) { circle(6, -17.6, 2.6, LOOK[driver].skin, 0.5); c.beginPath(); c.arc(6, -18.4, 2.9, Math.PI, 0); fillInk(LOOK[driver].hair, 0.5); }
-    line(4, -20.6, 7, -16.4, 'rgba(255,255,255,.6)', 0.7);
-    ell(27, -11, 1.4, 1.4, 0, '#fff4c0', 0.4); ell(-27, -11, 1, 1.6, 0, '#e02828', 0.4);
-    box(-28, -6, 57, 2.4, '#2a2a2e', 0.6, 13, 0.6);
-    c.restore();
-    glowAdd(x + dir * 32, y - 10, 15, '#fff3c0', 0.28);
-    wheel(x - 16 * dir, y - 3.4, 4.8, t * 9 * dir); wheel(x + 16 * dir, y - 3.4, 4.8, t * 9 * dir);
-  }
-  function tram(x, y, dir, t) {
-    for (let s = 0; s < 3; s++) {
-      const sx = x + s * 51 * dir;
-      c.save(); c.translate(sx, y); c.scale(dir, 1);
-      const front = s === 2;
-      shape(front ? [[0, -5], [0, -40], [44, -40], [50, -34], [51, -5]] : [[0, -5], [0, -40], [50, -40], [50, -5]], '#f6c51e', 0.95, s + 21, 0.1);
-      within(() => { R(-1, -9, 53, 5, '#d8a40e'); R(-1, -41, 53, 2.6, '#ffe070'); });
-      for (let w = 0; w < 4; w++) box(3 + w * 11.6, -33.5, 9.6, 14, '#fff0b8', 0.6, s * 9 + w, 0.8);
-      line(0, -18, 50, -18, '#3a3a3a', 1.6);
-      if (front) { box(39, -38.6, 10, 5, '#1a1a1a', 0.5, 31, 0.6); c.save(); c.font = '800 3.4px "M PLUS Rounded 1c", sans-serif'; c.fillStyle = '#ffb000'; c.textAlign = 'center'; c.fillText('M10', 44, -35); c.restore(); ell(49, -10, 1.4, 1.2, 0, '#fff4c0', 0.4); }
-      c.restore();
-      wheel(sx + dir * 10, y - 3, 3, t * 12 * dir); wheel(sx + dir * 40, y - 3, 3, t * 12 * dir);
-    }
-    glowAdd(x + dir * 75, y - 25, 70, '#ffe7a8', 0.13);
-    // the pantograph on the middle car
-    const px = x + dir * 76;
-    line(px - 6, y - 40, px, y - 50, '#333', 0.7); line(px + 6, y - 40, px, y - 50, '#333', 0.7); line(px - 6, y - 50, px + 6, y - 50, '#333', 0.9);
-    return 150;
-  }
   function scooter(x, y, dir, rider, t) {
     c.save(); c.translate(x, y); c.scale(dir, 1);
     box(-8.5, -3.6, 15, 2, '#33363c', 0.6, 2, 0.8);
@@ -1690,7 +1968,8 @@ const ART = (() => {
   return {
     use, setScale, paper, R, glow, rgba, hash, LOOK, friend, friendTop, person,
     campLion, altengrabow, lehnin, street, outdoorTables, streetFront, STREET, treesAt,
-    car, taxi, amarok, tram, scooter, plane, train,
+    car, taxi, amarok, tram, bus, scooter, plane, train, vehicleLights, CAR, AMAROK,
+    dusk, duskActors, streetLights,
     inside, insideTop, IN, dish, menuCard,
     europeMap, brandenburgMap, planeIcon, mapIcon, roadTrip, skyline, trainTrip, hbf, airport, cityNight, neonText,
   };

@@ -124,4 +124,12 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   (laughing, facing, Oleksiy's step, doors, and street life from the shared clock)
 - going home from Berlin and walking in through your own door ends the game
 - the radio has no button on screen: only the cabinet inside Hoongy controls it
+- late twilight on the street: a blue dusk wash, glowing windows, neon, lamps and
+  headlights; through Hoongy's window you see the room in 3D (like the photos)
+- all three at one table: the camera moves in; friends enjoy every bite (sparkles)
+- camps have a fence, a guard and an exit gate: through the gate you leave for
+  Berlin, and come home
+- talking: the 🎙 PRATEN button (or M) turns the microphone on; everyone with the
+  microphone on is in one call (WebRTC, set up through /api/tusa), and the
+  speaker's mouth moves
 

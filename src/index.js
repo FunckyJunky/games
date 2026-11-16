@@ -691,7 +691,8 @@ export class TusaRoom extends DurableObject {
   }
 
   async webSocketMessage(ws, message) {
-    if (typeof message !== "string" || message.length > 1024) return;
+    // voice call set-up messages (SDP) are a few KB; everything else is small
+    if (typeof message !== "string" || message.length > 24000) return;
     let d;
     try {
       d = JSON.parse(message);
@@ -761,6 +762,19 @@ export class TusaRoom extends DurableObject {
         const to = TUSA_CHARS.includes(d.to) ? d.to : "";
         const j = Number.isInteger(d.j) ? Math.max(0, Math.min(999, d.j)) : 0;
         this.broadcast({ type: "emote", from: me.char, kind: d.kind, to, j, t: now });
+        return;
+      }
+      case "voice":
+        // talking with the microphone on (a three-way call between the friends)
+        me.voice = !!d.on;
+        break;
+      case "rtc": {
+        // pass call set-up messages to one friend
+        if (!TUSA_CHARS.includes(d.to) || !d.data || message.length > 24000) return;
+        for (const s of this.live(ws)) {
+          const a = s.deserializeAttachment();
+          if (a.char === d.to) this.send(s, { type: "rtc", from: me.char, data: d.data });
+        }
         return;
       }
       case "radio": {

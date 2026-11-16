@@ -25,9 +25,10 @@ const NAMES = {
   OLEKSIY: ['OLEKSIY', 'OLEKSII', 'OLEKSIJ', 'OLEKSI', 'ALEKSEY', 'OLEXIY', 'OLEKSIJ'],
 };
 const HOME = {
-  VITO: { title: 'CAMP LION', sub: 'România · Румунія', draw: A.campLion, door: 75, exitDir: 1, W: 470, sign: 'CAMP LION' },
-  VIKA: { title: 'ALTENGRABOW', sub: 'Sachsen-Anhalt · Німеччина', draw: A.altengrabow, door: 79, exitDir: 1, W: 420, sign: 'ALTENGRABOW' },
-  OLEKSIY: { title: 'LEHNIN', sub: 'Brandenburg · Німеччина', draw: A.lehnin, door: 62, exitDir: 1, W: 400, sign: 'LEHNIN' },
+  // gate: the exit of the camp; through it you leave for Berlin, and come home
+  VITO: { title: 'CAMP LION', sub: 'România · Румунія', draw: A.campLion, door: 75, exitDir: 1, W: 540, gate: 468, sign: 'CAMP LION' },
+  VIKA: { title: 'ALTENGRABOW', sub: 'Sachsen-Anhalt · Німеччина', draw: A.altengrabow, door: 79, exitDir: 1, W: 440, gate: 370, sign: 'ALTENGRABOW' },
+  OLEKSIY: { title: 'LEHNIN', sub: 'Brandenburg · Німеччина', draw: A.lehnin, door: 62, exitDir: 1, W: 420, gate: 350, sign: 'LEHNIN' },
 };
 const ARRIVE = { VITO: 'taxi', VIKA: 'amarok', OLEKSIY: 'scooter' };
 const TAG = { VITO: '#7fd3ff', VIKA: '#ff9ec0', OLEKSIY: '#b8e07a' };
@@ -75,6 +76,7 @@ const SFX = {
   },
   crickets() { for (let i = 0; i < 6; i++) tone(4200, 0.04, 0.012, 'sine', 0.2 + i * 0.09 + (i > 2 ? 0.5 : 0), 4000); },
   knob() { noise(0.03, 0.25, 2400, 1.5); tone(90, 0.05, 0.05, 'square'); },
+  yum() { noise(0.05, 0.1, 1600, 1.2); tone(220, 0.4, 0.035, 'sine', 0.08, 260); tone(330, 0.3, 0.02, 'triangle', 0.25, 300); },
   heart() { tone(880, 0.09, 0.05, 'sine'); tone(1318, 0.16, 0.05, 'sine', 0.09); },
   hug() { tone(392, 0.3, 0.04, 'sine', 0, 523); tone(523, 0.35, 0.03, 'sine', 0.2, 440); },
   door() { tone(1568, 0.25, 0.04, 'sine'); tone(1175, 0.4, 0.04, 'sine', 0.18); },
@@ -123,7 +125,7 @@ const G = {
   camX: 0, camY: 0,
   base: null, travel: null, arrival: null, trans: null,
   npcs: [], cars: [], leaves: [], hearts: [], notes: [],
-  talk: {}, jokes: {}, blush: {}, hugs: {}, toast: null,
+  talk: {}, jokes: {}, blush: {}, hugs: {}, toast: null, yum: {}, zoom: 1,
   others: {},
   nextPed: 0, nextCar: 0, nextTram: 8, nextSoldier: 0,
   prompt: '', closedShown: false,
@@ -151,7 +153,7 @@ function disconnect() {
   NET.want = false; NET.ok = false;
   if (NET.ws) { try { NET.ws.close(1000, 'bye'); } catch (e) {} }
   NET.ws = null; G.others = {};
-  radioStop();
+  radioStop(); voiceStop(true); updateMicBtn();
 }
 function send(obj) { if (NET.ok && NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(obj)); }
 function sendState(force) {
@@ -172,6 +174,8 @@ function onNet(m) {
     for (const p of m.players) addOther(p, true);
     NET.g = m.g;
     NET.welcomed = true;
+    if (VOICE.on) send({ t: 'voice', on: 1 });                  // back after a hiccup: still talking
+    if (m.players.length && !VOICE.on) setTimeout(() => toast('🎙 Tik op PRATEN om met je vrienden te praten', 3.5), 3500);
     // friends already here? then nobody is being waited for: no commentary
     if (m.players.length) G.voiceDone = true;
     radioSync();
@@ -179,12 +183,16 @@ function onNet(m) {
     updateRadioBtn();
   } else if (m.type === 'p') {
     if (m.p.char === G.me) { G.p.seat = m.p.seat; G.order = m.p.order; return; }
+    const prev = G.others[m.p.char], pb = prev && prev.order ? prev.order.bites || 0 : 0, nb = m.p.order ? m.p.order.bites || 0 : 0;
+    if (prev && nb > pb) enjoy(m.p.char, nb);
     addOther(m.p, false);
   } else if (m.type === 'gone') {
     const o = G.others[m.char];
-    if (o) delete G.others[m.char];
+    if (o) { hangup(m.char); delete G.others[m.char]; updateMicBtn(); }
   } else if (m.type === 'emote') {
     handleEmote(m);
+  } else if (m.type === 'rtc') {
+    onRTC(m);
   } else if (m.type === 'g') {
     const was = NET.g.clockStart;
     NET.g = m.g;
@@ -203,11 +211,13 @@ function addOther(p, initial) {
   if (!o) o = G.others[p.char] = { char: p.char, x: p.x, y: p.y, phase: 0 };
   // a friend going in or out of Hoongy: everyone sees the door open
   if (!fresh && o.scene && p.scene && o.scene !== p.scene) { G.doorUntil = G.t + 1.2; if (scenePlace() === 'street' || G.scene === 'inside') SFX.door(); }
-  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt, ride: !!p.ride, scoot: p.scoot, sd: p.sd, lg: p.lg || 0, rf: !!p.rf, a: p.a });
+  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt, ride: !!p.ride, scoot: p.scoot, sd: p.sd, lg: p.lg || 0, rf: !!p.rf, a: p.a, voice: !!p.voice });
+  voicePeer(p.char);
   if (fresh) {
     o.x = p.x; o.y = p.y;
     // the first friend has arrived: the waiting is over
-    if (!initial) G.voiceDone = true;
+    if (!initial) { G.voiceDone = true; if (!VOICE.on) setTimeout(() => toast('🎙 ' + p.char + ' is er! Tik op PRATEN om te praten', 3.5), 2600); }
+    updateMicBtn();
   }
 }
 function arrivingFor(o) { return o.arrive && snow() - o.arriveAt < 6500; }
@@ -308,8 +318,8 @@ function startBase(who, back) {
   if (document.body.classList.contains('at-login')) { document.body.classList.remove('at-login'); layout(); globalThis.__LH = LH; }
   G.scene = 'base';
   const H = HOME[who];
-  G.base = { who, H, t0: back ? G.t - 2 : G.t, out: !!back, back: !!back };
-  G.p = { x: back ? H.W + 6 : H.door, y: 152, dir: back ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
+  G.base = { who, H, t0: back ? G.t - 2 : G.t, out: !!back, back: !!back, gate: back ? 1 : 0, inside: !back };
+  G.p = { x: back ? H.gate + 52 : H.door, y: 152, dir: back ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
   G.prompt = '';
   G.npcs = [];
   for (let i = 0; i < 3; i++) spawnSoldier(true);
@@ -342,7 +352,7 @@ function updateEnd(dt) {
 }
 function spawnSoldier(anywhere) {
   const B = G.base; if (!B) return;
-  const dir = Math.random() < 0.5 ? 1 : -1, W = B.H.W;
+  const dir = Math.random() < 0.5 ? 1 : -1, W = B.H.gate - 10;   // soldiers stay inside the camp
   const x = anywhere ? 40 + Math.random() * (W - 80) : (dir > 0 ? -20 : W + 20);
   const camo = { VITO: ['#6b6a45', '#4a4a30'], VIKA: ['#6e7350', '#3f4a2c'], OLEKSIY: ['#5d6b44', '#3a462a'] }[B.who];
   G.npcs.push({ kind: 'soldier', x, y: 152 + Math.random() * 3, dir, speed: (Math.random() < 0.25 ? 34 : 15) + Math.random() * 6, phase: Math.random(), wait: 0,
@@ -352,17 +362,22 @@ function updateBase(dt) {
   const B = G.base, H = B.H;
   if (G.t - B.t0 < 0.9) { G.p.x = H.door + (G.t - B.t0) * 18; G.p.moving = true; G.p.phase += dt * 2; G.p.dir = 1; return; }
   if (!B.out) B.out = true;
-  movePlayerSide(dt, 30, H.W + 30);
+  movePlayerSide(dt, 30, H.gate + 56);
   // home again: the door takes you inside, and that is the end of the evening
   G.prompt = B.back && Math.abs(G.p.x - H.door) < 10 ? 'A  🏠 Зайти додому' : '';
-  if (G.p.x > H.W + 10 && !dialogOpen()) {
+  // the barrier lifts when you come close to the gate
+  const nearGate = G.p.x > H.gate - 34 && G.p.x < H.gate + 64;
+  B.gate += ((nearGate ? 1 : 0) - B.gate) * Math.min(1, dt * 3);
+  if (G.p.x < H.gate - 8) B.inside = true;
+  // walking out through the gate: off to Berlin
+  if (B.inside && G.p.dir > 0 && G.p.x > H.gate + 24 && !dialogOpen()) {
     if (G.me === 'VITO') {
       showDialog({
         title: 'Летіти до Берліна?',
         text: 'Бухарест (OTP) → Берлін (BER) · ✈ 2 год 05 хв',
         opts: [
           { ico: '✈', label: 'Летимо!', key: 'A', act: () => startTravel('VITO') },
-          { ico: '↩', label: 'Ще трохи побуду тут', key: 'B', act: () => { G.p.x = H.W - 20; G.p.dir = -1; } },
+          { ico: '↩', label: 'Ще трохи побуду тут', key: 'B', act: () => { G.p.x = H.gate - 12; G.p.dir = -1; } },
         ],
       });
     } else startTravel(G.me);
@@ -382,7 +397,7 @@ function drawBase() {
   const B = G.base, H = B.H;
   A.use(lctx);
   lctx.save(); lctx.translate(0, sideOY());
-  const r = H.draw(LW, 180, G.camX, G.t);
+  const r = H.draw(LW, 180, G.camX, G.t, B.gate || 0, H.gate);
   B.signX = r.signX; B.signY = r.signY; B.signW = r.signW; B.signH = r.signH;
   const list = G.npcs.map(n => ({ y: n.y, d: () => A.person(n.x - G.camX, n.y, n.look, n.phase, n.wait <= 0, n.dir, G.t) }));
   list.push({ y: G.p.y, d: () => drawMe(G.p.x - G.camX, G.p.y) });
@@ -545,11 +560,20 @@ function streetLife() {
     if (x < -260 || x > S.W + 260) continue;
     cars.push({ kind: 'car', id: n, x, y: dir > 0 ? 168 : 178, dir, col: ['#c8323a', '#2a4a8a', '#e8e8e8', '#1a1a1a', '#5a7a3a', '#d8a020', '#7a7a8a'][Math.floor(h1(n * 11 + 4) * 7) % 7] });
   }
+  // a yellow bus now and then
+  for (let n = Math.floor(now / 29) - 2; n <= Math.floor(now / 29); n++) {
+    if (h1(n * 13 + 2) > 0.7) continue;
+    const dir = h1(n * 13 + 1) < 0.5 ? 1 : -1, el = now - n * 29 - 9;
+    if (el < 0) continue;
+    const x = dir > 0 ? -110 + el * 48 : S.W + 110 - el * 48;
+    if (x < -260 || x > S.W + 260) continue;
+    cars.push({ kind: 'bus', id: 'bus' + n, x, y: dir > 0 ? 168 : 178, dir });
+  }
   for (let n = Math.floor(now / 37) - 2; n <= Math.floor(now / 37); n++) {
     const dir = h1(n * 5 + 1) < 0.5 ? 1 : -1, el = now - n * 37;
     const x = dir > 0 ? -170 + el * 55 : S.W + 170 - el * 55;
     if (x < -260 || x > S.W + 260) continue;
-    cars.push({ kind: 'tram', id: 'tram' + n, x, y: 172, dir });
+    cars.push({ kind: 'tram', id: 'tram' + n, x: x + (dir > 0 ? -40 : 0), y: 172, dir });
   }
   return { peds: list, cars };
 }
@@ -582,6 +606,7 @@ function updateStreet(dt) {
   for (const v of G.cars) {
     if (G.heard[v.id]) continue;
     if (v.kind === 'tram' && Math.abs(v.x - G.p.x) < 160) { G.heard[v.id] = 1; SFX.bell(); }
+    if (v.kind === 'bus' && Math.abs(v.x - G.p.x) < 140) { G.heard[v.id] = 1; SFX.car(); }
     if (v.kind === 'car' && Math.abs(v.x - G.p.x) < 120) { G.heard[v.id] = 1; SFX.car(); }
   }
   // falling ginkgo and linden leaves, carried by the wind
@@ -609,13 +634,30 @@ function updateStreet(dt) {
   sendState(false);
 }
 function onScreen(x) { return x > G.camX - 40 && x < G.camX + LW + 40; }
+// people, cars and trees are drawn on their own layer, so the evening light
+// can tint them a little without touching the glowing windows behind them
+let actC = null, actX = null;
+function actorLayer() {
+  if (!actC) { actC = document.createElement('canvas'); actX = actC.getContext('2d'); }
+  if (actC.width !== view.width || actC.height !== view.height) { actC.width = view.width; actC.height = view.height; }
+  return actX;
+}
 function drawStreet() {
+  const t = G.t, cx = G.camX, oy = sideOY(), doorOpen = G.doorUntil > t;
+  const m = lctx.getTransform();
+  // 1. the street itself, with the room behind Hoongy's window
   A.use(lctx);
-  const t = G.t, cx = G.camX;
-  lctx.save(); lctx.translate(0, sideOY());
-  A.street(LW, 180, cx, t, { doorOpen: G.doorUntil > t });
+  lctx.save(); lctx.translate(0, oy);
+  A.street(LW, 180, cx, t, { doorOpen });
+  lctx.restore();
+  // 2. late twilight: a blue wash over everything that doesn't glow
+  A.dusk(cx, oy, LW, LH);
+  // 3. people, cars, trees and leaves
+  const g = actorLayer(), lights = [];
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, actC.width, actC.height);
+  g.setTransform(m); g.translate(0, oy);
+  A.use(g);
   A.outdoorTables(cx, t);
-  // the parked e-scooter while Oleksiy is here
   // Oleksiy's step, where he parked it
   if (G.me === 'OLEKSIY' && !G.arrival && !G.ride && G.scootX != null) A.scooter(G.scootX - cx, S.feet, G.scootDir, null, 0);
   const ol = G.others.OLEKSIY;
@@ -625,7 +667,6 @@ function drawStreet() {
   }
   const list = [];
   for (const n of G.npcs) list.push({ y: n.y, d: () => A.person(n.x - cx, n.y, n.look, n.phase, true, n.dir, t) });
-  // friends
   for (const ch of presentChars()) {
     const o = ch === G.me ? null : G.others[ch];
     if (o && o.scene !== 'street') continue;
@@ -639,33 +680,39 @@ function drawStreet() {
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.d());
   A.streetFront(cx, t);
-  // arrivals (mine and friends')
   const arrivals = [];
   if (G.arrival) arrivals.push([G.me, G.arrival.kind, G.arrival.t0]);
   for (const ch in G.others) { const o = G.others[ch]; if (arrivingFor(o)) arrivals.push([ch, o.arrive, (o.arriveAt - snow()) / 1000 + t]); }
-  // traffic
-  for (const v of G.cars.filter(v => v.y < 172)) drawVehicle(v);
+  for (const v of G.cars.filter(v => v.y < 172)) drawVehicle(v, lights);
   for (const [ch, kind, t0] of arrivals) {
     const st = arrivalState(kind, t0, t), a = ARR[kind];
     if (kind === 'scooter' && st.riding) { A.scooter(st.vx - cx, a.y, 1, ch, t); A.friend(ch, st.vx - cx - 1, a.y - 3, { dir: 1, t }); }
-    else if (st.veh && kind === 'taxi') A.taxi(st.vx - cx, a.y, 1, t);
-    else if (st.veh && kind === 'amarok') A.amarok(st.vx - cx, a.y, -1, t, (t - t0) < 2.5 ? ch : null);
+    else if (st.veh && kind === 'taxi') { A.taxi(st.vx - cx, a.y, 1, t); lights.push({ kind: 'car', x: st.vx, y: a.y, dir: 1, s: A.CAR }); }
+    else if (st.veh && kind === 'amarok') { A.amarok(st.vx - cx, a.y, -1, t, (t - t0) < 2.5 ? ch : null); lights.push({ kind: 'car', x: st.vx, y: a.y, dir: -1, s: 1.8 }); }
   }
-  for (const v of G.cars.filter(v => v.y >= 172)) drawVehicle(v);
-  // leaves on top of everything
+  for (const v of G.cars.filter(v => v.y >= 172)) drawVehicle(v, lights);
   for (const l of G.leaves) {
     if (!onScreen(l.x)) continue;
-    lctx.globalAlpha = Math.min(1, l.life * 2);
-    lctx.fillStyle = l.col; lctx.beginPath(); lctx.moveTo(l.x - cx, l.y);
-    lctx.arc(l.x - cx, l.y, 2.2, l.rot - 0.6, l.rot + 0.6); lctx.closePath(); lctx.fill();   // a little ginkgo fan
-    lctx.globalAlpha = 1;
+    g.globalAlpha = Math.min(1, l.life * 2);
+    g.fillStyle = l.col; g.beginPath(); g.moveTo(l.x - cx, l.y);
+    g.arc(l.x - cx, l.y, 2.2, l.rot - 0.6, l.rot + 0.6); g.closePath(); g.fill();   // a little ginkgo fan
+    g.globalAlpha = 1;
   }
+  A.duskActors(g, actC.width, actC.height);
+  lctx.save(); lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.drawImage(actC, 0, 0); lctx.restore();
+  // 4. the lights: neon, lanterns, lamps, headlights
+  A.use(lctx);
+  lctx.save(); lctx.translate(0, oy);
+  A.streetLights(cx, t, { doorOpen }, lights);
   lctx.restore();
 }
-function drawVehicle(v) {
+function drawVehicle(v, lights) {
   const x = v.x - G.camX;
-  if (x < -200 || x > LW + 200) return;
-  if (v.kind === 'tram') A.tram(x, v.y, v.dir, G.t); else A.car(x, v.y, v.col, v.dir, G.t, true);
+  if (x < -260 || x > LW + 260) return;
+  if (v.kind === 'tram') A.tram(x, v.y, v.dir, G.t);
+  else if (v.kind === 'bus') A.bus(x, v.y, v.dir, G.t);
+  else A.car(x, v.y, v.col, v.dir, G.t);
+  if (lights) lights.push({ kind: v.kind, x: v.x, y: v.y, dir: v.dir });
 }
 
 // =====================================================================
@@ -693,6 +740,7 @@ function updateEnter() {
   if (p >= 1) {
     G.scene = 'inside';
     G.p.x = A.IN.door.x; G.p.y = A.IN.H - 24; G.p.angle = -Math.PI / 2; G.p.seat = -1;
+    G.zoom = 1; G.focus = null;
     sendState(true);
     radioSync();
   }
@@ -784,14 +832,38 @@ function updateInside(dt) {
     if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) G.prompt = 'A  🚪 Вийти';
     if (Math.abs(G.p.x - IN.door.x) < 12 && G.p.y >= IN.H - 17 && G.inputDown) leaveHoongy();
   }
-  G.camX = IN.W <= LW ? (IN.W - LW) / 2 : clamp(G.p.x - LW / 2, 0, IN.W - LW);
-  G.camY = IN.H <= LH ? (IN.H - LH) / 2 : clamp(G.p.y - LH / 2, 0, IN.H - LH);
+  insideCamera(dt);
   sendState(false);
+}
+// all three friends at the same table? then the camera moves in a little
+function sharedTable() {
+  const chars = presentChars();
+  if (chars.length < 3) return -1;
+  let table = -1;
+  for (const ch of chars) {
+    const seat = ch === G.me ? (G.scene === 'inside' ? G.p.seat : -1) : (G.others[ch].scene === 'inside' ? G.others[ch].seat : -1);
+    if (seat < 0) return -1;
+    const tb = IN.seats[seat].table;
+    if (table >= 0 && tb !== table) return -1;
+    table = tb;
+  }
+  return table;
+}
+function insideCamera(dt) {
+  const tb = sharedTable(), want = tb >= 0 ? 1.45 : 1;
+  G.zoom += (want - G.zoom) * Math.min(1, dt * 2.2);
+  const fx0 = tb >= 0 ? IN.tables[tb].x : G.p.x, fy0 = tb >= 0 ? IN.tables[tb].y : G.p.y;
+  G.focus = G.focus || { x: fx0, y: fy0 };
+  G.focus.x += (fx0 - G.focus.x) * Math.min(1, dt * 3); G.focus.y += (fy0 - G.focus.y) * Math.min(1, dt * 3);
+  const vw = LW / G.zoom, vh = LH / G.zoom;
+  G.camX = IN.W <= vw ? (IN.W - vw) / 2 : clamp(G.focus.x - vw / 2, 0, IN.W - vw);
+  G.camY = IN.H <= vh ? (IN.H - vh) / 2 : clamp(G.focus.y - vh / 2, 0, IN.H - vh);
 }
 function drawInsideWorld() {
   A.use(lctx);
   lctx.fillStyle = '#120c08'; lctx.fillRect(0, 0, LW, LH);
-  lctx.save(); lctx.translate(-G.camX, -G.camY);
+  const Z = G.scene === 'inside' ? G.zoom : 1;
+  lctx.save(); lctx.scale(Z, Z); lctx.translate(-G.camX, -G.camY);
   const taken = seatTakenMap();
   A.inside(G.t, { seatTaken: taken, hiSeat: G.scene === 'inside' && G.p.seat < 0 ? G.hiSeat : -1, doorOpen: G.doorUntil > G.t, radioOn: NET.g.radio ? NET.g.radio.ch : 0, hiRadio: nearRadio() });
   // dishes on the tables
@@ -817,7 +889,7 @@ function drawInsideWorld() {
     list.push({ y: o.y, d: () => drawOtherTop(o) });
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.d());
-  A.insideTop(G.t, { x: G.camX, y: G.camY, w: LW, h: LH });
+  A.insideTop(G.t, { x: G.camX, y: G.camY, w: LW / Z, h: LH / Z });
   lctx.restore();
 }
 // the waiter: where is he right now?
@@ -960,6 +1032,14 @@ function handleEmote(e) {
     } else setAnim(from, 'hug', 1.2);
   }
 }
+// a bite: wiggle, sparkles, and a happy "mmm" (bigger for the last bite)
+function enjoy(ch, bite) {
+  G.yum[ch] = G.t + (bite >= 5 ? 2.6 : 1.7);
+  G.yumBig = G.yumBig || {}; G.yumBig[ch] = bite >= 5;
+  const p = posOf(ch), me = posOf(G.me);
+  if (p && me && p.scene === me.scene) setTimeout(() => SFX.yum(), 180);
+}
+function yumFor(ch) { const u = G.yum[ch] || 0; return u > G.t ? (G.yumBig && G.yumBig[ch] ? 3 : 1) : 0; }
 function scenePlace() { return G.scene === 'inside' ? 'inside' : 'street'; }
 function setAnim(ch, anim, dur) {
   if (ch === G.me) { G.p.anim = anim; G.p.animUntil = G.t + dur; }
@@ -985,31 +1065,31 @@ function animFor(ch) {
 function talking(ch) { return G.talk[ch] > G.t && (G.t * 8 | 0) % 2 === 0; }
 function drawRider(ch, x, y, dir, moving, st) {
   A.scooter(x, y, dir, null, moving ? G.t : 0);
-  A.friend(ch, x - dir, y - 3, { dir, t: G.t, anim: st.anim === 'hug' || st.anim === 'heart' ? st.anim : (G.talk[ch] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[ch] > G.t, talk: talking(ch) });
+  A.friend(ch, x - dir, y - 3, { dir, t: G.t, anim: st.anim === 'hug' || st.anim === 'heart' ? st.anim : (G.talk[ch] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[ch] > G.t, talk: mouthMoving(ch) });
 }
 function drawMe(x, y) {
   const st = animFor(G.me);
   if (G.ride && G.scene === 'street' && st.anim !== 'rofl') return drawRider(G.me, x, y, G.p.dir, G.p.moving, st);
-  A.friend(G.me, x, y, { dir: G.p.dir, phase: G.p.phase, moving: G.p.moving, anim: st.anim || (G.talk[G.me] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[G.me] > G.t, t: G.t, talk: talking(G.me) });
+  A.friend(G.me, x, y, { dir: G.p.dir, phase: G.p.phase, moving: G.p.moving, anim: st.anim || (G.talk[G.me] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[G.me] > G.t, t: G.t, talk: mouthMoving(G.me) });
 }
 function drawOther(o, x, y) {
   const st = animFor(o.char);
   if (o.ride && o.scene === 'street' && st.anim !== 'rofl') return drawRider(o.char, x, y, o.dir, o.moving, st);
-  A.friend(o.char, x, y, { dir: o.dir, phase: o.phase, moving: o.moving, anim: st.anim || (G.talk[o.char] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[o.char] > G.t, t: G.t, talk: talking(o.char) });
+  A.friend(o.char, x, y, { dir: o.dir, phase: o.phase, moving: o.moving, anim: st.anim || (G.talk[o.char] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[o.char] > G.t, t: G.t, talk: mouthMoving(o.char) });
 }
 // on the floor next to the chair when rolling with laughter at the table
 function floorSpot(seat, x, y) { const s = IN.seats[seat]; return s ? [x + (s.face === 0 ? -9 : 9), y + 3] : [x, y]; }
 function drawMeTop(x, y) {
   const st = animFor(G.me);
   if (st.anim === 'rofl' && G.p.seat >= 0) [x, y] = floorSpot(G.p.seat, x, y);
-  A.friendTop(G.me, x, y, { angle: G.p.angle, moving: G.p.moving, phase: G.p.phase, laugh: st.laugh, anim: st.anim, t: G.t });
+  A.friendTop(G.me, x, y, { angle: G.p.angle, moving: G.p.moving, phase: G.p.phase, laugh: st.laugh, anim: st.anim, t: G.t, yum: yumFor(G.me) });
 }
 function drawOtherTop(o) {
   const st = animFor(o.char);
   const ang = o.seat >= 0 ? IN.seats[o.seat].face : (o.dir > 0 ? 0 : Math.PI);
   let x = o.x, y = o.y;
   if (st.anim === 'rofl' && o.seat >= 0) [x, y] = floorSpot(o.seat, x, y);
-  A.friendTop(o.char, x, y, { angle: o.seat >= 0 ? ang : (typeof o.a === 'number' ? o.a : ang), moving: o.moving, phase: o.phase, laugh: st.laugh, anim: st.anim, t: G.t });
+  A.friendTop(o.char, x, y, { angle: o.seat >= 0 ? ang : (typeof o.a === 'number' ? o.a : ang), moving: o.moving, phase: o.phase, laugh: st.laugh, anim: st.anim, t: G.t, yum: yumFor(o.char) });
 }
 
 // =====================================================================
@@ -1172,6 +1252,113 @@ function voiceUpdate() {
   }
 }
 
+
+// =====================================================================
+// talking: a three-way voice call between the friends (WebRTC). The game
+// server only passes the set-up messages along; voices go phone to phone.
+// =====================================================================
+const VOICE = { on: false, stream: null, pcs: {}, els: {}, an: {}, buf: null, speaking: {}, pend: {}, hold: {} };
+const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+async function voiceStart() {
+  unlock();
+  if (VOICE.on) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.RTCPeerConnection) { toast('🎙 Praten werkt niet in deze browser', 3); return; }
+  try {
+    VOICE.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch (e) { toast('🎙 Geen toegang tot de microfoon', 3); return; }
+  VOICE.on = true;
+  watchLevel(G.me, VOICE.stream);
+  send({ t: 'voice', on: 1 });
+  toast('🎙 Microfoon aan: je vrienden horen je', 2.5);
+  for (const ch in G.others) voicePeer(ch);
+  updateMicBtn();
+}
+function voiceStop(quiet) {
+  if (!VOICE.on && !VOICE.stream) return;
+  VOICE.on = false;
+  for (const ch of Object.keys(VOICE.pcs)) hangup(ch);
+  if (VOICE.stream) VOICE.stream.getTracks().forEach(tr => tr.stop());
+  VOICE.stream = null; delete VOICE.an[G.me]; VOICE.speaking = {};
+  if (!quiet) { send({ t: 'voice', on: 0 }); toast('🎙 Microfoon uit', 2); }
+  updateMicBtn();
+}
+// both of us have the microphone on? the one whose name comes first starts the call
+function voicePeer(ch) {
+  const o = G.others[ch];
+  if (!VOICE.on || !o || !o.voice) { if (VOICE.pcs[ch]) hangup(ch); return; }
+  if (VOICE.pcs[ch] || G.me > ch) return;
+  callPeer(ch);
+}
+function makePeer(ch) {
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  VOICE.pcs[ch] = pc; VOICE.pend[ch] = VOICE.pend[ch] || [];
+  VOICE.stream.getTracks().forEach(tr => pc.addTrack(tr, VOICE.stream));
+  pc.onicecandidate = e => { if (e.candidate) send({ t: 'rtc', to: ch, data: { ice: e.candidate } }); };
+  pc.ontrack = e => {
+    let el = VOICE.els[ch];
+    if (!el) { el = VOICE.els[ch] = document.createElement('audio'); el.autoplay = true; el.setAttribute('playsinline', ''); document.body.appendChild(el); }
+    el.srcObject = e.streams[0]; el.play().catch(() => {});
+    watchLevel(ch, e.streams[0]);
+  };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && VOICE.pcs[ch] === pc) { hangup(ch); setTimeout(() => voicePeer(ch), 1500); } };
+  return pc;
+}
+async function callPeer(ch) {
+  const pc = makePeer(ch);
+  try { await pc.setLocalDescription(await pc.createOffer()); send({ t: 'rtc', to: ch, data: { sdp: pc.localDescription } }); } catch (e) { hangup(ch); }
+}
+async function onRTC(m) {
+  const ch = m.from, d = m.data || {};
+  if (!VOICE.on || !G.others[ch]) return;
+  try {
+    if (d.sdp && d.sdp.type === 'offer') {
+      if (VOICE.pcs[ch]) hangup(ch);
+      const pc = makePeer(ch);
+      await pc.setRemoteDescription(d.sdp);
+      await pc.setLocalDescription(await pc.createAnswer());
+      send({ t: 'rtc', to: ch, data: { sdp: pc.localDescription } });
+      for (const c of VOICE.pend[ch].splice(0)) await pc.addIceCandidate(c).catch(() => {});
+    } else if (d.sdp && d.sdp.type === 'answer' && VOICE.pcs[ch]) {
+      await VOICE.pcs[ch].setRemoteDescription(d.sdp);
+      for (const c of (VOICE.pend[ch] || []).splice(0)) await VOICE.pcs[ch].addIceCandidate(c).catch(() => {});
+    } else if (d.ice) {
+      const pc = VOICE.pcs[ch];
+      if (pc && pc.remoteDescription) await pc.addIceCandidate(d.ice).catch(() => {});
+      else (VOICE.pend[ch] = VOICE.pend[ch] || []).push(d.ice);
+    }
+  } catch (e) {}
+}
+function hangup(ch) {
+  const pc = VOICE.pcs[ch]; delete VOICE.pcs[ch]; VOICE.pend[ch] = [];
+  try { if (pc) pc.close(); } catch (e) {}
+  const el = VOICE.els[ch]; if (el) { el.srcObject = null; el.remove(); delete VOICE.els[ch]; }
+  delete VOICE.an[ch]; delete VOICE.speaking[ch];
+}
+// who is speaking right now? their mouth moves and little sound waves show
+function watchLevel(ch, stream) {
+  const a = audio(); if (!a) return;
+  try { const src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 512; src.connect(an); VOICE.an[ch] = an; } catch (e) {}
+}
+function voiceLevels() {
+  for (const ch in VOICE.an) {
+    const an = VOICE.an[ch];
+    if (!VOICE.buf || VOICE.buf.length !== an.fftSize) VOICE.buf = new Float32Array(an.fftSize);
+    try { an.getFloatTimeDomainData(VOICE.buf); } catch (e) { continue; }
+    let sum = 0; for (let i = 0; i < VOICE.buf.length; i += 4) sum += VOICE.buf[i] * VOICE.buf[i];
+    if (Math.sqrt(sum / (VOICE.buf.length / 4)) > 0.025) VOICE.hold[ch] = G.t + 0.25;
+    VOICE.speaking[ch] = (VOICE.hold[ch] || 0) > G.t;
+  }
+}
+function mouthMoving(ch) { return talking(ch) || (!!VOICE.speaking[ch] && (G.t * 9 | 0) % 2 === 0); }
+function updateMicBtn() {
+  const b = $('micBtn'); if (!b) return;
+  const inBerlin = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
+  const show = inBerlin && (VOICE.on || Object.keys(G.others).length > 0);
+  b.style.visibility = show ? 'visible' : 'hidden';
+  b.textContent = VOICE.on ? '🎙 AAN' : '🎙 PRATEN';
+  b.classList.toggle('live', VOICE.on);
+}
+
 // iPhones only let a sound element play after it was started from a tap,
 // so on the first taps both players are started silently once
 let primed = false;
@@ -1226,9 +1413,10 @@ function press(k) {
   if (G.scene === 'login') return;
   if (dialogOpen()) return dialogKey(k);
   if (k === 'hug' || k === 'heart' || k === 'joke') return emote(k);
+  if (k === 'mic') { if ($('micBtn').style.visibility === 'visible') VOICE.on ? voiceStop() : voiceStart(); return; }
   if (G.scene === 'travel') { if (k === 'a' || k === 'b') nextTravel(); return; }
   if (G.scene === 'base' && G.base.back && (k === 'a' || k === 'up') && Math.abs(G.p.x - G.base.H.door) < 10) return endGame();
-  if (G.scene === 'base' && k === 'a' && G.me === 'VITO' && G.p.x > G.base.H.W - 30) return startTravel('VITO');
+  if (G.scene === 'base' && k === 'a' && G.me === 'VITO' && G.base.inside && G.p.x > G.base.H.gate + 10) return startTravel('VITO');
   if (G.scene === 'street' && !G.arrival) {
     if (k === 'a' && G.ride) return parkScooter();
     if (k === 'a' && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) return rideScooter();
@@ -1240,7 +1428,7 @@ function press(k) {
       if (k === 'b' || k === 'left' || k === 'right' || k === 'up' || k === 'down') { standUp(); return; }
       if (k === 'a') {
         if (o && o.ph === 'wait' && snow() >= o.t + 3800) openMenu();
-        else if (o && o.ph === 'cook' && snow() >= o.t + 10500 && (o.bites || 0) < 5) { send({ t: 'eat' }); if (!NET.ok) o.bites = (o.bites || 0) + 1; SFX.eat(); }
+        else if (o && o.ph === 'cook' && snow() >= o.t + 10500 && (o.bites || 0) < 5) { send({ t: 'eat' }); if (!NET.ok) o.bites = (o.bites || 0) + 1; SFX.eat(); enjoy(G.me, (o.bites || 0) + 1); }
         else if (o && o.ph === 'cook' && (o.bites || 0) >= 5) { send({ t: 'more' }); if (!NET.ok) G.order = { ph: 'wait', t: snow() }; }
       }
       return;
@@ -1266,7 +1454,7 @@ function standUp() {
   if (s) { G.p.x = s.x + (s.face === 0 ? -10 : 10); if (insideBlocked(G.p.x, G.p.y)) G.p.y += 14; }
   sendState(true);
 }
-const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke' };
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke', KeyM: 'mic' };
 addEventListener('keydown', e => {
   if (G.scene === 'login') {
     unlock();
@@ -1293,12 +1481,13 @@ view.addEventListener('pointerdown', e => {
   unlock();
   if (G.scene !== 'inside' || dialogOpen()) return;
   const r = view.getBoundingClientRect();
-  const wx = (e.clientX - r.left) / SCALE + G.camX, wy = (e.clientY - r.top) / SCALE + G.camY;
+  const wx = (e.clientX - r.left) / SCALE / G.zoom + G.camX, wy = (e.clientY - r.top) / SCALE / G.zoom + G.camY;
   if (nearRadio() && Math.hypot(wx - IN.radio.x, wy - IN.radio.y) < 16) return cycleRadio();
   const taken = seatTakenMap();
   const s = IN.seats.findIndex((st, i) => !taken[i] && Math.hypot(st.x - wx, st.y - wy) < 9);
   if (s >= 0 && G.p.seat < 0 && Math.hypot(IN.seats[s].x - G.p.x, IN.seats[s].y - G.p.y) < 40) sitDown(s);
 });
+$('micBtn').addEventListener('click', () => { VOICE.on ? voiceStop() : voiceStart(); });
 $('dosBtn').addEventListener('click', () => {
   unlock();
   showDialog({
@@ -1352,7 +1541,7 @@ function drawOverlay() {
       c.fillText(H.sign, S2(G.base.signX + G.base.signW / 2), S2(G.base.signY + G.base.signH * 0.72 + oy));
       c.textAlign = 'left';
     }
-    if (G.p.x > H.W - 70 && !dialogOpen()) hint(G.me === 'VITO' ? 'Іди далі ► до аеропорту' : 'Іди далі ► до Берліна');
+    if (G.base.inside && G.p.x > H.gate - 70 && G.p.x < H.gate + 20 && !dialogOpen() && !G.prompt) hint(G.me === 'VITO' ? 'Через ворота ► до аеропорту' : 'Через ворота ► до Берліна');
   }
   if (G.scene === 'travel') {
     const st = G.travel.steps[G.travel.i];
@@ -1371,17 +1560,19 @@ function drawOverlay() {
     for (const ch of presentChars()) {
       const p = posOf(ch); if (!p) continue;
       if ((G.scene === 'inside') !== (p.scene === 'inside')) continue;
-      const sx = p.x - G.camX, sy = p.y - (G.scene === 'inside' ? G.camY : -oy);
+      const Z = G.scene === 'inside' ? G.zoom : 1;
+      const sx = (p.x - G.camX) * Z, sy = G.scene === 'inside' ? (p.y - G.camY) * Z : p.y + oy;
       if (ch !== G.me && G.others[ch] && arrivingFor(G.others[ch]) && G.scene === 'street') {
         const o = G.others[ch], t0 = (o.arriveAt - snow()) / 1000 + G.t;
         if (!arrivalState(o.arrive, t0, G.t).show) continue;
       }
       if (ch === G.me && G.arrival && !arrivalState(G.arrival.kind, G.arrival.t0, G.t).show) continue;
-      let top = G.scene === 'inside' ? sy - 10 : sy - 40;
+      let top = G.scene === 'inside' ? sy - 10 * Z : sy - 40;
       // friends standing close together: stack the names instead of overlapping them
       while (placed.some(([px, py]) => Math.abs(px - sx) < 30 && Math.abs(py - top) < 6)) top -= 7;
       placed.push([sx, top]);
       nameTag(ch, sx, top);
+      if (VOICE.speaking[ch]) waves(c, S2(sx) + c.measureText(ch).width / 2 + 3 * k, S2(top) - 2 * k, k);
     }
   }
   if (G.scene === 'base') nameTag(G.me, G.p.x - G.camX, G.p.y - 40 + oy);
@@ -1390,7 +1581,8 @@ function drawOverlay() {
     const el = G.t - h.t0; if (el < 0) continue;
     const kk = Math.min(1, el / 0.9);
     const hy = G.scene === 'inside' ? G.camY : -oy;
-    const x = h.x + (h.tx - h.x) * kk - G.camX, y = h.y + (h.ty - h.y) * kk - Math.sin(kk * Math.PI) * 18 - hy;
+    const Zh = G.scene === 'inside' ? G.zoom : 1;
+    const x = (h.x + (h.tx - h.x) * kk - G.camX) * Zh, y = (h.y + (h.ty - h.y) * kk - Math.sin(kk * Math.PI) * 18 - hy) * Zh;
     c.globalAlpha = Math.max(0, 1 - Math.max(0, el - 1.1) * 2);
     heart(c, S2(x), S2(y), k * (h.small ? 0.8 : 1.15));
     c.globalAlpha = 1;
@@ -1452,6 +1644,15 @@ function hint(txt, row, info) {
   roundRect(c, x, y, w, h, 3 * k); c.lineWidth = k * 0.8; c.strokeStyle = info ? '#cf3a2a' : INKC; c.stroke();
   c.fillStyle = INKC; c.textAlign = 'left'; c.fillText(txt, x + 6 * k, y + 6 * k + fs * 0.36);
 }
+function waves(c, x, y, k) {
+  c.save(); c.strokeStyle = '#fbf4e2'; c.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const a = 0.4 + 0.6 * Math.abs(Math.sin(G.t * 8 - i * 0.9));
+    c.globalAlpha = a; c.lineWidth = k * 0.9;
+    c.beginPath(); c.arc(x, y, (2 + i * 2.2) * k, -0.7, 0.7); c.stroke();
+  }
+  c.restore();
+}
 function nameTag(ch, x, y) {
   const c = vctx, k = SCALE * DPR;
   c.font = '800 ' + (5.6 * k) + 'px ' + FONT; c.textAlign = 'center'; c.lineJoin = 'round';
@@ -1486,6 +1687,7 @@ function frame(now) {
   else if (G.scene === 'end') updateEnd(dt);
   radioMix();
   voiceUpdate();
+  voiceLevels();
   // draw
   const k = SCALE * DPR;
   vctx.setTransform(k, 0, 0, k, 0, 0);
@@ -1499,7 +1701,7 @@ function frame(now) {
   vctx.setTransform(1, 0, 0, 1, 0, 0);
   if (G.scene !== 'login') A.paper(vctx, view.width, view.height);
   drawOverlay();
-  if (now - lastClock > 250) { updateClock(); lastClock = now; }
+  if (now - lastClock > 250) { updateClock(); updateMicBtn(); lastClock = now; }
   requestAnimationFrame(frame);
 }
 
@@ -1520,5 +1722,5 @@ if (q.get('as') && whoIs(q.get('as'))) {
   setTimeout(() => { startBase(who); if (q.get('skip')) { startTravel(who); G.travel.i = G.travel.steps.length - 1; nextTravel(); } }, 50);
 }
 window.__tusa = G;
-window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, startTravel, STATIONS: () => STATIONS };
+window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, startTravel, STATIONS: () => STATIONS, VOICE };
 })();

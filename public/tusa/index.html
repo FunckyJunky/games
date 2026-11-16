@@ -39,6 +39,8 @@
     box-shadow: 0 2px 0 var(--ink);
   }
   .hspace { width: 64px; flex: none; }  /* keeps the clock in the middle */
+  .hbtn.live { background: #cf3a2a; color: #fbf4e2; animation: live 1.2s ease-in-out infinite; }
+  @keyframes live { 50% { box-shadow: 0 2px 0 var(--ink), 0 0 0 4px rgba(207,58,42,.35); } }
   .hbtn:active { transform: translateY(2px); box-shadow: none; background: #ffe7a8; }
   #clock {
     font-family: var(--round); font-weight: 900; font-size: 23px; color: var(--paper); letter-spacing: 1px;
@@ -124,7 +126,7 @@
   <div id="hud">
     <button class="hbtn" id="dosBtn">◄ DOS</button>
     <div id="clock">HOONGY</div>
-    <div class="hspace" aria-hidden="true"></div>
+    <button class="hbtn" id="micBtn" style="visibility:hidden">🎙 PRATEN</button>
   </div>
   <div id="stage">
     <canvas id="view"></canvas>
@@ -149,7 +151,7 @@
       <div class="pb B" data-k="b">B</div>
     </div>
   </div>
-  <div id="keys">Pijltjes / WASD: lopen · ENTER: A · ESC: B · H: knuffel · L: hart · J: grap</div>
+  <div id="keys">Pijltjes / WASD: lopen · ENTER: A · ESC: B · H: knuffel · L: hart · J: grap · M: praten</div>
 
   <script>
     // no zooming in by double-tapping or pinching, like a real app
