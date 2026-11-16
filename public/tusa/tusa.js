@@ -346,26 +346,30 @@ addEventListener('resize', () => { DM.cols = 0; LOGO.w = 0; });
 // round and glitching now and then
 // =====================================================================
 const logoCv = $('dosLogo'), logoCtx = logoCv.getContext('2d');
-const LOGO = { w: 0, h: 0, face: null, side: null, back: null, glitch: 0, next: 2, t: 0, last: 0 };
+const LOGO = { w: 0, h: 0, sets: null, glitch: 0, next: 2, t: 0, last: 0, mode: 'dos', hold: 0, to: '' };
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { LOGO.w = 0; });   // redo the letters once the pixel font is in
 function logoLayout() {
   const r = logoCv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
   if (!r.width) return;
   const w = logoCv.width = Math.round(r.width * dpr), h = logoCv.height = Math.round(r.height * dpr);
   LOGO.w = w; LOGO.h = h;
-  // the letters once, then a copy in each colour: front, sides, far back
-  const mask = document.createElement('canvas'); mask.width = w; mask.height = h;
-  const m = mask.getContext('2d');
-  m.fillStyle = '#fff'; m.textAlign = 'center'; m.textBaseline = 'alphabetic';
-  const fit = (txt, size, y) => {
-    m.font = '700 ' + size + 'px "Pixelify Sans", "VT323", monospace';
-    const tw = m.measureText(txt).width, k = Math.min(1, w * 0.84 / tw);
-    m.save(); m.translate(w / 2, y); m.scale(k, 1); m.fillText(txt, 0, 0); m.restore();
+  // the letters once, then a copy in each colour: front, sides, far back.
+  // two logos: ERROR DOS, and the one it sometimes glitches into, ERROR.BLUE
+  const build = second => {
+    const mask = document.createElement('canvas'); mask.width = w; mask.height = h;
+    const m = mask.getContext('2d');
+    m.fillStyle = '#fff'; m.textAlign = 'center'; m.textBaseline = 'alphabetic';
+    const fit = (txt, size, y) => {
+      m.font = '700 ' + size + 'px "Pixelify Sans", "VT323", monospace';
+      const tw = m.measureText(txt).width, k = Math.min(1, w * 0.84 / tw);
+      m.save(); m.translate(w / 2, y); m.scale(k, 1); m.fillText(txt, 0, 0); m.restore();
+    };
+    fit('ERROR', h * 0.4, h * 0.44);
+    fit(second, h * 0.5, h * 0.88);
+    const tint = col => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(mask, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, w, h); return c; };
+    return { face: tint('#7dffa8'), side: tint('#1d9a48'), back: tint('#0a3d1c') };
   };
-  fit('ERROR', h * 0.4, h * 0.44);
-  fit('DOS', h * 0.5, h * 0.88);
-  const tint = col => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(mask, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, w, h); return c; };
-  LOGO.face = tint('#7dffa8'); LOGO.side = tint('#1d9a48'); LOGO.back = tint('#0a3d1c');
+  LOGO.sets = { dos: build('DOS'), blue: build('.BLUE') };
 }
 function logoDraw(now) {
   if (!LOGO.w) { logoLayout(); if (!LOGO.w) return; }
@@ -374,10 +378,19 @@ function logoDraw(now) {
   // phosphor afterglow: fade the last picture instead of wiping it
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
   c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(0, 0, w, h);
-  // now and then a glitch burst
+  // now and then a glitch burst; some of them flip the logo to ERROR.BLUE for a moment, and back
   LOGO.next -= dt;
-  if (LOGO.next <= 0) { LOGO.glitch = 0.18 + Math.random() * 0.3; LOGO.next = 1.6 + Math.random() * 3.2; }
+  if (LOGO.mode === 'blue') {
+    LOGO.hold -= dt;
+    if (LOGO.hold <= 0 && !LOGO.to) { LOGO.glitch = 0.35; LOGO.to = 'dos'; LOGO.next = 1.6 + Math.random() * 3.2; }
+  } else if (LOGO.next <= 0) {
+    LOGO.glitch = 0.18 + Math.random() * 0.3; LOGO.next = 1.6 + Math.random() * 3.2;
+    if (Math.random() < 0.3) { LOGO.glitch = 0.35; LOGO.to = 'blue'; }
+  }
   const gl = LOGO.glitch > 0; if (gl) LOGO.glitch -= dt;
+  if (!gl && LOGO.to) { LOGO.mode = LOGO.to; LOGO.to = ''; if (LOGO.mode === 'blue') LOGO.hold = 1.4 + Math.random() * 1.4; }
+  // while it switches, it flickers between the two
+  const set = LOGO.sets[gl && LOGO.to && Math.random() < 0.5 ? LOGO.to : LOGO.mode];
   // turn round the upright axis and nod a little
   const yaw = Math.sin(t * 1.15) * 0.62 + (gl ? (Math.random() - 0.5) * 0.5 : 0), pitch = Math.sin(t * 0.8) * 0.3;
   const sx = Math.max(0.25, Math.cos(yaw)), depth = Math.round(h * 0.11);
@@ -385,10 +398,10 @@ function logoDraw(now) {
   const at = (img, k) => {
     c.save(); c.translate(w / 2 + ex * k, ey * k); c.scale(sx, 1); c.drawImage(img, -w / 2, 0); c.restore();
   };
-  for (let k = depth; k >= 1; k--) at(k > depth * 0.55 ? LOGO.back : LOGO.side, k);
+  for (let k = depth; k >= 1; k--) at(k > depth * 0.55 ? set.back : set.side, k);
   c.shadowColor = '#39ff7a'; c.shadowBlur = h * 0.08;
   c.globalAlpha = gl && Math.random() < 0.3 ? 0.35 : 1;
-  at(LOGO.face, 0);
+  at(set.face, 0);
   c.shadowBlur = 0; c.globalAlpha = 1;
   if (gl) {
     // tearing: strips of the picture slide sideways, and a green bar flashes
@@ -1997,5 +2010,5 @@ if (q.get('as') && whoIs(q.get('as'))) {
   setTimeout(() => { startBase(who); if (q.get('skip')) { startTravel(who); G.travel.i = G.travel.steps.length - 1; nextTravel(); } }, 50);
 }
 window.__tusa = G;
-window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, startTravel, STATIONS: () => STATIONS, VOICE };
+window.__tusaDbg = { LOGO, NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, startTravel, STATIONS: () => STATIONS, VOICE };
 })();
