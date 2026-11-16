@@ -13,6 +13,8 @@
 //   GET  /api/vgadai/live                      Вгадай що?!: episodes on air
 //   GET  /api/vgadai/<SSEE>/info               Вгадай що?!: one episode's leaderboard (for the lobby)
 //   POST /api/vgadai/look {name, new}          Вгадай що?!: a player's random look
+//   GET  /api/vgadai/episodes                  Вгадай що?!: all episodes (for erasing)
+//   POST /api/vgadai/erase {what, code|season} Вгадай що?!: erase an episode, a season, the players or all
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -1181,6 +1183,39 @@ async function handleVgadai(request, env, url) {
       ORDER BY updated DESC LIMIT 12`).bind(Date.now() - 6 * 3600 * 1000).all();
     return json({ live: live.results.map((r) => ({ code: r.code, n: r.n, players: JSON.parse(r.players) })) });
   }
+  if (url.pathname === "/api/vgadai/episodes") {
+    // every episode there is (for the erase menu)
+    const all = await db.prepare(`SELECT code, players, n, updated FROM vgadai_rooms ORDER BY code`).all();
+    return json({ episodes: all.results.map((r) => ({ code: r.code, n: r.n, players: JSON.parse(r.players), updated: r.updated })) });
+  }
+  if (url.pathname === "/api/vgadai/erase") {
+    // { what: "episode", code } | { what: "season", season } | { what: "players" } | { what: "all" }
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "send JSON" }, 400); }
+    const what = String(body.what || "");
+    const codes = (await db.prepare(`SELECT code FROM vgadai_rooms`).all()).results.map((r) => r.code);
+    let list, mode = "all";
+    if (what === "all") list = codes;
+    else if (what === "players") { list = codes; mode = "players"; }
+    else if (what === "episode") {
+      const code = String(body.code || "");
+      if (!VG_CODE.test(code)) return json({ error: "season and episode are 01-99" }, 400);
+      list = [code];
+    } else if (what === "season") {
+      const ss = String(body.season || "").padStart(2, "0");
+      if (!/^(0[1-9]|[1-9]\d)$/.test(ss)) return json({ error: "season is 01-99" }, 400);
+      list = codes.filter((c) => c.startsWith(ss));
+    } else return json({ error: "erase what?" }, 400);
+    await Promise.all(list.map((c) => env.VGADAI.get(env.VGADAI.idFromName("ep:" + c))
+      .fetch(new Request("https://vgadai/api/vgadai/" + c + "/erase?what=" + mode, { method: "POST" }))));
+    if (mode === "all") {
+      if (what === "all") await db.prepare(`DELETE FROM vgadai_rooms`).run();
+      else for (const c of list) await db.prepare(`DELETE FROM vgadai_rooms WHERE code = ?`).bind(c).run();
+    }
+    if (what === "all" || what === "players") await db.prepare(`DELETE FROM vgadai_players`).run();
+    return json({ ok: true, episodes: list.length });
+  }
   if (url.pathname === "/api/vgadai/look") {
     // your look: { name } → { seed }; with new: true a fresh random look
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
@@ -1324,6 +1359,29 @@ export class VgadaiRoom extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname.endsWith("/erase") && request.method === "POST") {
+      const what = url.searchParams.get("what") === "players" ? "players" : "all";
+      // everyone in it goes back to the lobby
+      for (const ws of this.live()) {
+        this.send(ws, { type: "erased", what });
+        ws.serializeAttachment({ gone: true });
+        try { ws.close(4003, "erased"); } catch { /* closed */ }
+      }
+      await this.ctx.storage.deleteAlarm();
+      this.subs = {};
+      if (what === "all") {
+        await this.ctx.storage.deleteAll();
+        this.s = vgFresh();
+      } else {
+        // only the players: the leaderboard, the looks and who sits where; the questions stay
+        const s = this.s;
+        s.seats = []; s.scores = {}; s.asked = {}; s.looks = {}; s.lock = {};
+        this.newRound(""); s.last = "";
+        await this.ctx.storage.put("s", s);
+        await this.ctx.storage.put("subs", this.subs);
+      }
+      return json({ ok: true });
+    }
     if (url.pathname.endsWith("/info")) {
       const s = this.s;
       return json({ exists: !!s.created, created: s.created, online: this.online(), scores: s.scores, asked: s.asked, looks: s.looks, rounds: s.round || 0 });

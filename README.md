@@ -181,6 +181,11 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   standing in it as paper cut-outs, and a handheld camera that sways and follows the action
 - server: the `VgadaiRoom` Durable Object, one per episode (`/api/vgadai/<SSEE>`);
   `/api/vgadai/<SSEE>/info`, `/api/vgadai/live`, `/api/vgadai/look`
+- ⚙ → 🛠 Розширені erases: one episode or a whole season (history and leaderboard; the code
+  is free again), only the players (looks and every leaderboard; the questions stay), or
+  everything. Each needs a 1.6 s press and hold. Anyone can do it: there is no password.
+  `/api/vgadai/erase` asks each episode's Durable Object to erase itself (`/<SSEE>/erase`);
+  the list of episodes is the D1 table `vgadai_rooms`
 - installable on its own: `vgadai/manifest.webmanifest` (full screen, no zoom)
 - on a computer F switches full screen (when you aren't typing a name, question or answer;
   then F is a letter), and so does the small ⛶ F button (bottom left of the studio and the

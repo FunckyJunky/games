@@ -200,6 +200,21 @@ function dialog(html, acts) {
     d.classList.remove('show'); MENU = false;
     if (f && f() === 'keep') d.classList.add('show');
   };
+  // press and hold (1.6 s) to confirm something that can't be undone
+  d.querySelectorAll('[data-hold]').forEach(b => {
+    let t0 = 0, raf = 0;
+    const stop = () => { t0 = 0; cancelAnimationFrame(raf); b.style.setProperty('--p', '0%'); };
+    const step = () => {
+      if (!t0) return;
+      const k = Math.min(1, (performance.now() - t0) / 1600);
+      b.style.setProperty('--p', (k * 100).toFixed(1) + '%');
+      if (k < 1) { if ((k * 20 | 0) !== ((k - 0.02) * 20 | 0)) SFX.tick(); raf = requestAnimationFrame(step); return; }
+      stop(); SFX.wrong(); d.classList.remove('show'); MENU = false;
+      const f = acts && acts[b.dataset.hold]; if (f) f();
+    };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); t0 = performance.now(); raf = requestAnimationFrame(step); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+  });
 }
 const dlgOpen = () => $('dlg').classList.contains('show');
 const closeDialog = () => { $('dlg').classList.remove('show'); MENU = false; };
@@ -526,6 +541,11 @@ function onMsg(m) {
     }[m.why] || 'Не вийшло. Probeer het nog eens.';
     if (SCREEN === 'app') enterLobby(msg); else lobMsg(msg, true);
     SFX.nope();
+    return;
+  }
+  if (m.type === 'erased') {
+    NET.want = false;
+    enterLobby(m.what === 'players' ? '🧹 Гравців стерто. Зайди в епізод знову.' : '🧹 Цей епізод стерто.');
     return;
   }
   if (m.type === 'kicked') {
@@ -895,6 +915,7 @@ function openSettings(inStudio) {
     + '<button class="opt" data-a="sound"><span class="ico">🔊</span><span>Звук<small>кнопки, фанфари, оплески</small></span>' + sw(SET.sound) + '</button>'
     + (standalone ? '' : '<button class="opt" data-a="install"><span class="ico">📲</span><span>Встановити як додаток<small>на головний екран, на весь екран</small></span></button>')
     + (inStudio ? '<button class="opt" data-a="reset"><span class="ico">🔄</span><span>Нова гра в цьому епізоді<small>рейтинг ' + esc(epName(S.code)) + ' на нуль</small></span></button>' : '')
+    + '<button class="opt" data-a="adv"><span class="ico">🛠</span><span>Розширені<small>стерти епізод, сезон, гравців або все</small></span></button>'
     + '<button class="btn" data-a="close" style="margin-top:4px">ГОТОВО</button>', {
     push: () => { togglePush().then(() => openSettings(inStudio)); return 'keep'; },
     voice: () => { PREF.voice = !PREF.voice; savePref(); if (!PREF.voice) try { speechSynthesis.cancel(); } catch (e) {} else speakTest(); openSettings(inStudio); return 'keep'; },
@@ -904,7 +925,61 @@ function openSettings(inStudio) {
       const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       setTimeout(() => dialog('<h3>📲</h3><p>' + (ios ? 'Safari: tik op Deel ⎙ en kies "Zet op beginscherm".' : 'Open het browsermenu ⋮ en kies "App installeren" of "Toevoegen aan startscherm".') + '</p><button class="btn go" data-a="ok">OK</button>'), 50);
     },
+    adv: () => { setTimeout(() => openAdvanced(inStudio), 30); },
     reset: () => { setTimeout(() => dialog('<h3>Нова гра?</h3><p>Рейтинг і історія ' + esc(epName(S.code)) + ' стануть порожніми.</p><button class="btn no" data-a="yes">ТАК, ЗАНОВО</button> <button class="btn" data-a="no">НІ</button>', { yes: () => send({ t: 'reset' }) }), 50); },
+  });
+}
+// ---------- advanced: erasing ----------
+function openAdvanced(inStudio) {
+  const opt = (a, ico, label, sub) => '<button class="opt" data-a="' + a + '"><span class="ico">' + ico + '</span><span>' + label + '<small>' + sub + '</small></span></button>';
+  dialog('<h3>🛠 Розширені</h3><p>Стерти дані гри. Цього не можна скасувати.</p>'
+    + opt('ep', '🧹', 'Стерти епізод або сезон', 'історія питань і рейтинг; код знову вільний')
+    + opt('players', '👥', 'Стерти тільки гравців', 'вигляд гравців і рейтинги в усіх епізодах; питання лишаються')
+    + opt('all', '💣', 'Стерти все', 'усі епізоди, історії, рейтинги і гравців')
+    + '<button class="btn" data-a="back" style="margin-top:4px">◄ НАЗАД</button>', {
+    ep: () => { setTimeout(() => eraseEpisodes(S.code || codeOf()), 30); },
+    players: () => { setTimeout(() => eraseConfirm({ what: 'players' }, '👥 Стерти всіх гравців?', 'Вигляд гравців і рейтинги в усіх епізодах зникнуть. Питання й відповіді в історії лишаються. Хто зараз грає, повернеться в лобі.'), 30); },
+    all: () => { setTimeout(() => eraseConfirm({ what: 'all' }, '💣 Стерти все?', 'Усі епізоди всіх сезонів, їхні історії й рейтинги, і всі гравці. Хто зараз грає, повернеться в лобі.'), 30); },
+    back: () => { setTimeout(() => openSettings(inStudio), 30); },
+  });
+}
+// pick an episode (or a whole season) to erase; the episodes that exist are listed
+async function eraseEpisodes(code) {
+  let eps = [];
+  try { eps = (await (await fetch('/api/vgadai/episodes')).json()).episodes || []; } catch (e) {}
+  let ss = +code.slice(0, 2) || 1, ee = +code.slice(2) || 1;
+  const draw = () => {
+    const c = String(ss).padStart(2, '0') + String(ee).padStart(2, '0'), inSeason = eps.filter(x => x.code.startsWith(c.slice(0, 2)));
+    const exists = eps.some(x => x.code === c);
+    const chips = eps.length ? eps.map(x => '<button class="chipEp' + (x.code === c ? ' on' : '') + '" data-ep="' + x.code + '">' + esc(epName(x.code)) + (x.n ? ' 🔴' : '') + '</button>').join('') : '<span class="empty" style="padding:4px">Ще немає жодного епізоду.</span>';
+    dialog('<h3>🧹 Стерти епізод</h3>'
+      + '<div class="steps"><span>СЕЗОН</span><button class="hbtn" data-a="s-">◄</button><b>' + String(ss).padStart(2, '0') + '</b><button class="hbtn" data-a="s+">►</button></div>'
+      + '<div class="steps"><span>ЕПІЗОД</span><button class="hbtn" data-a="e-">◄</button><b>' + String(ee).padStart(2, '0') + '</b><button class="hbtn" data-a="e+">►</button></div>'
+      + '<div class="eps">' + chips + '</div>'
+      + '<button class="opt" data-a="one"' + (exists ? '' : ' disabled style="opacity:.45"') + '><span class="ico">🧹</span><span>Епізод ' + esc(epName(c)) + '<small>' + (exists ? 'історія, рейтинг, код ' + c + ' знову вільний' : 'такого епізоду немає') + '</small></span></button>'
+      + '<button class="opt" data-a="season"' + (inSeason.length ? '' : ' disabled style="opacity:.45"') + '><span class="ico">🗂</span><span>Весь сезон ' + ss + '<small>' + inSeason.length + ' епізод(ів)</small></span></button>'
+      + '<button class="btn" data-a="back" style="margin-top:4px">◄ НАЗАД</button>', {
+      's-': () => { ss = ss > 1 ? ss - 1 : 99; draw(); return 'keep'; }, 's+': () => { ss = ss < 99 ? ss + 1 : 1; draw(); return 'keep'; },
+      'e-': () => { ee = ee > 1 ? ee - 1 : 99; draw(); return 'keep'; }, 'e+': () => { ee = ee < 99 ? ee + 1 : 1; draw(); return 'keep'; },
+      one: () => { if (!exists) return 'keep'; setTimeout(() => eraseConfirm({ what: 'episode', code: c }, '🧹 Стерти ' + epName(c) + '?', 'Історія питань і рейтинг цього епізоду зникнуть, а код ' + c + ' знову вільний для нового епізоду.'), 30); },
+      season: () => { if (!inSeason.length) return 'keep'; setTimeout(() => eraseConfirm({ what: 'season', season: c.slice(0, 2) }, '🗂 Стерти сезон ' + ss + '?', 'Усі ' + inSeason.length + ' епізод(ів) сезону ' + ss + ': історії й рейтинги.'), 30); },
+      back: () => { setTimeout(() => openAdvanced(SCREEN === 'app'), 30); },
+    });
+    $('dlg').querySelectorAll('[data-ep]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); SFX.tick(); ss = +b.dataset.ep.slice(0, 2); ee = +b.dataset.ep.slice(2); draw(); }));
+  };
+  draw();
+}
+function eraseConfirm(body, title, text) {
+  dialog('<h3>' + esc(title) + '</h3><p>' + esc(text) + '</p>'
+    + '<button class="btn no hold" data-hold="go">✋ ТРИМАЙ, ЩОБ СТЕРТИ</button><br><button class="btn" data-a="no" style="margin-top:10px">НІ</button>', {
+    go: async () => {
+      try {
+        const r = await (await fetch('/api/vgadai/erase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+        toast(r.ok ? '🧹 Стерто' + (r.episodes ? ': епізодів ' + r.episodes : '') : 'Не вийшло');
+        if (body.what === 'all' || body.what === 'players') { for (const k in SEEDS) delete SEEDS[k]; S.seed = 0; }
+        if (SCREEN === 'lobby') { peek(); loadLive(); if (!HOONGY[S.me] && (body.what === 'all' || body.what === 'players')) enterLobby(); }
+      } catch (e) { toast('Geen verbinding'); }
+    },
   });
 }
 function speakTest() {
