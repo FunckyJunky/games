@@ -27,6 +27,7 @@
     room.sendTo(playerId, { hi: 1 });   // to one player
     room.close();
     GameLab.newRoomCode()  -> e.g. "K7QD"
+    await GameLab.whoIsIn('my-game', 'ABCD')  -> { players: [{ name, joinedAt }], max: 16 }  (without joining)
 
   MUSIC (starts after the first tap/click, as browsers require)
     const music = GameLab.music('music.mp3', { volume: 0.5 });
@@ -90,6 +91,10 @@
       const bytes = new Uint8Array(4);
       crypto.getRandomValues(bytes);
       return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+    },
+
+    async whoIsIn(game, code) {
+      return api('/api/room/' + encodeURIComponent(game) + '/' + encodeURIComponent(String(code).toUpperCase()) + '/who');
     },
 
     joinRoom(game, code, handlers) {

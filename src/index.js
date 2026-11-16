@@ -6,6 +6,7 @@
 //   GET  /api/save/<game>/<playerId>           load a player's saved progress
 //   PUT  /api/save/<game>/<playerId>           save a player's progress (JSON body)
 //   GET  /api/room/<game>/<CODE>               multiplayer room (WebSocket)
+//   GET  /api/room/<game>/<CODE>/who           who is in that room now, without joining
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
 //   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
 //   GET  /api/tusa?char=VITO                   Туса У Берліні: the shared Hoongy (WebSocket)
@@ -154,7 +155,7 @@ async function handleSave(request, env, game, player) {
 // ---------------------------------------------------------------------------
 const LOCKED = { "leviathan-voyage": "lv_key" };
 // games that live at their own short address instead of /games/<id>/
-const SHORT_PATHS = { "leviathan-voyage": "/voyage" };
+const SHORT_PATHS = { "leviathan-voyage": "/voyage", studio3d: "/music3d" };
 // added to every game page: app mode, no zoom on double-tap or pinch
 const NO_ZOOM_HEAD = '<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">' +
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
@@ -420,6 +421,14 @@ export default {
         return await handleSave(request, env, game, player);
       }
 
+      m = path.match(/^\/api\/room\/([^/]+)\/([^/]+)\/who$/);
+      if (m) {
+        const [, game, code] = m;
+        if (!GAME_RE.test(game) || !ROOM_RE.test(code)) return json({ error: "bad game or room code" }, 400);
+        const room = env.ROOMS.get(env.ROOMS.idFromName(`${game}:${code.toUpperCase()}`));
+        return room.fetch(new Request("https://room/who"));
+      }
+
       m = path.match(/^\/api\/room\/([^/]+)\/([^/]+)$/);
       if (m) {
         const [, game, code] = m;
@@ -527,6 +536,9 @@ export class GameRoom extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === "/who") {
+      return json({ players: this.players().filter((p) => !p.left).map((p) => ({ name: p.name, joinedAt: p.joinedAt })), max: MAX_PLAYERS_PER_ROOM });
+    }
     const name = cleanName(url.searchParams.get("name")) || "Player";
 
     const pair = new WebSocketPair();

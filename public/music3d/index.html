@@ -64,7 +64,8 @@ body.locked #cv { cursor: none; }
 #jam { margin-top: .8em; display: grid; gap: 8px; justify-items: center; }
 #jam label { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: max(18px, calc(var(--scr) * .042)); }
 #jam input { font: inherit; font-size: max(20px, calc(var(--scr) * .05)); width: 7.5em; background: #0d0a18; color: var(--ink); border: 1px solid var(--rim); border-radius: 6px; padding: 2px 8px; text-transform: uppercase; }
-#jam input#jam-code { width: 4.2em; letter-spacing: 3px; text-align: center; }
+#jam-who, #jam-now { margin: 0; color: var(--green); font-size: max(18px, calc(var(--scr) * .042)); text-shadow: 0 0 6px rgba(57,255,122,.45); }
+#jam-now { margin-top: .5em; min-height: 1.2em; }
 #jam .link { background: none; border: 0; color: var(--dim); text-decoration: underline; cursor: pointer; font-size: 18px; }
 #jam .err { color: #ff8080; margin: 0; min-height: 1em; font-size: 18px; }
 #roombar { display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 34px; border: 1px solid #1b7a3c; border-radius: 8px; color: var(--green); background: rgba(3,18,8,.6); white-space: nowrap; font-size: 20px; }
@@ -136,12 +137,12 @@ body.touch .deck { display: flex; touch-action: none; }
   <div class="top">
     <a class="back" href="/" id="back">&lt; ERROR-DOS</a>
     <div class="title">STUDIO 3D<small>a music studio to walk around in</small></div>
-    <div id="roombar" hidden title="Online room">
-      <span class="dot"></span><span class="lbl">ROOM</span><b id="rb-code"></b><span id="rb-n"></span>
-      <button id="rb-invite" title="Invite: share the link">INVITE</button><button id="rb-leave" title="Leave the room">&#x2715;</button>
+    <div id="roombar" hidden title="Online: who is in the studio">
+      <span class="dot"></span><b id="rb-code">ONLINE</b><span id="rb-n"></span>
+      <button id="rb-invite" title="Invite: share the link">INVITE</button><button id="rb-leave" title="Leave: back to your own song">&#x2715;</button>
     </div>
     <div id="roompop" hidden>
-      <div class="rp-head">ROOM <b id="rp-code"></b></div>
+      <div class="rp-head">IN THE STUDIO</div>
       <ul id="rp-list"></ul>
       <div class="rp-btns"><button class="big" id="rp-invite">INVITE</button><button class="big pink" id="rp-leave">LEAVE</button></div>
       <p>&#9835; holds the song: a newcomer gets it from them.</p>
@@ -167,12 +168,12 @@ body.touch .deck { display: flex; touch-action: none; }
             <button class="big" id="go-solo">PLAY ALONE</button>
             <button class="big pink" id="go-jam">JAM ONLINE</button>
           </div>
+          <p id="jam-now" hidden></p>
           <div id="jam" hidden>
+            <p id="jam-who">&nbsp;</p>
             <label>NAME <input id="jam-name" maxlength="12" autocomplete="nickname" spellcheck="false"></label>
-            <label>ROOM <input id="jam-code" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE"></label>
             <div class="choose" style="margin-top:0">
-              <button class="big pink" id="jam-join">JOIN</button>
-              <button class="big" id="jam-new">NEW ROOM</button>
+              <button class="big pink" id="jam-join">GO IN</button>
             </div>
             <p class="err" id="jam-err"></p>
             <button class="link" id="jam-back">play alone instead</button>
@@ -323,8 +324,8 @@ body.touch .deck { display: flex; touch-action: none; }
       ex.web_start();
       $('start-go').hidden = true;
       $('start-hint').textContent = touchFirst ? 'stick walks, drag looks, tap a control, then A or Y' : 'the mouse looks around; click to use what the dot is on';
-      const q = new URLSearchParams(location.search).get('room');
-      if (q) showJam(q); else $('choose').hidden = false;
+      const q = new URLSearchParams(location.search);
+      if (q.has('jam') || q.has('room')) showJam(); else { $('choose').hidden = false; peek(); }
       requestAnimationFrame(frame);
     } catch (e) {
       console.error(e);
@@ -381,27 +382,43 @@ body.touch .deck { display: flex; touch-action: none; }
   function onButton(id, fn) { $(id).addEventListener('click', (e) => { e.preventDefault(); fn(e); }); }
   $('start').addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') setMode(2); });
   onButton('go-solo', () => enter());
-  onButton('go-jam', () => showJam(''));
-  onButton('jam-back', () => { $('jam').hidden = true; $('choose').hidden = false; });
-  onButton('jam-new', () => { $('jam-code').value = GameLab.newRoomCode(); goOnline(); });
+  onButton('go-jam', () => showJam());
+  onButton('jam-back', () => { $('jam').hidden = true; $('choose').hidden = false; peek(); });
   onButton('jam-join', () => goOnline());
-  $('jam-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); goOnline(); } });
-  $('jam-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('jam-code').focus(); } });
-  function showJam(code) {
-    $('choose').hidden = true; $('jam').hidden = false;
+  $('jam-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); goOnline(); } });
+  function showJam() {
+    $('choose').hidden = true; $('jam-now').hidden = true; $('jam').hidden = false;
     $('jam-name').value = (GameLab.playerName() || '').toUpperCase();
-    $('jam-code').value = (code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-    setTimeout(() => ($('jam-name').value ? $('jam-code') : $('jam-name')).focus({ preventScroll: true }), 30);
+    setTimeout(() => ($('jam-name').value ? $('jam-join') : $('jam-name')).focus({ preventScroll: true }), 30);
+    peek();
   }
   function goOnline() {
-    const name = $('jam-name').value.trim().slice(0, 12), code = $('jam-code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const name = $('jam-name').value.trim().slice(0, 12);
     if (!name) { $('jam-err').textContent = 'type a name first'; $('jam-name').focus(); return; }
-    if (code.length !== 4) { $('jam-err').textContent = 'a room code has 4 letters (or press NEW ROOM)'; $('jam-code').focus(); return; }
+    if (studioFull) { $('jam-err').textContent = 'the studio is full (16): try again in a moment'; peek(); return; }
     $('jam-err').textContent = '';
     if (document.activeElement) document.activeElement.blur();
     GameLab.setPlayerName(name);
-    netJoin(code);
+    netJoin();
     enter();
+  }
+  /* who is in the studio right now (asked again every few seconds while the start screen is up) */
+  let studioFull = false, peekTimer = null;
+  async function peek() {
+    clearTimeout(peekTimer);
+    if (started) return;
+    let w = null;
+    try { const r = await fetch('/api/room/studio3d/' + ROOM + '/who', { cache: 'no-store' }); if (r.ok) w = await r.json(); } catch (e) {}
+    if (started) return;
+    peekTimer = setTimeout(peek, 6000);
+    if (!w || !Array.isArray(w.players)) { $('jam-now').hidden = true; $('jam-who').textContent = 'one studio for everyone online'; return; }
+    const names = w.players.map(p => ascii(p.name)), n = names.length;
+    studioFull = n >= (w.max || 16);
+    const list = n <= 4 ? names.join(', ') : names.slice(0, 3).join(', ') + ' and ' + (n - 3) + ' more';
+    $('jam-who').textContent = studioFull ? 'the studio is full (' + n + '): try again in a moment'
+      : n ? 'in the studio now: ' + list : 'nobody in the studio now: you open it';
+    $('jam-now').textContent = n ? (n === 1 ? names[0] + ' is jamming online now' : n + ' are jamming online now: ' + list) : '';
+    $('jam-now').hidden = !n || $('choose').hidden;
   }
 
   /* ---- desktop: the mouse looks around (pointer lock) ---------------------------------- */
@@ -609,7 +626,8 @@ body.touch .deck { display: flex; touch-action: none; }
    * (so everyone ends up the same, even if two people turned the same knob at once).
    * Notes and drum hits played by hand are sent as they happen; each player's spot, view
    * and the control under their dot ten times a second. */
-  const NET = { want: false, room: null, code: '', me: null, slots: new Map(), peers: new Map(), local: new Map(),
+  const ROOM = 'STUDIO';                          /* one studio for everyone */
+  const NET = { want: false, room: null, code: ROOM, me: null, slots: new Map(), peers: new Map(), local: new Map(),
                 poseT: 0, clkT: 0, syncT: 0, jamT: 0, pingT: 0, lat: 40, rtts: [], latOf: new Map(), errs: [], retry: 0, lastPose: '', host: null, timer: null };
   const enc = new TextEncoder();
   const TRANS = { 'А':'A','Б':'B','В':'V','Г':'H','Ґ':'G','Д':'D','Е':'E','Є':'YE','Ж':'ZH','З':'Z','И':'Y','І':'I','Ї':'YI','Й':'Y','К':'K','Л':'L','М':'M','Н':'N','О':'O','П':'P','Р':'R','С':'S','Т':'T','У':'U','Ф':'F','Х':'KH','Ц':'TS','Ч':'CH','Ш':'SH','Щ':'SHCH','Ь':'','Ю':'YU','Я':'YA','Ы':'Y','Э':'E','Ё':'YO','Ъ':'' };
@@ -665,13 +683,22 @@ body.touch .deck { display: flex; touch-action: none; }
     const lat = amHost() && NET.latOf.has(from) ? NET.latOf.get(from) : NET.lat;   /* the song holder knows each one's way */
     if (!was && playing()) ex.web_set_pos(lat / 1000 * bpm() * 4 / 60);
   }
-  function saveJam() { if (ex && NET.code) try { const full = cstr(ex.web_net_full(), 8192); localStorage.setItem('studio3d-jam-' + NET.code, full); } catch (e) {} }
+  const JAM_KEY = 'studio3d-jam';                 /* the studio's song as you last had it */
+  function saveJam() { if (ex) try { const full = cstr(ex.web_net_full(), 8192); localStorage.setItem(JAM_KEY, full); } catch (e) {} }
 
-  function netJoin(code) {
-    NET.want = true; NET.code = code; NET.retry = 0;
-    try { history.replaceState(null, '', location.pathname + '?room=' + code); } catch (e) {}
-    $('rb-code').textContent = code; $('roombar').hidden = false; document.body.classList.add('online'); layout();
+  function netJoin() {
+    NET.want = true; NET.retry = 0;
+    try { history.replaceState(null, '', location.pathname + '?jam'); } catch (e) {}
+    $('roombar').hidden = false; document.body.classList.add('online'); layout();
     connect();
+  }
+  /* could not get in (the studio is full): carry on alone with your own song */
+  function netGiveUp(msg) {
+    NET.want = false; clearTimeout(NET.timer);
+    if (NET.room) try { NET.room.close(); } catch (e) {}
+    $('roombar').hidden = true; document.body.classList.remove('online'); showPop(false); layout();
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    sayAscii(msg);
   }
   function connect() {
     clearTimeout(NET.timer);
@@ -685,12 +712,12 @@ body.touch .deck { display: flex; touch-action: none; }
         cstr(ex.web_net_full(), 8192);                  /* from here on, only what changes is sent */
         if (amHost()) {
           let jam = null;
-          try { jam = localStorage.getItem('studio3d-jam-' + NET.code); } catch (e) {}
+          try { jam = localStorage.getItem(JAM_KEY); } catch (e) {}
           if (jam) { applyText(jam); cstr(ex.web_net_full(), 8192); }
-          sayAscii('ROOM ' + NET.code + ': SHARE THE CODE');
+          sayAscii('YOU OPENED THE STUDIO: INVITE SOMEONE');
         } else {
           NET.room.sendTo(hostId(), { t: 'hello', a: performance.now() });
-          sayAscii('JOINING ' + NET.code);
+          sayAscii('GOING IN...');
         }
         NET.host = hostId();
         roomBar();
@@ -708,7 +735,7 @@ body.touch .deck { display: flex; touch-action: none; }
       onMessage: (d, from) => {
         if (!d || !ex) return;
         if (d.t === 'hello') { if (amHost()) NET.room.sendTo(from, { t: 'state', d: cstr(ex.web_net_full(), 8192), c: posNow(bpm()), b: bpm(), a: d.a }); }
-        else if (d.t === 'state') { rtt(d.a); applyText(d.d); cstr(ex.web_net_full(), 8192); follow(+d.c, +d.b, true); sayAscii('IN ROOM ' + NET.code); }
+        else if (d.t === 'state') { rtt(d.a); applyText(d.d); cstr(ex.web_net_full(), 8192); follow(+d.c, +d.b, true); sayAscii(players().length === 2 ? 'JAMMING WITH ' + nameOf(hostId()) : 'JAMMING WITH ' + (players().length - 1) + ' OTHERS'); }
         else if (d.t === 'set') applyPlay(String(d.d || ''), from);
         else if (d.t === 'sync') { if (from === hostId()) applyFiltered(String(d.d || '')); }
         else if (d.t === 'clk') { if (from === hostId()) follow(+d.c, +d.b); }
@@ -721,7 +748,10 @@ body.touch .deck { display: flex; touch-action: none; }
           if (!p) { p = { cur: { ...tgt }, tgt }; NET.peers.set(from, p); } else p.tgt = tgt;
         }
       },
-      onError: (m) => { $('jam-err').textContent = String(m || ''); sayAscii(String(m || 'ROOM ERROR')); },
+      onError: (m) => {
+        if (/full/i.test(String(m))) netGiveUp('THE STUDIO IS FULL: TRY AGAIN LATER');
+        else sayAscii(String(m || 'CONNECTION ERROR').toUpperCase());
+      },
       onClose: () => {
         $('roombar').classList.add('off');
         for (const s of NET.slots.values()) if (ex) ex.web_peer(s, 0, 0, 0, 0, 0, 0, -1, 0);
@@ -734,13 +764,12 @@ body.touch .deck { display: flex; touch-action: none; }
   }
   function roomBar() {
     const n = players().length; $('rb-n').textContent = ' · ' + n;
-    $('roombar').title = 'Online room ' + NET.code + ': ' + players().map(p => p.name).join(', ');
+    $('roombar').title = 'In the studio: ' + players().map(p => p.name).join(', ');
     if (!$('roompop').hidden) fillPop();
   }
-  /* the room's list: tap the room code */
+  /* who is in the studio: tap ONLINE */
   const PCOL = ['#ff4dbf', '#40d9ff', '#ffd940', '#59ff73', '#ff8c33', '#b373ff', '#ff4d4d', '#ebebeb'];
   function fillPop() {
-    $('rp-code').textContent = NET.code;
     const ul = $('rp-list'); ul.textContent = '';
     const ps = players(), h = hostId();
     if (!ps.length) { const li = document.createElement('li'); li.innerHTML = '<span>connecting…</span>'; ul.appendChild(li); }
@@ -785,11 +814,11 @@ body.touch .deck { display: flex; touch-action: none; }
   $('rp-invite').addEventListener('click', () => { showPop(false); invite(); });
   $('rb-invite').addEventListener('click', invite);
   async function invite() {
-    const url = location.origin + location.pathname + '?room=' + NET.code;
+    const url = location.origin + location.pathname + '?jam';
     try {
-      if (navigator.share && mode === 2) { await navigator.share({ title: 'STUDIO 3D', text: 'Jam with me in STUDIO 3D, room ' + NET.code, url }); return; }
-      await navigator.clipboard.writeText(url); sayAscii('LINK COPIED: ROOM ' + NET.code);
-    } catch (e) { sayAscii('ROOM CODE ' + NET.code); }
+      if (navigator.share && mode === 2) { await navigator.share({ title: 'STUDIO 3D', text: 'Jam with me in STUDIO 3D', url }); return; }
+      await navigator.clipboard.writeText(url); sayAscii('LINK COPIED: SEND IT TO A FRIEND');
+    } catch (e) { sayAscii('ERROR.BLUE/GAMES/STUDIO3D'); }
   }
 
   /* every frame, in a room: send what changed, notes, where I am; draw the others */

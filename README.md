@@ -13,10 +13,10 @@ public/                 the website
   games/
     pixel-hop/          one folder per game (index.html + music, images...)
     pixel-party/
-    studio3d/           STUDIO 3D (the FunKey game, as WebAssembly)
   apps/
     error-chat/         ERROR-CHAT: text chat by channel code
   tusa/                 Туса У Берліні
+  music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
@@ -76,6 +76,7 @@ const progress = await GameLab.load('my-game');
 
 const room = GameLab.joinRoom('my-game', 'ABCD', { onMessage: (data, from) => {} });
 room.send({ x: 10, y: 20 });
+const who = await GameLab.whoIsIn('my-game', 'ABCD');   // { players: [{ name }], max: 16 }, without joining
 
 const music = GameLab.music('music.mp3');
 music.play();
@@ -201,9 +202,9 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   leave the episode, ERROR-DOS); in Chrome and Edge the game keeps Esc in full screen
   (Keyboard Lock), holding Esc still leaves. Phones and tablets don't get the switch
 
-## Studio 3D (error.blue/games/studio3d)
+## Studio 3D (error.blue/music3d)
 
-`public/games/studio3d/`: the FunKey S game STUDIO 3D, a music studio to walk around in and
+`public/music3d/`: the FunKey S game STUDIO 3D, a music studio to walk around in and
 play (drum machine, two synths with their sequencers, a master panel, all cabled up). The C game
 runs unchanged as `studio3d.wasm`; `index.html` draws its 240 x 240 picture crisp and as big as it
 fits (whole multiples of 240 when there is room), plays its 22 kHz sound, and keeps the song,
@@ -222,13 +223,15 @@ the room's lights, the settings and where you stand in the browser (localStorage
   B backs out of menus, LB/RB step sideways, Start plays, Back/Select opens the menu, LT shows the map.
 - the game's hints follow what you use: mouse buttons on a computer, A / Y on touch and gamepads.
 - its menu's last line, SAVE, BACK TO ERROR-DOS, saves and returns to the menu here.
-- JAM ONLINE (on the start screen): play the same studio together, up to 16 people, in a
-  GameLab room (`GameLab.joinRoom('studio3d', CODE)`, no server state). NEW ROOM makes a 4-letter
-  code; INVITE shares or copies a link `?room=CODE` that opens the join panel with the code in.
+- JAM ONLINE (on the start screen): one studio online for everyone, up to 16 people, no room
+  codes. Type a name, GO IN. It is the GameLab room `studio3d` / `STUDIO` (no server state);
+  the start screen and the jam panel say who is in now (`GET /api/room/studio3d/STUDIO/who`,
+  asked every 6 s). INVITE shares or copies `error.blue/music3d/?jam`, which opens the jam panel.
+  When the studio is full the panel says so, and a player who still gets turned away plays alone.
   - shared: the whole song (every knob, pattern, step and note, mute/solo, the drum kit), PLAY
     and STOP, and the room's LEDs and neon. Each change goes out as short `key=value` lines
     (`web_net_diff`), the others apply them (`web_net_apply`).
-  - the player who has been in the room longest holds the song (♫ in the room list): a newcomer
+  - the player who has been in the studio longest holds the song (♫ in the list): a newcomer
     gets it from them (`hello` -> `state`), they send the clock every second and the whole song
     every 4 s, so everyone ends up the same even if two people turned one knob at once (what you
     changed in the last 1.5 s is not overwritten). When they leave, the next one holds it.
@@ -240,13 +243,15 @@ the room's lights, the settings and where you stand in the browser (localStorage
     and the control under their dot go out 10 times a second (`pose`) and the others see a robot
     in that player's colour with the name over its head (A-Z, Cyrillic spelled out), sitting
     when they sit, with a beam to what they point at; the map shows them as coloured dots.
-  - your own song is not touched: in a room the jam is kept as `studio3d-jam-CODE`, and LEAVE
-    (✕) goes back to your own. The holder who comes back to an empty room gets the jam back.
-  - tap the room code for the list of who is in, INVITE and LEAVE. On a phone the room gets a
-    row of its own under the top bar.
+  - your own song is not touched: online, the studio's song is kept as `studio3d-jam`, and
+    LEAVE (✕) goes back to your own. Whoever opens an empty studio brings the studio's song as
+    they last had it.
+  - tap ONLINE in the top bar for who is in, INVITE and LEAVE. On a phone it gets a row of its
+    own under the top bar.
   - test: `npx wrangler dev`, then `python3 tools/jamtest.py http://127.0.0.1:8787 out` in the
-    game's source (two players, one on a computer and one on a phone).
-- ERROR-DOS shows it as STUDIO3D.HTM in GAMES, with its own wireframe logo (`studio`).
+    game's source (two players, one on a computer and one on a phone, and a full studio).
+- ERROR-DOS shows it as STUDIO3D.HTM in GAMES, with its own wireframe logo (`studio`). The old
+  address /games/studio3d/ redirects to /music3d/ (`SHORT_PATHS` in `src/index.js`).
 - the source is the game's own (`studio3d-source.tar.gz` in the Funkey S project). After a change:
   `make web` there (needs the WASI sysroot, see its README), copy `web/studio3d.wasm` here and
   raise `?v=` where `index.html` loads it: the service worker keeps `.wasm` files, so a new

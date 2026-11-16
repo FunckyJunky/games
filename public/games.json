@@ -23,7 +23,7 @@
     "id": "studio3d",
     "title": "Studio 3D",
     "description": "Walk around a music studio and play it: drum machine, two synths with their sequencers, a master panel, all cabled up. Play alone, or JAM ONLINE: share a room code and make one song together. Mouse looks around on a computer; stick, drag and A / Y on a phone.",
-    "path": "games/studio3d/",
+    "path": "music3d/",
     "folder": "games",
     "logo": "studio",
     "added": "2026-11-16T21:00"
