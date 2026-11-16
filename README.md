@@ -175,7 +175,7 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
 - Talk: turns your intercom on and off. Everyone with the intercom on is in one call (WebRTC, set up
   through the same room, like TUSA); voices get quieter with distance and are silent beyond 160 m
 - camp: campfire, tent, Christmas lights, sit, sausages, coffee, sleep; moves: dance, hug, wave,
-  cheer, sit, lie down; chat with emoji. Time runs at 2x real time (Advanced settings has a slider)
+  cheer, sit, lie down; chat with emoji
 - time: real time by default, in the average of everyone's time zones (a shared switch under
   Advanced turns it off; then a time-speed slider and the first explorer's clock take over)
 - weather: mist and rain, and alone (or without music) it slowly turns into a storm. When two
@@ -194,8 +194,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- drum machine: its own punch bus (compressor and drive), a deep 808 bass on the chord's root that
+  follows the kick, and eleven styles (boom bap, lazy, breaks, jazz hop, trap, house, one drop,
+  shuffle, half time, bossa, dusty) with the odd fill. No record crackle or hiss on the music
 - while your intercom is on, the game's own sounds (music, rain, wind) go quiet on your phone, so
   nothing echoes back into the call
+- Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
+  occlusion), ray tracing (screen-space reflections on wet ground and water) and map optimization
+  (the world is only built as far as the fog lets you see, and far terrain is much simpler; the
+  picture stays the same, memory use drops a lot). GI and ray tracing are heavy on phones
 
 ## Вгадай що?! (error.blue/vgadai)
 
