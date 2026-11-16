@@ -99,6 +99,11 @@
   }
   .dos.show { display: flex; }
   .dos::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); }
+  /* get a notification when a friend starts TUSA */
+  #pushBtn { all: unset; cursor: pointer; position: relative; z-index: 2; align-self: flex-end; flex: none; margin-bottom: 6px; padding: 3px 8px; border: 2px solid var(--fg);
+    color: var(--fg); font-family: 'VT323', monospace; font-size: 20px; line-height: 1; background: var(--bg); text-shadow: 0 0 5px var(--glow); }
+  #pushBtn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  #pushBtn:active { filter: brightness(1.4); }
   #term { flex: 1; min-height: 0; overflow: hidden; white-space: pre-wrap; font-size: clamp(16px, min(5vw, 3.3vh), 28px); line-height: 1.12; }
   #term .big { font-family: 'Pixelify Sans', monospace; font-size: 1.35em; color: var(--neon); text-shadow: 0 0 8px rgba(255,226,58,.7); }
   #term .dim { color: var(--dim); text-shadow: none; }
@@ -140,6 +145,7 @@
   <div id="stage">
     <canvas id="view"></canvas>
     <div class="dos" id="login">
+      <button id="pushBtn" aria-label="meldingen">🔔 MELDINGEN: UIT</button>
       <div id="term"></div>
       <div id="loginKbd"></div>
     </div>

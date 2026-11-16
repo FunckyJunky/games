@@ -1,6 +1,6 @@
 // ERROR-DOS service worker: lets error.blue work as an installed app
 // and open the menu (and games you've played) without a connection.
-const CACHE = 'errordos-v3';
+const CACHE = 'errordos-v4';
 const SHELL = ['/', '/games.json', '/lib/gamelab.js', '/lib/appback.js', '/404.html', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
@@ -52,4 +52,26 @@ self.addEventListener('fetch', (e) => {
       })
     );
   }
+});
+
+// a notification from error.blue (for now: "someone is in TUSA")
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'error.blue', {
+    body: d.body || '',
+    tag: d.tag || 'errorblue',
+    renotify: true,
+    icon: '/tusa/icons/tusa-192.png',
+    badge: '/tusa/icons/tusa-192.png',
+    data: { url: d.url || '/' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) if (new URL(c.url).pathname.startsWith(url) && 'focus' in c) return c.focus();
+    return self.clients.openWindow(url);
+  }));
 });

@@ -236,8 +236,145 @@ async function handleUnlock(request, env, url) {
   });
 }
 
+// =====================================================================
+// push notifications ("someone is in TUSA!"): standard Web Push, sent
+// straight from here. The VAPID key pair is made on first use and kept in
+// D1, so nothing secret lives in this (public) repository.
+// =====================================================================
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function unb64u(s) {
+  s = String(s).replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const b = atob(s), u = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+  return u;
+}
+const utf8 = (s) => new TextEncoder().encode(s);
+function concat(...parts) {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
+}
+async function hmac(key, data) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
+}
+let pushTables = false;
+async function pushDb(env) {
+  const db = await lockDb(env);
+  if (!pushTables) {
+    await db.prepare("CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created INTEGER NOT NULL)").run();
+    pushTables = true;
+  }
+  return db;
+}
+async function vapidKeys(env) {
+  const db = await pushDb(env);
+  let row = await db.prepare("SELECT v FROM settings WHERE k = 'vapid'").first();
+  if (!row) {
+    const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const rec = { pub: b64u(await crypto.subtle.exportKey("raw", kp.publicKey)), jwk: await crypto.subtle.exportKey("jwk", kp.privateKey) };
+    await db.prepare("INSERT OR IGNORE INTO settings (k, v) VALUES ('vapid', ?)").bind(JSON.stringify(rec)).run();
+    row = await db.prepare("SELECT v FROM settings WHERE k = 'vapid'").first();
+  }
+  return JSON.parse(row.v);
+}
+// only real push services (Apple, Google, Mozilla, Microsoft) are ever called
+const PUSH_HOSTS = /(^|\.)(push\.apple\.com|fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/;
+function pushEndpointOk(endpoint, local) {
+  try {
+    const u = new URL(endpoint);
+    if (local && u.protocol === "http:" && u.hostname === "127.0.0.1") return true;   // local tests only
+    return u.protocol === "https:" && PUSH_HOSTS.test(u.hostname);
+  } catch { return false; }
+}
+// the message, encrypted for this one phone (RFC 8291, aes128gcm)
+async function pushBody(sub, text) {
+  const uaPub = unb64u(sub.p256dh), auth = unb64u(sub.auth);
+  const mine = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const asPub = new Uint8Array(await crypto.subtle.exportKey("raw", mine.publicKey));
+  const theirs = await crypto.subtle.importKey("raw", uaPub, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: theirs }, mine.privateKey, 256));
+  const ikm = await hmac(await hmac(auth, shared), concat(utf8("WebPush: info"), new Uint8Array([0]), uaPub, asPub, new Uint8Array([1])));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const prk = await hmac(salt, ikm);
+  const cek = (await hmac(prk, concat(utf8("Content-Encoding: aes128gcm"), new Uint8Array([0, 1])))).slice(0, 16);
+  const nonce = (await hmac(prk, concat(utf8("Content-Encoding: nonce"), new Uint8Array([0, 1])))).slice(0, 12);
+  const key = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, concat(utf8(text), new Uint8Array([2]))));
+  return concat(salt, new Uint8Array([0, 0, 16, 0]), new Uint8Array([65]), asPub, sealed);
+}
+async function sendPush(env, sub, msg) {
+  const v = await vapidKeys(env);
+  const head = b64u(utf8(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const claims = b64u(utf8(JSON.stringify({ aud: new URL(sub.endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: "https://error.blue" })));
+  const signKey = await crypto.subtle.importKey("jwk", v.jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, signKey, utf8(head + "." + claims));
+  const res = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: "vapid t=" + head + "." + claims + "." + b64u(sig) + ", k=" + v.pub,
+      "Content-Encoding": "aes128gcm",
+      "Content-Type": "application/octet-stream",
+      TTL: "3600",
+      Urgency: "high",
+    },
+    body: await pushBody(sub, JSON.stringify(msg)),
+  });
+  // the phone turned notifications off or the app was removed: forget it
+  if (res.status === 404 || res.status === 410) await (await pushDb(env)).prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(sub.endpoint).run();
+  return res.status;
+}
+async function handlePush(request, env, url) {
+  const local = env.PUSH_LOCAL_TEST === "1";   // only set in .dev.vars on a developer's computer
+  if (request.method === "GET") return json({ key: (await vapidKeys(env)).pub });
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "bad request" }, 400); }
+  const db = await pushDb(env);
+  const endpoint = String(body.endpoint || "");
+  if (!pushEndpointOk(endpoint, local)) return json({ error: "not a push address" }, 400);
+  if (request.method === "DELETE") {
+    await db.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(endpoint).run();
+    return json({ ok: true });
+  }
+  if (request.method !== "POST") return json({ error: "use GET, POST or DELETE" }, 405);
+  const keys = body.keys || {};
+  if (!/^[A-Za-z0-9_-]{80,100}$/.test(keys.p256dh || "") || !/^[A-Za-z0-9_-]{16,32}$/.test(keys.auth || "")) return json({ error: "bad keys" }, 400);
+  const n = await db.prepare("SELECT COUNT(*) AS n FROM push_subs").first();
+  if (n && n.n >= 60) return json({ error: "full" }, 429);
+  await db.prepare("INSERT OR REPLACE INTO push_subs (endpoint, p256dh, auth, created) VALUES (?, ?, ?, ?)").bind(endpoint, keys.p256dh, keys.auth, Date.now()).run();
+  return json({ ok: true });
+}
+// someone typed their name in TUSA: tell every other phone that asked for it
+// (at most once every 10 minutes per friend, so reconnecting doesn't spam)
+const TUSA_HELLO = {
+  VIKA: "Vika is net in de game gestapt",
+  VITO: "Vito is net in de game gestapt",
+  OLEKSIY: "Oleksiy is net in de game gestapt",
+};
+async function handleHello(request, env, ctx, url) {
+  if (request.method !== "POST") return json({ error: "use POST" }, 405);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "bad request" }, 400); }
+  const who = String(body.char || "");
+  if (!TUSA_HELLO[who]) return json({ error: "who?" }, 400);
+  const db = await pushDb(env), now = Date.now();
+  const last = await db.prepare("SELECT v FROM settings WHERE k = ?").bind("hello:" + who).first();
+  if (last && now - Number(last.v) < 10 * 60 * 1000) return json({ ok: true, sent: 0, quiet: true });
+  await db.prepare("INSERT OR REPLACE INTO settings (k, v) VALUES (?, ?)").bind("hello:" + who, String(now)).run();
+  const me = String(body.me || "");
+  const { results } = await db.prepare("SELECT endpoint, p256dh, auth FROM push_subs").all();
+  const subs = (results || []).filter((r) => r.endpoint !== me);
+  const msg = { title: "ТУСА У БЕРЛІНІ 🍜", body: TUSA_HELLO[who] + " · Kom je ook naar Hoongy?", tag: "tusa-" + who, url: "/tusa/" };
+  const local = env.PUSH_LOCAL_TEST === "1";
+  const work = Promise.allSettled(subs.filter((s) => pushEndpointOk(s.endpoint, local)).map((s) => sendPush(env, s, msg)));
+  if (ctx && ctx.waitUntil) ctx.waitUntil(work); else await work;
+  return json({ ok: true, sent: subs.length });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -281,6 +418,10 @@ export default {
       }
 
       if (path === "/api/unlock") return handleUnlock(request, env, url);
+
+      if (path === "/api/push") return await handlePush(request, env, url);
+
+      if (path === "/api/tusa/hello") return await handleHello(request, env, ctx, url);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 

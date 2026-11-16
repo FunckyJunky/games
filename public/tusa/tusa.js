@@ -449,6 +449,8 @@ function tryLogin() {
     typed = ''; SFX.pop(); termRender(); return;
   }
   try { localStorage.setItem('tusa-name', typed.trim()); } catch (e) {}
+  // tell the friends who asked for it (on their phones) that you are here
+  try { fetch('/api/tusa/hello', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ char: who, me: PUSH.sub ? PUSH.sub.endpoint : '' }), keepalive: true }).catch(() => {}); } catch (e) {}
   loginBusy = true;
   loginLines.push('');
   loginLines.push('Ласкаво просимо, ' + who + '!');
@@ -463,6 +465,68 @@ function tryLogin() {
   loginLines.push('');
   setTimeout(bar, 300);
 }
+// =====================================================================
+// notifications: "Vito is net in de game gestapt" on your phone, even
+// when TUSA is closed. Works in Chrome/Android and desktop browsers; on an
+// iPhone only when error.blue is on the home screen (iOS 16.4 and newer).
+// =====================================================================
+const PUSH = { reg: null, key: null, sub: null, busy: false };
+function pushBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+  const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u;
+}
+function pushSay(line) { if (G.scene === 'login') { loginLines.push(line); termRender(); } else toast(line.replace(/<[^>]+>/g, ''), 3.5); }
+function pushShow() {
+  const b = $('pushBtn'); if (!b) return;
+  b.textContent = '🔔 MELDINGEN: ' + (PUSH.sub ? 'AAN' : 'UIT'); b.classList.toggle('on', !!PUSH.sub);
+}
+async function pushPrepare() {
+  // get everything ready beforehand: on an iPhone the tap itself has to ask for permission
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    PUSH.reg = await navigator.serviceWorker.register('/sw.js');
+    PUSH.sub = await PUSH.reg.pushManager.getSubscription();
+    pushShow();
+    if (!PUSH.key) PUSH.key = pushBytes((await (await fetch('/api/push')).json()).key);
+  } catch (e) {}
+}
+function pushToggle() {
+  if (PUSH.busy) return;
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const app = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone;
+  if (!PUSH.reg || !('PushManager' in window) || !('Notification' in window)) {
+    if (ios && !app) {
+      pushSay('<span class="err">iPhone: zet TUSA eerst op je beginscherm.</span>');
+      pushSay('<span class="dim">Deel-knop ⎙ → "Zet op beginscherm", open TUSA daar en tik dan op 🔔.</span>');
+    } else pushSay('<span class="err">Meldingen werken niet in deze browser.</span>');
+    return;
+  }
+  if (!PUSH.key) { pushSay('<span class="err">Even geduld… probeer het zo nog eens.</span>'); pushPrepare(); return; }
+  PUSH.busy = true;
+  if (PUSH.sub) {
+    const old = PUSH.sub; PUSH.sub = null; pushShow();
+    fetch('/api/push', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: old.endpoint }) }).catch(() => {});
+    old.unsubscribe().catch(() => {}).finally(() => { PUSH.busy = false; });
+    pushSay('🔕 Meldingen uit.');
+    return;
+  }
+  // straight from the tap: this is what asks "allow notifications?"
+  PUSH.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: PUSH.key })
+    .then(sub => fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) }).then(r => {
+      if (!r.ok) throw new Error('server ' + r.status);
+      PUSH.sub = sub; pushShow();
+      pushSay('🔔 Meldingen aan! Je hoort het als VIKA, VITO of OLEKSIY de game start.');
+    }))
+    .catch(() => {
+      pushSay(Notification.permission === 'denied'
+        ? '<span class="err">Meldingen zijn geblokkeerd. Zet ze aan in de instellingen van je telefoon.</span>'
+        : '<span class="err">Meldingen aanzetten lukte niet. Probeer het nog eens.</span>');
+    })
+    .finally(() => { PUSH.busy = false; });
+}
+$('pushBtn').addEventListener('click', e => { e.stopPropagation(); pushToggle(); });
+pushPrepare();
+
 function showLogin() {
   G.scene = 'login';
   $('login').classList.add('show');
