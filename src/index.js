@@ -147,6 +147,8 @@ async function handleSave(request, env, game, player) {
 // A right code sets a cookie for 30 days; the game's files need that cookie.
 // ---------------------------------------------------------------------------
 const LOCKED = { "leviathan-voyage": "lv_key" };
+// games that live at their own short address instead of /games/<id>/
+const SHORT_PATHS = { "leviathan-voyage": "/voyage" };
 // added to every game page: app mode, no zoom on double-tap or pinch
 const NO_ZOOM_HEAD = '<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">' +
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
@@ -158,9 +160,11 @@ async function sha256hex(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function lockedGame(path) {
+  for (const id in SHORT_PATHS) if (path === SHORT_PATHS[id] || path.startsWith(SHORT_PATHS[id] + "/")) return LOCKED[id] ? id : null;
   const m = path.match(/^\/games\/([a-z0-9-]+)\//);
   return m && LOCKED[m[1]] ? m[1] : null;
 }
+const isGamePath = (path) => path.startsWith("/games/") || Object.values(SHORT_PATHS).some((p) => path === p || path.startsWith(p + "/"));
 let lockTables = false;
 async function lockDb(env) {
   if (!lockTables) {
@@ -445,6 +449,10 @@ export default {
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 
+      // old addresses of games that moved to a short one (error.blue/voyage)
+      m = path.match(/^\/games\/([a-z0-9-]+)(\/.*)?$/);
+      if (m && SHORT_PATHS[m[1]]) return new Response(null, { status: 301, headers: { Location: SHORT_PATHS[m[1]] + (m[2] || "/") + url.search } });
+
       // a program with an access code: no code, no files
       const lockedId = lockedGame(path);
       if (lockedId && !(await isUnlocked(request, env, lockedId))) {
@@ -456,7 +464,7 @@ export default {
 
       const res = await env.ASSETS.fetch(request);
       // game pages get a small back button when the site runs as an installed app
-      if (path.startsWith("/games/") && (res.headers.get("content-type") || "").includes("text/html")) {
+      if (isGamePath(path) && (res.headers.get("content-type") || "").includes("text/html")) {
         // ...and they behave like an app: no zooming in by double-tapping or pinching
         let viewport = false;
         return new HTMLRewriter()

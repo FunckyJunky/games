@@ -45,7 +45,7 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 ## Radio tracks (SoundRooms)
 
 A game can have a `SoundRooms` folder, just like the one on the FunKey's SD card. Leviathan Voyage
-plays the tracks in `public/games/leviathan-voyage/SoundRooms/` on its radios:
+plays the tracks in `public/voyage/SoundRooms/` on its radios:
 
 - `radio1.mp3`, `radio2.mp3`, ... are the channels, in that order.
 - `manual.mp3` is the MANUAL channel. It also plays as narration while the manual is open.
@@ -149,6 +149,9 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   `PUSH_LOCAL_TEST="1"` in `.dev.vars`
 
 ## Access code (Leviathan)
+
+Leviathan Voyage lives at error.blue/voyage (files in `public/voyage/`); the old
+address /games/leviathan-voyage/ redirects there (`SHORT_PATHS` in `src/index.js`).
 
 `games.json` marks a program with `"lock": true`. ERROR-DOS then asks for a
 5-digit code on its own number pad before it runs it. Leviathan has a fixed
