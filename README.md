@@ -114,7 +114,7 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   for good when the first friend arrives
 - 3 jokes within 25 seconds make the other friends roll on the floor laughing;
   walking cancels the laughing. Nobody talks in words: no speech bubbles
-- the kitchen only opens once a friend has arrived (the 18:00 clock is running)
+- Hoongy (and its kitchen) only opens once a friend has arrived (the 18:00 clock is running)
 - Oleksiy rides his step around the street until he parks it (A); A next to it to ride again
 - installable on its own: `tusa/manifest.webmanifest` (start /tusa/, full screen, no zoom)
 - look: hand-drawn Japanese cartoon style with ink outlines, watercolour and

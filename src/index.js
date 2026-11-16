@@ -831,6 +831,8 @@ export class TusaRoom extends DurableObject {
         if (Number.isFinite(y)) me.y = Math.max(0, Math.min(400, y));
         me.dir = d.dir === -1 ? -1 : 1;
         if (d.scene === "street" || d.scene === "inside") me.scene = d.scene;
+        // nobody goes into Hoongy alone: it opens once a friend has shown up (the evening runs)
+        if (me.scene === "inside" && !this.g.clockStart && this.players(ws).length === 0) me.scene = "street";
         me.anim = typeof d.anim === "string" ? d.anim.slice(0, 12) : "";
         // Oleksiy's e-scooter: riding it, or where it is parked (-1 = not parked)
         me.ride = d.ride === 1 && me.char === "OLEKSIY";

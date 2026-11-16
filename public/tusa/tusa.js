@@ -635,7 +635,7 @@ function updateStreet(dt) {
   else if (!G.arrival && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) G.prompt = 'A  🛴 Op de step';
   else if (!G.arrival && Math.abs(G.p.x - S.door) < 14) {
     const c = clockInfo();
-    G.prompt = c && c.closed ? '🔒 Gesloten tot morgen' : 'A  Naar binnen';
+    G.prompt = c && c.closed ? '🔒 Gesloten tot morgen' : !buddyHere() ? '🔒 Wacht op een vriend' : 'A  Naar binnen';
   }
   G.camX = clamp(G.p.x - LW / 2, 0, S.W - LW);
   sendState(false);
@@ -735,7 +735,10 @@ function rideScooter() {
   G.ride = true; G.p.x = G.scootX; G.p.dir = G.scootDir; G.scootX = null;
   tone(300, 0.25, 0.03, 'sawtooth', 0, 620); sendState(true);
 }
+// Hoongy only opens once at least one of your friends has shown up this evening
+function buddyHere() { return !!NET.g.clockStart || Object.keys(G.others).length > 0; }
 function enterHoongy() {
+  if (!buddyHere()) { toast('Hoongy gaat open als er een vriend is', 2.5); SFX.knob(); return; }
   if (G.ride) { toast('Eerst de step parkeren: druk op A', 2.2); return; }
   const c = clockInfo();
   if (c && c.closed) { toast('Gesloten. Tot morgen!', 2.5); return; }
