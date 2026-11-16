@@ -685,7 +685,9 @@ export class ChatRoom extends DurableObject {
 const TUSA_CHARS = ["VIKA", "VITO", "OLEKSIY"];
 const TUSA_SEATS = 14;
 const TUSA_ITEMS = ["lassi", "coffee", "shrimp", "fish"];
-const TUSA_EMOTES = ["hug", "heart", "joke"];
+const TUSA_EMOTES = ["hug", "heart", "joke", "nose"];
+// the nose kiss is only for Vito and Oleksiy
+const TUSA_NOSE = { VITO: "OLEKSIY", OLEKSIY: "VITO" };
 const TUSA_SERVE_MS = 10500;
 
 export class TusaRoom extends DurableObject {
@@ -883,6 +885,7 @@ export class TusaRoom extends DurableObject {
         me.lastEmote = now;
         ws.serializeAttachment(me);
         const to = TUSA_CHARS.includes(d.to) ? d.to : "";
+        if (d.kind === "nose" && TUSA_NOSE[me.char] !== to) return;
         const j = Number.isInteger(d.j) ? Math.max(0, Math.min(999, d.j)) : 0;
         this.broadcast({ type: "emote", from: me.char, kind: d.kind, to, j, t: now });
         return;

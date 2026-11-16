@@ -32,7 +32,15 @@
   button { font: inherit; }
 
   /* ---------- top bar ---------- */
-  #hud { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; height: 38px; box-sizing: border-box; }
+  #hud { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 5px 8px; height: 60px; box-sizing: border-box; }
+  /* the dot-matrix DOS screen at the top: where you are, the time, and everything else that is going on */
+  #dmx { flex: 1; min-width: 0; height: 50px; display: block; border-radius: 6px; background: #020a05;
+    box-shadow: 0 0 0 2px #0f2a18, 0 0 0 4px #050505, inset 0 0 14px rgba(0,0,0,.9); }
+  /* the DOS button: a small 3D ERROR-DOS logo on a black screen */
+  #dosBtn { all: unset; cursor: pointer; flex: none; width: 70px; height: 50px; border-radius: 6px; background: #000; overflow: hidden;
+    box-shadow: 0 0 0 2px #0f2a18, 0 0 0 4px #050505, 0 0 10px rgba(57,255,122,.25); }
+  #dosBtn canvas { display: block; width: 100%; height: 100%; }
+  #dosBtn:active { filter: brightness(1.4); transform: translateY(1px); }
   .hbtn {
     all: unset; cursor: pointer; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 9px; color: var(--ink);
     font-family: var(--round); font-weight: 800; font-size: 14px; background: var(--paper); white-space: nowrap;
@@ -42,11 +50,6 @@
   .hbtn.live { background: #cf3a2a; color: #fbf4e2; animation: live 1.2s ease-in-out infinite; }
   @keyframes live { 50% { box-shadow: 0 2px 0 var(--ink), 0 0 0 4px rgba(207,58,42,.35); } }
   .hbtn:active { transform: translateY(2px); box-shadow: none; background: #ffe7a8; }
-  #clock {
-    font-family: var(--round); font-weight: 900; font-size: 23px; color: var(--paper); letter-spacing: 1px;
-    text-shadow: 0 2px 0 var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  #clock small { font-size: 13px; font-weight: 700; letter-spacing: 0; color: #f1d9a8; text-shadow: none; }
 
   /* ---------- the game picture ---------- */
   #stage { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; }
@@ -72,6 +75,11 @@
   .emotes { display: flex; flex-direction: column; gap: calc(var(--u) * 0.1); }
   .emotes .pb { width: calc(var(--u) * 1.3); height: calc(var(--u) * 0.76); font-size: calc(var(--u) * 0.24); gap: 0; line-height: 1; text-align: center; border-bottom-width: 4px; }
   .emotes .pb span { font-size: calc(var(--u) * 0.34); display: block; }
+  /* Vito and Oleksiy close together: a fourth button, and all four a bit flatter so the pad keeps its height */
+  .emotes.four { gap: calc(var(--u) * 0.07); }
+  .emotes.four .pb { height: calc(var(--u) * 0.62); font-size: calc(var(--u) * 0.2); border-bottom-width: 3px; }
+  .emotes.four .pb span { font-size: calc(var(--u) * 0.27); }
+  .emotes .pb.nose { background: linear-gradient(#ffe0e6, #f7b8c6); }
   .ab { display: grid; grid-template-columns: calc(var(--u) * 1.08) calc(var(--u) * 1.4); grid-template-rows: calc(var(--u) * 1.3) calc(var(--u) * 0.9); gap: calc(var(--u) * 0.1); justify-self: end; align-items: end; }
   .ab .A { grid-column: 2; grid-row: 1 / 3; height: calc(var(--u) * 1.5); border-radius: 50%; font-size: calc(var(--u) * 0.5); background: radial-gradient(circle at 40% 35%, #ffe08a, #e8a838); color: var(--ink); }
   .ab .B { grid-column: 1; grid-row: 2; height: calc(var(--u) * 1.0); border-radius: 50%; font-size: calc(var(--u) * 0.38); background: radial-gradient(circle at 40% 35%, #ff8a7a, #cf3a2a); color: var(--paper); }
@@ -81,7 +89,7 @@
     #pad { --u: min(6.5vw, 13vh, 52px); position: absolute; left: 0; right: 0; bottom: 0; background: none; pointer-events: none; }
     #pad > * { pointer-events: auto; opacity: .82; }
   }
-  @media (max-width: 340px) { #hud .hbtn { padding: 4px 6px; font-size: 12px; } #clock { font-size: 22px; } }
+  @media (max-width: 340px) { #hud .hbtn { padding: 4px 6px; font-size: 12px; } }
 
   /* ---------- DOS overlays: login, dialogs, menus ---------- */
   .dos {
@@ -125,9 +133,9 @@
 </head>
 <body>
   <div id="hud">
-    <button class="hbtn" id="dosBtn">◄ DOS</button>
-    <div id="clock">HOONGY</div>
-    <button class="hbtn" id="micBtn" style="visibility:hidden">🎙 PRATEN</button>
+    <button id="dosBtn" aria-label="terug naar ERROR-DOS"><canvas id="dosLogo"></canvas></button>
+    <canvas id="dmx" aria-label="status"></canvas>
+    <button class="hbtn" id="micBtn" style="visibility:hidden" aria-label="praten">🎙</button>
   </div>
   <div id="stage">
     <canvas id="view"></canvas>
@@ -146,13 +154,14 @@
       <div class="pb" data-k="hug"><span>🤗</span>KNUF</div>
       <div class="pb" data-k="heart"><span>❤️</span>СЕРЦЕ</div>
       <div class="pb" data-k="joke"><span>😂</span>ЖАРТ</div>
+      <div class="pb nose" data-k="nose" id="noseBtn" style="display:none"><span>👃</span>NEUSJE</div>
     </div>
     <div class="ab">
       <div class="pb A" data-k="a">A</div>
       <div class="pb B" data-k="b">B</div>
     </div>
   </div>
-  <div id="keys">Pijltjes / WASD: lopen · ENTER: A · ESC: B · H: knuffel · L: hart · J: grap · M: praten</div>
+  <div id="keys">Pijltjes / WASD: lopen · ENTER: A · ESC: B · H: knuffel · L: hart · J: grap · N: neusje (Vito + Oleksiy) · M: praten</div>
 
   <script>
     // no zooming in by double-tapping or pinching, like a real app

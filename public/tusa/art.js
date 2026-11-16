@@ -275,6 +275,7 @@ const ART = (() => {
     let fh, bh;                              // front and back hand
     const sw = walk * 0.55;
     if (an === 'hug') { fh = [sx + 7.2, -14.5]; bh = [-sx + 9.5, -13.5]; }
+    else if (an === 'nose') { fh = [sx + 7.4, -16.6 + Math.sin(t * 10) * 0.4]; bh = [-sx + 9.6, -15.8]; }   // hands on the other one's shoulders
     else if (an === 'wave' || an === 'heart') { fh = [sx + 2.6, -24.5 + Math.sin(t * 14) * 0.8]; bh = [-sx - 1 + Math.sin(-sw) * 6, -15.5 + Math.cos(sw) * 6.3]; }
     else if (rofl) { fh = [sx + 4 + Math.sin(t * 15) * 2, -21 + Math.cos(t * 15) * 2]; bh = [-sx - 4 + Math.sin(t * 13) * 2, -20 + Math.cos(t * 13) * 2]; }
     else if (laugh >= 2) { fh = [bw - 0.5, -9.5]; bh = [-1.5, -9]; }
@@ -322,8 +323,10 @@ const ART = (() => {
       if (L.apron) { shape([[-1.6, -12.6], [bw + 0.1, -12.6], [bw + 0.5, -5.4], [-1.8, -5.4]], L.apron, 0.6, 5, 0.05); line(-bw + 0.4, -12.4, -1.6, -12.4, L.apron, 0.7); }
     }
 
-    // ---- head ----
+    // ---- head ---- (for a nose kiss it leans in and rubs from side to side)
+    if (an === 'nose') { c.save(); c.translate(0.7, -17.4); c.rotate(0.16 + Math.sin(t * 10) * 0.12); c.translate(-0.7, 17.4); }
     head(L, o, t, laugh, an, rofl);
+    if (an === 'nose') c.restore();
     if (an !== 'salute') arm(sx, fh, L.sleeve || L.top);
   }
 
@@ -349,7 +352,7 @@ const ART = (() => {
     if (L.style !== 'vika') { ell(hx - 5.9, hy + 1.2, 1.3, 1.8, 0, L.skin, 0.6); }
     // eyes
     const ey = hy + 0.5, e1 = hx + 1.6, e2 = hx + 5.4;
-    const happy = laugh >= 1 || an === 'hug' || rofl;
+    const happy = laugh >= 1 || an === 'hug' || an === 'nose' || rofl;
     const blink = !happy && (t * 1000 | 0) % 3700 < 110;
     for (const ex of [e1, e2]) {
       if (happy) { c.beginPath(); c.arc(ex, ey + 1, 1.25, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = INK; c.lineWidth = 0.8; c.lineCap = 'round'; c.stroke(); }
@@ -361,9 +364,9 @@ const ART = (() => {
       }
     }
     // cheeks
-    c.globalAlpha *= (o.blush || laugh >= 2) ? 0.85 : 0.45;
+    c.globalAlpha *= (o.blush || laugh >= 2 || an === 'nose') ? 0.85 : 0.45;
     ell(hx - 0.9, hy + 3.2, 1.4, 0.8, 0, '#ff8fa6'); ell(hx + 6.8, hy + 3, 1.1, 0.75, 0, '#ff8fa6');
-    c.globalAlpha /= (o.blush || laugh >= 2) ? 0.85 : 0.45;
+    c.globalAlpha /= (o.blush || laugh >= 2 || an === 'nose') ? 0.85 : 0.45;
     // mouth
     const mx = hx + 3.5, my = hy + 4.4;
     if (laugh >= 1 || rofl) {
@@ -445,6 +448,8 @@ const ART = (() => {
       shape([[hx - 8, hy - 2], [hx - 6.8, hy - 8.6], [hx + 1, hy - 10.4], [hx + 7.2, hy - 7.6], [hx + 8.2, hy - 2.6]], L.hatc, 0.85, 91, 0.08);
       R(hx - 8, hy - 3.6, 16.2, 1.6, 'rgba(0,0,0,.18)'); circle(hx, hy - 10.6, 1.6, L.hatc, 0.6);
     }
+    // a little nose, only when it touches the other nose (drawn last, so no beard or hair covers it)
+    if (an === 'nose') { ell(hx + r - 0.1, hy + 1.6, 1.5, 1.1, 0, L.skin, 0.55); ell(hx + r + 0.6, hy + 1.4, 0.6, 0.45, 0, '#ff9aa8'); }
   }
 
   // top-down view for inside the restaurant
@@ -472,7 +477,8 @@ const ART = (() => {
     }
     const shake = (o.laugh || 0) >= 2 ? Math.sin(t * 30) * 0.7 : 0;
     const yum = o.yum || 0;            // > 0 while enjoying a bite
-    c.translate(shake, 0); c.rotate(a + (yum ? Math.sin(t * 13) * 0.2 : 0));
+    const nose = o.anim === 'nose';    // nose kiss: the head rubs from side to side
+    c.translate(shake, 0); c.rotate(a + (yum ? Math.sin(t * 13) * 0.2 : 0) + (nose ? Math.sin(t * 10) * 0.16 : 0));
     c.fillStyle = 'rgba(50,25,10,.22)'; c.beginPath(); c.ellipse(1, 1.6, 7.5, 7, 0, 0, Math.PI * 2); c.fill();
     const swing = o.moving ? Math.sin((o.phase || 0) * Math.PI * 2) * 2.2 : 0;
     if (yum) {
@@ -485,8 +491,14 @@ const ART = (() => {
     within(() => { R(-7, -9, 4, 18, L.top2); });
     if (L.apron) ell(2.4, 0, 1.8, 4.4, 0, L.apron, 0.5);
     topHead(L, 0.6, 0, 0, t, false, o);
-    if (yum) { ell(3.4, -3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); ell(3.4, 3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); }
+    if (yum || nose) { ell(3.4, -3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); ell(3.4, 3.4, 1.2, 0.8, 0, 'rgba(255,120,150,.8)'); }
+    if (nose) ell(6.2, 0, 1.3, 1.1, 0, L.skin, 0.5);
     c.restore();
+    // two tiny twinkles where the noses meet
+    if (nose) for (let i = 0; i < 2; i++) {
+      const k = (t * 1.6 + i / 2) % 1, ang = a + (i ? 0.9 : -0.9);
+      c.globalAlpha *= 1 - k; sparkle(x + Math.cos(a) * 7 + Math.cos(ang) * k * 7, y + Math.sin(a) * 7 + Math.sin(ang) * k * 7, 1.3, '#ffe9a0'); c.globalAlpha /= Math.max(0.01, 1 - k);
+    }
     // little sparkles of joy around the head
     if (yum) for (let i = 0; i < (yum > 2 ? 6 : 4); i++) {
       const an = i / (yum > 2 ? 6 : 4) * Math.PI * 2 + t * 2.2, r = 9.5 + Math.sin(t * 7 + i * 2) * 1.6;

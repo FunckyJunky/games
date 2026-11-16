@@ -80,6 +80,7 @@ const SFX = {
   yum() { noise(0.05, 0.1, 1600, 1.2); tone(220, 0.4, 0.035, 'sine', 0.08, 260); tone(330, 0.3, 0.02, 'triangle', 0.25, 300); },
   heart() { tone(880, 0.09, 0.05, 'sine'); tone(1318, 0.16, 0.05, 'sine', 0.09); },
   hug() { tone(392, 0.3, 0.04, 'sine', 0, 523); tone(523, 0.35, 0.03, 'sine', 0.2, 440); },
+  boop() { for (let i = 0; i < 4; i++) tone(i % 2 ? 990 : 760, 0.09, 0.045, 'sine', 0.15 + i * 0.32, i % 2 ? 760 : 1180); },
   door() { tone(1568, 0.25, 0.04, 'sine'); tone(1175, 0.4, 0.04, 'sine', 0.18); },
   bell() { tone(1200, 0.5, 0.05, 'triangle'); tone(1200, 0.5, 0.05, 'triangle', 0.28); },
   car() { noise(0.9, 0.05, 240, 0.7); },
@@ -113,6 +114,7 @@ function layout() {
   view.style.width = CW + 'px'; view.style.height = CH + 'px';
   view.width = Math.round(CW * DPR); view.height = Math.round(CH * DPR);
   A.setScale(SCALE * DPR);
+  DM.cols = 0; LOGO.w = 0;   // the screens at the top re-measure themselves
 }
 addEventListener('resize', layout);
 
@@ -232,15 +234,173 @@ function clockInfo() {
   return { closed: ms >= CLOSE_MS, h: Math.floor(Math.min(gameMin, 22 * 60) / 60), m: Math.min(gameMin, 22 * 60) % 60 };
 }
 function updateClock() {
-  const el = $('clock');
-  const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
-  if (G.scene === 'login') { el.textContent = 'ТУСА.EXE'; return; }
-  if (!at) { el.innerHTML = (HOME[G.me] ? HOME[G.me].title : 'TUSA') + ' <small>' + (G.scene === 'travel' ? '→ BERLIN' : '') + '</small>'; return; }
   const c = clockInfo();
   if (!c) G.closedShown = false;
-  if (!c) { el.innerHTML = '18:00 <small>' + (voicePlaying() ? '🎙 ' : '') + 'wachten…</small>'; return; }
-  const hh = String(c.h).padStart(2, '0') + ':' + String(c.m).padStart(2, '0');
-  el.innerHTML = hh + (c.closed ? ' <small>GESLOTEN</small>' : '');
+}
+
+// =====================================================================
+// the dot-matrix screen at the top: glowing green dots like an old DOS
+// display. The big line says where you are and the time; the small line
+// scrolls everything else (friends, radio, your order...) or shows a message.
+// =====================================================================
+const dmx = $('dmx'), dctx = dmx.getContext('2d');
+const DM = { rows: 22, cols: 0, pitch: 0, src: null, s: null, grid: null, off: 0, last: 0, key: '' };
+function dmLayout() {
+  const r = dmx.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (!r.width) return;
+  dmx.width = Math.round(r.width * dpr); dmx.height = Math.round(r.height * dpr);
+  DM.pitch = dmx.height / DM.rows; DM.cols = Math.floor(dmx.width / DM.pitch);
+  DM.src = document.createElement('canvas'); DM.src.width = DM.cols; DM.src.height = DM.rows;
+  DM.s = DM.src.getContext('2d', { willReadFrequently: true });
+  // the dark dots that are always there
+  DM.grid = document.createElement('canvas'); DM.grid.width = dmx.width; DM.grid.height = dmx.height;
+  const g = DM.grid.getContext('2d'), p = DM.pitch, ox = (dmx.width - DM.cols * p) / 2;
+  g.fillStyle = '#020a05'; g.fillRect(0, 0, dmx.width, dmx.height);
+  g.fillStyle = 'rgba(57,255,122,.07)'; g.beginPath();
+  for (let y = 0; y < DM.rows; y++) for (let x = 0; x < DM.cols; x++) { g.moveTo(ox + (x + 0.5) * p + p * 0.36, (y + 0.5) * p); g.arc(ox + (x + 0.5) * p, (y + 0.5) * p, p * 0.36, 0, 7); }
+  g.fill();
+  DM.ox = ox;
+}
+const DM_FONT = '"Pixelify Sans", "VT323", monospace';
+// emoji don't exist on a dot-matrix screen
+const dmText = t => String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim().toUpperCase();
+function dmContent() {
+  const sc = G.scene, c = clockInfo(), info = [];
+  const time = c ? String(c.h).padStart(2, '0') + ':' + String(c.m).padStart(2, '0') : '--:--';
+  let L = '', R = '', Ls = '';
+  if (sc === 'login') { L = 'ERROR-DOS'; R = 'ТУСА.EXE'; info.push('ТУСА У БЕРЛІНІ', 'VIKA · VITO · OLEKSIY', 'WIE BEN JIJ?'); }
+  else if ((sc === 'base' || sc === 'end') && G.base) {
+    const H = G.base.H;
+    L = H.title; R = sc === 'end' ? 'EINDE' : G.base.back ? 'THUIS' : 'BASIS'; Ls = H.title.replace(/^CAMP /i, '');
+    info.push(H.sub, G.me, sc === 'end' ? 'КІНЕЦЬ ТУСИ' : G.base.back ? 'WELKOM THUIS · DOOR NAAR BINNEN = EINDE' : 'DOOR DE POORT → BERLIJN');
+  } else if (sc === 'travel' && G.travel) {
+    const st = G.travel.steps[G.travel.i];
+    L = '→ BERLIN'; R = (G.travel.i + 1) + '/' + G.travel.steps.length;
+    info.push(st.cap(), 'A: OVERSLAAN');
+  } else {
+    L = sc === 'inside' ? 'IN HOONGY' : 'HOONGY · BERLIN'; Ls = 'HOONGY'; R = (c ? time : '18:00') + (c && c.closed ? ' DICHT' : '');
+    const friends = ['VIKA', 'VITO', 'OLEKSIY'].filter(x => x !== G.me).map(x => {
+      const o = G.others[x];
+      return x + (o ? (o.scene === 'inside' ? ' BINNEN' : ' BUITEN') + (o.voice ? ' MIC' : '') : ' ...');
+    });
+    info.push('VRIENDEN: ' + friends.join(' · '));
+    if (!c) info.push('WACHTEN OP VRIENDEN');
+    const ch = NET.g.radio ? NET.g.radio.ch : 0, rs = STATIONS[ch - 1];
+    info.push(rs ? 'RADIO ' + rs.freq + ' ' + rs.name + (VOICE.on && sc === 'inside' ? ' (STIL: MIC AAN)' : '') : 'RADIO UIT');
+    if (G.order) info.push(G.order.ph === 'wait' ? 'DE OBER KOMT' : FOOD[G.order.item] ? FOOD[G.order.item].name + ' ' + Math.min(5, G.order.bites || 0) + '/5' : '');
+    else if (sc === 'inside' && G.p.seat >= 0 && !c) info.push('KEUKEN DICHT');
+    if (voicePlaying()) info.push('COMMENTAAR SPEELT');
+    if (VOICE.on) info.push('MIC AAN');
+    if (noseReady()) info.push('NEUSJE-NEUSJE KAN NU');
+    if (G.ride) info.push('OP DE STEP');
+    if (!NET.ok) info.push('GEEN VERBINDING');
+  }
+  return { L: dmText(L), Ls: dmText(Ls || L), R: dmText(R), info: info.map(dmText).filter(Boolean).join('   ·   ') };
+}
+function dmDraw(now) {
+  if (!DM.s || !DM.cols) { dmLayout(); if (!DM.s) return; }
+  const s = DM.s, C = DM.cols, dt = Math.min(0.1, (now - (DM.last || now)) / 1000); DM.last = now;
+  const ct = dmContent(), toast = G.toast && G.toast.until > G.t ? dmText(G.toast.text) : '';
+  if (toast !== DM.toast) { DM.toast = toast; DM.toastAt = now; }
+  s.clearRect(0, 0, C, DM.rows); s.fillStyle = '#fff'; s.textBaseline = 'alphabetic';
+  // the big line
+  s.font = '12px ' + DM_FONT;
+  // place and time; on a small screen the short name, and if even that won't fit the time goes to the ticker
+  const rw = ct.R ? s.measureText(ct.R).width + 5 : 0;
+  let big = ct.L, info = ct.info;
+  if (s.measureText(big).width + rw > C - 2) big = ct.Ls;
+  if (s.measureText(big).width + rw > C - 2) { info = ct.R + '   ·   ' + info; ct.R = ''; }
+  s.textAlign = 'left'; s.fillText(big, 1, 11);
+  if (ct.R) { s.textAlign = 'right'; s.fillText(ct.R, C - 1, 11); }
+  // the small line: a message, or everything else scrolling by
+  s.font = '9px ' + DM_FONT; s.textAlign = 'left';
+  const small = toast || info, w = s.measureText(small).width;
+  if (w <= C - 2) { s.fillText(small, toast ? Math.round((C - w) / 2) : 1, 20); DM.off = 0; }
+  else {
+    if (DM.key !== small) { DM.key = small; DM.off = toast ? -8 : 0; }
+    DM.off += dt * 14;
+    const gap = 24, span = w + gap, x = -((DM.off % span + span) % span);
+    s.fillText(small, Math.round(x), 20); s.fillText(small, Math.round(x + span), 20);
+  }
+  // light up the dots
+  const img = s.getImageData(0, 0, C, DM.rows).data, p = DM.pitch, ox = DM.ox;
+  dctx.drawImage(DM.grid, 0, 0);
+  const blink = toast && now - DM.toastAt < 1000 && ((now - DM.toastAt) / 170 | 0) % 2 === 1;   // a new message blinks a few times
+  const lit = new Path2D(), halo = new Path2D();
+  for (let y = 0; y < DM.rows; y++) for (let x = 0; x < C; x++) {
+    if (img[(y * C + x) * 4 + 3] < 110) continue;
+    if (blink && y > 11) continue;
+    const cx = ox + (x + 0.5) * p, cy = (y + 0.5) * p;
+    lit.moveTo(cx + p * 0.38, cy); lit.arc(cx, cy, p * 0.38, 0, 7);
+    halo.moveTo(cx + p * 0.75, cy); halo.arc(cx, cy, p * 0.75, 0, 7);
+  }
+  dctx.fillStyle = toast ? 'rgba(255,214,90,.16)' : 'rgba(57,255,122,.16)'; dctx.fill(halo);
+  dctx.fillStyle = toast ? '#ffe07a' : '#5dff94'; dctx.fill(lit);
+  // a faint glass sheen
+  dctx.fillStyle = 'rgba(255,255,255,.035)'; dctx.fillRect(0, 0, dmx.width, dmx.height * 0.45);
+}
+addEventListener('resize', () => { DM.cols = 0; LOGO.w = 0; });
+
+// =====================================================================
+// the DOS button: a little 3D ERROR-DOS logo, green on black, swinging
+// round and glitching now and then
+// =====================================================================
+const logoCv = $('dosLogo'), logoCtx = logoCv.getContext('2d');
+const LOGO = { w: 0, h: 0, face: null, side: null, back: null, glitch: 0, next: 2, t: 0, last: 0 };
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { LOGO.w = 0; });   // redo the letters once the pixel font is in
+function logoLayout() {
+  const r = logoCv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (!r.width) return;
+  const w = logoCv.width = Math.round(r.width * dpr), h = logoCv.height = Math.round(r.height * dpr);
+  LOGO.w = w; LOGO.h = h;
+  // the letters once, then a copy in each colour: front, sides, far back
+  const mask = document.createElement('canvas'); mask.width = w; mask.height = h;
+  const m = mask.getContext('2d');
+  m.fillStyle = '#fff'; m.textAlign = 'center'; m.textBaseline = 'alphabetic';
+  const fit = (txt, size, y) => {
+    m.font = '700 ' + size + 'px "Pixelify Sans", "VT323", monospace';
+    const tw = m.measureText(txt).width, k = Math.min(1, w * 0.84 / tw);
+    m.save(); m.translate(w / 2, y); m.scale(k, 1); m.fillText(txt, 0, 0); m.restore();
+  };
+  fit('ERROR', h * 0.4, h * 0.44);
+  fit('DOS', h * 0.5, h * 0.88);
+  const tint = col => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(mask, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, w, h); return c; };
+  LOGO.face = tint('#7dffa8'); LOGO.side = tint('#1d9a48'); LOGO.back = tint('#0a3d1c');
+}
+function logoDraw(now) {
+  if (!LOGO.w) { logoLayout(); if (!LOGO.w) return; }
+  const dt = Math.min(0.1, (now - (LOGO.last || now)) / 1000); LOGO.last = now; LOGO.t += dt;
+  const c = logoCtx, w = LOGO.w, h = LOGO.h, t = LOGO.t;
+  // phosphor afterglow: fade the last picture instead of wiping it
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+  c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(0, 0, w, h);
+  // now and then a glitch burst
+  LOGO.next -= dt;
+  if (LOGO.next <= 0) { LOGO.glitch = 0.18 + Math.random() * 0.3; LOGO.next = 1.6 + Math.random() * 3.2; }
+  const gl = LOGO.glitch > 0; if (gl) LOGO.glitch -= dt;
+  // turn round the upright axis and nod a little
+  const yaw = Math.sin(t * 1.15) * 0.62 + (gl ? (Math.random() - 0.5) * 0.5 : 0), pitch = Math.sin(t * 0.8) * 0.3;
+  const sx = Math.max(0.25, Math.cos(yaw)), depth = Math.round(h * 0.11);
+  const ex = Math.sin(yaw) * h * 0.012, ey = -Math.sin(pitch) * h * 0.012 + h * 0.006;
+  const at = (img, k) => {
+    c.save(); c.translate(w / 2 + ex * k, ey * k); c.scale(sx, 1); c.drawImage(img, -w / 2, 0); c.restore();
+  };
+  for (let k = depth; k >= 1; k--) at(k > depth * 0.55 ? LOGO.back : LOGO.side, k);
+  c.shadowColor = '#39ff7a'; c.shadowBlur = h * 0.08;
+  c.globalAlpha = gl && Math.random() < 0.3 ? 0.35 : 1;
+  at(LOGO.face, 0);
+  c.shadowBlur = 0; c.globalAlpha = 1;
+  if (gl) {
+    // tearing: strips of the picture slide sideways, and a green bar flashes
+    for (let i = 0; i < 3; i++) {
+      const y = Math.random() * h, sh = 2 + Math.random() * h * 0.18, dx = (Math.random() - 0.5) * w * 0.3;
+      c.drawImage(logoCv, 0, y, w, sh, dx, y, w, sh);
+    }
+    if (Math.random() < 0.5) { c.globalCompositeOperation = 'difference'; c.fillStyle = '#39ff7a'; c.fillRect(0, Math.random() * h, w, 1 + Math.random() * h * 0.08); c.globalCompositeOperation = 'source-over'; }
+  }
+  // scan lines
+  c.fillStyle = 'rgba(0,0,0,.35)';
+  for (let y = 0; y < h; y += 3) c.fillRect(0, y, w, 1);
 }
 
 // =====================================================================
@@ -949,7 +1109,7 @@ function openMenu() {
 const keys = { left: false, right: false, up: false, down: false };
 function movePlayerSide(dt, minX, maxX, speed) {
   const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-  if (animFor(G.me).anim === 'hug') { G.p.moving = false; return; }
+  if (holding(animFor(G.me).anim)) { G.p.moving = false; return; }
   if (dx) {
     stopLaughing(G.me);
     G.p.x = clamp(G.p.x + dx * (speed || 46) * dt, minX, maxX); G.p.dir = dx; G.p.moving = true; G.p.phase += dt * 2.4; G.p.idle = 0;
@@ -961,7 +1121,7 @@ function movePlayerTop(dt) {
   const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
   G.inputDown = keys.down;
   if (!dx && !dy) { G.p.moving = false; G.p.idle += dt; return; }
-  if (animFor(G.me).anim === 'hug') { G.p.moving = false; return; }
+  if (holding(animFor(G.me).anim)) { G.p.moving = false; return; }
   stopLaughing(G.me);
   const l = Math.hypot(dx, dy), sp = 40 * dt;
   const nx = G.p.x + dx / l * sp, ny = G.p.y + dy / l * sp;
@@ -994,9 +1154,29 @@ function nearestFriend(maxD) {
   }
   return best;
 }
+// Vito and Oleksiy have one of their own: when they stand close, they can rub noses
+const NOSE_PAIR = { VITO: 'OLEKSIY', OLEKSIY: 'VITO' };
+const holding = a => a === 'hug' || a === 'nose';
+function noseReady() {
+  const other = NOSE_PAIR[G.me];
+  if (!other || !G.others[other] || !(G.scene === 'street' || G.scene === 'inside')) return '';
+  const me = posOf(G.me), p = posOf(other);
+  if (!p || p.scene !== me.scene) return '';
+  return Math.hypot(p.x - me.x, (p.y - me.y) * (me.scene === 'inside' ? 1 : 0.3)) < 46 ? other : '';
+}
+function updateNoseBtn() {
+  const b = $('noseBtn'); if (!b) return;
+  const show = !!noseReady();
+  if ((b.style.display !== 'none') !== show) { b.style.display = show ? '' : 'none'; b.parentNode.classList.toggle('four', show); }
+}
 function emote(kind) {
   if (!(G.scene === 'street' || G.scene === 'inside' || G.scene === 'base')) return;
   unlock();
+  if (kind === 'nose') {
+    const to = noseReady(); if (!to) return;
+    if (NET.ok) send({ t: 'emote', kind, to, j: 0 }); else handleEmote({ from: G.me, kind, to, j: 0, t: snow() });
+    return;
+  }
   const to = nearestFriend(kind === 'hug' ? 46 : 1e9) || '';
   if (NET.ok) send({ t: 'emote', kind, to, j: 0 });
   else handleEmote({ from: G.me, kind, to, j: 0, t: snow() });
@@ -1040,6 +1220,25 @@ function handleEmote(e) {
       if (e.to === G.me && a) { G.p.dir = a.x >= G.p.x ? 1 : -1; }
       G.blush[from] = G.t + 2.5; G.blush[e.to] = G.t + 2.5;
     } else setAnim(from, 'hug', 1.2);
+  } else if (e.kind === 'nose' && e.to && NOSE_PAIR[from] === e.to) {
+    // nose kiss: face each other, lean in until the noses touch, and rub them side to side
+    SFX.boop();
+    setAnim(from, 'nose', 2.6); setAnim(e.to, 'nose', 2.6);
+    stopLaughing(from); stopLaughing(e.to);
+    const a = posOf(from), b = posOf(e.to);
+    if (from === G.me && b) {
+      if (G.scene === 'street') { G.p.dir = b.x >= G.p.x ? 1 : -1; G.p.x = b.x - G.p.dir * 17.5; }
+      else {
+        const ang = Math.atan2(b.y - G.p.y, b.x - G.p.x), nx = b.x - Math.cos(ang) * 12.5, ny = b.y - Math.sin(ang) * 12.5;
+        if (G.p.seat < 0 && !insideBlocked(nx, ny)) { G.p.x = nx; G.p.y = ny; }
+        G.p.angle = ang; G.p.dir = Math.cos(ang) >= 0 ? 1 : -1;
+      }
+    }
+    if (e.to === G.me && a) {
+      G.p.dir = a.x >= G.p.x ? 1 : -1;
+      if (G.scene === 'inside' && G.p.seat < 0) G.p.angle = Math.atan2(a.y - G.p.y, a.x - G.p.x);
+    }
+    G.blush[from] = G.t + 3; G.blush[e.to] = G.t + 3;
   }
 }
 // a bite: wiggle, sparkles, and a happy "mmm" (bigger for the last bite)
@@ -1062,20 +1261,20 @@ function toast(text, dur) { G.toast = { text, until: G.t + (dur || 2.5) }; }
 function myLaugh() {
   const lv = laughLevel(G.me), since = lastJoke(G.me);
   const a = G.p.animUntil > G.t ? G.p.anim : '';
-  if (lv >= ROFL_AT && since < 20000 && a !== 'hug') return { anim: 'rofl', laugh: 4 };
+  if (lv >= ROFL_AT && since < 20000 && !holding(a)) return { anim: 'rofl', laugh: 4 };
   return { anim: a, laugh: since < 9000 ? lv : 0 };
 }
 function animFor(ch) {
   if (ch === G.me) return myLaugh();
   const o = G.others[ch]; if (!o) return { anim: '', laugh: 0 };
   const a = (o.localAnimUntil || 0) > G.t ? o.localAnim : '';
-  if (o.rf && a !== 'hug') return { anim: 'rofl', laugh: 4 };
+  if (o.rf && !holding(a)) return { anim: 'rofl', laugh: 4 };
   return { anim: a, laugh: o.lg || 0 };
 }
 function talking(ch) { return G.talk[ch] > G.t && (G.t * 8 | 0) % 2 === 0; }
 function drawRider(ch, x, y, dir, moving, st) {
   A.scooter(x, y, dir, null, moving ? G.t : 0);
-  A.friend(ch, x - dir, y - 3, { dir, t: G.t, anim: st.anim === 'hug' || st.anim === 'heart' ? st.anim : (G.talk[ch] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[ch] > G.t, talk: mouthMoving(ch) });
+  A.friend(ch, x - dir, y - 3, { dir, t: G.t, anim: holding(st.anim) || st.anim === 'heart' ? st.anim : (G.talk[ch] > G.t ? 'wave' : ''), laugh: st.laugh, blush: G.blush[ch] > G.t, talk: mouthMoving(ch) });
 }
 function drawMe(x, y) {
   const st = animFor(G.me);
@@ -1164,7 +1363,7 @@ function hissOff() {
   setTimeout(() => { try { h.src.stop(); h.lfo.stop(); } catch (e) {} }, 400);
 }
 function radioSync() {
-  const hear = G.scene === 'inside';
+  const hear = G.scene === 'inside' && !VOICE.on;   // talking? then the radio goes quiet for you
   const ch = NET.g.radio ? NET.g.radio.ch : 0;
   updateRadioBtn();
   if (!hear || !ch || !STATIONS[ch - 1]) { radioStop(); return; }
@@ -1277,9 +1476,10 @@ async function voiceStart() {
     VOICE.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch (e) { toast('🎙 Geen toegang tot de microfoon', 3); return; }
   VOICE.on = true;
+  radioSync();
   watchLevel(G.me, VOICE.stream);
   send({ t: 'voice', on: 1 });
-  toast('🎙 Microfoon aan: je vrienden horen je', 2.5);
+  toast('🎙 Microfoon aan · radio stil', 2.5);
   for (const ch in G.others) voicePeer(ch);
   updateMicBtn();
 }
@@ -1289,7 +1489,7 @@ function voiceStop(quiet) {
   for (const ch of Object.keys(VOICE.pcs)) hangup(ch);
   if (VOICE.stream) VOICE.stream.getTracks().forEach(tr => tr.stop());
   VOICE.stream = null; delete VOICE.an[G.me]; VOICE.speaking = {};
-  if (!quiet) { send({ t: 'voice', on: 0 }); toast('🎙 Microfoon uit', 2); }
+  if (!quiet) { send({ t: 'voice', on: 0 }); toast('🎙 Microfoon uit', 2); radioSync(); }
   updateMicBtn();
 }
 // both of us have the microphone on? the one whose name comes first starts the call
@@ -1364,8 +1564,10 @@ function updateMicBtn() {
   const b = $('micBtn'); if (!b) return;
   const inBerlin = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
   const show = inBerlin && (VOICE.on || Object.keys(G.others).length > 0);
+  if (b.style.visibility !== (show ? 'visible' : 'hidden')) DM.cols = 0;   // the screen gets wider or narrower
   b.style.visibility = show ? 'visible' : 'hidden';
-  b.textContent = VOICE.on ? '🎙 AAN' : '🎙 PRATEN';
+  b.style.display = show ? '' : 'none';
+  b.textContent = '🎙';
   b.classList.toggle('live', VOICE.on);
 }
 
@@ -1422,7 +1624,7 @@ function press(k) {
   unlock();
   if (G.scene === 'login') return;
   if (dialogOpen()) return dialogKey(k);
-  if (k === 'hug' || k === 'heart' || k === 'joke') return emote(k);
+  if (k === 'hug' || k === 'heart' || k === 'joke' || k === 'nose') return emote(k);
   if (k === 'mic') { if ($('micBtn').style.visibility === 'visible') VOICE.on ? voiceStop() : voiceStart(); return; }
   if (G.scene === 'travel') { if (k === 'a' || k === 'b') nextTravel(); return; }
   if (G.scene === 'base' && G.snap && G.snap.shot && !G.snap.small && (k === 'a' || k === 'b')) { G.snap.small = true; return; }
@@ -1465,7 +1667,7 @@ function standUp() {
   if (s) { G.p.x = s.x + (s.face === 0 ? -10 : 10); if (insideBlocked(G.p.x, G.p.y)) G.p.y += 14; }
   sendState(true);
 }
-const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke', KeyM: 'mic' };
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Enter: 'a', Space: 'a', KeyE: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'b', KeyH: 'hug', KeyL: 'heart', KeyJ: 'joke', KeyM: 'mic', KeyN: 'nose' };
 addEventListener('keydown', e => {
   if (G.scene === 'login') {
     unlock();
@@ -1546,7 +1748,6 @@ function drawOverlay() {
   // captions
   if (G.scene === 'base' || G.scene === 'end') {
     const H = G.base.H;
-    capText(H.title, H.sub);
     if (G.base.signX != null) {
       c.font = '800 ' + (5.6 * k) + 'px ' + FONT; c.fillStyle = '#fbf4e2'; c.textAlign = 'center';
       c.fillText(H.sign, S2(G.base.signX + G.base.signW / 2), S2(G.base.signY + G.base.signH * 0.72 + oy));
@@ -1556,7 +1757,6 @@ function drawOverlay() {
   }
   if (G.scene === 'travel') {
     const st = G.travel.steps[G.travel.i];
-    capText(st.cap(), 'A: overslaan');
     if (G.mapPins && (st.k === 'mapDrive' || st.k === 'mapTrain' || st.k === 'europe')) {
       c.font = '800 ' + (6 * k) + 'px ' + FONT; c.lineJoin = 'round';
       for (const [n, [x, y]] of G.mapPins) {
@@ -1608,9 +1808,7 @@ function drawOverlay() {
   }
   if (G.scene === 'base') drawSnapshot();
   if (G.scene === 'end') drawEnd();
-  const showToast = G.toast && G.toast.until > G.t;
-  if (G.prompt && !dialogOpen()) hint(G.prompt, showToast ? 1 : 0);
-  if (showToast && !dialogOpen()) hint(G.toast.text, 0, true);
+  if (G.prompt && !dialogOpen()) hint(G.prompt, 0);
   // fade after leaving
   if (G.fadeUntil > G.t) { c.fillStyle = 'rgba(0,0,0,' + ((G.fadeUntil - G.t) * 2) + ')'; c.fillRect(0, 0, view.width, view.height); }
 }
@@ -1776,7 +1974,9 @@ function frame(now) {
   vctx.setTransform(1, 0, 0, 1, 0, 0);
   if (G.scene !== 'login') A.paper(vctx, view.width, view.height);
   drawOverlay();
-  if (now - lastClock > 250) { updateClock(); updateMicBtn(); lastClock = now; }
+  if (now - lastClock > 250) { updateClock(); updateMicBtn(); updateNoseBtn(); lastClock = now; }
+  dmDraw(now);
+  logoDraw(now);
   requestAnimationFrame(frame);
 }
 
