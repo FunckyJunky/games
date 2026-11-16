@@ -4,7 +4,7 @@
 const A = ART;
 const $ = id => document.getElementById(id);
 const view = $('view'), vctx = view.getContext('2d');
-const low = document.createElement('canvas'), lctx = low.getContext('2d');
+const lctx = vctx;   // the world is drawn straight onto the screen canvas, sharp at any size
 const stage = $('stage'), dlg = $('dlg');
 let LW = 240, LH = 180, SCALE = 2, DPR = 1, CW = 480, CH = 360;
 
@@ -97,7 +97,7 @@ function layout() {
     // portrait phone: keep about 215 pixels across and show extra height above
     SCALE = sw / 215;
     LW = Math.round(sw / SCALE);
-    LH = Math.max(180, Math.min(300, Math.floor(sh / SCALE)));
+    LH = Math.max(180, Math.min(360, Math.floor(sh / SCALE)));
   } else {
     let ch = Math.min(sh, sw * 0.78);
     let cw = Math.min(sw, ch * 430 / 180);
@@ -109,7 +109,7 @@ function layout() {
   CW = Math.round(LW * SCALE); CH = Math.round(LH * SCALE);
   view.style.width = CW + 'px'; view.style.height = CH + 'px';
   view.width = Math.round(CW * DPR); view.height = Math.round(CH * DPR);
-  low.width = LW; low.height = LH;
+  A.setScale(SCALE * DPR);
 }
 addEventListener('resize', layout);
 
@@ -301,19 +301,44 @@ function showLogin() {
 // =====================================================================
 // scenes: base
 // =====================================================================
-function startBase(who) {
+// back = coming home from Berlin: you walk in from the edge, and your own door ends the game
+function startBase(who, back) {
   G.me = who;
   $('login').classList.remove('show');
   if (document.body.classList.contains('at-login')) { document.body.classList.remove('at-login'); layout(); globalThis.__LH = LH; }
   G.scene = 'base';
   const H = HOME[who];
-  G.base = { who, H, t0: G.t, out: false };
-  G.p = { x: H.door, y: 152, dir: 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
+  G.base = { who, H, t0: back ? G.t - 2 : G.t, out: !!back, back: !!back };
+  G.p = { x: back ? H.W + 6 : H.door, y: 152, dir: back ? -1 : 1, phase: 0, moving: false, anim: '', animUntil: 0, seat: -1, angle: -Math.PI / 2, idle: 0 };
+  G.prompt = '';
   G.npcs = [];
   for (let i = 0; i < 3; i++) spawnSoldier(true);
   G.camX = 0;
   closeDialog();
   radioStop();
+}
+// walking in through your own door: the end of the evening
+function endGame() {
+  G.scene = 'end'; G.end = { t0: G.t, shown: false }; G.prompt = '';
+  G.p.dir = G.base.H.door >= G.p.x ? 1 : -1;
+  SFX.door();
+}
+function updateEnd(dt) {
+  const E = G.end, H = G.base.H, el = G.t - E.t0;
+  // step into the doorway, then the picture fades and the card comes
+  if (el < 0.8) { G.p.x += (H.door - G.p.x) * Math.min(1, dt * 6); G.p.moving = true; G.p.phase += dt * 2; }
+  else G.p.moving = false;
+  if (el > 2.2 && !E.shown) {
+    E.shown = true; SFX.bell();
+    showDialog({
+      title: 'Кінець туси · Einde', low: true,
+      text: 'Дякуємо, що були в Hoongy! Tot de volgende keer, ' + G.me + '.',
+      opts: [
+        { ico: '↻', label: 'Ще раз', key: 'A', act: () => location.reload() },
+        { ico: '◄', label: 'Terug naar ERROR-DOS', key: 'B', act: () => { try { sessionStorage.setItem('errordos-ran', 'TUSA'); } catch (e) {} location.href = '/'; } },
+      ],
+    });
+  }
 }
 function spawnSoldier(anywhere) {
   const B = G.base; if (!B) return;
@@ -328,6 +353,8 @@ function updateBase(dt) {
   if (G.t - B.t0 < 0.9) { G.p.x = H.door + (G.t - B.t0) * 18; G.p.moving = true; G.p.phase += dt * 2; G.p.dir = 1; return; }
   if (!B.out) B.out = true;
   movePlayerSide(dt, 30, H.W + 30);
+  // home again: the door takes you inside, and that is the end of the evening
+  G.prompt = B.back && Math.abs(G.p.x - H.door) < 10 ? 'A  🏠 Зайти додому' : '';
   if (G.p.x > H.W + 10 && !dialogOpen()) {
     if (G.me === 'VITO') {
       showDialog({
@@ -354,7 +381,6 @@ function updateBase(dt) {
 function drawBase() {
   const B = G.base, H = B.H;
   A.use(lctx);
-  topFill({ VITO: '#5b8fd1', VIKA: '#6f9fd8', OLEKSIY: '#7aa6d6' }[B.who]);
   lctx.save(); lctx.translate(0, sideOY());
   const r = H.draw(LW, 180, G.camX, G.t);
   B.signX = r.signX; B.signY = r.signY; B.signW = r.signW; B.signH = r.signH;
@@ -362,7 +388,6 @@ function drawBase() {
   list.push({ y: G.p.y, d: () => drawMe(G.p.x - G.camX, G.p.y) });
   list.sort((a, b) => a.y - b.y).forEach(o => o.d());
   // door: open while stepping out
-  if (G.t - B.t0 < 1.2 && G.me === 'VITO') A.R(H.door - 5 - G.camX, 133, 3, 16, '#9aa1a6');
   lctx.restore();
 }
 
@@ -408,7 +433,7 @@ function drawTravel() {
   A.use(lctx);
   const side = !/^(europe|mapDrive|mapTrain)$/.test(st.k);
   G.travelShift = side ? sideOY() : 0;
-  if (side) { topFill({ airport: '#0b1530', drive: '#5e8ccc', train: '#6c96cf', hbf: '#0d1a33', city: '#0b1324' }[st.k]); lctx.save(); lctx.translate(0, sideOY()); }
+  if (side) { lctx.save(); lctx.translate(0, sideOY()); }
   const LH = side ? 180 : globalThis.__LH;
   if (st.k === 'europe') { const r = A.europeMap(LW, LH, ease(p), t); G.mapPins = [['Бухарест · Boekarest', r.from], ['Берлін · Berlijn', r.to]]; }
   else if (st.k === 'mapDrive' || st.k === 'mapTrain') {
@@ -418,9 +443,8 @@ function drawTravel() {
     const r = A.brandenburgMap(LW, LH, route, ease(p), t);
     const pins = st.k === 'mapDrive' ? [['Altengrabow', 12.18, 52.18], ['Berlin', 13.42, 52.53]] : [['Lehnin', 12.74, 52.32], ['Brück', 12.76, 52.2], ['Berlin Hbf', 13.37, 52.525]];
     G.mapPins = pins.map(([n, lo, la]) => [n, r.P(lo, la)]);
-    lctx.save(); lctx.translate(r.at[0], r.at[1]);
-    if (st.k === 'mapDrive') { A.R(-4, -2, 8, 4, '#4f8a45'); A.R(-1, -3, 4, 2, '#9cc7ff'); }
-    else { A.R(-5, -2, 10, 4, '#e8212b'); A.R(-4, -1, 8, 1, '#fff'); }
+    lctx.save(); lctx.translate(r.at[0], r.at[1]); lctx.rotate(r.ang); lctx.scale(1.3, 1.3);
+    A.mapIcon(st.k === 'mapTrain' ? 'train' : 'car');
     lctx.restore();
   } else if (st.k === 'airport') {
     const px = -40 + p * (LW * 0.75), py = p < 0.6 ? 70 + p / 0.6 * 70 : 140;
@@ -429,19 +453,13 @@ function drawTravel() {
     A.roadTrip(LW, LH, t, 'day');
     if (p > 0.6) A.skyline(LW, 140, t, (p - 0.6) / 0.4);
     A.amarok(LW * 0.45, 158, 1, t, 'VIKA');
-    A.R(LW * 0.8, 112, 34, 14, '#1d5a2a'); A.R(LW * 0.8 + 16, 126, 2, 14, '#888');
   } else if (st.k === 'train') {
     A.trainTrip(LW, LH, t, 'OLEKSIY');
   } else if (st.k === 'hbf') {
     A.hbf(LW, LH, t);
     A.friend('OLEKSIY', LW * 0.2 + p * LW * 0.6, 160, { dir: 1, moving: true, phase: t * 2, t });
   } else if (st.k === 'city') {
-    A.use(lctx);
-    lctx.fillStyle = '#0b1324'; lctx.fillRect(0, 0, LW, LH);
-    A.skyline(LW, 140, t, 1);
-    A.R(0, 140, LW, 40, '#232328'); for (let x = -((t * 120) % 40); x < LW; x += 40) A.R(x, 160, 20, 1, '#ddd');
-    if (G.me === 'VITO') A.taxi(LW * 0.5, 160, 1, t);
-    else A.amarok(LW * 0.5, 160, 1, t, 'VIKA');
+    A.cityNight(LW, LH, t, G.me);
   }
   if (side) lctx.restore();
 }
@@ -551,7 +569,7 @@ function updateStreet(dt) {
         title: 'Назад на базу?',
         text: 'Чи ще трохи потусуєш у Берліні?',
         opts: [
-          { ico: '🏠', label: 'Додому, на базу', key: 'A', act: () => { disconnect(); startBase(G.me); } },
+          { ico: '🏠', label: 'Додому, на базу', key: 'A', act: () => { disconnect(); startBase(G.me, true); } },
           { ico: '🍜', label: 'Залишаюсь!', key: 'B', act: () => { G.p.x = clamp(G.p.x, 12, S.W - 12); G.p.dir *= -1; } },
         ],
       });
@@ -594,7 +612,6 @@ function onScreen(x) { return x > G.camX - 40 && x < G.camX + LW + 40; }
 function drawStreet() {
   A.use(lctx);
   const t = G.t, cx = G.camX;
-  topFill('street', cx);
   lctx.save(); lctx.translate(0, sideOY());
   A.street(LW, 180, cx, t, { doorOpen: G.doorUntil > t });
   A.outdoorTables(cx, t);
@@ -639,8 +656,8 @@ function drawStreet() {
   for (const l of G.leaves) {
     if (!onScreen(l.x)) continue;
     lctx.globalAlpha = Math.min(1, l.life * 2);
-    const flip = Math.sin(l.rot) > 0;
-    A.R(l.x - cx, l.y, flip ? 2 : 1, flip ? 1 : 2, l.col);
+    lctx.fillStyle = l.col; lctx.beginPath(); lctx.moveTo(l.x - cx, l.y);
+    lctx.arc(l.x - cx, l.y, 2.2, l.rot - 0.6, l.rot + 0.6); lctx.closePath(); lctx.fill();   // a little ginkgo fan
     lctx.globalAlpha = 1;
   }
   lctx.restore();
@@ -686,13 +703,9 @@ function drawEnter() {
     // the camera slides into the front window
     const k = ease(p / 0.55), zoom = 1 + k * 3.2;
     const wx = (S.shop0 + S.shop1) / 2 - G.camX, wy = 96 + sideOY();
-    drawStreet();
-    const img = lctx.getImageData(0, 0, LW, LH);
-    const tmp = document.createElement('canvas'); tmp.width = LW; tmp.height = LH; tmp.getContext('2d').putImageData(img, 0, 0);
-    lctx.fillStyle = '#000'; lctx.fillRect(0, 0, LW, LH);
     lctx.save();
     lctx.translate(LW / 2, LH / 2); lctx.scale(zoom, zoom); lctx.translate(-(wx + (LW / 2 - wx) * (1 - k)), -(wy + (LH / 2 - wy) * (1 - k)));
-    lctx.drawImage(tmp, 0, 0);
+    drawStreet();
     lctx.restore();
     lctx.fillStyle = 'rgba(255,220,140,' + (k * 0.5) + ')'; lctx.fillRect(0, 0, LW, LH);
   } else {
@@ -778,7 +791,7 @@ function updateInside(dt) {
 function drawInsideWorld() {
   A.use(lctx);
   lctx.fillStyle = '#120c08'; lctx.fillRect(0, 0, LW, LH);
-  lctx.save(); lctx.translate(-Math.round(G.camX), -Math.round(G.camY));
+  lctx.save(); lctx.translate(-G.camX, -G.camY);
   const taken = seatTakenMap();
   A.inside(G.t, { seatTaken: taken, hiSeat: G.scene === 'inside' && G.p.seat < 0 ? G.hiSeat : -1, doorOpen: G.doorUntil > G.t, radioOn: NET.g.radio ? NET.g.radio.ch : 0, hiRadio: nearRadio() });
   // dishes on the tables
@@ -1102,8 +1115,10 @@ function radioMix() {
   radioFilter.frequency.setTargetAtTime(2500 + k * k * 15500, ac.currentTime, 0.3);
   radioGain.gain.setTargetAtTime(0.22 + k * 0.6, ac.currentTime, 0.3);
 }
+// (the radio is only controlled at its cabinet inside Hoongy; no button on screen)
 function updateRadioBtn() {
-  const b = $('radioBtn'), ch = NET.g.radio ? NET.g.radio.ch : 0, st = STATIONS[ch - 1];
+  const b = $('radioBtn'); if (!b) return;
+  const ch = NET.g.radio ? NET.g.radio.ch : 0, st = STATIONS[ch - 1];
   const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
   b.textContent = at && st ? '📻 ' + st.freq : '📻 OFF';
   b.style.borderColor = at && st ? '#ffe23a' : '';
@@ -1179,6 +1194,7 @@ function showDialog(d) {
       '<button class="opt' + (i === dlgSel ? ' sel' : '') + '" data-i="' + i + '"><span class="ico">' + (o.ico || '') + '</span><span>' + esc(o.label) +
       (o.small ? '<small>' + esc(o.small) + '</small>' : '') + '</span>' + (o.key ? '<span class="k">' + o.key + '</span>' : '') + '</button>').join('') + '</div>';
   dlg.dataset.radio = d.title.indexOf('RADIO HOONGY') >= 0 ? '1' : '';
+  dlg.classList.toggle('low', !!d.low);
   dlg.classList.add('show');
 }
 function closeDialog() { dlg.classList.remove('show'); dlgOpts = []; }
@@ -1209,6 +1225,7 @@ function press(k) {
   if (dialogOpen()) return dialogKey(k);
   if (k === 'hug' || k === 'heart' || k === 'joke') return emote(k);
   if (G.scene === 'travel') { if (k === 'a' || k === 'b') nextTravel(); return; }
+  if (G.scene === 'base' && G.base.back && (k === 'a' || k === 'up') && Math.abs(G.p.x - G.base.H.door) < 10) return endGame();
   if (G.scene === 'base' && k === 'a' && G.me === 'VITO' && G.p.x > G.base.H.W - 30) return startTravel('VITO');
   if (G.scene === 'street' && !G.arrival) {
     if (k === 'a' && G.ride) return parkScooter();
@@ -1290,7 +1307,6 @@ $('dosBtn').addEventListener('click', () => {
     ],
   });
 });
-$('radioBtn').addEventListener('click', radioInfo);
 // game controller
 const padPrev = {};
 function pollPad() {
@@ -1312,16 +1328,25 @@ function pollPad() {
 // screen-space text: names, bubbles, prompts, captions
 // =====================================================================
 function S2(x) { return x * SCALE * DPR; }
+const FONT = '"M PLUS Rounded 1c", "Pixelify Sans", sans-serif', INKC = '#33241b', PAPER = 'rgba(251,244,226,.95)';
+// a cartoon heart, drawn in screen space
+function heart(c, x, y, s) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  c.beginPath(); c.moveTo(0, 3); c.bezierCurveTo(-5, -0.5, -3.6, -5, 0, -2.6); c.bezierCurveTo(3.6, -5, 5, -0.5, 0, 3); c.closePath();
+  c.fillStyle = '#ff5a7a'; c.fill(); c.lineWidth = 0.8; c.strokeStyle = INKC; c.lineJoin = 'round'; c.stroke();
+  c.beginPath(); c.arc(-1.6, -1.6, 0.7, 0, 7); c.fillStyle = 'rgba(255,255,255,.75)'; c.fill();
+  c.restore();
+}
 function drawOverlay() {
   const c = vctx, k = SCALE * DPR;
-  const oy = (G.scene === 'base' || G.scene === 'street') ? sideOY() : 0;
+  const oy = (G.scene === 'base' || G.scene === 'street' || G.scene === 'end') ? sideOY() : 0;
   c.textBaseline = 'alphabetic';
   // captions
-  if (G.scene === 'base') {
+  if (G.scene === 'base' || G.scene === 'end') {
     const H = G.base.H;
     capText(H.title, H.sub);
     if (G.base.signX != null) {
-      c.font = '600 ' + (5.5 * k) + 'px "Pixelify Sans", monospace'; c.fillStyle = '#f4ead0'; c.textAlign = 'center';
+      c.font = '800 ' + (5.6 * k) + 'px ' + FONT; c.fillStyle = '#fbf4e2'; c.textAlign = 'center';
       c.fillText(H.sign, S2(G.base.signX + G.base.signW / 2), S2(G.base.signY + G.base.signH * 0.72 + oy));
       c.textAlign = 'left';
     }
@@ -1331,8 +1356,12 @@ function drawOverlay() {
     const st = G.travel.steps[G.travel.i];
     capText(st.cap(), 'A: overslaan');
     if (G.mapPins && (st.k === 'mapDrive' || st.k === 'mapTrain' || st.k === 'europe')) {
-      c.font = (6 * k) + 'px "Pixelify Sans", monospace'; c.fillStyle = '#9cff9c';
-      for (const [n, [x, y]] of G.mapPins) { const w = c.measureText(n).width; c.fillText(n, Math.min(S2(x + 3), view.width - w - 4), S2(y - 2)); }
+      c.font = '800 ' + (6 * k) + 'px ' + FONT; c.lineJoin = 'round';
+      for (const [n, [x, y]] of G.mapPins) {
+        const w = c.measureText(n).width, tx = Math.min(S2(x + 4), view.width - w - 4), ty = S2(y - 3);
+        c.lineWidth = k * 2; c.strokeStyle = 'rgba(251,244,226,.95)'; c.strokeText(n, tx, ty);
+        c.fillStyle = INKC; c.fillText(n, tx, ty);
+      }
     }
   }
   if (G.scene === 'street' || G.scene === 'inside') {
@@ -1346,14 +1375,14 @@ function drawOverlay() {
         if (!arrivalState(o.arrive, t0, G.t).show) continue;
       }
       if (ch === G.me && G.arrival && !arrivalState(G.arrival.kind, G.arrival.t0, G.t).show) continue;
-      let top = G.scene === 'inside' ? sy - 9 : sy - 34;
+      let top = G.scene === 'inside' ? sy - 10 : sy - 40;
       // friends standing close together: stack the names instead of overlapping them
       while (placed.some(([px, py]) => Math.abs(px - sx) < 30 && Math.abs(py - top) < 6)) top -= 7;
       placed.push([sx, top]);
       nameTag(ch, sx, top);
     }
   }
-  if (G.scene === 'base') nameTag(G.me, G.p.x - G.camX, G.p.y - 34 + oy);
+  if (G.scene === 'base') nameTag(G.me, G.p.x - G.camX, G.p.y - 40 + oy);
   // hearts
   for (const h of G.hearts) {
     const el = G.t - h.t0; if (el < 0) continue;
@@ -1361,48 +1390,70 @@ function drawOverlay() {
     const hy = G.scene === 'inside' ? G.camY : -oy;
     const x = h.x + (h.tx - h.x) * kk - G.camX, y = h.y + (h.ty - h.y) * kk - Math.sin(kk * Math.PI) * 18 - hy;
     c.globalAlpha = Math.max(0, 1 - Math.max(0, el - 1.1) * 2);
-    c.font = ((h.small ? 7 : 10) * k) + 'px sans-serif'; c.textAlign = 'center';
-    c.fillText('❤️', S2(x), S2(y));
-    c.globalAlpha = 1; c.textAlign = 'left';
+    heart(c, S2(x), S2(y), k * (h.small ? 0.8 : 1.15));
+    c.globalAlpha = 1;
   }
   G.hearts = G.hearts.filter(h => G.t - h.t0 < 1.8);
   // chill notes when idle
   if ((G.scene === 'street' || G.scene === 'base') && G.p.idle > 6 && !G.arrival) {
-    c.font = (7 * k) + 'px sans-serif'; c.fillStyle = '#ffe9a8'; c.textAlign = 'center';
+    c.font = (7 * k) + 'px sans-serif'; c.fillStyle = '#5a4030'; c.textAlign = 'center';
     const ph = (G.t * 0.7) % 1;
     c.globalAlpha = 1 - ph; c.fillText(ph < 0.5 ? '♪' : '♫', S2(G.p.x - G.camX + 6 + ph * 6), S2(G.p.y - 32 - ph * 14 + oy));
     c.globalAlpha = 1; c.textAlign = 'left';
   }
+  if (G.scene === 'end') drawEnd();
   const showToast = G.toast && G.toast.until > G.t;
   if (G.prompt && !dialogOpen()) hint(G.prompt, showToast ? 1 : 0);
   if (showToast && !dialogOpen()) hint(G.toast.text, 0, true);
   // fade after leaving
   if (G.fadeUntil > G.t) { c.fillStyle = 'rgba(0,0,0,' + ((G.fadeUntil - G.t) * 2) + ')'; c.fillRect(0, 0, view.width, view.height); }
 }
+function drawEnd() {
+  const c = vctx, el = G.t - G.end.t0, w = view.width, h = view.height, k = SCALE * DPR;
+  const f = Math.min(1, Math.max(0, (el - 0.6) / 1.4));
+  c.fillStyle = 'rgba(251,244,226,' + (f * 0.92) + ')'; c.fillRect(0, 0, w, h);
+  if (f <= 0) return;
+  A.paper(c, w, h, f);
+  c.save(); c.globalAlpha = f;
+  const r = Math.min(w, h) * 0.13, cx = w / 2, cy = h * 0.2 + r;
+  c.translate(cx, cy); c.rotate(-0.08);
+  c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = '#cf3a2a'; c.fill();
+  c.lineWidth = r * 0.06; c.strokeStyle = '#fbf4e2'; c.beginPath(); c.arc(0, 0, r * 0.84, 0, 7); c.stroke();
+  c.fillStyle = '#fbf4e2'; c.font = '900 ' + r * 1.05 + 'px "M PLUS Rounded 1c", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('終', 0, r * 0.06);
+  c.restore();
+  c.save(); c.globalAlpha = f; c.textAlign = 'center'; c.fillStyle = INKC;
+  c.font = '900 ' + 9 * k + 'px ' + FONT; c.fillText('Туса У Берліні', cx, cy + r + 12 * k);
+  c.restore();
+}
 function capText(a, b) {
   const c = vctx, k = SCALE * DPR;
-  c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(0, 0, view.width, 15 * k);
-  c.font = '600 ' + (8 * k) + 'px "Pixelify Sans", monospace'; c.fillStyle = '#ffe23a'; c.textAlign = 'left';
-  c.fillText(a, 5 * k, 10 * k);
+  c.fillStyle = PAPER; c.fillRect(0, 0, view.width, 15 * k);
+  c.fillStyle = '#cf3a2a'; c.fillRect(0, 15 * k - k * 0.5, view.width, k * 0.5);
+  c.font = '800 ' + (8 * k) + 'px ' + FONT; c.fillStyle = INKC; c.textAlign = 'left';
+  c.fillText(a, 5 * k, 10.5 * k);
   const aw = c.measureText(a).width;
-  if (b) { c.font = (6 * k) + 'px "Pixelify Sans", monospace'; if (aw + c.measureText(b).width + 16 * k < view.width) { c.fillStyle = '#e8e0c8'; c.textAlign = 'right'; c.fillText(b, view.width - 5 * k, 10 * k); c.textAlign = 'left'; } }
+  if (b) { c.font = '700 ' + (6 * k) + 'px ' + FONT; if (aw + c.measureText(b).width + 16 * k < view.width) { c.fillStyle = '#8a6a50'; c.textAlign = 'right'; c.fillText(b, view.width - 5 * k, 10.5 * k); c.textAlign = 'left'; } }
 }
-// one line at the bottom of the picture; row 1 sits just above row 0
+// one line at the bottom of the picture, on a paper label; row 1 sits just above row 0
 function hint(txt, row, info) {
   const c = vctx, k = SCALE * DPR;
   let fs = 7 * k;
-  c.font = '600 ' + fs + 'px "Pixelify Sans", monospace';
-  let w = c.measureText(txt).width + 10 * k;
-  if (w > view.width - 6 * k) { fs *= (view.width - 16 * k) / (w - 10 * k); c.font = '600 ' + fs + 'px "Pixelify Sans", monospace'; w = c.measureText(txt).width + 10 * k; }
-  const x = Math.round((view.width - w) / 2), y = Math.round(view.height - 15 * k - (row || 0) * 14 * k);
-  c.fillStyle = info ? 'rgba(30,22,4,.9)' : 'rgba(3,18,8,.88)'; c.fillRect(x, y, w, 11 * k);
-  c.strokeStyle = info ? '#ffe23a' : '#39ff7a'; c.lineWidth = k * 0.6; c.strokeRect(x, y, w, 11 * k);
-  c.fillStyle = info ? '#fff3c4' : '#c8ffd4'; c.textAlign = 'left'; c.fillText(txt, x + 5 * k, y + 5.5 * k + fs * 0.36);
+  c.font = '800 ' + fs + 'px ' + FONT;
+  let w = c.measureText(txt).width + 12 * k;
+  if (w > view.width - 6 * k) { fs *= (view.width - 18 * k) / (w - 12 * k); c.font = '800 ' + fs + 'px ' + FONT; w = c.measureText(txt).width + 12 * k; }
+  const x = Math.round((view.width - w) / 2), y = Math.round(view.height - 16 * k - (row || 0) * 15 * k), h = 12 * k;
+  c.save();
+  c.shadowColor = 'rgba(40,20,10,.35)'; c.shadowOffsetY = k; c.shadowBlur = 2 * k;
+  roundRect(c, x, y, w, h, 3 * k); c.fillStyle = info ? '#fff1c8' : PAPER; c.fill();
+  c.restore();
+  roundRect(c, x, y, w, h, 3 * k); c.lineWidth = k * 0.8; c.strokeStyle = info ? '#cf3a2a' : INKC; c.stroke();
+  c.fillStyle = INKC; c.textAlign = 'left'; c.fillText(txt, x + 6 * k, y + 6 * k + fs * 0.36);
 }
 function nameTag(ch, x, y) {
   const c = vctx, k = SCALE * DPR;
-  c.font = '600 ' + (5.5 * k) + 'px "Pixelify Sans", monospace'; c.textAlign = 'center';
-  c.fillStyle = 'rgba(0,0,0,.5)'; c.fillText(ch, S2(x) + k * 0.5, S2(y) + k * 0.5);
+  c.font = '800 ' + (5.6 * k) + 'px ' + FONT; c.textAlign = 'center'; c.lineJoin = 'round';
+  c.lineWidth = k * 1.6; c.strokeStyle = INKC; c.strokeText(ch, S2(x), S2(y));
   c.fillStyle = TAG[ch] || '#fff'; c.fillText(ch, S2(x), S2(y));
   c.textAlign = 'left';
 }
@@ -1430,18 +1481,21 @@ function frame(now) {
   else if (G.scene === 'street') updateStreet(dt);
   else if (G.scene === 'enter') { updateStreet(0); updateEnter(); }
   else if (G.scene === 'inside') updateInside(dt);
+  else if (G.scene === 'end') updateEnd(dt);
   radioMix();
   voiceUpdate();
   // draw
-  lctx.imageSmoothingEnabled = false;
-  if (G.scene === 'base') drawBase();
+  const k = SCALE * DPR;
+  vctx.setTransform(k, 0, 0, k, 0, 0);
+  vctx.imageSmoothingEnabled = true;
+  vctx.fillStyle = '#000'; vctx.fillRect(0, 0, LW, LH);
+  if (G.scene === 'base' || G.scene === 'end') drawBase();
   else if (G.scene === 'travel') drawTravel();
   else if (G.scene === 'street') drawStreet();
   else if (G.scene === 'enter') drawEnter();
   else if (G.scene === 'inside') drawInsideWorld();
-  else { lctx.fillStyle = '#000'; lctx.fillRect(0, 0, LW, LH); }
-  vctx.imageSmoothingEnabled = false;
-  vctx.drawImage(low, 0, 0, view.width, view.height);
+  vctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (G.scene !== 'login') A.paper(vctx, view.width, view.height);
   drawOverlay();
   if (now - lastClock > 250) { updateClock(); lastClock = now; }
   requestAnimationFrame(frame);
@@ -1464,5 +1518,5 @@ if (q.get('as') && whoIs(q.get('as'))) {
   setTimeout(() => { startBase(who); if (q.get('skip')) { startTravel(who); G.travel.i = G.travel.steps.length - 1; nextTravel(); } }, 50);
 }
 window.__tusa = G;
-window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, STATIONS: () => STATIONS };
+window.__tusaDbg = { NET, radioEl, voiceEl, voiceOn: () => voiceOn, onAir, press, startTravel, STATIONS: () => STATIONS };
 })();

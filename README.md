@@ -117,4 +117,11 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - the kitchen only opens once a friend has arrived (the 18:00 clock is running)
 - Oleksiy rides his step around the street until he parks it (A); A next to it to ride again
 - installable on its own: `tusa/manifest.webmanifest` (start /tusa/, full screen, no zoom)
+- look: hand-drawn Japanese cartoon style with ink outlines, watercolour and
+  ink-wash backgrounds and a washi paper texture, all drawn in code in `art.js`
+  (big still parts are painted once into cached layers)
+- every text has one fixed language, Ukrainian or Dutch; everyone sees the same
+  (laughing, facing, Oleksiy's step, doors, and street life from the shared clock)
+- going home from Berlin and walking in through your own door ends the game
+- the radio has no button on screen: only the cabinet inside Hoongy controls it
 

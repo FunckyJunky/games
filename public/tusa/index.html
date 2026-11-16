@@ -14,17 +14,18 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23111%27/%3E%3Ctext x=%278%27 y=%2712%27 font-size=%2711%27 text-anchor=%27middle%27 fill=%27%23ffe23a%27%3EH%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=VT323&family=Pixelify+Sans:wght@400;600&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Pixelify+Sans:wght@400;600&family=M+PLUS+Rounded+1c:wght@500;700;800;900&display=block" rel="stylesheet">
 <style>
-  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); --neon: #ffe23a; }
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; }
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); --neon: #ffe23a;
+          --ink: #33241b; --paper: #fbf4e2; --paper2: #f1e4c4; --red: #cf3a2a; --round: 'M PLUS Rounded 1c', 'Pixelify Sans', sans-serif; }
+  html, body { margin: 0; height: 100%; background: #1c1612; overflow: hidden; overscroll-behavior: none; }
   /* behaves like an app: no double-tap zoom, no pinch zoom, no text selection */
   * { touch-action: manipulation; -webkit-touch-callout: none; }
   #view, #pad, #pad * { touch-action: none; }
   body {
     height: 100dvh; display: flex; flex-direction: column;
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none;
-    font-family: 'Pixelify Sans', 'VT323', ui-monospace, monospace; color: #f4efe0;
+    font-family: var(--round); color: #f4efe0;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     box-sizing: border-box;
   }
@@ -33,19 +34,21 @@
   /* ---------- top bar ---------- */
   #hud { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; height: 38px; box-sizing: border-box; }
   .hbtn {
-    all: unset; cursor: pointer; padding: 4px 10px; border: 2px solid #3a3326; border-radius: 6px; color: #ffe9b8;
-    font-family: 'Pixelify Sans', monospace; font-size: 14px; background: #15120d; white-space: nowrap;
+    all: unset; cursor: pointer; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 9px; color: var(--ink);
+    font-family: var(--round); font-weight: 800; font-size: 14px; background: var(--paper); white-space: nowrap;
+    box-shadow: 0 2px 0 var(--ink);
   }
-  .hbtn:active { background: var(--neon); color: #111; }
+  .hspace { width: 64px; flex: none; }  /* keeps the clock in the middle */
+  .hbtn:active { transform: translateY(2px); box-shadow: none; background: #ffe7a8; }
   #clock {
-    font-family: 'VT323', monospace; font-size: 26px; color: var(--neon); letter-spacing: 2px;
-    text-shadow: 0 0 6px rgba(255,226,58,.7), 0 0 14px rgba(255,170,40,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: var(--round); font-weight: 900; font-size: 23px; color: var(--paper); letter-spacing: 1px;
+    text-shadow: 0 2px 0 var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #clock small { font-size: 15px; letter-spacing: 0; color: #ffd98a; }
+  #clock small { font-size: 13px; font-weight: 700; letter-spacing: 0; color: #f1d9a8; text-shadow: none; }
 
   /* ---------- the game picture ---------- */
   #stage { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; }
-  #view { display: block; image-rendering: pixelated; border-radius: 6px; box-shadow: 0 0 0 2px #1d1810, 0 0 40px rgba(255,190,80,.08); }
+  #view { display: block; border-radius: 8px; box-shadow: 0 0 0 2px var(--ink), 0 6px 24px rgba(0,0,0,.45); }
 
   /* ---------- touch controls ---------- */
   /* every size follows --u, so the whole pad always fits the width of the screen */
@@ -59,17 +62,17 @@
   .dpad .b { grid-column: 2; }
   .dpad .l { grid-row: 2; grid-column: 1; } .dpad .r { grid-row: 2; grid-column: 3; } .dpad .d { grid-row: 3; grid-column: 2; } .dpad .u { grid-row: 1; grid-column: 2; }
   .pb {
-    display: grid; place-items: center; border-radius: 10px; border: 2px solid #4a3f2c; border-bottom-width: 5px;
-    background: linear-gradient(#2a241a, #17130d); color: #ffe9b8; font-family: 'Pixelify Sans', monospace; font-size: calc(var(--u) * 0.36); cursor: pointer;
+    display: grid; place-items: center; border-radius: 12px; border: 2px solid var(--ink); border-bottom-width: 5px;
+    background: linear-gradient(var(--paper), var(--paper2)); color: var(--ink); font-family: var(--round); font-weight: 900; font-size: calc(var(--u) * 0.36); cursor: pointer;
     box-sizing: border-box;
   }
-  .pb.on { background: var(--neon); color: #1a1405; border-color: #b8a020; transform: translateY(2px); border-bottom-width: 3px; }
+  .pb.on { background: #ffe7a8; transform: translateY(2px); border-bottom-width: 3px; }
   .emotes { display: flex; flex-direction: column; gap: calc(var(--u) * 0.1); }
   .emotes .pb { width: calc(var(--u) * 1.3); height: calc(var(--u) * 0.76); font-size: calc(var(--u) * 0.24); gap: 0; line-height: 1; text-align: center; border-bottom-width: 4px; }
   .emotes .pb span { font-size: calc(var(--u) * 0.34); display: block; }
   .ab { display: grid; grid-template-columns: calc(var(--u) * 1.08) calc(var(--u) * 1.4); grid-template-rows: calc(var(--u) * 1.3) calc(var(--u) * 0.9); gap: calc(var(--u) * 0.1); justify-self: end; align-items: end; }
-  .ab .A { grid-column: 2; grid-row: 1 / 3; height: calc(var(--u) * 1.5); border-radius: 50%; font-size: calc(var(--u) * 0.5); background: radial-gradient(circle at 40% 35%, #ffe86a, #d4a514); color: #2a1d00; border-color: #8a6a0a; }
-  .ab .B { grid-column: 1; grid-row: 2; height: calc(var(--u) * 1.0); border-radius: 50%; font-size: calc(var(--u) * 0.38); background: radial-gradient(circle at 40% 35%, #ff8a8a, #b8323a); color: #fff; border-color: #6a1418; }
+  .ab .A { grid-column: 2; grid-row: 1 / 3; height: calc(var(--u) * 1.5); border-radius: 50%; font-size: calc(var(--u) * 0.5); background: radial-gradient(circle at 40% 35%, #ffe08a, #e8a838); color: var(--ink); }
+  .ab .B { grid-column: 1; grid-row: 2; height: calc(var(--u) * 1.0); border-radius: 50%; font-size: calc(var(--u) * 0.38); background: radial-gradient(circle at 40% 35%, #ff8a7a, #cf3a2a); color: var(--paper); }
   .ab .A.on, .ab .B.on { filter: brightness(1.3); transform: translateY(3px); }
   #keys { flex: none; text-align: center; font-size: 13px; color: #a89a7a; padding: 4px 0 8px; display: none; }
   @media (orientation: landscape) and (pointer: coarse) {
@@ -94,33 +97,34 @@
   @keyframes blink { 50% { background: transparent; } }
   #loginKbd { flex: none; margin-top: 8px; }
 
+  /* dialogs: a sheet of washi paper with an ink border and a red seal line */
   #dlg {
-    position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-0.4deg);
     width: min(92vw, 420px); max-height: 86%; overflow: auto; display: none;
-    background: rgba(3,18,8,.96); color: var(--fg); border: 3px double var(--fg); border-radius: 4px;
-    box-shadow: 0 0 18px var(--glow); font-family: 'Pixelify Sans', 'VT323', monospace; padding: 12px 14px; box-sizing: border-box;
-    text-shadow: 0 0 4px var(--glow);
+    background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px 10px 16px 9px;
+    box-shadow: 0 5px 0 var(--ink), 0 14px 30px rgba(0,0,0,.45); font-family: var(--round); padding: 14px 16px; box-sizing: border-box;
+    background-image: radial-gradient(circle at 20% 15%, rgba(214,190,150,.25), transparent 40%), radial-gradient(circle at 80% 85%, rgba(214,190,150,.2), transparent 45%);
   }
   #dlg.show { display: block; }
-  #dlg h3 { margin: 0 0 6px; font-size: 19px; color: var(--neon); text-shadow: 0 0 8px rgba(255,226,58,.6); font-weight: 600; }
-  #dlg p { margin: 4px 0 10px; font-size: 15px; line-height: 1.3; color: #d8ffe4; }
-  #dlg .opts { display: flex; flex-direction: column; gap: 7px; }
+  #dlg.low { top: auto; bottom: 4%; transform: translate(-50%, 0) rotate(-0.4deg); }
+  #dlg h3 { margin: 0 0 6px; font-size: 19px; font-weight: 900; color: var(--ink); border-bottom: 3px solid var(--red); padding-bottom: 4px; }
+  #dlg p { margin: 6px 0 10px; font-size: 15px; font-weight: 700; line-height: 1.35; color: #5a4030; }
+  #dlg .opts { display: flex; flex-direction: column; gap: 8px; }
   #dlg .opt {
-    all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 2px solid var(--dim); border-radius: 4px;
-    font-size: 16px; color: #e8ffe8;
+    all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px;
+    font-size: 16px; font-weight: 800; color: var(--ink); background: #fffaf0; box-shadow: 0 2px 0 var(--ink);
   }
   #dlg .opt .ico { font-size: 22px; width: 28px; text-align: center; }
-  #dlg .opt small { display: block; font-size: 12px; color: #9ad8aa; }
-  #dlg .opt.sel, #dlg .opt:active { background: var(--fg); color: var(--bg); text-shadow: none; }
-  #dlg .opt.sel small, #dlg .opt:active small { color: #0b3a18; }
-  #dlg .opt .k { margin-left: auto; font-family: 'VT323', monospace; font-size: 18px; opacity: .8; }
+  #dlg .opt small { display: block; font-size: 12px; font-weight: 700; color: #8a6a50; }
+  #dlg .opt.sel, #dlg .opt:active { background: #ffe7a8; }
+  #dlg .opt .k { margin-left: auto; font-size: 15px; font-weight: 900; color: var(--paper); background: var(--red); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
 </style>
 </head>
 <body>
   <div id="hud">
     <button class="hbtn" id="dosBtn">◄ DOS</button>
     <div id="clock">HOONGY</div>
-    <button class="hbtn" id="radioBtn">📻 RADIO</button>
+    <div class="hspace" aria-hidden="true"></div>
   </div>
   <div id="stage">
     <canvas id="view"></canvas>
