@@ -98,3 +98,12 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - `public/lib/appback.js`: added to every game page by the server; in the
   installed app it shows a small "< ERROR-DOS" button on pages without a back link
 
+## Туса У Берліні (error.blue/tusa)
+
+`public/tusa/`: Vika, Vito and Oleksiy meet at Hoongy in Berlin.
+
+- log in as VIKA (also VICA, VICTORIA), VITO or OLEKSIY
+- `art.js` draws everything; `tusa.js` is the game; `radio/` holds the stations
+- the shared restaurant is the `TusaRoom` Durable Object at `/api/tusa`
+- radio: put an mp3 in `public/tusa/radio/` and add it to `radio/stations.json`
+

@@ -8,6 +8,7 @@
 //   GET  /api/room/<game>/<CODE>               multiplayer room (WebSocket)
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
 //   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
+//   GET  /api/tusa?char=VITO                   Туса У Берліні: the shared Hoongy (WebSocket)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -170,6 +171,11 @@ export default {
         if (!ROOM_RE.test(code)) return json({ error: "bad channel code" }, 400);
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
         return env.CHAT.get(env.CHAT.idFromName(code)).fetch(request);
+      }
+
+      if (path === "/api/tusa") {
+        if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
+        return env.TUSA.get(env.TUSA.idFromName("hoongy")).fetch(request);
       }
 
       if (path === "/api/wall") {
@@ -545,5 +551,220 @@ export class ChatRoom extends DurableObject {
   // 7 days without a message: forget the channel
   async alarm() {
     this.sql.exec(`DELETE FROM msgs`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Туса У Берліні: one shared Hoongy restaurant for Vika, Vito and Oleksiy.
+// Each player's state lives on their own WebSocket (it survives hibernation);
+// the clock and the radio are saved. The clock starts at 18:00 when a second
+// friend arrives and runs 4x faster than real time, so 22:00 comes after one
+// real hour. When everyone has gone, the clock and radio reset.
+const TUSA_CHARS = ["VIKA", "VITO", "OLEKSIY"];
+const TUSA_SEATS = 14;
+const TUSA_ITEMS = ["lassi", "coffee", "shrimp", "fish"];
+const TUSA_EMOTES = ["hug", "heart", "joke"];
+const TUSA_SERVE_MS = 10500;
+
+export class TusaRoom extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"type":"pong"}'));
+    this.g = { clockStart: 0, radio: { ch: 0, since: 0 } };
+    ctx.blockConcurrencyWhile(async () => {
+      const g = await ctx.storage.get("g");
+      if (g) this.g = g;
+    });
+  }
+
+  live(except) {
+    return this.ctx.getWebSockets().filter((ws) => {
+      if (ws === except || ws.readyState !== WebSocket.OPEN) return false;
+      const a = ws.deserializeAttachment();
+      return a && a.char && !a.gone;
+    });
+  }
+
+  players(except) {
+    return this.live(except).map((ws) => ws.deserializeAttachment());
+  }
+
+  send(ws, msg) {
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch {
+      // gone
+    }
+  }
+
+  broadcast(msg, except) {
+    const text = JSON.stringify(msg);
+    for (const ws of this.live(except)) {
+      try {
+        ws.send(text);
+      } catch {
+        // gone
+      }
+    }
+  }
+
+  async saveG() {
+    await this.ctx.storage.put("g", this.g);
+    this.broadcast({ type: "g", g: this.g, now: Date.now() });
+  }
+
+  async updateClock() {
+    const n = this.players().length;
+    if (n === 0) {
+      if (this.g.clockStart || this.g.radio.ch) {
+        this.g = { clockStart: 0, radio: { ch: 0, since: 0 } };
+        await this.ctx.storage.put("g", this.g);
+      }
+    } else if (n >= 2 && !this.g.clockStart) {
+      this.g.clockStart = Date.now();
+      await this.saveG();
+    }
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const char = String(url.searchParams.get("char") || "").toUpperCase();
+    if (!TUSA_CHARS.includes(char)) return new Response("unknown character", { status: 400 });
+
+    // the same friend logging in again replaces the old connection
+    for (const old of this.live()) {
+      const a = old.deserializeAttachment();
+      if (a.char === char) {
+        old.serializeAttachment({ ...a, gone: true });
+        this.send(old, { type: "kicked" });
+        try {
+          old.close(4001, "logged in elsewhere");
+        } catch {
+          // already closed
+        }
+        this.broadcast({ type: "gone", char }, old);
+      }
+    }
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    const now = Date.now();
+    const arrive = ["taxi", "amarok", "scooter"].includes(url.searchParams.get("arrive")) ? url.searchParams.get("arrive") : "";
+    const me = {
+      char,
+      x: Math.max(0, Math.min(800, Number(url.searchParams.get("x")) || 200)),
+      y: 150,
+      dir: 1,
+      scene: "street",
+      anim: "",
+      seat: -1,
+      order: null,
+      arrive,
+      arriveAt: now,
+    };
+    server.serializeAttachment(me);
+    this.send(server, { type: "welcome", now, you: me, players: this.players(server), g: this.g });
+    this.broadcast({ type: "p", p: me, now }, server);
+    await this.updateClock();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, message) {
+    if (typeof message !== "string" || message.length > 1024) return;
+    let d;
+    try {
+      d = JSON.parse(message);
+    } catch {
+      return;
+    }
+    const me = ws.deserializeAttachment();
+    if (!me || me.gone || !d) return;
+    const now = Date.now();
+
+    switch (d.t) {
+      case "st": {
+        const x = Number(d.x), y = Number(d.y);
+        if (Number.isFinite(x)) me.x = Math.max(-50, Math.min(900, x));
+        if (Number.isFinite(y)) me.y = Math.max(0, Math.min(400, y));
+        me.dir = d.dir === -1 ? -1 : 1;
+        if (d.scene === "street" || d.scene === "inside") me.scene = d.scene;
+        me.anim = typeof d.anim === "string" ? d.anim.slice(0, 12) : "";
+        if (me.scene === "street") { me.seat = -1; me.order = null; }
+        ws.serializeAttachment(me);
+        this.broadcast({ type: "p", p: me, now }, ws);
+        return;
+      }
+      case "sit": {
+        const seat = Number(d.seat);
+        if (!Number.isInteger(seat) || seat < 0 || seat >= TUSA_SEATS) return;
+        if (this.players(ws).some((p) => p.seat === seat)) {
+          this.send(ws, { type: "taken", seat });
+          return;
+        }
+        me.seat = seat;
+        me.order = { ph: "wait", t: now };
+        break;
+      }
+      case "stand":
+        me.seat = -1;
+        me.order = null;
+        break;
+      case "order":
+        if (me.seat < 0 || !TUSA_ITEMS.includes(d.item)) return;
+        me.order = { ph: "cook", item: d.item, t: now, bites: 0 };
+        break;
+      case "eat":
+        if (!me.order || me.order.ph !== "cook" || now < me.order.t + TUSA_SERVE_MS) return;
+        me.order.bites = Math.min(5, (me.order.bites || 0) + 1);
+        break;
+      case "more":
+        if (me.seat < 0) return;
+        me.order = { ph: "wait", t: now };
+        break;
+      case "emote": {
+        if (!TUSA_EMOTES.includes(d.kind)) return;
+        if (now - (me.lastEmote || 0) < 350) return;
+        me.lastEmote = now;
+        ws.serializeAttachment(me);
+        const to = TUSA_CHARS.includes(d.to) ? d.to : "";
+        const j = Number.isInteger(d.j) ? Math.max(0, Math.min(999, d.j)) : 0;
+        this.broadcast({ type: "emote", from: me.char, kind: d.kind, to, j, t: now });
+        return;
+      }
+      case "radio": {
+        const ch = Number(d.ch);
+        if (!Number.isInteger(ch) || ch < 0 || ch > 30) return;
+        this.g.radio = { ch, since: now };
+        await this.saveG();
+        return;
+      }
+      default:
+        return;
+    }
+    ws.serializeAttachment(me);
+    this.broadcast({ type: "p", p: me, now });
+  }
+
+  async webSocketClose(ws, code, reason) {
+    await this.leave(ws);
+    try {
+      ws.close(code, reason);
+    } catch {
+      // already closed
+    }
+  }
+
+  async webSocketError(ws) {
+    await this.leave(ws);
+  }
+
+  async leave(ws) {
+    const me = ws.deserializeAttachment();
+    if (!me || me.gone) return;
+    ws.serializeAttachment({ ...me, gone: true });
+    this.broadcast({ type: "gone", char: me.char }, ws);
+    await this.updateClock();
   }
 }
