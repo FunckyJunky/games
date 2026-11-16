@@ -18,6 +18,7 @@ public/                 the website
   tusa/                 Туса У Берліні
   music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
+  games/mistwalkers/    Mistwalkers (3D walk for three, built from the World Tester project)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -41,7 +42,7 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 
    `folder` is `games`, `online` or `apps` (the three tabs in the ERROR-DOS menu).
    `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, `tusa`, `vgadai`,
-   `studio`, or leave it out for the name over a synthwave sun.
+   `studio`, `mist`, or leave it out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 
@@ -158,6 +159,43 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   (`settings` row `vapid`), phones in table `push_subs`. On an iPhone it works
   only when TUSA is on the home screen (iOS 16.4+). For local tests put
   `PUSH_LOCAL_TEST="1"` in `.dev.vars`
+
+## Mistwalkers (error.blue/games/mistwalkers/)
+
+`public/games/mistwalkers/index.html`: a slow morning walk for up to three explorers through misty
+pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` logo.
+
+- the page is built from the World Tester project (one generated file, three.js inside); don't edit it
+  by hand, rebuild it and copy `build/game-errorblue.html` over it
+- pick a name, Female or Male, colours and a camp name. Everyone with the same camp name walks
+  together, three per camp. The camp name becomes the room code (letters and digits, at most 8)
+- rooms: the normal GameLab rooms (`/api/room/mistwalkers/<CODE>`); each explorer sends its whole
+  state about 8 times a second (`{ t: 'st', s: {...} }`). The one who has been there longest keeps
+  the clock, so everyone has the same time and weather
+- Talk: turns your intercom on and off. Everyone with the intercom on is in one call (WebRTC, set up
+  through the same room, like TUSA); voices get quieter with distance and are silent beyond 160 m
+- camp: campfire, tent, Christmas lights, sit, sausages, coffee, sleep; moves: dance, hug, wave,
+  cheer, sit, lie down; chat with emoji. Time runs at 2x real time (Advanced settings has a slider)
+- time: real time by default, in the average of everyone's time zones (a shared switch under
+  Advanced turns it off; then a time-speed slider and the first explorer's clock take over)
+- weather: mist and rain, and alone (or without music) it slowly turns into a storm. When two
+  explorers stand within 15 m of each other, both playing, and one of them on the drum machine,
+  the fog and rain lift within 300 m of them
+- light: tree lights (wind them round the nearest tree, up to eight; brighter at night) and an oil
+  lantern at the hip with a shimmering flame. Three real lights go to the lantern, the nearest fires
+  and lit trees
+- wildlife: after dark an owl sometimes perches on a tree and hoots; at dawn and dusk a curious fox
+  sometimes comes to sit and watch (only when it's quiet, never near a fire). On a dark night with
+  no music and no fire near, a witch stands 200 m away: she creeps closer while you don't look, stops
+  at 25 m, and draws back faster than you can walk. The mist is thinner around her; her eyes are
+  dark green
+- music (lo-fi, everyone in sync): drum machine, note synth and e-piano (set down on the ground and
+  sit at it, or play it from your backpack), guitar, flute and saxophone (played in your hands).
+  Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
+  scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
+  with distance (Advanced: hearing distance). Characters groove to what they hear
+- while your intercom is on, the game's own sounds (music, rain, wind) go quiet on your phone, so
+  nothing echoes back into the call
 
 ## Вгадай що?! (error.blue/vgadai)
 

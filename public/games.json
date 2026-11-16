@@ -29,6 +29,16 @@
     "added": "2026-11-16T21:00"
   },
   {
+    "id": "mistwalkers",
+    "title": "Mistwalkers",
+    "dos": "MISTWALK",
+    "description": "Walk misty, rainy pine woods with up to three explorers. Jam lo-fi together (drum machine, synth, e-piano, guitar, flute, sax) and the fog lifts around you. Campfire, tent, coffee, chat and a voice intercom. Same camp name = same walk.",
+    "path": "games/mistwalkers/",
+    "folder": "online",
+    "logo": "mist",
+    "added": "2026-11-16T21:45"
+  },
+  {
     "id": "tusa",
     "title": "Туса У Берліні",
     "dos": "TUSA",
