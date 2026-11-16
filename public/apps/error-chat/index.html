@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
 <title>ERROR-CHAT</title>
 <meta name="theme-color" content="#000000">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ERROR-DOS">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 4h10v6H7l-3 3v-3H3z%27 stroke=%27%2339ff7a%27 stroke-width=%271.4%27 fill=%27none%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -558,6 +564,8 @@ function flash(k) {
 }
 function unlock() { if (!unlocked) { unlocked = true; audio(); } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { st.unread = 0; document.title = 'ERROR-CHAT'; } });
+
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 
 // ---------- start ----------
 applyColors();

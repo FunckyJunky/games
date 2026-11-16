@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "ERROR-DOS",
+  "short_name": "ERROR-DOS",
+  "description": "error.blue: games, online games and apps in a DOS terminal on a CRT.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "ERROR-CHAT", "short_name": "Chat", "url": "/apps/error-chat/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Pixel Wall", "short_name": "Wall", "url": "/games/pixel-wall/", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

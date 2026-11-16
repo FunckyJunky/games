@@ -86,3 +86,15 @@ Music files: mp3 works in every browser. Each file can be up to 25 MB.
 npm install
 npm run dev      # http://localhost:8787 with a local test database
 ```
+
+## Web app
+
+error.blue can be installed as an app (Install app in the browser menu, or
+Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
+
+- `public/manifest.webmanifest` and `public/icons/`: name, icons, full screen
+- `public/sw.js`: keeps the menu and played games working offline; scores,
+  chat and multiplayer always go to the server
+- `public/lib/appback.js`: added to every game page by the server; in the
+  installed app it shows a small "< ERROR-DOS" button on pages without a back link
+

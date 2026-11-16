@@ -179,7 +179,18 @@ export default {
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 
-      return env.ASSETS.fetch(request);
+      const res = await env.ASSETS.fetch(request);
+      // game pages get a small back button when the site runs as an installed app
+      if (path.startsWith("/games/") && (res.headers.get("content-type") || "").includes("text/html")) {
+        return new HTMLRewriter()
+          .on("body", {
+            element(el) {
+              el.append('<script src="/lib/appback.js" defer></script>', { html: true });
+            },
+          })
+          .transform(res);
+      }
+      return res;
     } catch (err) {
       console.error(err);
       return json({ error: "server error" }, 500);

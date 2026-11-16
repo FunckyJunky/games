@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>ERROR-DOS · error.blue</title>
 <meta name="theme-color" content="#000000">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ERROR-DOS">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 4l3 3-3 3%27 stroke=%27%2339ff7a%27 stroke-width=%271.6%27 fill=%27none%27/%3E%3Crect x=%277%27 y=%2710%27 width=%276%27 height=%271.6%27 fill=%27%2339ff7a%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -788,6 +794,7 @@ function setupRows() {
     ['SCREEN', S.curved ? 'CURVED' : 'FLAT', () => { S.curved = !S.curved; applyColors(); }],
     ['SOUND', S.sound ? 'ON' : 'OFF', () => { S.sound = !S.sound; }],
     ['BOOT', BOOT[S.boot], d => { S.boot = (S.boot + d + 3) % 3; }],
+    ...(isApp() ? [] : [['INSTALL APP', '', () => installApp()]]),
     ['CLOSE', '', () => closeOverlay()],
   ];
 }
@@ -899,6 +906,7 @@ async function boot(kind) {
     bootPrint('Drive C : ' + (location.host || 'error.blue'));
     await sleep(120);
     bootPrint('Network : ' + (navigator.onLine === false ? 'offline' : 'online'));
+    bootPrint('Mode    : ' + (isApp() ? 'installed app' : 'browser'));
     await sleep(350);
     bootPrint('');
   }
@@ -1114,6 +1122,22 @@ async function start() {
     boot(S.boot === 0 && seen ? 1 : S.boot);
   }
 }
+// ----- web app -----
+let installPrompt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+addEventListener('appinstalled', () => { installPrompt = null; message = 'ERROR-DOS installed'; messageUntil = performance.now() + 4000; dirty = true; });
+function isApp() {
+  return (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches)) || navigator.standalone === true;
+}
+function installApp() {
+  closeOverlay();
+  if (installPrompt) { installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; }); return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  message = ios ? 'Safari: Share > Add to Home Screen' : 'Browser menu > Install app / Add to Home screen';
+  messageUntil = performance.now() + 7000; dirty = true;
+}
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+
 // coming back with the browser's back button
 addEventListener('pageshow', e => {
   if (e.persisted) {
