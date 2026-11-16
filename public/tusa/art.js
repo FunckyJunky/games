@@ -2004,6 +2004,8 @@ const ART = (() => {
 
   return {
     use, setScale, paper, R, glow, rgba, hash, LOOK, friend, friendTop, person,
+    // the pen, for other games that draw in the same style (Вгадай що?!)
+    INK, shape, poly, box, blob, circle, ell, line, stroke, limb, within, puffs, sparkle, grad, wcBlob, glowAdd,
     campLion, altengrabow, lehnin, street, outdoorTables, streetFront, STREET, treesAt,
     car, taxi, amarok, tram, bus, scooter, plane, train, vehicleLights, CAR, AMAROK,
     dusk, duskActors, streetLights,

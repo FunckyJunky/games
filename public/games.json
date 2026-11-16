@@ -30,6 +30,16 @@
     "added": "2026-11-16T14:00"
   },
   {
+    "id": "vgadai",
+    "title": "Вгадай що?!",
+    "dos": "VGADAI",
+    "description": "Телешоу! Pick a season and episode, one asks, the others type an answer and race to the green button. Vika, Vito, Oleksiy and anyone else.",
+    "path": "vgadai/",
+    "folder": "online",
+    "logo": "vgadai",
+    "added": "2026-11-16T19:00"
+  },
+  {
     "id": "pixel-party",
     "title": "Pixel Party",
     "description": "Multiplayer test: make a room, share the code and walk around together.",

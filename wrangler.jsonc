@@ -40,14 +40,16 @@
       { "name": "ROOMS", "class_name": "GameRoom" },
       { "name": "WALL", "class_name": "PixelWall" },
       { "name": "CHAT", "class_name": "ChatRoom" },
-      { "name": "TUSA", "class_name": "TusaRoom" }
+      { "name": "TUSA", "class_name": "TusaRoom" },
+      { "name": "VGADAI", "class_name": "VgadaiRoom" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["GameRoom"] },
     { "tag": "v2", "new_sqlite_classes": ["PixelWall"] },
     { "tag": "v3", "new_sqlite_classes": ["ChatRoom"] },
-    { "tag": "v4", "new_sqlite_classes": ["TusaRoom"] }
+    { "tag": "v4", "new_sqlite_classes": ["TusaRoom"] },
+    { "tag": "v5", "new_sqlite_classes": ["VgadaiRoom"] }
   ],
 
   "observability": { "enabled": true }

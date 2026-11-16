@@ -6,8 +6,9 @@
       fnKeys: ['EXIT', 'LINK'],    // optional top row
       sendLabel: 'ENTER',
       sound: true,
+      ua: true, lang: 'ua',        // optional: a Ukrainian (ЙЦУКЕН) layout and a УКР/EN key
     });
-    kb.setShift(true); kb.setSendLabel('GO'); kb.flash('a');
+    kb.setShift(true); kb.setSendLabel('GO'); kb.flash('a'); kb.setLang('abc');
 */
 (function () {
   const CSS = `
@@ -23,6 +24,7 @@
   }
   .ekb .k.sm { font-size: clamp(14px, 3.6vw, 20px); letter-spacing: .04em; }
   .ekb .k.fn { height: clamp(26px, 4.4dvh, 38px); border-bottom-width: 2px; border-style: dashed; font-size: clamp(14px, 3.6vw, 20px); }
+  .ekb .k.lang { font-size: clamp(13px, 3.4vw, 18px); }
   .ekb .k.w15 { flex-grow: 1.5; } .ekb .k.w2 { flex-grow: 2.2; } .ekb .k.w5 { flex-grow: 5.5; }
   .ekb .k.send { background: var(--fg, #39ff7a); color: var(--bg, #031208); text-shadow: none; border-color: var(--fg, #39ff7a); box-shadow: 0 0 10px var(--glow, rgba(57,255,122,.55)); }
   .ekb .k.down { background: var(--fg, #39ff7a); color: var(--bg, #031208); text-shadow: none; border-color: var(--fg, #39ff7a); transform: translateY(2px); border-bottom-width: 2px; }
@@ -53,11 +55,18 @@
       abc: [fn, '1234567890'.split(''), 'qwertyuiop'.split(''), 'asdfghjkl?'.split(''),
         [['SHIFT', 'w2 sm shift'], 'z', 'x', 'c', 'v', 'b', 'n', 'm', ['DEL', 'w2 sm del']],
         [['SYM', 'w15 sm sym'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']]],
+      ua: [fn, '1234567890'.split(''), 'йцукенгшщзхї'.split(''), "фівапролджє'".split(''),
+        [['SHIFT', 'w15 sm shift'], 'я', 'ч', 'с', 'м', 'и', 'т', 'ь', 'б', 'ю', 'ґ', ['DEL', 'w15 sm del']],
+        [['SYM', 'w15 sm sym'], ['EN', 'w15 sm lang'], ',', ['SPACE', 'w5 sm space'], '.', '?', ['SEND', 'w2 sm send']]],
       sym: [fn, '!@#$%&*()='.split(''), '-_+/\\:;"\'~'.split(''), '<>[]{}^|`?'.split(''),
         [['ABC', 'w15 sm abc'], [':)', 'sm'], [':(', 'sm'], [';)', 'sm'], [':D', 'sm'], ['<3', 'sm'], [':P', 'sm'], ['DEL', 'w2 sm del']],
         [['ABC', 'w15 sm abc'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']]],
     };
-    let layer = 'abc', shift = false, caps = false, lastShift = 0, sendLabel = opts.sendLabel || 'ENTER', repeatT = null;
+    const isLetter = k => k.length === 1 && k.toLowerCase() !== k.toUpperCase();
+    // with the Ukrainian layout, the letter row of the Latin layout gets a УКР key
+    if (opts.ua) LAYOUT.abc[5] = [['SYM', 'w15 sm sym'], ['УКР', 'w15 sm lang'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']];
+    let letters = opts.ua && opts.lang !== 'abc' ? 'ua' : 'abc';
+    let layer = letters, shift = false, caps = false, lastShift = 0, sendLabel = opts.sendLabel || 'ENTER', repeatT = null;
     function build() {
       el.innerHTML = '';
       for (const row of LAYOUT[layer]) {
@@ -80,7 +89,7 @@
       const up = shift || caps;
       el.querySelectorAll('.k').forEach(b => {
         const k = b.dataset.k;
-        if (k.length === 1 && /[a-z]/i.test(k)) b.textContent = up ? k.toUpperCase() : k.toLowerCase();
+        if (isLetter(k)) b.textContent = up ? k.toUpperCase() : k.toLowerCase();
       });
       const led = el.querySelector('.shift .led');
       if (led) { led.classList.toggle('on', up); led.classList.toggle('lock', caps); }
@@ -93,9 +102,10 @@
         lastShift = now; refresh(); return;
       }
       if (k === 'SYM') { layer = 'sym'; build(); return; }
-      if (k === 'ABC') { layer = 'abc'; build(); return; }
+      if (k === 'ABC') { layer = letters; build(); return; }
+      if (k === 'EN' || k === 'УКР') { letters = layer = k === 'EN' ? 'abc' : 'ua'; build(); opts.onLang && opts.onLang(letters); return; }
       if (k === 'SPACE') { opts.onKey && opts.onKey(' '); return; }
-      const letter = k.length === 1 && /[a-z]/i.test(k);
+      const letter = isLetter(k);
       if (letter) {
         opts.onKey && opts.onKey((shift || caps) ? k.toUpperCase() : k.toLowerCase());
         if (shift && !caps) { shift = false; refresh(); }
@@ -121,6 +131,8 @@
       el,
       setShift(on) { if (!caps) shift = !!on; refresh(); },
       setSendLabel(s) { sendLabel = s; const b = el.querySelector('.send'); if (b) b.textContent = s; },
+      setLang(l) { if (!opts.ua) return; letters = l === 'abc' ? 'abc' : 'ua'; if (layer !== 'sym') layer = letters; build(); },
+      get lang() { return letters; },
       flash(k) {
         const b = Array.from(el.querySelectorAll('.k')).find(x => x.dataset.k.toLowerCase() === String(k).toLowerCase());
         if (b) { b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 90); }

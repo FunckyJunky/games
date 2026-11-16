@@ -54,24 +54,34 @@ self.addEventListener('fetch', (e) => {
   }
 });
 
-// a notification from error.blue (for now: "someone is in TUSA")
+// a notification from error.blue ("someone is in TUSA", "a new question in Вгадай що?!")
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'error.blue', {
+  const show = () => self.registration.showNotification(d.title || 'error.blue', {
     body: d.body || '',
     tag: d.tag || 'errorblue',
     renotify: true,
-    icon: '/tusa/icons/tusa-192.png',
-    badge: '/tusa/icons/tusa-192.png',
+    icon: d.icon || '/tusa/icons/tusa-192.png',
+    badge: d.icon || '/tusa/icons/tusa-192.png',
     data: { url: d.url || '/' },
-  }));
+  });
+  // "quiet": no notification while that game is open and on screen (you see it anyway)
+  if (d.quiet) {
+    e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.some((c) => c.visibilityState === 'visible' && new URL(c.url).pathname.startsWith(d.quiet));
+      return open ? null : show();
+    }));
+    return;
+  }
+  e.waitUntil(show());
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || '/';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-    for (const c of list) if (new URL(c.url).pathname.startsWith(url) && 'focus' in c) return c.focus();
+    const path = new URL(url, self.location.origin).pathname;
+    for (const c of list) if (new URL(c.url).pathname.startsWith(path) && 'focus' in c) return c.navigate ? c.navigate(url).then((w) => (w || c).focus()) : c.focus();
     return self.clients.openWindow(url);
   }));
 });

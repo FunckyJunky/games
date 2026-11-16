@@ -15,6 +15,8 @@ public/                 the website
     pixel-party/
   apps/
     error-chat/         ERROR-CHAT: text chat by channel code
+  tusa/                 Туса У Берліні
+  vgadai/               Вгадай що?! (quiz show)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -147,6 +149,39 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   (`settings` row `vapid`), phones in table `push_subs`. On an iPhone it works
   only when TUSA is on the home screen (iOS 16.4+). For local tests put
   `PUSH_LOCAL_TEST="1"` in `.dev.vars`
+
+## Вгадай що?! (error.blue/vgadai)
+
+`public/vgadai/`: a TV quiz show. Listed in ERROR-DOS under ONLINE (VGADAI).
+
+- log in on the DOS screen like in TUSA. VIKA, VITO and OLEKSIY (same names and
+  spellings as TUSA) look like the TUSA friends; any other name (2-10 letters or digits)
+  gets a random look. That look's seed is kept in D1 (`vgadai_players`), so it is the
+  same on every phone; 🎲 in the lobby rolls a new one
+- every game is an episode: pick a season (01-99) and an episode (01-99) in the lobby.
+  Together they are the 4-digit room code (S03 E12 = `0312`). 🎬 NEW EPISODE only works
+  for a code nobody used yet; 📺 JOIN goes into an existing one. The lobby shows the
+  episode's leaderboard before you join, and the episodes on air right now
+- one player types a question; the others type one word or one number and race to press
+  the green button. The first press is heard; the one who asked presses ТАК or НІ.
+  НІ: the game goes on (that player waits 3 seconds). ТАК: +1, everyone sees the answer,
+  and 7 seconds later the next player asks. The one asking can give a 💡 hint, or end the
+  round with 🏳 (nobody knew) and show the answer
+- each episode keeps its own leaderboard (wins, questions asked) and the history of every
+  question and guess. There is no global leaderboard. ⚙ → 🔄 resets the episode
+- on-screen keyboard: the ERROR keyboard with a Ukrainian layout (ЙЦУКЕН, і ї є ґ ') and
+  УКР / EN; a computer keyboard works too
+- the show host reads questions written in Cyrillic out loud in Ukrainian (the phone's
+  own speech voice; ⚙ → 🗣 turns it off). If the device has no Ukrainian voice, it says so once
+- 🔔 notifications (⚙): a new question and a new answer in your episode. Web Push like TUSA,
+  but the subscriptions live in the episode, not in `push_subs`. Not shown while the game
+  is open on screen. Tapping one opens `/vgadai/?ep=0312`
+- the studio is drawn in 3D in `vgadai.js` (perspective floor of LED tiles, podiums,
+  spotlights, curtains, a sign with bulbs) with the TUSA characters from `/tusa/art.js`
+  standing in it as paper cut-outs, and a handheld camera that sways and follows the action
+- server: the `VgadaiRoom` Durable Object, one per episode (`/api/vgadai/<SSEE>`);
+  `/api/vgadai/<SSEE>/info`, `/api/vgadai/live`, `/api/vgadai/look`
+- installable on its own: `vgadai/manifest.webmanifest` (full screen, no zoom)
 
 ## Access code (Leviathan)
 

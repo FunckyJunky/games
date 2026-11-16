@@ -9,6 +9,10 @@
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
 //   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
 //   GET  /api/tusa?char=VITO                   Туса У Берліні: the shared Hoongy (WebSocket)
+//   GET  /api/vgadai/<SSEE>?name=X&mode=create Вгадай що?!: one episode of the quiz show (WebSocket)
+//   GET  /api/vgadai/live                      Вгадай що?!: episodes on air
+//   GET  /api/vgadai/<SSEE>/info               Вгадай що?!: one episode's leaderboard (for the lobby)
+//   POST /api/vgadai/look {name, new}          Вгадай що?!: a player's random look
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -435,6 +439,22 @@ export default {
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
         return env.TUSA.get(env.TUSA.idFromName("hoongy")).fetch(request);
       }
+
+      m = path.match(/^\/api\/vgadai\/(\d{4})\/info$/);
+      if (m) {
+        if (!VG_CODE.test(m[1])) return json({ error: "season and episode are 01-99" }, 400);
+        return env.VGADAI.get(env.VGADAI.idFromName("ep:" + m[1])).fetch(request);
+      }
+
+      m = path.match(/^\/api\/vgadai\/(\d{4})$/);
+      if (m) {
+        if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
+        if (!VG_CODE.test(m[1])) return json({ error: "season and episode are 01-99" }, 400);
+        const u = new URL(request.url); u.searchParams.set("code", m[1]);
+        return env.VGADAI.get(env.VGADAI.idFromName("ep:" + m[1])).fetch(new Request(u, request));
+      }
+
+      if (path.startsWith("/api/vgadai/")) return await handleVgadai(request, env, url);
 
       if (path === "/api/wall") {
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
@@ -1106,5 +1126,410 @@ export class TusaRoom extends DurableObject {
     ws.serializeAttachment({ ...me, gone: true });
     this.broadcast({ type: "gone", char: me.char }, ws);
     await this.updateClock();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Вгадай що?! (error.blue/vgadai): a TV quiz show. Every game is an episode:
+// a room with a 4-digit code made of the season and the episode (S03 E12 = 0312).
+// One player types a question; the others type one word or one number and race
+// to press the green button; the one who asked says yes or no. A right answer
+// wins the round (+1), then the next player asks. Each episode keeps its own
+// leaderboard. Vika, Vito and Oleksiy look like in TUSA; everybody else gets a
+// random look (kept in D1, so it is the same in every episode).
+// ---------------------------------------------------------------------------
+const VG_HOONGY = { VIKA: 1, VITO: 1, OLEKSIY: 1 };
+const VG_SEATS = 6;            // players in one episode
+const VG_LOCK_MS = 3000;       // after a wrong answer that player waits a moment
+const VG_REVEAL_MS = 7000;     // the winner is shown, then the next player asks
+const VG_HIST = 80;
+const VG_NAME = /^[A-Z0-9]{2,10}$/;
+const VG_CODE = /^(0[1-9]|[1-9]\d)(0[1-9]|[1-9]\d)$/;   // season 01-99 + episode 01-99
+const vgClean = (v, n) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+// one word or one number: no spaces, only letters, digits and - ' . ,
+function vgWord(v) {
+  const w = String(v ?? "").trim().split(/\s+/)[0] || "";
+  return w.replace(/[^\p{L}\p{M}\p{N}'’\-.,]/gu, "").replace(/^[.,]+|[.,]+$/g, "").slice(0, 24);
+}
+const vgSeed = () => crypto.getRandomValues(new Uint32Array(1))[0] >>> 1;
+function vgFresh() {
+  return {
+    code: "", created: 0, seats: [], looks: {}, scores: {}, asked: {},
+    phase: "ask", host: "", last: "", round: 0,
+    q: "", hint: "", buzzer: "", lock: {}, answer: "",
+    tries: [], winner: "", reveal: "", nextAt: 0, hist: [],
+  };
+}
+let vgTables = false;
+async function vgDb(env) {
+  if (!vgTables) {
+    await env.DB.batch([
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS vgadai_players (
+        name TEXT PRIMARY KEY, seed INTEGER NOT NULL, updated INTEGER NOT NULL DEFAULT 0)`),
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS vgadai_rooms (
+        code TEXT PRIMARY KEY, players TEXT NOT NULL, n INTEGER NOT NULL, updated INTEGER NOT NULL)`),
+    ]);
+    vgTables = true;
+  }
+  return env.DB;
+}
+// the episodes that are on air right now (for the lobby)
+async function handleVgadai(request, env, url) {
+  const db = await vgDb(env);
+  if (url.pathname === "/api/vgadai/live") {
+    const live = await db.prepare(`SELECT code, players, n FROM vgadai_rooms WHERE n > 0 AND updated > ?
+      ORDER BY updated DESC LIMIT 12`).bind(Date.now() - 6 * 3600 * 1000).all();
+    return json({ live: live.results.map((r) => ({ code: r.code, n: r.n, players: JSON.parse(r.players) })) });
+  }
+  if (url.pathname === "/api/vgadai/look") {
+    // your look: { name } → { seed }; with new: true a fresh random look
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "send JSON" }, 400); }
+    const name = String(body.name || "").toUpperCase();
+    if (!VG_NAME.test(name)) return json({ error: "bad name" }, 400);
+    if (VG_HOONGY[name]) return json({ seed: 0, hoongy: true });
+    let row = await db.prepare(`SELECT seed FROM vgadai_players WHERE name = ?`).bind(name).first();
+    if (!row || body.new) {
+      const seed = vgSeed();
+      await db.prepare(`INSERT INTO vgadai_players (name, seed, updated) VALUES (?, ?, ?)
+        ON CONFLICT (name) DO UPDATE SET seed = excluded.seed, updated = excluded.updated`).bind(name, seed, Date.now()).run();
+      row = { seed };
+    }
+    return json({ seed: row.seed });
+  }
+  return json({ error: "not found" }, 404);
+}
+
+export class VgadaiRoom extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.env = env;
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"type":"pong"}'));
+    this.s = vgFresh();
+    this.subs = {};   // phones that want a notification: endpoint -> { name, endpoint, p256dh, auth }
+    ctx.blockConcurrencyWhile(async () => {
+      const s = await ctx.storage.get("s");
+      if (s) this.s = { ...vgFresh(), ...s };
+      this.subs = (await ctx.storage.get("subs")) || {};
+    });
+  }
+
+  // a notification to everyone in this episode who turned them on (not to the one who did it)
+  notify(except, body, hostBody) {
+    const code = this.s.code, local = this.env.PUSH_LOCAL_TEST === "1";
+    const title = "Вгадай що?! · S" + code.slice(0, 2) + " E" + code.slice(2);
+    const list = Object.values(this.subs).filter((x) => x.name !== except && pushEndpointOk(x.endpoint, local));
+    if (!list.length) return;
+    const work = Promise.allSettled(list.map(async (x) => {
+      const msg = { title, body: x.name === this.s.host && hostBody ? hostBody : body, tag: "vgadai-" + code,
+        url: "/vgadai/?ep=" + code, icon: "/vgadai/icons/vgadai-192.png", quiet: "/vgadai/" };
+      const st = await sendPush(this.env, x, msg);
+      if (st === 404 || st === 410) { delete this.subs[x.endpoint]; await this.ctx.storage.put("subs", this.subs); }
+    }));
+    if (this.ctx.waitUntil) this.ctx.waitUntil(work);
+  }
+
+  // the leaderboard lives in D1; a hiccup there never stops the show
+  async db(sql, ...args) {
+    try {
+      const db = await vgDb(this.env);
+      return await db.prepare(sql).bind(...args).run();
+    } catch (e) {
+      console.error("vgadai db", e);
+      return null;
+    }
+  }
+
+  live(except) {
+    return this.ctx.getWebSockets().filter((ws) => {
+      if (ws === except || ws.readyState !== WebSocket.OPEN) return false;
+      const a = ws.deserializeAttachment();
+      return a && a.name && !a.gone;
+    });
+  }
+
+  online() {
+    const on = new Set(this.live().map((ws) => ws.deserializeAttachment().name));
+    return this.s.seats.filter((c) => on.has(c));
+  }
+
+  send(ws, msg) {
+    try { ws.send(JSON.stringify(msg)); } catch { /* gone */ }
+  }
+
+  broadcast(msg) {
+    const text = JSON.stringify(msg);
+    for (const ws of this.live()) {
+      try { ws.send(text); } catch { /* gone */ }
+    }
+  }
+
+  view() {
+    const on = this.online();
+    return { ...this.s, online: on, paused: on.length < 2 };
+  }
+
+  // save, and tell everyone; ev is something to animate (a buzz, a no, a yes...)
+  async push(ev) {
+    await this.ctx.storage.put("s", this.s);
+    const due = this.s.phase === "reveal" ? this.s.nextAt : 0;
+    if (due) await this.ctx.storage.setAlarm(due);
+    else await this.ctx.storage.deleteAlarm();
+    this.broadcast({ type: "s", s: this.view(), ev: ev || null, now: Date.now() });
+  }
+
+  // which episodes are on air (for the lobby)
+  async onAir() {
+    if (!this.s.code) return;
+    const on = this.online();
+    await this.db(`INSERT INTO vgadai_rooms (code, players, n, updated) VALUES (?, ?, ?, ?)
+      ON CONFLICT (code) DO UPDATE SET players = excluded.players, n = excluded.n, updated = excluded.updated`,
+      this.s.code, JSON.stringify(on), on.length, Date.now());
+  }
+
+  nextHost(after) {
+    const on = this.online(), seats = this.s.seats;
+    if (!on.length) return "";
+    let i = seats.indexOf(after);
+    if (i < 0) i = -1;
+    for (let k = 1; k <= seats.length; k++) {
+      const c = seats[(i + k) % seats.length];
+      if (on.includes(c)) return c;
+    }
+    return on[0];
+  }
+
+  newRound(host) {
+    const s = this.s;
+    if (s.host) s.last = s.host;
+    s.host = host || "";
+    s.phase = "ask";
+    s.q = ""; s.hint = ""; s.buzzer = ""; s.lock = {}; s.answer = "";
+    s.tries = []; s.winner = ""; s.reveal = ""; s.nextAt = 0;
+  }
+
+  // after someone comes or goes: there is always someone asking, and nobody
+  // holds the button who isn't here
+  tidy() {
+    const s = this.s, on = this.online();
+    if (!on.length) return;
+    if (!s.host || !on.includes(s.host)) {
+      // the one asking left: this round is off, the next player asks
+      this.newRound(this.nextHost(s.host || s.last));
+      return;
+    }
+
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/info")) {
+      const s = this.s;
+      return json({ exists: !!s.created, created: s.created, online: this.online(), scores: s.scores, asked: s.asked, looks: s.looks, rounds: s.round || 0 });
+    }
+    const name = String(url.searchParams.get("name") || "").toUpperCase();
+    const code = String(url.searchParams.get("code") || "");
+    const mode = url.searchParams.get("mode") === "create" ? "create" : "join";
+    if (!VG_NAME.test(name) || !VG_CODE.test(code)) return new Response("bad name or code", { status: 400 });
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server);
+    const nope = (why, extra) => {
+      server.serializeAttachment({ gone: true });
+      this.send(server, { type: "nope", why, ...(extra || {}) });
+      try { server.close(4002, why); } catch { /* closed */ }
+      return new Response(null, { status: 101, webSocket: client });
+    };
+
+    // the same player logging in again replaces the old connection
+    const others = this.live(server).filter((ws) => ws.deserializeAttachment().name !== name);
+    if (mode === "create") {
+      // a new episode: only a season + episode that doesn't exist yet
+      if (others.length) return nope("live", { players: this.online().filter((n) => n !== name) });
+      if (this.s.created) return nope("exists");
+      this.s = vgFresh();
+      this.s.code = code;
+      this.s.created = Date.now();
+      this.subs = {};
+      await this.ctx.storage.put("subs", this.subs);
+    } else if (!this.s.created) {
+      return nope("none");
+    }
+    const s = this.s;
+    if (!s.seats.includes(name)) {
+      if (s.seats.length >= VG_SEATS) {
+        // make room: someone who isn't here, the one with the fewest points first
+        const on = new Set(others.map((ws) => ws.deserializeAttachment().name));
+        const away = s.seats.filter((n) => !on.has(n) && n !== s.host).sort((a, b) => (s.scores[a] || 0) - (s.scores[b] || 0));
+        if (!away.length) return nope("full");
+        s.seats = s.seats.filter((n) => n !== away[0]);
+      }
+      s.seats.push(name);
+      if (s.scores[name] == null) s.scores[name] = 0;
+      // a look for everyone who isn't Vika, Vito or Oleksiy (the same on every phone)
+      if (!VG_HOONGY[name]) {
+        let seed = 0;
+        try {
+          const db = await vgDb(this.env);
+          const row = await db.prepare(`SELECT seed FROM vgadai_players WHERE name = ?`).bind(name).first();
+          seed = row ? row.seed : 0;
+        } catch { /* no db: a look from the name */ }
+        if (!seed) {
+          seed = vgSeed();
+          await this.db(`INSERT OR IGNORE INTO vgadai_players (name, seed, updated) VALUES (?, ?, ?)`, name, seed, Date.now());
+        }
+        s.looks[name] = seed;
+      }
+    }
+    for (const old of this.live(server)) {
+      const a = old.deserializeAttachment();
+      if (a.name === name) {
+        old.serializeAttachment({ ...a, gone: true });
+        this.send(old, { type: "kicked" });
+        try { old.close(4001, "logged in elsewhere"); } catch { /* closed */ }
+      }
+    }
+    server.serializeAttachment({ name, at: Date.now() });
+    this.tidy();
+    this.send(server, { type: "hello", you: name, code });
+    await this.push({ k: mode === "create" ? "created" : "join", by: name });
+    await this.onAir();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, message) {
+    if (typeof message !== "string" || message.length > 2000) return;
+    let d;
+    try { d = JSON.parse(message); } catch { return; }
+    const me = ws.deserializeAttachment();
+    if (!me || me.gone || !me.name || !d) return;
+    const who = me.name, s = this.s, now = Date.now();
+    const on = this.online(), paused = on.length < 2;
+    const host = who === s.host;
+
+    switch (d.t) {
+      case "ask": {
+        // the question (it can be written while waiting for the others)
+        const q = vgClean(d.q, 160);
+        if (!host || s.phase !== "ask" || q.length < 2) return;
+        s.q = q; s.phase = "guess"; s.round = (s.round || 0) + 1;
+        s.asked[who] = (s.asked[who] || 0) + 1;
+        this.notify(who, "❓ " + who + " питає: " + q);
+        return this.push({ k: "ask", by: who });
+      }
+      case "buzz": {
+        // the answer is typed first; the green button sends it. The first one to press is heard.
+        if (host || paused || s.phase !== "guess") {
+          if (s.phase === "judge" && s.buzzer !== who) this.send(ws, { type: "late", by: s.buzzer });
+          return;
+        }
+        if ((s.lock[who] || 0) > now) return;
+        const w = vgWord(d.w);
+        if (!w) return;
+        s.phase = "judge"; s.buzzer = who; s.answer = w;
+        this.notify(who, "💬 " + who + " каже: «" + w + "»", "💬 " + who + " каже: «" + w + "» — правильно? Тисни ТАК або НІ!");
+        return this.push({ k: "buzz", by: who, w });
+      }
+      case "judge": {
+        if (!host || s.phase !== "judge") return;
+        const by = s.buzzer, w = s.answer;
+        if (d.ok === true) {
+          s.tries.push({ by, w, ok: true });
+          s.scores[by] = (s.scores[by] || 0) + 1;
+          s.phase = "reveal"; s.winner = by; s.reveal = w; s.nextAt = now + VG_REVEAL_MS;
+          this.keep();
+          return this.push({ k: "yes", by, w });
+        }
+        s.tries.push({ by, w, ok: false });
+        s.phase = "guess"; s.buzzer = ""; s.answer = ""; s.lock[by] = now + VG_LOCK_MS;
+        return this.push({ k: "no", by, w });
+      }
+      case "hint": {
+        const h = vgClean(d.h, 80);
+        if (!host || !["guess", "judge"].includes(s.phase) || !h) return;
+        s.hint = h;
+        return this.push({ k: "hint", by: who });
+      }
+      case "giveup": {
+        // nobody gets it: the one who asked tells the answer, no points
+        if (!host || s.phase !== "guess") return;
+        s.phase = "reveal"; s.winner = ""; s.reveal = vgClean(d.a, 40); s.buzzer = ""; s.nextAt = now + VG_REVEAL_MS;
+        this.keep();
+        return this.push({ k: "giveup", by: who });
+      }
+      case "next": {
+        if (s.phase !== "reveal") return;
+        this.newRound(this.nextHost(s.host));
+        return this.push({ k: "next", by: who });
+      }
+      case "react": {
+        const e = Number(d.e);
+        if (!Number.isInteger(e) || e < 0 || e > 5 || now - (me.lastReact || 0) < 300) return;
+        me.lastReact = now; ws.serializeAttachment(me);
+        this.broadcast({ type: "fx", k: "react", by: who, e });
+        return;
+      }
+      case "push": {
+        // notifications for this episode on this phone: on (with the subscription) or off
+        const sub = d.sub || {}, keys = sub.keys || {}, endpoint = String(sub.endpoint || "");
+        if (!pushEndpointOk(endpoint, this.env.PUSH_LOCAL_TEST === "1")) return;
+        if (!d.on) delete this.subs[endpoint];
+        else {
+          if (!/^[A-Za-z0-9_-]{80,100}$/.test(keys.p256dh || "") || !/^[A-Za-z0-9_-]{16,32}$/.test(keys.auth || "")) return;
+          if (Object.keys(this.subs).length >= 16 && !this.subs[endpoint]) return;
+          this.subs[endpoint] = { name: who, endpoint, p256dh: keys.p256dh, auth: keys.auth };
+        }
+        await this.ctx.storage.put("subs", this.subs);
+        this.send(ws, { type: "pushok", on: !!d.on });
+        return;
+      }
+      case "reset": {
+        // this episode's leaderboard back to 0, and an empty history
+        s.scores = {}; s.asked = {};
+        for (const n of s.seats) s.scores[n] = 0;
+        s.hist = []; s.round = 0;
+        this.newRound(s.host);
+        this.tidy();
+        return this.push({ k: "reset", by: who });
+      }
+      default:
+        return;
+    }
+  }
+
+  // a finished round goes into the history
+  keep() {
+    const s = this.s;
+    s.hist.push({ n: s.round, host: s.host, q: s.q, hint: s.hint, tries: s.tries.slice(), winner: s.winner, a: s.reveal, t: Date.now() });
+    if (s.hist.length > VG_HIST) s.hist = s.hist.slice(-VG_HIST);
+  }
+
+  async alarm() {
+    const s = this.s, now = Date.now();
+    if (s.phase === "reveal" && s.nextAt && now >= s.nextAt - 50) {
+      this.newRound(this.nextHost(s.host));
+      return this.push({ k: "next" });
+    }
+    if (s.phase === "reveal" && s.nextAt) await this.ctx.storage.setAlarm(Math.max(s.nextAt, now + 100));
+  }
+
+  async webSocketClose(ws, code, reason) {
+    await this.leave(ws);
+    try { ws.close(code, reason); } catch { /* closed */ }
+  }
+
+  async webSocketError(ws) {
+    await this.leave(ws);
+  }
+
+  async leave(ws) {
+    const me = ws.deserializeAttachment();
+    if (!me || me.gone || !me.name) return;
+    ws.serializeAttachment({ ...me, gone: true });
+    this.tidy();
+    await this.push({ k: "gone", by: me.name });
+    await this.onAir();
   }
 }

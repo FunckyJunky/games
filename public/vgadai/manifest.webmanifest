@@ -1,0 +1,18 @@
+{
+  "id": "/vgadai/",
+  "name": "Вгадай що?!",
+  "short_name": "Вгадай що?!",
+  "description": "A TV quiz show on error.blue: one asks, the others type an answer and race to the green button.",
+  "start_url": "/vgadai/",
+  "scope": "/vgadai/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#1c1230",
+  "theme_color": "#1c1230",
+  "icons": [
+    { "src": "/vgadai/icons/vgadai-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/vgadai/icons/vgadai-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/vgadai/icons/vgadai-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
