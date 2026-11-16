@@ -191,15 +191,89 @@ function toast(msg) {
 }
 function dialog(html, acts) {
   const d = $('dlg'); d.innerHTML = html; d.classList.add('show');
+  MENU = false;
+  dlgSel(0);
   d.onclick = e => {
     const b = e.target.closest('[data-a]'); if (!b) return;
     SFX.click();
     const f = acts && acts[b.dataset.a];
-    if (f && f() === 'keep') return;
-    d.classList.remove('show');
+    d.classList.remove('show'); MENU = false;
+    if (f && f() === 'keep') d.classList.add('show');
   };
 }
-const closeDialog = () => $('dlg').classList.remove('show');
+const dlgOpen = () => $('dlg').classList.contains('show');
+const closeDialog = () => { $('dlg').classList.remove('show'); MENU = false; };
+// on a computer: arrow keys choose in a dialog, Enter presses
+function dlgSel(i) {
+  const list = [...$('dlg').querySelectorAll('[data-a]')];
+  if (!list.length) return;
+  i = (i + list.length) % list.length;
+  list.forEach((b, k) => b.classList.toggle('sel', k === i));
+}
+function dlgKey(e) {
+  const list = [...$('dlg').querySelectorAll('[data-a]')], at = list.findIndex(b => b.classList.contains('sel'));
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'Tab') { e.preventDefault(); dlgSel(at + 1); SFX.tick(); }
+  else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); dlgSel(at - 1); SFX.tick(); }
+  else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (list[at]) list[at].click(); }
+}
+
+// =====================================================================
+// full screen on a computer: the first key or click goes full screen, and
+// so does every one after that, until you choose to stay in a window.
+// Esc opens the menu (where you can leave full screen).
+// =====================================================================
+const DESK = matchMedia('(pointer: fine)').matches && !/iPad|iPhone|iPod|Android/i.test(navigator.userAgent)
+  && !(navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !matchMedia('(display-mode: fullscreen)').matches;
+const FS = { want: DESK, leaving: false };
+try { if (sessionStorage.getItem('vgadai-window') === '1') FS.want = false; } catch (e) {}
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsOk = () => DESK && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+let MENU = false;
+function goFull() {
+  if (!FS.want || fsEl() || !fsOk()) return;
+  const el = document.documentElement, r = el.requestFullscreen || el.webkitRequestFullscreen;
+  try { const p = r.call(el, { navigationUI: 'hide' }); if (p && p.then) p.then(lockEsc, () => {}); else lockEsc(); } catch (e) {}
+}
+// in full screen, Esc comes to the game (Chrome, Edge): it opens the menu; holding Esc still leaves
+function lockEsc() { try { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); } catch (e) {} }
+function leaveFull() {
+  FS.want = false;
+  try { sessionStorage.setItem('vgadai-window', '1'); } catch (e) {}
+  try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
+  if (fsEl()) { FS.leaving = true; try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
+  toast('🗗 У вікні · Esc → меню → повний екран');
+}
+function backToFull() { FS.want = true; try { sessionStorage.removeItem('vgadai-window'); } catch (e) {} goFull(); }
+addEventListener('pointerdown', e => { if (!e.target.closest('#dlg')) goFull(); }, { capture: true });
+addEventListener('keydown', e => { if (e.key !== 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey && !dlgOpen() && !/^(F\d+|Shift|Control|Alt|Meta|CapsLock|Tab)$/.test(e.key)) goFull(); }, { capture: true });
+function fsChange() {
+  if (fsEl()) { FS.leaving = false; return; }
+  if (FS.leaving) { FS.leaving = false; return; }
+  // the browser left full screen (Esc without the key lock): the menu, to go back or stay in the window
+  if (FS.want && !dlgOpen()) openMenu();
+}
+document.addEventListener('fullscreenchange', fsChange);
+document.addEventListener('webkitfullscreenchange', fsChange);
+function openMenu() {
+  const inStudio = SCREEN === 'app', full = !!fsEl();
+  const opt = (a, ico, label, sub) => '<button class="opt" data-a="' + a + '"><span class="ico">' + ico + '</span><span>' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span></button>';
+  dialog('<h3>⏸ Меню</h3>'
+    + opt('go', '▶', 'Продовжити', full || !FS.want || !fsOk() ? 'Esc' : 'на весь екран')
+    + (fsOk() ? (full ? opt('window', '🗗', 'Вийти з повного екрана', 'гра далі у вікні')
+      : FS.want ? opt('window', '🗗', 'Залишитися у вікні', 'без повного екрана') : opt('full', '🖥', 'Повний екран', 'кожна клавіша знову на весь екран')) : '')
+    + opt('set', '⚙', 'Налаштування', 'сповіщення, голос ведучого, звук')
+    + (inStudio ? opt('leave', '🚪', 'Вийти з епізоду', esc(epName(S.code)) + ' · бали залишаться') : '')
+    + opt('dos', '◄', 'Terug naar ERROR-DOS', ''), {
+    go: () => goFull(),
+    window: leaveFull,
+    full: backToFull,
+    set: () => { setTimeout(() => openSettings(inStudio), 30); },
+    leave: () => leaveEpisode(),
+    dos: () => { try { sessionStorage.setItem('errordos-ran', 'VGADAI'); } catch (e) {} location.href = '/'; },
+  });
+  MENU = true;
+  SFX.whoosh();
+}
 const epName = code => 'S' + code.slice(0, 2) + ' · E' + code.slice(2);
 const epLong = code => 'СЕЗОН ' + (+code.slice(0, 2)) + ' · ЕПІЗОД ' + (+code.slice(2));
 
@@ -272,6 +346,7 @@ function showLogin() {
     'Wie ben jij? Typ je naam en druk op ENTER.',
     '',
   ];
+  if (fsOk()) loginLines.splice(loginLines.length - 1, 0, '<span class="dim">Een toets: volledig scherm · ESC: menu</span>');
   loginBusy = false;
   termRender();
 }
@@ -820,12 +895,14 @@ function openSettings(inStudio) {
     + '<button class="opt" data-a="push"><span class="ico">🔔</span><span>Сповіщення<small>нове питання і нова відповідь у твоєму епізоді</small></span>' + sw(PREF.push && PUSH.sub) + '</button>'
     + '<button class="opt" data-a="voice"><span class="ico">🗣</span><span>Ведучий читає питання<small>вголос, українською (коли питання кирилицею)</small></span>' + sw(PREF.voice) + '</button>'
     + '<button class="opt" data-a="sound"><span class="ico">🔊</span><span>Звук<small>кнопки, фанфари, оплески</small></span>' + sw(SET.sound) + '</button>'
+    + (fsOk() ? '<button class="opt" data-a="fs"><span class="ico">🖥</span><span>Повний екран<small>на комп\'ютері: кожна клавіша на весь екран, Esc → меню</small></span>' + sw(FS.want) + '</button>' : '')
     + (standalone ? '' : '<button class="opt" data-a="install"><span class="ico">📲</span><span>Встановити як додаток<small>на головний екран, на весь екран</small></span></button>')
     + (inStudio ? '<button class="opt" data-a="reset"><span class="ico">🔄</span><span>Нова гра в цьому епізоді<small>рейтинг ' + esc(epName(S.code)) + ' на нуль</small></span></button>' : '')
     + '<button class="btn" data-a="close" style="margin-top:4px">ГОТОВО</button>', {
     push: () => { togglePush().then(() => openSettings(inStudio)); return 'keep'; },
     voice: () => { PREF.voice = !PREF.voice; savePref(); if (!PREF.voice) try { speechSynthesis.cancel(); } catch (e) {} else speakTest(); openSettings(inStudio); return 'keep'; },
     sound: () => { setSound(!SET.sound); openSettings(inStudio); return 'keep'; },
+    fs: () => { if (FS.want) leaveFull(); else backToFull(); openSettings(inStudio); return 'keep'; },
     install: () => {
       if (installEv) { installEv.prompt(); installEv = null; return; }
       const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -886,15 +963,28 @@ pushPrepare();
 // =====================================================================
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (dlgOpen()) { const wasMenu = MENU; closeDialog(); if (wasMenu) SFX.click(); }
+    else if ($('sheet').classList.contains('show')) closeSheet();
+    else openMenu();
+    return;
+  }
+  if (dlgOpen()) return dlgKey(e);
   if (SCREEN === 'login') {
     if (e.key === 'Enter') { e.preventDefault(); loginKb.flash('SEND'); return loginKey('SEND'); }
     if (e.key === 'Backspace') { e.preventDefault(); return loginKey('DEL'); }
     if (e.key.length === 1) { e.preventDefault(); loginKb.flash(e.key); return loginKey(e.key); }
     return;
   }
+  if (SCREEN === 'lobby') {
+    // the dials with the arrow keys, Enter to join
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); dialStep(e.shiftKey ? 'S' : 'E', e.key === 'ArrowUp' ? 1 : -1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); dialStep('S', e.key === 'ArrowRight' ? 1 : -1); }
+    else if (e.key === 'Enter') { e.preventDefault(); SFX.click(); goEpisode('join'); }
+    return;
+  }
   if (SCREEN !== 'app') return;
-  if (e.key === 'Escape') { closeSheet(); closeDialog(); return; }
-  if ($('dlg').classList.contains('show')) return;
   const s = S.s;
   if (S.field) {
     if (e.key === 'Enter') { e.preventDefault(); return S.field === 'a' ? pressBuzz() : submitField(); }
