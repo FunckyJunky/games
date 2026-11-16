@@ -1,6 +1,6 @@
 // ERROR-DOS service worker: lets error.blue work as an installed app
 // and open the menu (and games you've played) without a connection.
-const CACHE = 'errordos-v2';
+const CACHE = 'errordos-v3';
 const SHELL = ['/', '/games.json', '/lib/gamelab.js', '/lib/appback.js', '/404.html', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
@@ -30,8 +30,9 @@ self.addEventListener('fetch', (e) => {
   const same = url.origin === self.location.origin;
   if (same && url.pathname.startsWith('/api/')) return;                   // scores, chat, rooms: always live
 
-  // pages and the game list: fresh from the network, cached copy when offline
-  if (req.mode === 'navigate' || (same && url.pathname.endsWith('.json'))) {
+  // pages, game code and lists: always fresh from the network (so an update shows
+  // at once), the cached copy only when offline
+  if (req.mode === 'navigate' || (same && /\.(json|js|css|html|webmanifest)$/.test(url.pathname))) {
     e.respondWith(
       fetch(req).then((res) => keep(req, res)).catch(() =>
         caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('/') : Response.error()))
@@ -40,7 +41,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // everything else on the site, and the VT323 font: cached, refreshed in the background
+  // big files (songs, the commentary) are not kept twice
+  if (same && /\.(mp3|m4a)$/.test(url.pathname)) return;
+  // pictures and fonts: cached, refreshed in the background
   if (same || url.hostname.endsWith('gstatic.com') || url.hostname.endsWith('googleapis.com')) {
     e.respondWith(
       caches.match(req).then((hit) => {

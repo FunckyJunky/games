@@ -715,6 +715,11 @@ export class TusaRoom extends DurableObject {
         const sc = Number(d.scoot);
         me.scoot = Number.isFinite(sc) && sc >= 0 ? Math.min(900, Math.round(sc)) : -1;
         me.sd = d.sd === -1 ? -1 : 1;
+        // how hard this friend is laughing (0-4), rolling on the floor, facing angle
+        me.lg = Math.max(0, Math.min(4, Number(d.lg) | 0));
+        me.rf = d.rf === 1;
+        const a = Number(d.a);
+        me.a = Number.isFinite(a) ? Math.round(Math.max(-7, Math.min(7, a)) * 100) / 100 : 0;
         if (me.scene === "street") { me.seat = -1; me.order = null; }
         ws.serializeAttachment(me);
         this.broadcast({ type: "p", p: me, now }, ws);

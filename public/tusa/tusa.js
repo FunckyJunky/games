@@ -9,15 +9,15 @@ const stage = $('stage'), dlg = $('dlg');
 let LW = 240, LH = 180, SCALE = 2, DPR = 1, CW = 480, CH = 360;
 
 // =====================================================================
-// words. Instructions are always plain English, one clear line; the
-// Dutch and Ukrainian live in the names, signs and the menu.
+// words: every text has its own fixed language, Ukrainian or Dutch
+// (never picked at random), so it always reads the same
 // =====================================================================
 const pick = a => a[Math.random() * a.length | 0];
 const FOOD = {
-  lassi: { ico: '🥭', name: 'Mango-Lassi · Манго-ласі', d: 'cold mango yoghurt drink', p: '5,90' },
-  coffee: { ico: '☕', name: "Vietnamese koffie · В'єтнамська кава", d: 'strong and sweet, with condensed milk', p: '4,50' },
-  shrimp: { ico: '🍤', name: 'Garnalen · Креветки', d: 'crispy, with chili and lime', p: '12,90' },
-  fish: { ico: '🐟', name: 'Vis · Риба', d: 'whole fish with ginger', p: '15,50' },
+  lassi: { ico: '🥭', name: 'Mango-Lassi', d: 'холодний манговий напій з йогуртом', p: '5,90' },
+  coffee: { ico: '☕', name: 'Vietnamese koffie', d: 'міцна й солодка, зі згущеним молоком', p: '4,50' },
+  shrimp: { ico: '🍤', name: 'Garnalen', d: 'хрусткі, з чилі та лаймом', p: '12,90' },
+  fish: { ico: '🐟', name: 'Vis', d: 'ціла риба з імбиром', p: '15,50' },
 };
 const NAMES = {
   VITO: ['VITO'],
@@ -158,7 +158,8 @@ function sendState(force) {
   const now = performance.now();
   if (!force && now - NET.lastSent < 110) return;
   const s = { t: 'st', x: Math.round(G.p.x * 10) / 10, y: Math.round(G.p.y * 10) / 10, dir: G.p.dir, scene: G.scene === 'inside' ? 'inside' : 'street', anim: G.p.anim || (G.p.moving ? 'walk' : ''),
-    ride: G.ride ? 1 : 0, scoot: G.scootX == null ? -1 : Math.round(G.scootX), sd: G.scootDir || 1 };
+    ride: G.ride ? 1 : 0, scoot: G.scootX == null ? -1 : Math.round(G.scootX), sd: G.scootDir || 1,
+    lg: myLaugh().laugh, rf: myLaugh().anim === 'rofl' ? 1 : 0, a: Math.round((G.p.angle || 0) * 100) / 100 };
   const key = JSON.stringify(s);
   if (!force && key === NET.lastKey) return;
   NET.lastKey = key; NET.lastSent = now;
@@ -187,20 +188,22 @@ function onNet(m) {
   } else if (m.type === 'g') {
     const was = NET.g.clockStart;
     NET.g = m.g;
-    if (!was && m.g.clockStart) { toast('18:00 · The evening starts, the kitchen is open!', 3.5); SFX.bell(); }
+    if (!was && m.g.clockStart) { toast('18:00 · Вечір почався, кухня відкрита!', 3.5); SFX.bell(); }
     radioSync();
   } else if (m.type === 'taken') {
-    toast('That seat is taken', 2);
+    toast('Bezet!', 2);
   } else if (m.type === 'kicked') {
     NET.want = false;
-    showDialog({ title: 'ERROR', text: 'You logged in on another device.', opts: [{ ico: '↩', label: 'OK', act: () => location.reload() }] });
+    showDialog({ title: 'ERROR', text: 'Je bent op een ander apparaat ingelogd.', opts: [{ ico: '↩', label: 'OK', act: () => location.reload() }] });
   }
 }
 function addOther(p, initial) {
   let o = G.others[p.char];
   const fresh = !o;
   if (!o) o = G.others[p.char] = { char: p.char, x: p.x, y: p.y, phase: 0 };
-  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt, ride: !!p.ride, scoot: p.scoot, sd: p.sd });
+  // a friend going in or out of Hoongy: everyone sees the door open
+  if (!fresh && o.scene && p.scene && o.scene !== p.scene) { G.doorUntil = G.t + 1.2; if (scenePlace() === 'street' || G.scene === 'inside') SFX.door(); }
+  Object.assign(o, { tx: p.x, ty: p.y, dir: p.dir, scene: p.scene, anim: p.anim, seat: p.seat, order: p.order, arrive: p.arrive, arriveAt: p.arriveAt, ride: !!p.ride, scoot: p.scoot, sd: p.sd, lg: p.lg || 0, rf: !!p.rf, a: p.a });
   if (fresh) {
     o.x = p.x; o.y = p.y;
     // the first friend has arrived: the waiting is over
@@ -224,9 +227,9 @@ function updateClock() {
   if (!at) { el.innerHTML = (HOME[G.me] ? HOME[G.me].title : 'TUSA') + ' <small>' + (G.scene === 'travel' ? '→ BERLIN' : '') + '</small>'; return; }
   const c = clockInfo();
   if (!c) G.closedShown = false;
-  if (!c) { el.innerHTML = '18:00 <small>' + (voicePlaying() ? '🎙 ' : '') + 'waiting…</small>'; return; }
+  if (!c) { el.innerHTML = '18:00 <small>' + (voicePlaying() ? '🎙 ' : '') + 'wachten…</small>'; return; }
   const hh = String(c.h).padStart(2, '0') + ':' + String(c.m).padStart(2, '0');
-  el.innerHTML = hh + (c.closed ? ' <small>CLOSED</small>' : '');
+  el.innerHTML = hh + (c.closed ? ' <small>GESLOTEN</small>' : '');
 }
 
 // =====================================================================
@@ -257,14 +260,14 @@ function tryLogin() {
   const who = whoIs(typed);
   loginLines.push('LOGIN: ' + esc(typed));
   if (!who) {
-    loginLines.push('<span class="err">ACCESS DENIED. Bad command or file name.</span>');
-    loginLines.push('<span class="dim">Only for: VIKA · VITO · OLEKSIY</span>');
+    loginLines.push('<span class="err">TOEGANG GEWEIGERD. Bad command or file name.</span>');
+    loginLines.push('<span class="dim">Тільки для: VIKA · VITO · OLEKSIY</span>');
     typed = ''; SFX.pop(); termRender(); return;
   }
   try { localStorage.setItem('tusa-name', typed.trim()); } catch (e) {}
   loginBusy = true;
   loginLines.push('');
-  loginLines.push('Welcome, ' + who + '!');
+  loginLines.push('Ласкаво просимо, ' + who + '!');
   termRender();
   let i = 0;
   const bar = () => {
@@ -287,8 +290,8 @@ function showLogin() {
     '<span class="big">Туса У Берліні</span>',
     '<span class="dim">(c) 2026 Hoongy &amp; vrienden · друзі</span>',
     '',
-    'Three friends. One café in Berlin.',
-    'Who are you? Type your name, then ENTER.',
+    'Троє друзів. Одне кафе в Берліні.',
+    'Wie ben jij? Typ je naam en druk op ENTER.',
     '',
   ];
   loginBusy = false;
@@ -328,11 +331,11 @@ function updateBase(dt) {
   if (G.p.x > H.W + 10 && !dialogOpen()) {
     if (G.me === 'VITO') {
       showDialog({
-        title: 'Fly to Berlin?',
-        text: 'Bucharest (OTP) → Berlin (BER) · ✈ 2h05',
+        title: 'Летіти до Берліна?',
+        text: 'Бухарест (OTP) → Берлін (BER) · ✈ 2 год 05 хв',
         opts: [
-          { ico: '✈', label: 'Fly!', key: 'A', act: () => startTravel('VITO') },
-          { ico: '↩', label: 'Stay a bit longer', key: 'B', act: () => { G.p.x = H.W - 20; G.p.dir = -1; } },
+          { ico: '✈', label: 'Летимо!', key: 'A', act: () => startTravel('VITO') },
+          { ico: '↩', label: 'Ще трохи побуду тут', key: 'B', act: () => { G.p.x = H.W - 20; G.p.dir = -1; } },
         ],
       });
     } else startTravel(G.me);
@@ -369,17 +372,17 @@ function drawBase() {
 const TRIPS = {
   VITO: [
     { k: 'europe', d: 5, cap: () => 'Бухарест → Берлін · Boekarest → Berlijn' },
-    { k: 'airport', d: 3.6, cap: () => 'BER · Welcome to Berlin!' },
+    { k: 'airport', d: 3.6, cap: () => 'BER · Welkom in Berlijn!' },
     { k: 'city', d: 3, cap: () => 'TAXI → Hoongy' },
   ],
   VIKA: [
     { k: 'mapDrive', d: 5, cap: () => 'Altengrabow → Berlin · A2 · 🚙 Amarok' },
-    { k: 'drive', d: 3.6, cap: () => 'Only 42 km to go!' },
+    { k: 'drive', d: 3.6, cap: () => 'Ще 42 км!' },
     { k: 'city', d: 2.6, cap: () => 'Berlin · Берлін' },
   ],
   OLEKSIY: [
     { k: 'mapTrain', d: 5, cap: () => 'Lehnin → Brück → Berlin Hbf · RE7' },
-    { k: 'train', d: 3.6, cap: () => 'RE7 · Next stop: Berlin Hbf' },
+    { k: 'train', d: 3.6, cap: () => 'RE7 · Volgende halte: Berlin Hbf' },
     { k: 'hbf', d: 2.6, cap: () => 'Berlin Hbf · 🛴 → Hoongy' },
   ],
 };
@@ -475,7 +478,6 @@ function arriveBerlin() {
   G.ride = kind === 'scooter'; G.scootX = null; G.scootDir = 1;
   G.order = null;
   G.npcs = []; G.cars = []; G.leaves = [];
-  for (let i = 0; i < 4; i++) spawnPed(true);
   G.camX = clamp(G.p.x - LW / 2, 0, S.W - LW);
   connect(kind, G.p.x);
   // a new visit: the commentary starts from the beginning
@@ -495,12 +497,43 @@ function arrivalState(kind, t0, now) {
   if (el < 5) return { vx: a.stop + (a.leave - a.stop) * ((el - 2.8) / 2.2) ** 2, show: true, veh: true };
   return { show: true, veh: false };
 }
-function spawnPed(anywhere) {
-  const dir = Math.random() < 0.5 ? 1 : -1;
-  const x = anywhere ? Math.random() * S.W : (dir > 0 ? -20 : S.W + 20);
-  const tops = ['#5a4a7a', '#7a3a3a', '#2f5a6a', '#8a6a3a', '#3a3a3a', '#6a2a4a', '#2a4a3a', '#c86a3a'];
-  G.npcs.push({ kind: 'ped', x, y: 146 + Math.random() * 7, dir, speed: 12 + Math.random() * 14, phase: Math.random(),
-    look: { skin: pick(['#f0c8a0', '#e0b090', '#c8946a', '#8a5a3a', '#f4d4b8']), top: pick(tops), legs: pick(['#2a2a3a', '#3a3a2a', '#1a1a1a', '#4a3a5a']), shoe: '#1a1a1a', hair: pick(['#1a1a1a', '#5a3a1a', '#d8b860', '#8a2a1a', '#c8c8c8']), long: Math.random() < 0.4, hat: Math.random() < 0.25 ? 'beanie' : null, hatc: pick(['#c83a3a', '#e8c040', '#3a6ac8']), bag: Math.random() < 0.3 ? pick(['#e8e0c8', '#3a6a3a']) : null, dog: Math.random() < 0.12 ? pick(['#c8a070', '#3a3a3a', '#f0f0f0']) : null } });
+// Street life is worked out from the shared clock, not from dice: every phone
+// shows the same people, cars and trams in the same places.
+const h1 = n => { let x = (n | 0) ^ 0x9e3779b9; x = Math.imul(x ^ (x >>> 16), 0x85ebca6b); x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35); x ^= x >>> 16; return (x >>> 0) / 4294967296; };
+const PED_TOPS = ['#5a4a7a', '#7a3a3a', '#2f5a6a', '#8a6a3a', '#3a3a3a', '#6a2a4a', '#2a4a3a', '#c86a3a'];
+function pedLook(n) {
+  const r = k => h1(n * 13 + k);
+  const of = (list, k) => list[Math.floor(r(k) * list.length) % list.length];
+  return { skin: of(['#f0c8a0', '#e0b090', '#c8946a', '#8a5a3a', '#f4d4b8'], 1), top: of(PED_TOPS, 2), legs: of(['#2a2a3a', '#3a3a2a', '#1a1a1a', '#4a3a5a'], 3), shoe: '#1a1a1a',
+    hair: of(['#1a1a1a', '#5a3a1a', '#d8b860', '#8a2a1a', '#c8c8c8'], 4), long: r(5) < 0.4, hat: r(6) < 0.25 ? 'beanie' : null, hatc: of(['#c83a3a', '#e8c040', '#3a6ac8'], 7),
+    bag: r(8) < 0.3 ? of(['#e8e0c8', '#3a6a3a'], 9) : null, dog: r(10) < 0.12 ? of(['#c8a070', '#3a3a3a', '#f0f0f0'], 11) : null, seed: n % 20 };
+}
+function streetLife() {
+  const now = snow() / 1000, list = [], cars = [];
+  // a pedestrian may start every 3 seconds from either end
+  for (let n = Math.floor(now / 3) - 70; n <= Math.floor(now / 3); n++) {
+    if (h1(n * 7 + 1) > 0.55) continue;
+    const dir = h1(n * 7 + 2) < 0.5 ? 1 : -1, speed = 12 + h1(n * 7 + 3) * 14, el = now - n * 3 - h1(n * 7 + 4) * 3;
+    if (el < 0) continue;
+    const x = dir > 0 ? -20 + el * speed : S.W + 20 - el * speed;
+    if (x < -40 || x > S.W + 40) continue;
+    list.push({ kind: 'ped', id: n, x, y: 146 + h1(n * 7 + 5) * 7, dir, phase: el * speed / 14, look: pedLook(n) });
+  }
+  // cars every few seconds, a tram now and then
+  for (let n = Math.floor(now / 4) - 12; n <= Math.floor(now / 4); n++) {
+    if (h1(n * 11 + 1) > 0.6) continue;
+    const dir = h1(n * 11 + 2) < 0.5 ? 1 : -1, speed = 70 + h1(n * 11 + 3) * 40, el = now - n * 4;
+    const x = dir > 0 ? -50 + el * speed : S.W + 50 - el * speed;
+    if (x < -260 || x > S.W + 260) continue;
+    cars.push({ kind: 'car', id: n, x, y: dir > 0 ? 168 : 178, dir, col: ['#c8323a', '#2a4a8a', '#e8e8e8', '#1a1a1a', '#5a7a3a', '#d8a020', '#7a7a8a'][Math.floor(h1(n * 11 + 4) * 7) % 7] });
+  }
+  for (let n = Math.floor(now / 37) - 2; n <= Math.floor(now / 37); n++) {
+    const dir = h1(n * 5 + 1) < 0.5 ? 1 : -1, el = now - n * 37;
+    const x = dir > 0 ? -170 + el * 55 : S.W + 170 - el * 55;
+    if (x < -260 || x > S.W + 260) continue;
+    cars.push({ kind: 'tram', id: 'tram' + n, x, y: 172, dir });
+  }
+  return { peds: list, cars };
 }
 function updateStreet(dt) {
   const arr = G.arrival;
@@ -515,36 +548,24 @@ function updateStreet(dt) {
     // walked off the street: home or stay?
     if (G.p.x < -8 || G.p.x > S.W + 8) {
       showDialog({
-        title: 'Go back to base?',
-        text: 'Or stay in Berlin a bit longer?',
+        title: 'Назад на базу?',
+        text: 'Чи ще трохи потусуєш у Берліні?',
         opts: [
-          { ico: '🏠', label: 'Go home', key: 'A', act: () => { disconnect(); startBase(G.me); } },
-          { ico: '🍜', label: 'Stay!', key: 'B', act: () => { G.p.x = clamp(G.p.x, 12, S.W - 12); G.p.dir *= -1; } },
+          { ico: '🏠', label: 'Додому, на базу', key: 'A', act: () => { disconnect(); startBase(G.me); } },
+          { ico: '🍜', label: 'Залишаюсь!', key: 'B', act: () => { G.p.x = clamp(G.p.x, 12, S.W - 12); G.p.dir *= -1; } },
         ],
       });
     }
   }
-  // traffic, people, leaves
-  G.nextPed -= dt; if (G.nextPed <= 0) { spawnPed(false); G.nextPed = 2.5 + Math.random() * 5; }
-  for (const n of G.npcs) { n.x += n.dir * n.speed * dt; n.phase += dt * n.speed / 14; }
-  G.npcs = G.npcs.filter(n => n.x > -60 && n.x < S.W + 60);
-  G.nextCar -= dt;
-  if (G.nextCar <= 0) {
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    G.cars.push({ kind: 'car', x: dir > 0 ? -50 : S.W + 50, y: dir > 0 ? 168 : 178, dir, speed: 70 + Math.random() * 40, col: pick(['#c8323a', '#2a4a8a', '#e8e8e8', '#1a1a1a', '#5a7a3a', '#d8a020', '#7a7a8a']) });
-    G.nextCar = 3 + Math.random() * 6; if (onScreen(S.W / 2)) SFX.car();
-  }
-  G.nextTram -= dt;
-  if (G.nextTram <= 0) {
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    G.cars.push({ kind: 'tram', x: dir > 0 ? -170 : S.W + 170, y: 172, dir, speed: 55, rang: false });
-    G.nextTram = 28 + Math.random() * 20;
-  }
+  // traffic and people (the same on every phone), leaves
+  const life = streetLife();
+  G.npcs = life.peds; G.cars = life.cars;
+  G.heard = G.heard || {};
   for (const v of G.cars) {
-    v.x += v.dir * v.speed * dt;
-    if (v.kind === 'tram' && !v.rang && Math.abs(v.x - G.p.x) < 160) { v.rang = true; SFX.bell(); }
+    if (G.heard[v.id]) continue;
+    if (v.kind === 'tram' && Math.abs(v.x - G.p.x) < 160) { G.heard[v.id] = 1; SFX.bell(); }
+    if (v.kind === 'car' && Math.abs(v.x - G.p.x) < 120) { G.heard[v.id] = 1; SFX.car(); }
   }
-  G.cars = G.cars.filter(v => v.x > -260 && v.x < S.W + 260);
   // falling ginkgo and linden leaves, carried by the wind
   const wind = 9 + Math.sin(G.t * 0.4) * 7 + (Math.sin(G.t * 1.7) > 0.9 ? 18 : 0);
   if (Math.random() < dt * 7) {
@@ -560,11 +581,11 @@ function updateStreet(dt) {
   if (G.leaves.length > 160) G.leaves.splice(0, G.leaves.length - 160);
   // the door
   G.prompt = '';
-  if (!G.arrival && G.ride) G.prompt = Math.abs(G.p.x - S.door) < 14 ? 'A  🛴 Park the scooter, then go in' : 'A  🛴 Park the scooter here';
-  else if (!G.arrival && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) G.prompt = 'A  🛴 Ride the scooter';
+  if (!G.arrival && G.ride) G.prompt = Math.abs(G.p.x - S.door) < 14 ? 'A  🛴 Eerst de step parkeren' : 'A  🛴 Step hier parkeren';
+  else if (!G.arrival && G.scootX != null && Math.abs(G.p.x - G.scootX) < 10 && Math.abs(G.p.x - S.door) >= 14) G.prompt = 'A  🛴 Op de step';
   else if (!G.arrival && Math.abs(G.p.x - S.door) < 14) {
     const c = clockInfo();
-    G.prompt = c && c.closed ? '🔒 Closed until tomorrow' : 'A  Go inside';
+    G.prompt = c && c.closed ? '🔒 Gesloten tot morgen' : 'A  Naar binnen';
   }
   G.camX = clamp(G.p.x - LW / 2, 0, S.W - LW);
   sendState(false);
@@ -644,9 +665,9 @@ function rideScooter() {
   tone(300, 0.25, 0.03, 'sawtooth', 0, 620); sendState(true);
 }
 function enterHoongy() {
-  if (G.ride) { toast('Park the scooter first: press A', 2.2); return; }
+  if (G.ride) { toast('Eerst de step parkeren: druk op A', 2.2); return; }
   const c = clockInfo();
-  if (c && c.closed) { toast('Hoongy is closed. See you tomorrow!', 2.5); return; }
+  if (c && c.closed) { toast('Gesloten. Tot morgen!', 2.5); return; }
   G.scene = 'enter'; G.trans = { t0: G.t, dir: 'in' };
   G.doorUntil = G.t + 1.2; SFX.door();
 }
@@ -715,8 +736,8 @@ const RADIO_SPOT = { x: 46, y: 133 };
 function nearRadio() { return G.scene === 'inside' && G.p.seat < 0 && Math.hypot(G.p.x - RADIO_SPOT.x, G.p.y - RADIO_SPOT.y) < 16; }
 function radioPrompt() {
   const cur = NET.g.radio ? NET.g.radio.ch : 0, n = STATIONS.length;
-  if (!cur) return 'A  📻 Turn the radio on';
-  return cur < n ? 'A  📻 Next channel (' + STATIONS[cur].freq + ')' : 'A  📻 Turn the radio off';
+  if (!cur) return 'A  📻 Radio aan';
+  return cur < n ? 'A  📻 Volgende zender (' + STATIONS[cur].freq + ')' : 'A  📻 Radio uit';
 }
 function nearSeat() {
   const taken = seatTakenMap();
@@ -728,7 +749,7 @@ function updateInside(dt) {
   const c = clockInfo();
   if (c && c.closed && !G.closedShown) {
     G.closedShown = true;
-    showDialog({ title: '22:00 · Hoongy is closing!', text: 'Thank you and see you tomorrow!', opts: [{ ico: '🚪', label: 'OK', key: 'A', act: leaveHoongy }] });
+    showDialog({ title: '22:00 · Hoongy зачиняється!', text: 'Дякуємо, до завтра!', opts: [{ ico: '🚪', label: 'OK', key: 'A', act: leaveHoongy }] });
   }
   if (G.p.seat >= 0) {
     const s = IN.seats[G.p.seat];
@@ -736,18 +757,18 @@ function updateInside(dt) {
     // the waiter brings the menu
     const o = G.order;
     if (o && o.ph === 'wait' && snow() >= o.t + 3800 && G.menuShownFor !== o.t && !dialogOpen()) { G.menuShownFor = o.t; openMenu(); }
-    if (!o) G.prompt = NET.g.clockStart ? 'B  Stand up' : '⏳ Kitchen opens when a friend arrives';
-    else if (o.ph === 'wait') G.prompt = snow() < o.t + 3800 ? 'The waiter is coming…' : 'A  📋 Menu';
-    else if (o.ph === 'cook' && snow() < o.t + 10500) G.prompt = '🍳 Cooking…';
-    else if (o.ph === 'cook' && (o.bites || 0) < 5) G.prompt = 'A  Eat     B  Stand up';
-    else G.prompt = 'A  Order more     B  Stand up';
+    if (!o) G.prompt = NET.g.clockStart ? 'B  Встати' : '⏳ Кухня відкриється, коли прийде друг';
+    else if (o.ph === 'wait') G.prompt = snow() < o.t + 3800 ? 'Офіціант іде…' : 'A  📋 Меню';
+    else if (o.ph === 'cook' && snow() < o.t + 10500) G.prompt = '🍳 Готується…';
+    else if (o.ph === 'cook' && (o.bites || 0) < 5) G.prompt = 'A  Їсти     B  Встати';
+    else G.prompt = 'A  Замовити ще     B  Встати';
   } else {
     movePlayerTop(dt);
     const ns = nearSeat();
     G.hiSeat = ns;
-    G.prompt = ns >= 0 ? 'A  🪑 Sit down' : '';
+    G.prompt = ns >= 0 ? 'A  🪑 Сісти' : '';
     if (nearRadio()) G.prompt = radioPrompt();
-    if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) G.prompt = 'A  🚪 Go outside';
+    if (Math.abs(G.p.x - IN.door.x) < 14 && G.p.y > IN.H - 30) G.prompt = 'A  🚪 Вийти';
     if (Math.abs(G.p.x - IN.door.x) < 12 && G.p.y >= IN.H - 17 && G.inputDown) leaveHoongy();
   }
   G.camX = IN.W <= LW ? (IN.W - LW) / 2 : clamp(G.p.x - LW / 2, 0, IN.W - LW);
@@ -818,12 +839,12 @@ function waiterPos() {
 function openMenu() {
   SFX.pop();
   showDialog({
-    title: '📋 HOONGY · Menu',
-    text: 'What would you like?',
+    title: '📋 HOONGY · Меню',
+    text: 'Що бажаєте?',
     opts: Object.keys(FOOD).map(k => ({
       ico: FOOD[k].ico, label: FOOD[k].name, small: FOOD[k].d + ' — ' + FOOD[k].p + ' €',
       act: () => { send({ t: 'order', item: k }); if (!NET.ok) G.order = { ph: 'cook', item: k, t: snow(), bites: 0 }; },
-    })).concat([{ ico: '⏳', label: 'Not yet', key: 'B', act: () => {} }]),
+    })).concat([{ ico: '⏳', label: 'Ще подумаю', key: 'B', act: () => {} }]),
   });
 }
 
@@ -923,7 +944,6 @@ function handleEmote(e) {
       if (from === G.me && b) { G.p.dir = b.x >= G.p.x ? 1 : -1; if (G.scene === 'street') G.p.x = b.x - G.p.dir * 11; }
       if (e.to === G.me && a) { G.p.dir = a.x >= G.p.x ? 1 : -1; }
       G.blush[from] = G.t + 2.5; G.blush[e.to] = G.t + 2.5;
-      if (a && b) for (let i = 0; i < 5; i++) G.hearts.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - (a.scene === 'inside' ? 4 : 26), tx: (a.x + b.x) / 2 + (Math.random() - 0.5) * 30, ty: (a.y + b.y) / 2 - 60, t0: G.t + i * 0.12, place: a.scene, small: true });
     } else setAnim(from, 'hug', 1.2);
   }
 }
@@ -935,12 +955,19 @@ function setAnim(ch, anim, dur) {
 // a short line at the bottom of the screen (never above a character)
 function toast(text, dur) { G.toast = { text, until: G.t + (dur || 2.5) }; }
 
-function animFor(ch) {
-  const lv = laughLevel(ch), since = lastJoke(ch);
-  const isMe = ch === G.me;
-  const a = isMe ? (G.p.animUntil > G.t ? G.p.anim : '') : ((G.others[ch] && (G.others[ch].localAnimUntil || 0) > G.t) ? G.others[ch].localAnim : '');
+// my own laughing, worked out from the jokes I heard; it is sent to everyone
+function myLaugh() {
+  const lv = laughLevel(G.me), since = lastJoke(G.me);
+  const a = G.p.animUntil > G.t ? G.p.anim : '';
   if (lv >= ROFL_AT && since < 20000 && a !== 'hug') return { anim: 'rofl', laugh: 4 };
   return { anim: a, laugh: since < 9000 ? lv : 0 };
+}
+function animFor(ch) {
+  if (ch === G.me) return myLaugh();
+  const o = G.others[ch]; if (!o) return { anim: '', laugh: 0 };
+  const a = (o.localAnimUntil || 0) > G.t ? o.localAnim : '';
+  if (o.rf && a !== 'hug') return { anim: 'rofl', laugh: 4 };
+  return { anim: a, laugh: o.lg || 0 };
 }
 function talking(ch) { return G.talk[ch] > G.t && (G.t * 8 | 0) % 2 === 0; }
 function drawRider(ch, x, y, dir, moving, st) {
@@ -969,7 +996,7 @@ function drawOtherTop(o) {
   const ang = o.seat >= 0 ? IN.seats[o.seat].face : (o.dir > 0 ? 0 : Math.PI);
   let x = o.x, y = o.y;
   if (st.anim === 'rofl' && o.seat >= 0) [x, y] = floorSpot(o.seat, x, y);
-  A.friendTop(o.char, x, y, { angle: o.angleLive != null && o.seat < 0 ? o.angleLive : ang, moving: o.moving, phase: o.phase, laugh: st.laugh, anim: st.anim, t: G.t });
+  A.friendTop(o.char, x, y, { angle: o.seat >= 0 ? ang : (typeof o.a === 'number' ? o.a : ang), moving: o.moving, phase: o.phase, laugh: st.laugh, anim: st.anim, t: G.t });
 }
 
 // =====================================================================
@@ -1084,8 +1111,8 @@ function updateRadioBtn() {
 function radioInfo() {
   unlock();
   const at = G.scene === 'street' || G.scene === 'inside' || G.scene === 'enter';
-  if (!at) return toast('The radio is in Hoongy, in Berlin.', 2.5);
-  toast(G.scene === 'inside' ? 'The radio is on the left wall. Walk to it and press A.' : 'The radio is inside Hoongy. Go in to hear it.', 3);
+  if (!at) return toast('De radio staat in Hoongy, in Berlijn.', 2.5);
+  toast(G.scene === 'inside' ? 'De radio staat links aan de muur. Loop erheen en druk op A.' : 'De radio staat binnen in Hoongy.', 3);
 }
 // off → first channel → second channel → … → off
 function cycleRadio() {
@@ -1095,7 +1122,7 @@ function cycleRadio() {
   if (NET.ok) send({ t: 'radio', ch: next });
   else { NET.g.radio = { ch: next, since: snow(), last: next || 1, epoch: (NET.g.radio && NET.g.radio.epoch) || localEpoch }; radioSync(); }
   if (next === 0) tone(180, 0.06, 0.05);
-  toast(next ? '📻 ' + STATIONS[next - 1].freq + ' · ' + STATIONS[next - 1].name : '📻 Radio off', 2);
+  toast(next ? '📻 ' + STATIONS[next - 1].freq + ' · ' + STATIONS[next - 1].name : '📻 Radio uit', 2);
 }
 
 // =====================================================================
@@ -1256,10 +1283,10 @@ view.addEventListener('pointerdown', e => {
 $('dosBtn').addEventListener('click', () => {
   unlock();
   showDialog({
-    title: 'Back to ERROR-DOS?',
+    title: 'Terug naar ERROR-DOS?',
     opts: [
-      { ico: '◄', label: 'Yes, quit the game', key: 'A', act: () => { disconnect(); try { sessionStorage.setItem('errordos-ran', 'TUSA'); } catch (e) {} location.href = '/'; } },
-      { ico: '🍜', label: 'No, keep playing', key: 'B', act: () => {} },
+      { ico: '◄', label: 'Ja, afsluiten', key: 'A', act: () => { disconnect(); try { sessionStorage.setItem('errordos-ran', 'TUSA'); } catch (e) {} location.href = '/'; } },
+      { ico: '🍜', label: 'Nee, verder spelen', key: 'B', act: () => {} },
     ],
   });
 });
@@ -1298,11 +1325,11 @@ function drawOverlay() {
       c.fillText(H.sign, S2(G.base.signX + G.base.signW / 2), S2(G.base.signY + G.base.signH * 0.72 + oy));
       c.textAlign = 'left';
     }
-    if (G.p.x > H.W - 70 && !dialogOpen()) hint(G.me === 'VITO' ? 'Keep walking ► to the airport' : 'Keep walking ► to Berlin');
+    if (G.p.x > H.W - 70 && !dialogOpen()) hint(G.me === 'VITO' ? 'Іди далі ► до аеропорту' : 'Іди далі ► до Берліна');
   }
   if (G.scene === 'travel') {
     const st = G.travel.steps[G.travel.i];
-    capText(st.cap(), 'A: skip');
+    capText(st.cap(), 'A: overslaan');
     if (G.mapPins && (st.k === 'mapDrive' || st.k === 'mapTrain' || st.k === 'europe')) {
       c.font = (6 * k) + 'px "Pixelify Sans", monospace'; c.fillStyle = '#9cff9c';
       for (const [n, [x, y]] of G.mapPins) { const w = c.measureText(n).width; c.fillText(n, Math.min(S2(x + 3), view.width - w - 4), S2(y - 2)); }
@@ -1396,7 +1423,6 @@ function frame(now) {
     if (d > 80) { o.x = o.tx; o.y = o.ty; }
     else { o.x += dx * Math.min(1, dt * 10); o.y += dy * Math.min(1, dt * 10); }
     o.moving = d > 0.6 || o.anim === 'walk';
-    if (o.moving) stopLaughing(ch);   // walking away stops the laughing
     if (o.moving) { o.phase += dt * 2.4; if (Math.abs(dx) + Math.abs(dy) > 0.3) o.angleLive = Math.atan2(dy, dx); }
   }
   if (G.scene === 'base') updateBase(dt);
