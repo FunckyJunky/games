@@ -110,7 +110,7 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
   go off → 88.4 → 93.7 → off. It is only heard inside, louder close by. Every station
   starts at 20% of its song when the evening begins and keeps playing (and looping)
   in the background, the same for everyone.
-- `voice/hoongy-commentary.mp3` plays on the street while you wait alone; it stops
+- `voice/hoongy-commentary.mp3` (your recording from 03:49) fades in on the street while you wait alone; it fades out and stops
   for good when the first friend arrives
 - 3 jokes within 25 seconds make the other friends roll on the floor laughing;
   walking cancels the laughing. Nobody talks in words: no speech bubbles

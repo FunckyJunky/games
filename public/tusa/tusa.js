@@ -1161,12 +1161,14 @@ function voiceUpdate() {
     const a = audio(); if (!a) return;
     if (!voiceNode) { try { voiceNode = a.createMediaElementSource(voiceEl); voiceGain = a.createGain(); voiceGain.gain.value = 0; voiceNode.connect(voiceGain).connect(master); } catch (e) {} }
     voiceOn = true;
-    if (voiceGain) voiceGain.gain.setTargetAtTime(0.95, a.currentTime, 0.15);
+    // fade in gently (about 2 seconds)
+    if (voiceGain) { voiceGain.gain.cancelScheduledValues(a.currentTime); voiceGain.gain.setValueAtTime(voiceGain.gain.value, a.currentTime); voiceGain.gain.linearRampToValueAtTime(0.95, a.currentTime + 2); }
     voiceEl.play().catch(() => { voiceOn = false; });
   } else if (!want && voiceOn) {
     voiceOn = false;
-    if (voiceGain && ac) voiceGain.gain.setTargetAtTime(0, ac.currentTime, 0.12);
-    setTimeout(() => { if (!voiceOn) try { voiceEl.pause(); } catch (e) {} }, 450);
+    // fade out slowly (about 2.5 seconds), then stop
+    if (voiceGain && ac) { voiceGain.gain.cancelScheduledValues(ac.currentTime); voiceGain.gain.setValueAtTime(voiceGain.gain.value, ac.currentTime); voiceGain.gain.linearRampToValueAtTime(0, ac.currentTime + 2.5); }
+    setTimeout(() => { if (!voiceOn) try { voiceEl.pause(); } catch (e) {} }, 2700);
   }
 }
 
