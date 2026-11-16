@@ -135,6 +135,18 @@ Share > Add to Home Screen on an iPhone; ERROR-DOS setup has INSTALL APP).
 - talking: the 🎙 PRATEN button (or M) turns the microphone on; everyone with the
   microphone on is in one call (WebRTC, set up through /api/tusa), and the
   speaker's mouth moves
+  (your own radio goes quiet while your mic is on)
+- the top bar is a dot-matrix DOS screen (place, time, and a ticker with friends,
+  radio, order, mic); the DOS button is a 3D ERROR-DOS logo that glitches, now and
+  then into ERROR.BLUE
+- Vito and Oleksiy, standing close, get a 👃 NEUSJE button (or N): a nose kiss
+- notifications: 🔔 MELDINGEN on the login screen. Typing your name sends
+  "… is net in de game gestapt" to every other phone that turned them on (once per
+  10 minutes per friend). Web Push from the Worker (`/api/push`,
+  `/api/tusa/hello`); the VAPID keys are made on first use and kept in D1
+  (`settings` row `vapid`), phones in table `push_subs`. On an iPhone it works
+  only when TUSA is on the home screen (iOS 16.4+). For local tests put
+  `PUSH_LOCAL_TEST="1"` in `.dev.vars`
 
 ## Access code (Leviathan)
 
