@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Settings for the glasses home screen">
+<title>Settings</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABoklEQVR42u3cPVLDMBDF8TXDUahpuFMOxZ1oqLmL6Jg0YWz0sRL6vSpNbMVv3n+0WXmPiChBaXryCBjAAGIAA4gBDCAGbKfnFRf9Vm4/nz+OdwkgBkBQFnZWx5EEMACCltbqOJIABuytIxp1xO7jfwYXvQuuq989s/6a3yIBEETDdkGP4jky5o92RzX3urp+CYAgmqoQyyqOZi7KJIABEESJ3TcJgCAI8rewBDCA7IJ+12f5+vN3X48XCSAGQFANdmow0uo6EgBBFCs05WuKr964qLl+jwJTAiAIgspq2GnVZG+Fo5rumwRAkEJsifezrp7J6b3OM2efztxXAiAIgrZ6LTQme2FEAiAIgpqcNN4ZTTXPRAIgCIJSCpAZXrgYiRoJgCCKnh2xVjiarSPmdDQE0Vbngu6x4FwQMQCCJsSR09HEAAhKxFH8o5FoEgBBEBTmOUsAA2izXdDIrlbWREQJgCBKQVCPKYVZQ18lAIIoVmvKzzA6bJXCUAIYYBcUJhxKAAQRBG05lVECGKAQK2HnIwEQRBAkAcQABhADGEDD9A3GRr/kWb9x4AAAAABJRU5ErkJggg==">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Settings"></canvas>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true };
+  const settings = {
+    get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
+    set(v) { store.set("glasses.settings", v); },
+  };
+  // DOS phosphor colours: main, bright, mid, dim, dark
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const dosPalette = (i) => {
+    const n = DOS_PALETTES.length, k = i === undefined ? settings.get().color : i;
+    return DOS_PALETTES[(((k | 0) % n) + n) % n];
+  };
+
+  /* ---------- tiny UI sounds (only when Settings > SOUNDS is on) ---------- */
+  let sfxCtx = null;
+  const SFX = {                 // [from Hz, to Hz, seconds, wave, volume]
+    tick: [1500, 1500, 0.02, "square", 0.04], row: [650, 950, 0.05, "square", 0.045],
+    open: [420, 1700, 0.17, "sawtooth", 0.05], on: [880, 1320, 0.07, "square", 0.045],
+    off: [1320, 660, 0.07, "square", 0.045], back: [900, 380, 0.09, "square", 0.04],
+  };
+  function sfx(kind) {
+    if (!settings.get().sounds) return;
+    try {
+      if (!sfxCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; sfxCtx = new AC(); }
+      if (sfxCtx.state === "suspended") sfxCtx.resume();
+      const P = SFX[kind] || SFX.tick, t = sfxCtx.currentTime + 0.005;
+      const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+      o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+      g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0001, t + P[2] + 0.03);
+      o.connect(g); g.connect(sfxCtx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+    } catch {}
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop,
+           settings, DOS_PALETTES, dosPalette, sfx };
+})();
+
+</script>
+<script>
+/* SETUP.EXE: settings for the glasses home screen (saved on the glasses, used by the apps).
+   Swipe up/down = pick   Pinch = switch on/off (or next choice)   Swipe left/right = change   Back = done */
+(() => {
+  "use strict";
+  const G = 300;
+  const clamp = DM.clamp;
+  let S = DM.settings.get();
+  let P = DM.dosPalette(S.color);
+
+  /* ---------------- canvas + VGA font ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.38)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  let atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = 95 * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < 95; i++) for (let r = 0; r < 14; r++) {
+      const bits = parseInt(FONT_HEX.substr((i * 14 + r) * 2, 2), 16);
+      for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+    }
+    return (atlases[color] = a);
+  }
+  function text(s, x, y, color, a = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a; s = String(s);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i) - 32;
+      if (c > 0 && c < 95) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8), Math.round(y), 8, 14);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s) => String(s).length * 8;
+
+  /* ---------------- the settings ---------------- */
+  const SPEED_NAMES = ["SLOW", "MEDIUM", "FAST"];
+  const ITEMS = [
+    { key: "compass", label: "COMPASS UNDER CLOCK", type: "bool" },
+    { key: "head",    label: "HEAD MOTION MOVES APPS", type: "bool" },
+    { key: "speed",   label: "HEAD SPEED", type: "list", values: SPEED_NAMES, needs: "head" },
+    { key: "invert",  label: "INVERT HEAD MOTION", type: "bool", needs: "head" },
+    { key: "color",   label: "HUD COLOUR", type: "list", values: DM.DOS_PALETTES.map((p) => p.name) },
+    { key: "sounds",  label: "SOUNDS", type: "bool" },
+  ];
+  let sel = 0, clock = 0, flashMsg = "", flashUntil = 0;
+  const flash = (m, d = 1.4) => { flashMsg = m; flashUntil = clock + d; };
+  const motion = DM.createMotion();
+
+  function change(d) {
+    const it = ITEMS[sel];
+    if (it.type === "bool") S[it.key] = !S[it.key];
+    else S[it.key] = (S[it.key] + d + it.values.length) % it.values.length;
+    DM.settings.set(S);
+    if (it.key === "color") { P = DM.dosPalette(S.color); atlases = {}; }
+    if (it.key === "head" && S.head) motion.enable();                // ask for the head sensors inside the gesture
+    if (it.type === "bool") DM.sfx(S[it.key] ? "on" : "off"); else DM.sfx("tick");
+    if (it.key === "sounds" && S.sounds) DM.sfx("on");
+    flash(it.label.split(" ")[0] + ": " + valueText(it));
+  }
+  const valueText = (it) => (it.type === "bool" ? (S[it.key] ? "ON" : "OFF") : it.values[S[it.key]]);
+
+  /* ---------------- drawing ---------------- */
+  function draw() {
+    const { c: GREEN, b: BRIGHT, m: MID, d: DIM } = P;
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    // top bar
+    text("C:\\GLASSES\\SETUP>" + (Math.floor(clock * 2) % 2 ? "_" : ""), 4, 3, GREEN);
+    lo.fillStyle = DIM; lo.fillRect(0, 19, G, 1);
+    // settings window
+    const x = 6, y = 30, w = G - 12, h = ITEMS.length * 19 + 16;
+    lo.strokeStyle = GREEN; lo.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); lo.strokeRect(x + 3.5, y + 3.5, w - 7, h - 7);
+    lo.fillStyle = "#000"; lo.fillRect(G / 2 - 52, y - 7, 104, 14);
+    text(" HUD SETUP ", G / 2 - textW(" HUD SETUP ") / 2, y - 7, BRIGHT);
+    ITEMS.forEach((it, i) => {
+      const yy = y + 12 + i * 19, on = i === sel, off = it.needs && !S[it.needs];
+      if (on) { lo.fillStyle = GREEN; lo.fillRect(x + 7, yy - 2, w - 14, 17); }
+      const col = on ? "#000000" : off ? DIM : GREEN;
+      let left;
+      if (it.type === "bool") left = (S[it.key] ? "[X] " : "[ ] ") + it.label;
+      else left = "    " + it.label;
+      text(left, x + 11, yy, col);
+      if (it.type === "list") { const v = "<" + it.values[S[it.key]] + ">"; text(v, x + w - 12 - textW(v), yy, on ? "#000000" : BRIGHT); }
+    });
+
+    // live sensor check
+    const py = y + h + 10;
+    lo.fillStyle = DIM; lo.fillRect(0, py - 4, G, 1);
+    const live = motion.live, comp = motion.compass;
+    text("HEAD SENSORS: " + (live ? "LIVE" : "WAITING"), 8, py, live ? BRIGHT : MID);
+    if (live) {
+      const inv = S.invert ? -1 : 1;
+      const yaw = Math.round(motion.yaw * inv), pit = Math.round(motion.pitch * inv);
+      const sgn = (v) => (v >= 0 ? "+" : "-") + String(Math.abs(v)).padStart(3, "0");
+      text("TURN " + sgn(yaw) + "  TILT " + sgn(pit), 8, py + 16, GREEN);
+      text(comp !== null ? "COMPASS " + String(Math.round(comp) % 360).padStart(3, "0") : "NO COMPASS (RELATIVE)", 8, py + 32, MID);
+      // a little target box: where the home screen would move with your head
+      const bx = G - 70, by = py, bs = 56, sp = [[26, 20], [18, 14], [12, 10]][S.speed];
+      lo.strokeStyle = MID; lo.strokeRect(bx + 0.5, by + 0.5, bs, bs);
+      lo.fillStyle = DIM; lo.fillRect(bx + bs / 2, by + 1, 1, bs - 1); lo.fillRect(bx + 1, by + bs / 2, bs - 1, 1);
+      const dx = clamp(yaw / sp[0] / 3, -1, 1) * (bs / 2 - 4), dy = clamp(-pit / sp[1] / 2, -1, 1) * (bs / 2 - 4);
+      lo.fillStyle = S.head ? BRIGHT : MID; lo.fillRect(Math.round(bx + bs / 2 + dx) - 2, Math.round(by + bs / 2 + dy) - 2, 5, 5);
+      // compass lines preview, like under the clock
+      const hd = comp !== null ? comp : motion.heading;
+      for (let deg = 0; deg < 360; deg += 10) {
+        const rel = DM.angDiff(deg, hd) * Math.PI / 180;
+        if (Math.abs(rel) > 1.45) continue;
+        const u = 110 + Math.sin(rel) * 95, f = Math.cos(rel), major = deg % 30 === 0;
+        lo.fillStyle = major ? GREEN : MID; lo.globalAlpha = f * (S.compass ? 1 : 0.35);
+        lo.fillRect(Math.round(u), py + 52, major ? 2 : 1, major ? 10 : 6);
+        if (major && deg % 90 === 0 && comp !== null) text({ 0: "N", 90: "E", 180: "S", 270: "W" }[deg], u - 3, py + 64, BRIGHT, f);
+        lo.globalAlpha = 1;
+      }
+      lo.fillStyle = BRIGHT; lo.fillRect(110, py + 48, 1, 3);
+    } else {
+      text("PINCH ON HEAD MOTION TO ALLOW", 8, py + 16, MID);
+      text("THE HEAD SENSORS", 8, py + 32, MID);
+    }
+    text("PINCH SET  <> CHANGE  ^V PICK", 8, G - 16, DIM);
+    if (clock < flashUntil) {
+      const fw = textW(flashMsg) + 16, fx = (G - fw) / 2, fy = 140;
+      lo.fillStyle = "#000"; lo.fillRect(fx, fy, fw, 22);
+      lo.strokeStyle = BRIGHT; lo.strokeRect(fx + 0.5, fy + 0.5, fw - 1, 21);
+      text(flashMsg, fx + 8, fy + 4, BRIGHT);
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- input ---------------- */
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) return;
+    e.preventDefault();
+    if (!motion.live) motion.enable();
+    if (k === "Escape") { DM.sfx("back"); history.back(); return; }
+    if (k === "ArrowUp") { sel = (sel + ITEMS.length - 1) % ITEMS.length; DM.sfx("tick"); }
+    else if (k === "ArrowDown") { sel = (sel + 1) % ITEMS.length; DM.sfx("tick"); }
+    else if (k === "ArrowLeft") change(-1);
+    else if (k === "ArrowRight") change(1);
+    else if (!e.repeat) change(1);
+  });
+  // previewing on a phone/computer: tap = pinch, swipe = arrows
+  let touch = null;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, cancelable: true }));
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null; e.preventDefault();
+    if (Math.hypot(dx, dy) < 20) key("Enter");
+    else if (Math.abs(dx) > Math.abs(dy)) key(dx > 0 ? "ArrowRight" : "ArrowLeft");
+    else key(dy < 0 ? "ArrowUp" : "ArrowDown");
+  });
+  cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
+
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    motion.update(dt);
+    draw();
+  }
+  requestAnimationFrame(frame);
+
+  window.__settings = { get S() { return S; }, get sel() { return sel; }, motion };
+})();
+</script>
+</body>
+</html>

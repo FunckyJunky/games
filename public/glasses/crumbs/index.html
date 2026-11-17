@@ -228,6 +228,45 @@ const DM = (() => {
     };
   }
 
+  /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true };
+  const settings = {
+    get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
+    set(v) { store.set("glasses.settings", v); },
+  };
+  // DOS phosphor colours: main, bright, mid, dim, dark
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const dosPalette = (i) => {
+    const n = DOS_PALETTES.length, k = i === undefined ? settings.get().color : i;
+    return DOS_PALETTES[(((k | 0) % n) + n) % n];
+  };
+
+  /* ---------- tiny UI sounds (only when Settings > SOUNDS is on) ---------- */
+  let sfxCtx = null;
+  const SFX = {                 // [from Hz, to Hz, seconds, wave, volume]
+    tick: [1500, 1500, 0.02, "square", 0.04], row: [650, 950, 0.05, "square", 0.045],
+    open: [420, 1700, 0.17, "sawtooth", 0.05], on: [880, 1320, 0.07, "square", 0.045],
+    off: [1320, 660, 0.07, "square", 0.045], back: [900, 380, 0.09, "square", 0.04],
+  };
+  function sfx(kind) {
+    if (!settings.get().sounds) return;
+    try {
+      if (!sfxCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; sfxCtx = new AC(); }
+      if (sfxCtx.state === "suspended") sfxCtx.resume();
+      const P = SFX[kind] || SFX.tick, t = sfxCtx.currentTime + 0.005;
+      const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+      o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+      g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0001, t + P[2] + 0.03);
+      o.connect(g); g.connect(sfxCtx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+    } catch {}
+  }
+
   /* ---------- 30 fps loop ---------- */
   function loop(fn) {
     let last = performance.now();
@@ -241,7 +280,8 @@ const DM = (() => {
     requestAnimationFrame(frame);
   }
 
-  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop };
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop,
+           settings, DOS_PALETTES, dosPalette, sfx };
 })();
 
 </script>
@@ -254,7 +294,8 @@ const DM = (() => {
 (() => {
   "use strict";
   const G = 300, CX = 150, MAP_T = 20, MAP_B = 214, MAP_CY = 117;
-  const GREEN = "#33ff66", BRIGHT = "#d2ffdc", MID = "#22b84e", DIM = "#0e5f27", DARK = "#031c0b";
+  const PAL = DM.dosPalette();                                          // HUD colour from Settings
+  const GREEN = PAL.c, BRIGHT = PAL.b, MID = PAL.m, DIM = PAL.d, DARK = PAL.k;
   const D2R = Math.PI / 180;
   const { clamp, angDiff, wrap360 } = DM;
   const store = DM.store;

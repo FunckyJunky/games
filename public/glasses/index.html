@@ -17,15 +17,291 @@
 <body>
 <canvas id="screen" aria-label="Glasses home: swipe to choose an app, pinch to open"></canvas>
 <script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true };
+  const settings = {
+    get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
+    set(v) { store.set("glasses.settings", v); },
+  };
+  // DOS phosphor colours: main, bright, mid, dim, dark
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const dosPalette = (i) => {
+    const n = DOS_PALETTES.length, k = i === undefined ? settings.get().color : i;
+    return DOS_PALETTES[(((k | 0) % n) + n) % n];
+  };
+
+  /* ---------- tiny UI sounds (only when Settings > SOUNDS is on) ---------- */
+  let sfxCtx = null;
+  const SFX = {                 // [from Hz, to Hz, seconds, wave, volume]
+    tick: [1500, 1500, 0.02, "square", 0.04], row: [650, 950, 0.05, "square", 0.045],
+    open: [420, 1700, 0.17, "sawtooth", 0.05], on: [880, 1320, 0.07, "square", 0.045],
+    off: [1320, 660, 0.07, "square", 0.045], back: [900, 380, 0.09, "square", 0.04],
+  };
+  function sfx(kind) {
+    if (!settings.get().sounds) return;
+    try {
+      if (!sfxCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; sfxCtx = new AC(); }
+      if (sfxCtx.state === "suspended") sfxCtx.resume();
+      const P = SFX[kind] || SFX.tick, t = sfxCtx.currentTime + 0.005;
+      const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+      o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+      g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0001, t + P[2] + 0.03);
+      o.connect(g); g.connect(sfxCtx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+    } catch {}
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop,
+           settings, DOS_PALETTES, dosPalette, sfx };
+})();
+
+</script>
+<script>
 /* GLASSES HOME: a 3D app slider in a green DOS look.
    Swipe left/right = slide through a row of apps.  Swipe up/down = change row.
+   Head motion (Settings > HEAD MOTION): turn your head = slide, tilt it up/down = change row.
    Above the top row sits a big digital clock.      Pinch = open the app (on the clock: 12/24 h).
    Every app icon is a small live 3D model. */
 (() => {
   "use strict";
   const G = 300, CX = 150, CY = 122, F = 330;
-  const GREEN = "#33ff66", BRIGHT = "#d2ffdc", MID = "#22b84e", DIM = "#0e5f27", DARK = "#031c0b";
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  let S = DM.settings.get();                                          // written by the Settings app
+  const PAL = DM.dosPalette(S.color);
+  const GREEN = PAL.c, BRIGHT = PAL.b, MID = PAL.m, DIM = PAL.d, DARK = PAL.k;
+  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16));
+  const RGB = { c: hexRgb(PAL.c), b: hexRgb(PAL.b), d: hexRgb(PAL.d), k: hexRgb(PAL.k) };
+  const mix = (a, b, t) => "rgb(" + a.map((v, i) => Math.round(v + (b[i] - v) * clamp(t, 0, 1))).join(",") + ")";
+  const motion = DM.createMotion();
   const store = {
     get(k, f, s = localStorage) { try { const v = s.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
     set(k, v, s = localStorage) { try { s.setItem(k, JSON.stringify(v)); } catch {} },
@@ -46,6 +322,9 @@
       { id: "clock",   file: "CLOCK.EXE",   desc: "TIME AND DATE",        url: "/glasses/mini/?app=clock" },
       { id: "counter", file: "COUNTER.EXE", desc: "TALLY COUNTER",        url: "/glasses/mini/?app=counter" },
       { id: "dice",    file: "DICE.EXE",    desc: "ROLL 1-3 DICE",        url: "/glasses/mini/?app=dice" },
+    ] },
+    { name: "SYSTEM", apps: [
+      { id: "settings", file: "SETUP.EXE", desc: "HUD SETTINGS", url: "/glasses/settings/" },
     ] },
   ];
   const nav = store.get("home.nav", { row: 0, cols: [0, 0] }, sessionStorage);
@@ -242,6 +521,22 @@
     return m;
   }
 
+  // SETTINGS: a turning gear (a disc plus box teeth, so every part stays convex)
+  function gearMesh() {
+    const m = mesh(), N = 16, R0 = 0.7, D = 0.18, b = m.v.length;
+    for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2; m.v.push([Math.cos(a) * R0, Math.sin(a) * R0, -D], [Math.cos(a) * R0, Math.sin(a) * R0, D]); }
+    m.f.push({ i: [...Array(N).keys()].map((i) => b + i * 2), c: [0, 0, 0], k: "solid" }, { i: [...Array(N).keys()].map((i) => b + i * 2 + 1).reverse(), c: [0, 0, 0], k: "solid" });
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N; m.f.push({ i: [b + i * 2, b + j * 2, b + j * 2 + 1, b + i * 2 + 1], c: [0, 0, 0], k: "solid" }); }
+    for (let t = 0; t < 8; t++) {                                   // teeth: boxes turned around the axle
+      const a = (t / 8) * Math.PI * 2, R1 = rz(a), start = m.v.length, fs = box(m, 0.86, 0, 0, 0.36, 0.3, D * 1.9, "on");
+      for (let k = start; k < m.v.length; k++) m.v[k] = ap(R1, m.v[k]);
+      for (const f of fs) f.c = ap(R1, [0.86, 0, 0]);
+    }
+    box(m, 0, 0, 0, 0.32, 0.32, D * 2.6, "off");                     // axle
+    return m;
+  }
+  const GEAR = gearMesh();
+
   // SPECTRUM: rolling 3D spectrum ridges
   function spectrumMesh(t) {
     const m = mesh(), R = 6, N = 14;
@@ -292,6 +587,7 @@
       case "crumbs":  return [crumbsMesh(t), mul(rx(0.55), ry(t * 0.35)), 0.36];
       case "yaro":    return [eyeMesh(t), ry(Math.sin(t * 0.3) * 0.3), 0.4];
       case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
+      case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];
     }
   }
 
@@ -306,9 +602,9 @@
     lo.globalAlpha = 1;
   }
   function shadeColor(kind, s) {
-    if (kind === "on") return `rgb(${Math.round(60 + 140 * s)},${Math.round(160 + 95 * s)},${Math.round(90 + 110 * s)})`;
-    if (kind === "off") return `rgb(0,${Math.round(18 + 30 * s)},8)`;
-    return `rgb(${Math.round(4 + 30 * s * s)},${Math.round(30 + 150 * s)},${Math.round(12 + 50 * s)})`;
+    if (kind === "on") return mix(RGB.c, RGB.b, 0.2 + 0.8 * s);
+    if (kind === "off") return mix(RGB.k, RGB.d, 0.3 + 0.5 * s);
+    return mix(RGB.k, RGB.c, 0.12 + 0.72 * s);
   }
   function drawMesh(m, M, scale, P, alpha) {
     const vs = m.v.map((v) => { const w = ap(M, v); return [w[0] * scale + P[0], w[1] * scale + P[1], w[2] * scale + P[2]]; });
@@ -399,9 +695,10 @@
   }
   function drawClockPanel(ps, t, now) {
     const { P, M, a, focus } = ps;
-    const place = (u, v) => { const w = ap(M, [u, v, 0]); return proj([w[0] + P[0], w[1] + P[1], w[2] + P[2]]); };
-    poly(frameQuad(M, P, 1.25, 0.7), DARK, focus > 0.5 ? GREEN : MID, a * 0.92, 1.5);
-    poly(frameQuad(M, P, 1.19, 0.64), null, GREEN, a * 0.45);
+    const sc = S.compass ? 0.88 : 1;                                   // a little smaller when the compass sits below
+    const place = (u, v) => { const w = ap(M, [u * sc, v * sc, 0]); return proj([w[0] + P[0], w[1] + P[1], w[2] + P[2]]); };
+    poly(frameQuad(M, P, 1.25 * sc, 0.7 * sc), DARK, focus > 0.5 ? GREEN : MID, a * 0.92, 1.5);
+    poly(frameQuad(M, P, 1.19 * sc, 0.64 * sc), null, GREEN, a * 0.45);
     let hh = now.getHours();
     const pm = hh >= 12;
     if (h12) hh = hh % 12 || 12;
@@ -435,6 +732,31 @@
     }
     lo.globalAlpha = 1;
     if (h12) { const p = place(1.08, 0.5); text(pm ? "PM" : "AM", p[0] - 16, p[1], GREEN, a); }
+    const ca = a * clamp(focus * 1.6 - 0.2, 0, 1);                   // only when you look at the clock
+    if (S.compass && ca > 0.03) drawCompassTape(place, ca);
+  }
+
+  // compass under the clock: tick lines on a drum that turns with your head
+  const compassHeading = () => (motion.compass !== null ? motion.compass : motion.live ? motion.heading : null);
+  function drawCompassTape(place, a) {
+    const hd = compassHeading(), abs = motion.compass !== null;
+    const spin = hd === null ? clock * 25 : hd;                        // no sensors: idle spin so you can see it
+    for (let deg = 0; deg < 360; deg += 10) {
+      const rel = DM.angDiff(deg, spin) * Math.PI / 180;
+      if (Math.abs(rel) > 1.45) continue;
+      const u = Math.sin(rel) * 1.2, fade = Math.cos(rel), major = deg % 30 === 0;
+      const p0 = place(u, -0.8), p1 = place(u, major ? -0.97 : -0.9);
+      lo.strokeStyle = major ? GREEN : MID; lo.globalAlpha = a * fade * (hd === null ? 0.5 : 1); lo.lineWidth = major ? 1.5 : 1;
+      lo.beginPath(); lo.moveTo(p0[0], p0[1]); lo.lineTo(p1[0], p1[1]); lo.stroke();
+      if (major && abs && fade > 0.35) {
+        const lbl = { 0: "N", 90: "E", 180: "S", 270: "W" }[deg] || String(deg / 10);
+        const q = place(u, -0.99);
+        text(lbl, q[0] - textW(lbl) / 2, q[1], deg % 90 === 0 ? BRIGHT : GREEN, a * fade);
+      }
+    }
+    lo.lineWidth = 1; lo.globalAlpha = 1;
+    const c0 = place(0, -0.76), c1 = place(-0.04, -0.7), c2 = place(0.04, -0.7);     // centre marker
+    poly([c0, c1, c2], BRIGHT, null, a);
   }
 
   /* ---------------- background + chrome ---------------- */
@@ -456,6 +778,7 @@
     const where = row < 0 ? "TIME" : ROWS[row].name;
     text("C:\\GLASSES\\" + where + ">" + cur, 4, 3, GREEN);
     if (row >= 0) text(pad(now.getHours()) + ":" + pad(now.getMinutes()), G - 46, 3, MID);
+    if (headActive()) text("HEAD", G - (row >= 0 ? 88 : 40), 3, BRIGHT, 0.8);
     lo.fillStyle = DIM; lo.fillRect(0, 19, G, 1);
 
     // row indicator on the right edge
@@ -470,7 +793,9 @@
     if (row < 0) {
       text("> TIME" + (Math.floor(t * 2) % 2 ? "_" : ""), 8, 228, BRIGHT);
       text(`${DAYS[now.getDay()]} ${pad(now.getDate())} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`, 8, 246, GREEN);
-      text("PINCH: " + (h12 ? "24H" : "12H") + "   V APPS", 8, 276, MID);
+      const hd = S.compass ? compassHeading() : null;
+      if (hd !== null) text("HEADING " + String(Math.round(hd) % 360).padStart(3, "0") + (motion.compass !== null ? "" : " (REL)"), 8, 260, MID);
+      text("PINCH: " + (h12 ? "24H" : "12H") + (headActive() ? "  LOOK DOWN: APPS" : "   V APPS"), 8, 276, MID);
     } else {
       const app = ROWS[row].apps[cols[row]];
       text("> " + app.file + (Math.floor(t * 2) % 2 ? "_" : ""), 8, 228, BRIGHT);
@@ -478,7 +803,7 @@
       // position dots for the row
       const n = ROWS[row].apps.length;
       for (let i = 0; i < n; i++) { lo.fillStyle = i === cols[row] ? GREEN : DIM; lo.fillRect(G - 12 - (n - i) * 10, 251, i === cols[row] ? 6 : 4, i === cols[row] ? 6 : 4); }
-      text("PINCH RUN  <> SLIDE  ^V ROW", 8, 276, MID);
+      text(headActive() ? "PINCH RUN   LOOK AROUND OR SWIPE" : "PINCH RUN  <> SLIDE  ^V ROW", 8, 276, MID);
     }
   }
 
@@ -493,7 +818,11 @@
     for (let r = -1; r < ROWS.length; r++) {
       const dr = r - rowA;
       if (Math.abs(dr) > 1.9) continue;
-      if (r < 0) { items.push({ kind: "clock", ps: pose(0, dr) }); continue; }
+      if (r < 0) {
+        const ps = pose(0, dr);
+        if (S.compass) ps.P[1] += 0.24 * clamp(1 - Math.abs(dr), 0, 1);   // lift it so the compass fits underneath
+        items.push({ kind: "clock", ps }); continue;
+      }
       ROWS[r].apps.forEach((app, c) => {
         const dc = c - colA[r];
         if (Math.abs(dc) > 2.6) return;
@@ -526,24 +855,70 @@
   function saveNav() { store.set("home.nav", { row, cols }, sessionStorage); }
   function move(dx, dy) {
     if (launching) return;
+    const r0 = row, c0 = row >= 0 ? cols[row] : 0;
     if (dy) row = clamp(row + dy, -1, ROWS.length - 1);
     if (dx && row >= 0) cols[row] = clamp(cols[row] + dx, 0, ROWS[row].apps.length - 1);
+    if (row !== r0) DM.sfx("row"); else if (row >= 0 && cols[row] !== c0) DM.sfx("tick");
+    anchorHead();
     saveNav();
+  }
+
+  /* ---------------- head motion: turn = slide, tilt up/down = rows ---------------- */
+  const SPEEDS = [[26, 20], [18, 14], [12, 10]];                       // degrees per card / per row
+  let refCol = 0, refRow = 0, headLive = false, headCol = null, headRow = null;
+  const headActive = () => S.head && motion.live && !launching;
+  function headPose() {
+    const inv = S.invert ? -1 : 1, sp = SPEEDS[S.speed] || SPEEDS[1];
+    return { yaw: motion.yaw * inv, pit: motion.pitch * inv, sh: sp[0], sv: sp[1] };
+  }
+  function anchorHead() {                                               // the head pose right now = the current card
+    if (!headActive()) return;
+    const { yaw, pit, sh, sv } = headPose();
+    refRow = row + pit / sv;
+    refCol = (row >= 0 ? cols[row] : 0) - yaw / sh;
+  }
+  function headControl() {
+    if (!headActive()) { headLive = false; headCol = headRow = null; return; }
+    if (!headLive) { headLive = true; anchorHead(); }
+    const { yaw, pit, sh, sv } = headPose();
+    // rows: look up = row above (the clock is above the top row)
+    let v = refRow - pit / sv;
+    const vmin = -1 - 0.6, vmax = ROWS.length - 1 + 0.6;
+    if (v < vmin) { refRow += vmin - v; v = vmin; }                     // sticky edges: no dead zone past the ends
+    if (v > vmax) { refRow -= v - vmax; v = vmax; }
+    const nr = clamp(Math.round(v), -1, ROWS.length - 1);
+    if (nr !== row && Math.abs(v - row) > 0.62) {
+      row = nr; DM.sfx("row");
+      refCol = (row >= 0 ? cols[row] : 0) - yaw / sh;
+      saveNav();
+    }
+    headRow = clamp(v, -1.25, ROWS.length - 0.75);
+    if (row < 0) { headCol = null; return; }
+    const n = ROWS[row].apps.length;
+    let u = refCol + yaw / sh;
+    const umin = -0.6, umax = n - 1 + 0.6;
+    if (u < umin) { refCol += umin - u; u = umin; }
+    if (u > umax) { refCol -= u - umax; u = umax; }
+    const nc = clamp(Math.round(u), 0, n - 1);
+    if (nc !== cols[row] && Math.abs(u - cols[row]) > 0.62) { cols[row] = nc; DM.sfx("tick"); saveNav(); }
+    headCol = clamp(u, -0.3, n - 0.7);
   }
   function select() {
     if (launching) return;
-    if (row < 0) { h12 = !h12; store.set("home.h12", h12); return; }
+    if (row < 0) { h12 = !h12; store.set("home.h12", h12); DM.sfx(h12 ? "on" : "off"); return; }
     const app = ROWS[row].apps[cols[row]];
     saveNav();
+    DM.sfx("open");
     launching = { app, t0: clock };
     setTimeout(() => { location.href = app.url; }, 360);
   }
   document.addEventListener("keydown", (e) => {
     const k = e.key;
+    if (S.head && !motion.live) motion.enable();                       // sensor permission comes from a gesture
     const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (map[k]) { e.preventDefault(); move(...map[k]); }
     else if (k === "Enter") { e.preventDefault(); if (!e.repeat) select(); }
-    else if (k === "Escape") { e.preventDefault(); history.back(); }
+    else if (k === "Escape") { e.preventDefault(); DM.sfx("back"); history.back(); }
   });
   // previewing on a phone or computer: swipe / wheel / tap
   let touch = null;
@@ -564,7 +939,14 @@
     wheelAt = performance.now();
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) move(e.deltaX > 0 ? 1 : -1, 0); else move(0, e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
-  window.addEventListener("pageshow", (e) => { if (e.persisted) launching = null; });
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    launching = null;
+    const fresh = DM.settings.get();                                    // coming back from Settings?
+    if (fresh.color !== S.color) { location.reload(); return; }
+    S = fresh;
+    motion.zero(); headLive = false;                                    // where you look now = the card you left from
+  });
 
   /* ---------------- loop (30 Hz) ---------------- */
   let last = performance.now();
@@ -575,14 +957,16 @@
     last = now;
     const dt = Math.min(0.1, ms / 1000);
     clock += dt;
+    motion.update(dt);
+    headControl();
     const k = 1 - Math.exp(-dt * 9);
-    rowA += (row - rowA) * k;
-    for (let r = 0; r < ROWS.length; r++) colA[r] += (cols[r] - colA[r]) * k;
+    rowA += ((headRow !== null ? headRow : row) - rowA) * k;
+    for (let r = 0; r < ROWS.length; r++) colA[r] += ((headCol !== null && r === row ? headCol : cols[r]) - colA[r]) * k;
     draw(dt);
   }
   requestAnimationFrame(frame);
 
-  window.__home = { get row() { return row; }, cols, ROWS, move, select, get launching() { return launching; } };
+  window.__home = { get row() { return row; }, cols, ROWS, move, select, get launching() { return launching; }, motion, get S() { return S; } };
 })();
 </script>
 </body>
