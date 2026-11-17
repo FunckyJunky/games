@@ -238,8 +238,9 @@ const DM = (() => {
 </script>
 <script>
 /* DOT FLIGHT: a tiny wireframe flight sim on the dot-matrix display.
-   Look left / right = turn (the plane banks into the turn).  Look up / down = climb / dive.
-   Fly through the gates.  The small cross shows where you're looking.
+   Controls are flipped (see FLIP): look down = climb, look up = dive,
+   look right = turn left, look left = turn right. The plane banks into the turn.
+   Fly through the gates. The small circle shows where the plane is steering.
    Pinch = take off / re-centre   Swipe up/down = throttle   Swipe left/right = colour   Back = exit
    Without sensors: arrow keys or drag = control stick. */
 (() => {
@@ -336,13 +337,16 @@ const DM = (() => {
   const dead = (v, z) => (Math.abs(v) < z ? 0 : v - Math.sign(v) * z);
 
   // steering input in degrees: where you look (left/right, up/down) relative to centre
+  // All controls are flipped: look/drag/press down = climb, up = dive, right = turn left, left = turn right.
+  // Set FLIP = 1 to go back to "the plane goes where you look".
+  const FLIP = -1;
   const input = { x: 0, y: 0 };
   function readInput(dt) {
-    if (motion.live) { input.x = motion.yaw; input.y = motion.pitch; return; }
+    if (motion.live) { input.x = FLIP * motion.yaw; input.y = FLIP * motion.pitch; return; }
     if (clock > stick.until && !dragging) { stick.tx = 0; stick.ty = 0; }
     const k = 1 - Math.exp(-dt * 6);
     stick.x += (stick.tx - stick.x) * k; stick.y += (stick.ty - stick.y) * k;
-    input.x = stick.x * 34; input.y = stick.y * 28;
+    input.x = FLIP * stick.x * 34; input.y = FLIP * stick.y * 28;
   }
 
   function physics(dt) {
@@ -554,8 +558,8 @@ const DM = (() => {
     const blink = Math.floor(clock * 2.5) % 2 === 0;
     if (state === "ready") {
       textC("DOT FLIGHT", CX, 30);
-      textC("LOOK LEFT/RIGHT = TURN", CX, 72, 0.85);
-      textC("LOOK UP/DOWN = CLIMB/DIVE", CX, 79, 0.85);
+      textC("LOOK DOWN = CLIMB", CX, 72, 0.85);
+      textC("LOOK RIGHT = TURN LEFT", CX, 79, 0.85);
       if (blink) textC("PINCH TO TAKE OFF", CX, 90);
     } else if (state === "crash") {
       const t = clock - crashAt;
