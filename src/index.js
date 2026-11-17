@@ -16,6 +16,7 @@
 //   POST /api/vgadai/look {name, new}          Вгадай що?!: a player's random look
 //   GET  /api/vgadai/episodes                  Вгадай що?!: all episodes (for erasing)
 //   POST /api/vgadai/erase {what, code|season} Вгадай що?!: erase an episode, a season, the players or all
+//   GET  /api/sm/gifts                         Святий Миколайчик: gifts for Yaro (more at handleSm)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -144,6 +145,126 @@ async function handleSave(request, env, game, player) {
   }
 
   return json({ error: "method not allowed" }, 405);
+}
+
+
+// ---------------------------------------------------------------------------
+// Святий Миколайчик: gifts for Yaro, left on a GPS spot (error.blue/glasses/SM)
+// and picked up with the glasses app (error.blue/glasses/mykolai).
+//   GET    /api/sm/gifts                  waiting gifts + gifts found in the last 30 days
+//   POST   /api/sm/gifts {lat,lng,acc,from,note,look}   leave a gift -> { gift, key }
+//   POST   /api/sm/gifts/<id>/got {lat,lng}             Yaro picked it up (must stand close)
+//   DELETE /api/sm/gifts/<id>?key=<key>                 the giver takes it back (not after it was found)
+// ---------------------------------------------------------------------------
+const SM_ID = /^[a-z0-9]{8}$/;
+const SM_LOOKS = 6;                   // statue colours, 0-5
+const SM_MAX_ACC = 100;               // metres: a rougher location can't hold a gift
+const SM_PICKUP_M = 20;               // the glasses ask at 7 m; GPS wobble gets some room
+const SM_PER_HOUR = 12;               // gifts per phone network per hour
+const SM_MAX_WAITING = 200;
+let smReady = null;
+function smDb(env) {
+  if (!smReady) {
+    smReady = env.DB.batch([
+      env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS sm_gifts (
+           id TEXT PRIMARY KEY, key TEXT NOT NULL,
+           lat REAL NOT NULL, lng REAL NOT NULL, acc REAL NOT NULL,
+           giver TEXT NOT NULL, note TEXT NOT NULL, look INTEGER NOT NULL,
+           ip TEXT NOT NULL, created INTEGER NOT NULL,
+           got INTEGER, got_lat REAL, got_lng REAL
+         )`
+      ),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS sm_gifts_got ON sm_gifts (got, created)`),
+    ]).catch((err) => { smReady = null; throw err; });
+  }
+  return smReady.then(() => env.DB);
+}
+function smText(v, max) {
+  return String(v ?? "").replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function smRand(n) {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789", b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => chars[x % chars.length]).join("");
+}
+function smMetres(aLat, aLng, bLat, bLng) {
+  const R = 6371008.8, r = Math.PI / 180;
+  const dLat = (bLat - aLat) * r, dLng = (bLng - aLng) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+const smGift = (g) => ({
+  id: g.id, lat: g.lat, lng: g.lng, acc: g.acc, from: g.giver, note: g.note, look: g.look,
+  created: g.created, got: g.got || null,
+});
+async function handleSm(request, env, url) {
+  const db = await smDb(env);
+  const path = url.pathname;
+
+  if (path === "/api/sm/gifts" && request.method === "GET") {
+    const since = Date.now() - 30 * 24 * 3600 * 1000;
+    const [waiting, found] = await Promise.all([
+      db.prepare(`SELECT * FROM sm_gifts WHERE got IS NULL ORDER BY created DESC LIMIT ?`).bind(SM_MAX_WAITING).all(),
+      db.prepare(`SELECT * FROM sm_gifts WHERE got IS NOT NULL AND got > ? ORDER BY got DESC LIMIT 40`).bind(since).all(),
+    ]);
+    return json({ now: Date.now(), waiting: waiting.results.map(smGift), found: found.results.map(smGift) });
+  }
+
+  if (path === "/api/sm/gifts" && request.method === "POST") {
+    let b;
+    try { b = await request.json(); } catch { return json({ error: "send JSON" }, 400); }
+    const lat = Number(b?.lat), lng = Number(b?.lng), acc = Number(b?.acc);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return json({ error: "no location" }, 400);
+    if (!Number.isFinite(acc) || acc <= 0 || acc > SM_MAX_ACC) return json({ error: "location too rough", max: SM_MAX_ACC }, 400);
+    const look = Math.max(0, Math.min(SM_LOOKS - 1, Number(b?.look) | 0));
+    const giver = smText(b?.from, 24) || "Святий Миколай";
+    const note = smText(b?.note, 140);
+    const ip = (await sha256hex("sm:" + (request.headers.get("CF-Connecting-IP") || "local"))).slice(0, 24);
+    const now = Date.now();
+    const counts = await db.prepare(
+      `SELECT (SELECT COUNT(*) FROM sm_gifts WHERE ip = ? AND created > ?) AS mine,
+              (SELECT COUNT(*) FROM sm_gifts WHERE got IS NULL) AS waiting`
+    ).bind(ip, now - 3600 * 1000).first();
+    if (counts.mine >= SM_PER_HOUR) return json({ error: "too many gifts this hour, the sack is empty" }, 429);
+    if (counts.waiting >= SM_MAX_WAITING) return json({ error: "Yaro has too many gifts waiting already" }, 429);
+    const id = smRand(8), key = smRand(16);
+    const row = { id, key, lat: +lat.toFixed(7), lng: +lng.toFixed(7), acc: Math.round(acc * 10) / 10, giver, note, look, ip, created: now };
+    await db.prepare(
+      `INSERT INTO sm_gifts (id, key, lat, lng, acc, giver, note, look, ip, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(row.id, row.key, row.lat, row.lng, row.acc, row.giver, row.note, row.look, row.ip, row.created).run();
+    return json({ ok: true, gift: smGift(row), key }, 201);
+  }
+
+  let m = path.match(/^\/api\/sm\/gifts\/([a-z0-9]+)\/got$/);
+  if (m && request.method === "POST") {
+    if (!SM_ID.test(m[1])) return json({ error: "no such gift" }, 404);
+    let b;
+    try { b = await request.json(); } catch { return json({ error: "send JSON" }, 400); }
+    const g = await db.prepare(`SELECT * FROM sm_gifts WHERE id = ?`).bind(m[1]).first();
+    if (!g) return json({ error: "no such gift" }, 404);
+    if (g.got) return json({ ok: true, already: true, gift: smGift(g) });
+    const lat = Number(b?.lat), lng = Number(b?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: "no location" }, 400);
+    const d = smMetres(lat, lng, g.lat, g.lng);
+    if (d > SM_PICKUP_M) return json({ error: "too far away", metres: Math.round(d) }, 409);
+    const now = Date.now();
+    await db.prepare(`UPDATE sm_gifts SET got = ?, got_lat = ?, got_lng = ? WHERE id = ? AND got IS NULL`).bind(now, lat, lng, g.id).run();
+    return json({ ok: true, gift: smGift({ ...g, got: now }) });
+  }
+
+  m = path.match(/^\/api\/sm\/gifts\/([a-z0-9]+)$/);
+  if (m && request.method === "DELETE") {
+    if (!SM_ID.test(m[1])) return json({ error: "no such gift" }, 404);
+    const g = await db.prepare(`SELECT key, got FROM sm_gifts WHERE id = ?`).bind(m[1]).first();
+    if (!g) return json({ ok: true, gone: true });
+    if (g.key !== String(url.searchParams.get("key") || "")) return json({ error: "only the one who left it can take it back" }, 403);
+    if (g.got) return json({ error: "Yaro already found it" }, 409);
+    await db.prepare(`DELETE FROM sm_gifts WHERE id = ? AND got IS NULL`).bind(m[1]).run();
+    return json({ ok: true });
+  }
+
+  return json({ error: "not found" }, 404);
 }
 
 
@@ -477,6 +598,8 @@ export default {
       if (path === "/api/push") return await handlePush(request, env, url);
 
       if (path === "/api/tusa/hello") return await handleHello(request, env, ctx, url);
+
+      if (path.startsWith("/api/sm/")) return await handleSm(request, env, url);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 

@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Святий Миколайчик: find the gift someone left for Yaro">
+<title>Святий Миколайчик</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Святий Миколайчик gift finder"></canvas>
+<script src="/glasses/SM/statue.js"></script>
+<script>
+/* СВЯТИЙ МИКОЛАЙЧИК (MYKOLAI.EXE): someone left a gift for Yaro on a GPS spot (error.blue/glasses/SM).
+   LIST   the gifts waiting.          Pinch = go get it.  Swipe up/down = pick.  Swipe right = menu.
+   HUNT   far: 3D radar with direction and distance.  Within 30 m: the precise finder.
+          Pinch = say where it is.  Swipe up/down (close): 3D view <-> map.  Swipe left = back.
+   GOT    within 7 m the gift is yours; the giver sees that you got it.
+   Location comes from the paired phone (navigator.geolocation); heading from the compass, or from walking. */
+(() => {
+  "use strict";
+  const G = 300, CX = 150;
+  const GOLD = "#ffd166", BRIGHT = "#fff4dc", MID = "#d9952f", DIM = "#6b4513", DARK = "#2a1606";
+  const RED = "#ff4d5e", GREEN = "#5dff8a", ICE = "#9fdcff";
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+  const pad = (n, l = 2) => String(n).padStart(l, "0");
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const API = "/api/sm/gifts";
+  const CLOSE_M = 30, CLOSE_OUT_M = 36, GRAB_M = 7;
+
+  /* ---------------- head motion + compass (same as the other glasses apps) ---------------- */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------------- canvas + VGA font with Cyrillic capitals ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.34)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const CYR = {"Б": "00007e4040407c424242427c0000", "Г": "00007e4040404040404040400000", "Ґ": "02027e4040404040404040400000", "Д": "00001e22222222222242ff810000", "Є": "00003c42404078404040423c0000", "Ж": "0000929254543838545492920000", "З": "00003c4202021c020202423c0000", "И": "00004246464a4a52526262420000", "Й": "24184246464a4a52526262420000", "Л": "00001e2222222222222242820000", "П": "00007e4242424242424242420000", "У": "0000424222241414080810600000", "Ф": "0000107c929292927c1010100000", "Ц": "00004444444444444444447e0200", "Ч": "000042424242463a020202020000", "Ш": "0000929292929292929292fe0000", "Щ": "0000929292929292929292ff0100", "Ь": "0000404040407c424242427c0000", "Ъ": "0000e02020203c222222223c0000", "Ы": "000082828282f28a8a8a8af20000", "Э": "00003c4202023e020202423c0000", "Ю": "00008c929292f2929292928c0000", "Я": "00003e4242423e12222242420000", "Ё": "24007e4040407c404040407e0000", "Ї": "14003e08080808080808083e0000"};
+  const CYR_SAME = { "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X", "І": "I" };
+  const CYR_KEYS = Object.keys(CYR);
+  const NG = 95 + CYR_KEYS.length;
+  function glyph(ch) {
+    if (CYR_SAME[ch]) ch = CYR_SAME[ch];
+    const c = ch.charCodeAt(0);
+    if (c >= 32 && c < 127) return c - 32;
+    const k = CYR_KEYS.indexOf(ch);
+    return k >= 0 ? 95 + k : -1;
+  }
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = NG * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < NG; i++) {
+      const hx = i < 95 ? FONT_HEX.substr(i * 28, 28) : CYR[CYR_KEYS[i - 95]];
+      for (let r = 0; r < 14; r++) {
+        const bits = parseInt(hx.substr(r * 2, 2), 16);
+        for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+      }
+    }
+    return (atlases[color] = a);
+  }
+  // only what the font can show: capitals, and no emoji
+  const clean = (s) => Array.from(String(s).toUpperCase().replace(/[’`]/g, "'")).filter((ch) => glyph(ch) >= 0).join("").replace(/\s+/g, " ").trim();
+  function text(s, x, y, color = GOLD, a = 1, scale = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a;
+    const chars = Array.from(String(s).toUpperCase());
+    for (let i = 0; i < chars.length; i++) {
+      const c = glyph(chars[i]);
+      if (c > 0) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8 * scale), Math.round(y), 8 * scale, 14 * scale);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s, scale = 1) => Array.from(String(s)).length * 8 * scale;
+  const textC = (s, cx, y, color, a, scale = 1) => text(s, cx - textW(s, scale) / 2, y, color, a, scale);
+  const textR = (s, rx, y, color, a, scale = 1) => text(s, rx - textW(s, scale), y, color, a, scale);
+  function wrap(s, n) {
+    const out = []; let line = "";
+    for (const w of clean(s).split(" ")) {
+      if (!w) continue;
+      if ((line + " " + w).trim().length > n) { if (line) out.push(line); line = w.slice(0, n); }
+      else line = (line + " " + w).trim();
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  function line(x0, y0, x1, y1, color, a = 1, w = 1) {
+    lo.strokeStyle = color; lo.globalAlpha = a; lo.lineWidth = w;
+    lo.beginPath(); lo.moveTo(x0, y0); lo.lineTo(x1, y1); lo.stroke();
+    lo.globalAlpha = 1; lo.lineWidth = 1;
+  }
+  function tri(x, y, ang, size, color, a = 1) {                 // ang: 0 = up, clockwise degrees
+    const r = ang * D2R, c = Math.cos(r), s = Math.sin(r);
+    const P = [[0, -1], [0.7, 0.75], [0, 0.35], [-0.7, 0.75]].map(([u, v]) => [x + (u * c - v * s) * size, y + (u * s + v * c) * size]);
+    lo.globalAlpha = a; lo.fillStyle = color; lo.beginPath();
+    P.forEach((p, i) => (i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1])));
+    lo.closePath(); lo.fill(); lo.globalAlpha = 1;
+  }
+  function twinkle(x, y, r, color, a = 1) {
+    line(x - r, y, x + r, y, color, a); line(x, y - r, x, y + r, color, a);
+    if (r > 2) { line(x - r * 0.5, y - r * 0.5, x + r * 0.5, y + r * 0.5, color, a * 0.6); line(x - r * 0.5, y + r * 0.5, x + r * 0.5, y - r * 0.5, color, a * 0.6); }
+  }
+
+  /* ---------------- geo ---------------- */
+  function distBear(aLat, aLng, bLat, bLng) {
+    const p1 = aLat * D2R, p2 = bLat * D2R, dp = (bLat - aLat) * D2R, dl = (bLng - aLng) * D2R;
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    const d = 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+    const b = Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) / D2R;
+    return { d, b: wrap360(b) };
+  }
+  const offset = (lat, lng, e, n) => [lat + n / 110540, lng + e / (111320 * Math.cos(lat * D2R))];
+  const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const compassName = (b) => COMPASS[Math.round(wrap360(b) / 45) % 8];
+  function fmtDist(m) {
+    if (m < 10) return m.toFixed(1) + " M";
+    if (m < 1000) return Math.round(m) + " M";
+    if (m < 10000) return (m / 1000).toFixed(2) + " KM";
+    return Math.round(m / 1000) + " KM";
+  }
+  function walkTime(m) {
+    const min = m / 1.35 / 60;
+    if (m > 25000) return "A LONG WAY! TAKE A TRAIN";
+    if (min < 1.5) return "LESS THAN 2 MIN WALK";
+    if (min < 90) return "~" + Math.round(min) + " MIN WALK";
+    return "~" + Math.round(min / 60) + " HOURS WALK";
+  }
+  function ago(ms) {
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    if (s < 90) return "JUST NOW";
+    if (s < 3600) return Math.round(s / 60) + " MIN AGO";
+    if (s < 86400 * 1.5) return Math.round(s / 3600) + " H AGO";
+    return Math.round(s / 86400) + " DAYS AGO";
+  }
+  const stamp = (ms) => { const d = new Date(ms); return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+
+  /* ---------------- state ---------------- */
+  let gifts = [], found = [], net = "WAIT", lastNet = 0;
+  const seen = new Set(store.get("sm.seen", []));
+  let screen = "LIST";              // LIST | HUNT | GOT | FOUND
+  let sel = 0, selId = null, scroll = 0;
+  let target = null, close = false, closeView = "3D", inZone = 0;
+  let got = null;                   // { gift, at, state: SEND | OK | DEMO | FAIL }
+  let menu = null;
+  let raw = null, pos = null, gps = "OFF", watchId = null;
+  let course = null, courseYaw = null, lastCourseFix = null;
+  let demo = null;
+  let clock = 0, flashMsg = "", flashUntil = 0, flashCol = BRIGHT;
+  let soundOn = store.get("sm.sound", store.get("glasses.settings", {}).sounds !== false);   // starts like Settings > SOUNDS
+  let confetti = [];
+  const snow = Array.from({ length: 36 }, () => ({ x: Math.random() * G, y: Math.random() * G, s: 4 + Math.random() * 10, w: Math.random() * 6 }));
+  const flash = (m, d = 2.2, c = BRIGHT) => { flashMsg = clean(m); flashUntil = clock + d; flashCol = c; };
+  const motion = createMotion();
+
+  /* ---------------- sound ---------------- */
+  let ac = null;
+  function audio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch { ac = null; } }
+    if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    return ac;
+  }
+  function tone(f, t0, dur, type = "sine", vol = 0.12, f2) {
+    const a = soundOn && ac;                                       // made by the first pinch/swipe
+    if (!a || a.state !== "running") return;
+    const t = a.currentTime + t0, o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  const bell = (f, t0, d = 0.5, v = 0.1) => { tone(f, t0, d, "sine", v); tone(f * 2.76, t0, d * 0.4, "sine", v * 0.25); tone(f * 5.4, t0, d * 0.2, "sine", v * 0.1); };
+  // the "Щедрик" bells: Bb A Bb G
+  function jingle(t0 = 0) { [[466.16, 0], [440, 0.2], [466.16, 0.3], [392, 0.42]].forEach(([f, t]) => bell(f * 2, t0 + t, 0.45)); }
+  function fanfare() {
+    jingle(0); jingle(0.75);
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => bell(f, 1.55 + i * 0.09, 0.9, 0.09));
+    for (let i = 0; i < 10; i++) tone(1800 + Math.random() * 2200, 1.9 + i * 0.07, 0.12, "triangle", 0.03);
+  }
+  const radarPing = (d) => tone(clamp(1100 - Math.log10(Math.max(10, d)) * 160, 380, 1000), 0, 0.35, "sine", 0.09, 300);
+  const tick = (k) => { tone(1400 + k * 900, 0, 0.05, "square", 0.035); };
+  function speak(s) {
+    try {
+      if (!soundOn || !("speechSynthesis" in window)) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(s); u.lang = "en-GB"; u.rate = 1.02;
+      speechSynthesis.speak(u);
+    } catch {}
+  }
+
+  /* ---------------- location ---------------- */
+  function startGps() {
+    if (demo || watchId !== null) return;
+    if (!("geolocation" in navigator)) { gps = "N/A"; return; }
+    gps = "WAIT";
+    watchId = navigator.geolocation.watchPosition(
+      (p) => { if (!demo) onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, p.coords.speed, p.coords.heading, Date.now()); },
+      (err) => { if (err.code === 1) { gps = "DENIED"; flash("LOCATION NOT ALLOWED", 3, RED); } },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  }
+  function stopGps() { if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } if (!demo) gps = "OFF"; }
+
+  function onFix(lat, lng, acc, speed, hdg, t) {
+    raw = { lat, lng, acc, t, speed: Number.isFinite(speed) ? speed : null };
+    gps = acc <= 20 ? "OK" : "WEAK";
+    // smooth out the GPS wobble (a small Kalman filter in metres)
+    if (!pos) pos = { lat, lng, P: acc * acc, t };
+    else {
+      const dt = clamp((t - pos.t) / 1000, 0.1, 30);
+      const P = pos.P + 9 * dt;
+      const jump = distBear(pos.lat, pos.lng, lat, lng).d;
+      if (jump > 60 && jump > 4 * Math.sqrt(P + acc * acc)) { pos = { lat, lng, P: acc * acc, t }; }
+      else {
+        const k = P / (P + acc * acc);
+        pos.lat += k * (lat - pos.lat); pos.lng += k * (lng - pos.lng);
+        pos.P = (1 - k) * P; pos.t = t;
+      }
+    }
+    pos.acc = Math.sqrt(pos.P);
+    // which way we walk
+    if (Number.isFinite(hdg) && (speed || 0) > 0.6) { course = hdg; courseYaw = motion.live ? motion.yaw : null; }
+    else if (lastCourseFix) {
+      const m = distBear(lastCourseFix.lat, lastCourseFix.lng, lat, lng);
+      if (m.d > Math.max(4, acc * 0.5)) { course = m.b; courseYaw = motion.live ? motion.yaw : null; lastCourseFix = { lat, lng }; }
+    } else lastCourseFix = { lat, lng };
+  }
+  function heading() {
+    if (demo) return { h: wrap360(demo.h + (motion.live ? angDiff(motion.yaw, demo.yaw0) : 0)), src: "DEMO" };
+    const c = motion.compass;
+    if (c !== null) return { h: c, src: "COMPASS" };
+    if (course !== null) {
+      if (motion.live && courseYaw !== null) return { h: wrap360(course + angDiff(motion.yaw, courseYaw)), src: "WALK" };
+      return { h: course, src: "WALK" };
+    }
+    return null;
+  }
+  const where = (g) => (pos ? distBear(pos.lat, pos.lng, g.lat, g.lng) : null);
+
+  /* ---------------- gifts from error.blue ---------------- */
+  async function refresh() {
+    if (refresh.busy) return;
+    refresh.busy = true;
+    try {
+      const r = await fetch(API, { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+      gifts = data.waiting || []; found = data.found || [];
+      net = "OK"; lastNet = clock;
+      const fresh = gifts.filter((g) => !seen.has(g.id));
+      if (fresh.length && screen !== "GOT") {
+        flash(fresh.length === 1 ? "NEW GIFT FROM " + fresh[0].from + "!" : fresh.length + " NEW GIFTS FOR YARO!", 3.5, GOLD);
+        jingle();
+      }
+      if (target && !target.demo && screen === "HUNT" && !gifts.some((g) => g.id === target.id)) {
+        const f = found.find((g) => g.id === target.id);
+        if (f) { target = f; receive(true); }
+        else { flash("THE GIFT WAS TAKEN BACK", 3, RED); stopHunt(); }
+      }
+      if (target && !target.demo) { const g = gifts.find((x) => x.id === target.id); if (g) target = g; }
+    } catch (e) {
+      net = "OFF";
+    } finally { refresh.busy = false; }
+  }
+  function markSeen() { for (const g of gifts) seen.add(g.id); store.set("sm.seen", [...seen].slice(-300)); }
+  async function claim() {
+    const g = got && got.gift;
+    if (!g || g.demo || got.state === "OK") return;
+    got.state = "SEND";
+    try {
+      const p = pos || raw;
+      const r = await fetch(API + "/" + g.id + "/got", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lat: p.lat, lng: p.lng }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { got.state = "OK"; refresh(); return; }
+      if (r.status === 409) { got.state = "FAR"; return; }
+      if (r.status === 404) { got.state = "GONE"; return; }
+      throw new Error(r.status);
+    } catch (e) {
+      got.state = "RETRY";
+      setTimeout(() => { if (got && got.gift === g && got.state === "RETRY") claim(); }, 5000);
+    }
+  }
+
+  /* ---------------- hunt ---------------- */
+  function sorted() {
+    const list = gifts.map((g) => ({ g, w: where(g) }));
+    if (pos) list.sort((a, b) => a.w.d - b.w.d); else list.sort((a, b) => b.g.created - a.g.created);
+    return list;
+  }
+  function startHunt(g) {
+    target = g; screen = "HUNT"; close = false; inZone = 0; radar.range = 0;
+    motion.enable(); startGps(); markSeen();
+    flash("GO GET IT!", 1.5, GOLD);
+    jingle();
+  }
+  function stopHunt() { target = null; screen = "LIST"; close = false; if (demo) stopDemo(); }
+  function receive(already) {
+    got = { gift: target, at: clock, state: target.demo ? "DEMO" : already ? "OK" : "SEND" };
+    screen = "GOT";
+    confetti = [];
+    const L = SMStatue.LOOKS[target.look | 0] || SMStatue.LOOKS[0];
+    const cols = [L.robe, L.cape, L.trim, L.box, L.ribbon, GOLD, ICE];
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 150;
+      confetti.push({ x: CX, y: 130, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 90, c: cols[i % cols.length], r: Math.random() * 6, s: 1 + Math.random() * 2 });
+    }
+    fanfare();
+    setTimeout(() => speak("Gift received! From " + target.from), 2400);
+    if (!already) claim();
+    if (demo) stopDemo(true);
+  }
+
+  /* ---------------- demo: a pretend gift and a pretend walk ---------------- */
+  function startDemo() {
+    stopGps();
+    const base = pos ? [pos.lat, pos.lng] : [50.4501, 30.5234];
+    const hd = heading(), b = hd ? hd.h + 35 : 40;
+    const [glat, glng] = offset(base[0], base[1], Math.sin(b * D2R) * 140, Math.cos(b * D2R) * 140);
+    const g = { id: "demo", demo: true, lat: glat, lng: glng, acc: 4, from: "DEMO", note: "This is a pretend gift. Real ones are left at error.blue/glasses/SM", look: (Math.random() * 6) | 0, created: Date.now() };
+    demo = { lat: base[0], lng: base[1], h: wrap360(b - 70), yaw0: motion.live ? motion.yaw : 0, t: 0, timer: setInterval(demoTick, 250) };
+    pos = null; raw = null; gps = "OK";
+    startHunt(g);
+    flash("DEMO GIFT (NOT REAL GPS)", 3, ICE);
+  }
+  function demoTick() {
+    if (!demo || !target) return;
+    demo.t += 0.25;
+    const w = distBear(demo.lat, demo.lng, target.lat, target.lng);
+    demo.h = wrap360(demo.h + clamp(angDiff(w.b, demo.h), -14, 14) + Math.sin(demo.t * 0.7) * 3);
+    const v = w.d > 40 ? 6 : 1.6;                                    // fast while far, walking pace when close
+    [demo.lat, demo.lng] = offset(demo.lat, demo.lng, Math.sin(demo.h * D2R) * v * 0.25, Math.cos(demo.h * D2R) * v * 0.25);
+    const j = () => (Math.random() - 0.5) * 2.5;
+    const [jl, jg] = offset(demo.lat, demo.lng, j(), j());
+    onFix(jl, jg, 4, v, demo.h, Date.now());
+  }
+  function stopDemo(keep) { if (!demo) return; clearInterval(demo.timer); demo = null; if (!keep) { pos = null; raw = null; } startGps(); }
+
+  /* ---------------- drawing: shared bits ---------------- */
+  function drawSnow(dt, a = 1) {
+    for (const f of snow) {
+      f.y += f.s * dt; f.x += Math.sin(clock * 0.8 + f.w) * 4 * dt;
+      if (f.y > G) { f.y = -2; f.x = Math.random() * G; }
+      lo.globalAlpha = 0.18 * a + (f.s > 11 ? 0.12 : 0); lo.fillStyle = ICE;
+      lo.fillRect(f.x | 0, f.y | 0, f.s > 10 ? 2 : 1, f.s > 10 ? 2 : 1);
+    }
+    lo.globalAlpha = 1;
+  }
+  function drawTop() {
+    text("МИКОЛАЙЧИК", 4, 2, GOLD);
+    const d = new Date(), tm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+    let g = "GPS OFF", gc = DIM;
+    if (demo) { g = "DEMO"; gc = ICE; }
+    else if (gps === "WAIT" && !raw) { g = "GPS" + ".".repeat(1 + (Math.floor(clock * 2) % 3)); gc = MID; }
+    else if (raw) { g = "GPS " + Math.round(raw.acc) + "M"; gc = raw.acc <= 12 ? GREEN : raw.acc <= 30 ? GOLD : RED; }
+    else if (gps === "DENIED") { g = "NO GPS"; gc = RED; }
+    else if (gps === "N/A") { g = "NO GPS"; gc = RED; }
+    textR(tm, 296, 2, MID);
+    textR(g, 296 - textW(tm) - 10, 2, gc);
+    line(0, 17.5, G, 17.5, DIM);
+  }
+  function drawStatue(look, x, y, h, yaw, glow = 0, a = 1, tilt) {
+    SMStatue.draw(lo, { x, y, h, yaw, look, glow, alpha: a, tilt, flat: h < 40 });
+  }
+
+  /* ---------------- LIST ---------------- */
+  function drawList(dt) {
+    drawSnow(dt);
+    drawTop();
+    const list = sorted();
+    if (selId) { const i = list.findIndex((it) => it.g.id === selId); if (i >= 0) sel = i; }
+    sel = clamp(sel, 0, Math.max(0, list.length - 1));
+    if (list[sel]) selId = list[sel].g.id;
+    if (!list.length) {
+      const L = (Math.floor(clock / 6) % 6);
+      drawStatue(L, CX, 158, 128, clock * 0.8, 0.1 + 0.1 * Math.sin(clock * 2));
+      textC("СВЯТИЙ МИКОЛАЙЧИК", CX, 168, GOLD);
+      textC(net === "WAIT" ? "LOOKING FOR GIFTS..." : net === "OFF" ? "CAN'T REACH ERROR.BLUE" : "NO GIFTS FOR YARO YET", CX, 192, net === "OFF" ? RED : BRIGHT);
+      textC("ANYONE CAN LEAVE ONE AT", CX, 214, MID);
+      textC("ERROR.BLUE/GLASSES/SM", CX, 230, GOLD);
+      if (found.length) textC("FOUND SO FAR: " + found.length, CX, 252, GREEN);
+      textC("SWIPE > MENU (DEMO GIFT)", CX, 280, DIM);
+      return;
+    }
+    // header: the statue of the chosen gift + a big blinking line
+    const g0 = list[sel].g;
+    drawStatue(g0.look | 0, 52, 132, 104, Math.sin(clock * 0.9) * 0.7, 0.15 + 0.15 * Math.sin(clock * 3));
+    for (let i = 0; i < 3; i++) twinkle(52 + Math.cos(clock * 1.3 + i * 2.1) * 40, 80 + Math.sin(clock * 1.7 + i * 2.1) * 34, 1 + ((clock * 3 + i) % 2), GOLD, 0.8);
+    const blink = Math.floor(clock * 2) % 2 === 0;
+    text("A GIFT", 104, 30, blink ? GOLD : RED, 1, 2);
+    text("FOR YARO!", 104, 60, blink ? RED : GOLD, 1, 2);
+    text(list.length === 1 ? "1 GIFT IS WAITING" : list.length + " GIFTS ARE WAITING", 104, 96, BRIGHT);
+    if (found.length) text("FOUND SO FAR: " + found.length, 104, 112, GREEN);
+    // the list
+    const top = 142, rowH = 19, rows = 6;
+    const first = clamp(sel - 2, 0, Math.max(0, list.length - rows));
+    for (let k = 0; k < rows && first + k < list.length; k++) {
+      const { g, w } = list[first + k], y = top + k * rowH, on = first + k === sel;
+      if (on) { lo.fillStyle = GOLD; lo.fillRect(6, y - 2, G - 12, 17); }
+      const name = clean(g.from).slice(0, 16) || "?";
+      text((on ? ">" : " ") + name, 10, y, on ? "#000" : BRIGHT);
+      const dd = w ? fmtDist(w.d) + " " + compassName(w.b) : ago(g.created);
+      textR(dd, 292, y, on ? "#000" : seen.has(g.id) ? MID : GOLD);
+    }
+    if (list.length > rows) textR((sel + 1) + "/" + list.length, 292, top + rows * rowH, DIM);
+    textC("PINCH: GO GET IT", CX, 270, GOLD);
+    textC("SWIPE: PICK   > MENU", CX, 284, DIM);
+  }
+
+  /* ---------------- HUNT, far: the 3D radar ---------------- */
+  const radar = { range: 0, sweep: 0, lastPing: -9, blip: 0 };
+  const RANGES = [40, 60, 100, 150, 250, 400, 600, 1000, 1500, 2500, 4000, 6000, 10000, 15000, 25000, 40000, 60000, 100000, 200000, 500000, 1e6, 2e6, 5e6, 1e7, 2.1e7];
+  const RC = { y: 1.15, z: -1.62, F: 152, cy: 122 };
+  const RTH = Math.atan2(RC.y, -RC.z), RCT = Math.cos(RTH), RST = Math.sin(RTH);
+  function rp(u, h, v) {                                           // u right, h up, v forward (disc radius 1)
+    const dy = h - RC.y, dz = v - RC.z;
+    const zc = dz * RCT - dy * RST, yc = dz * RST + dy * RCT;
+    return [CX + (u * RC.F) / zc, RC.cy - (yc * RC.F) / zc, zc];
+  }
+  function ringPath(r, a0 = 0, a1 = 360, n = 64) {
+    lo.beginPath();
+    for (let i = 0; i <= n; i++) { const a = (a0 + ((a1 - a0) * i) / n) * D2R, p = rp(Math.sin(a) * r, 0, Math.cos(a) * r); i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1]); }
+  }
+  function drawRadar(dt, w, hd) {
+    const H = hd ? hd.h : 0;
+    // range: smallest that fits, eased
+    const want = RANGES.find((r) => r >= w.d * 1.25) || RANGES[RANGES.length - 1];
+    radar.range = radar.range ? Math.exp(Math.log(radar.range) + (Math.log(want) - Math.log(radar.range)) * (1 - Math.exp(-dt * 3))) : want;
+    const R = radar.range;
+    // disc glow + rings
+    ringPath(1); lo.fillStyle = DARK; lo.globalAlpha = 0.55; lo.fill(); lo.globalAlpha = 1;
+    for (const r of [0.25, 0.5, 0.75, 1]) { ringPath(r); lo.strokeStyle = r === 1 ? MID : DIM; lo.lineWidth = r === 1 ? 1.5 : 1; lo.stroke(); }
+    lo.lineWidth = 1;
+    // spokes, fixed to the world (they turn as you turn)
+    for (let k = 0; k < 12; k++) {
+      const a = (k * 30 - H) * D2R, p = rp(Math.sin(a) * 0.06, 0, Math.cos(a) * 0.06), q = rp(Math.sin(a), 0, Math.cos(a));
+      line(p[0], p[1], q[0], q[1], DIM, 0.7);
+    }
+    // view cone ahead
+    for (const s of [-1, 1]) { const a = s * 28 * D2R, q = rp(Math.sin(a), 0, Math.cos(a)); line(CX, rp(0, 0, 0)[1], q[0], q[1], MID, 0.45); }
+    // sweep
+    radar.sweep = (radar.sweep + dt * 150) % 360;
+    for (let k = 0; k < 14; k++) {
+      const a = (radar.sweep - k * 2.6) * D2R, q = rp(Math.sin(a), 0, Math.cos(a)), c = rp(0, 0, 0);
+      line(c[0], c[1], q[0], q[1], GOLD, 0.55 * (1 - k / 14));
+    }
+    // cardinal letters
+    for (const [lbl, b] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
+      const a = (b - H) * D2R, p = rp(Math.sin(a) * 1.13, 0, Math.cos(a) * 1.13);
+      textC(lbl, p[0], p[1] - 6, lbl === "N" ? RED : MID, p[2] < 1.3 ? 0.55 : 1);
+    }
+    // range labels
+    const l1 = rp(1, 0, -0.2), l2 = rp(0.5, 0, -0.1);
+    textR(fmtDist(R), Math.min(298, l1[0] + textW(fmtDist(R)) - 4), l1[1] + 4, MID, 0.9);
+    text(fmtDist(R / 2), l2[0] - 8, l2[1] + 2, DIM);
+    // you
+    const c0 = rp(0, 0, 0);
+    tri(c0[0], c0[1] - 2, 0, 6, BRIGHT);
+    // the gift
+    const rel = angDiff(w.b, H), rr = Math.min(1, w.d / R), a = rel * D2R;
+    const gu = Math.sin(a) * rr, gv = Math.cos(a) * rr;
+    const sweepRel = angDiff(radar.sweep, rel);
+    if (sweepRel >= 0 && sweepRel < 8 && clock - radar.lastPing > 1) { radar.lastPing = clock; radar.blip = 1; radarPing(w.d); }
+    radar.blip = Math.max(0, radar.blip - dt * 0.9);
+    const gp = rp(gu, 0, gv), top = rp(gu, 0.5, gv);
+    // ground ripple
+    for (let k = 0; k < 2; k++) {
+      const ph = (clock * 0.8 + k * 0.5) % 1, rad = 0.03 + ph * 0.13;
+      lo.beginPath();
+      for (let i = 0; i <= 24; i++) { const t = (i / 24) * Math.PI * 2, p = rp(gu + Math.sin(t) * rad, 0, gv + Math.cos(t) * rad); i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1]); }
+      lo.strokeStyle = RED; lo.globalAlpha = 0.9 * (1 - ph); lo.stroke(); lo.globalAlpha = 1;
+    }
+    line(gp[0], gp[1], top[0], top[1], GOLD, 0.6 + radar.blip * 0.4, 1);
+    const sh = clamp(0.55 * RC.F / top[2], 22, 56);
+    drawStatue(target.look | 0, top[0], top[1] + 2, sh, clock * 1.5, radar.blip * 0.8 + 0.1);
+    if (rr >= 1) { const e = rp(Math.sin(a) * 1.05, 0, Math.cos(a) * 1.05); tri(e[0], e[1], rel, 6, RED); }
+      }
+  function direction(w, hd) {
+    if (!hd) return { main: "GIFT IS " + compassName(w.b), sub: "NORTH IS UP: WALK TO TURN IT" };
+    const rel = angDiff(w.b, hd.h), ar = Math.abs(rel), side = rel < 0 ? "LEFT" : "RIGHT";
+    if (ar < 20) return { main: "STRAIGHT AHEAD", rel };
+    if (ar < 60) return { main: "BEAR " + side, rel };
+    if (ar < 140) return { main: "TURN " + side, rel };
+    return { main: "TURN AROUND", rel };
+  }
+  function drawHuntFar(dt, w, hd) {
+    drawTop();
+    textC("GIFT FROM " + clean(target.from).slice(0, 22), CX, 24, GOLD);
+    drawRadar(dt, w, hd);
+    lo.fillStyle = "#000"; lo.globalAlpha = 0.7; lo.fillRect(0, 226, G, 74); lo.globalAlpha = 1;
+    line(0, 226.5, G, 226.5, DIM);
+    textC(fmtDist(w.d), CX, 230, BRIGHT, 1, 2);
+    const dir = direction(w, hd);
+    textC(dir.main, CX, 262, GOLD);
+    textC(dir.sub || walkTime(w.d), CX, 280, MID);
+  }
+
+  /* ---------------- HUNT, close: the precise finder ---------------- */
+  const FP = { eye: 1.6, F: 205, cy: 112, pitch: 9 * D2R };
+  const FPC = Math.cos(FP.pitch), FPS = Math.sin(FP.pitch);
+  function fp(x, y, z) {                                           // x right, y up, z forward (metres)
+    const dy = y - FP.eye;
+    const zc = z * FPC - dy * FPS, yc = z * FPS + dy * FPC;
+    return [CX + (x * FP.F) / zc, FP.cy - (yc * FP.F) / zc, zc];
+  }
+  function fpLine(ax, az, bx, bz, color, a, n = 8) {              // a line on the ground, cut at the camera
+    let prev = null;
+    lo.strokeStyle = color; lo.lineWidth = 1;
+    for (let i = 0; i <= n; i++) {
+      const x = ax + ((bx - ax) * i) / n, z = az + ((bz - az) * i) / n, p = fp(x, 0, z);
+      const ok = p[2] > 0.4;
+      if (ok && prev) { lo.globalAlpha = a * clamp(1 - Math.hypot(x, z) / 30, 0, 1); lo.beginPath(); lo.moveTo(prev[0], prev[1]); lo.lineTo(p[0], p[1]); lo.stroke(); }
+      prev = ok ? p : null;
+    }
+    lo.globalAlpha = 1;
+  }
+  function drawClose3D(w, hd) {
+    const H = hd.h, rel = angDiff(w.b, H);
+    const toCam = (e, n) => { const c = Math.cos(H * D2R), s = Math.sin(H * D2R); return [e * c - n * s, e * s + n * c]; };
+    const ge = Math.sin(w.b * D2R) * w.d, gn = Math.cos(w.b * D2R) * w.d;
+    // horizon
+    const hz = fp(0, FP.eye, 1000);
+    line(0, hz[1], G, hz[1], DIM, 0.8);
+    // ground grid fixed to the world, every 2 m around the gift
+    for (let k = -16; k <= 16; k++) {
+      const e = ge + k * 2, n0 = gn - 32, n1 = gn + 32;
+      const [ax, az] = toCam(e, n0), [bx, bz] = toCam(e, n1);
+      fpLine(ax, az, bx, bz, k === 0 ? MID : DIM, k === 0 ? 0.9 : 0.75, 24);
+      const n = gn + k * 2, [cx, cz] = toCam(ge - 32, n), [dx, dz] = toCam(ge + 32, n);
+      fpLine(cx, cz, dx, dz, k === 0 ? MID : DIM, k === 0 ? 0.9 : 0.75, 24);
+    }
+    const [gx, gz] = toCam(ge, gn);
+    // the 7 m grab circle and a glow at the spot
+    for (const [r, col, dash] of [[GRAB_M, RED, true], [1.2, GOLD, false]]) {
+      let prev = null;
+      for (let i = 0; i <= 48; i++) {
+        const t = (i / 48) * Math.PI * 2, p = fp(gx + Math.sin(t) * r, 0, gz + Math.cos(t) * r);
+        if (p[2] > 0.4 && prev && (!dash || i % 2)) line(prev[0], prev[1], p[0], p[1], col, 0.9);
+        prev = p[2] > 0.4 ? p : null;
+      }
+    }
+    const inView = gz > 0.6 && Math.abs(rel) < 36;
+    if (gz > 0.6) {
+      const base = fp(gx, 0, gz), tip = fp(gx, 6, gz);
+      // a beam of light over the gift
+      for (let k = 0; k < 3; k++) line(base[0] + (k - 1), base[1], tip[0] + (k - 1), tip[1], GOLD, 0.18 + (k === 1 ? 0.25 : 0));
+      const h = clamp((3.2 * FP.F) / base[2], 22, 220);
+      const heat = clamp((CLOSE_M - w.d) / (CLOSE_M - GRAB_M), 0, 1);
+      drawStatue(target.look | 0, base[0], base[1], h, clock * (0.6 + heat * 2), 0.15 + heat * 0.5 * (0.6 + 0.4 * Math.sin(clock * 8)));
+      for (let i = 0; i < 6; i++) {
+        const t = clock * 1.4 + (i * Math.PI) / 3, p = fp(gx + Math.sin(t) * 0.7, 0.3 + ((i * 0.37 + clock * 0.3) % 1.2), gz + Math.cos(t) * 0.7);
+        if (p[2] > 0.4) twinkle(p[0], p[1], clamp(14 / p[2], 1, 4), i % 2 ? GOLD : BRIGHT, 0.9);
+      }
+    }
+    if (!inView) {
+      const left = rel < 0, behind = Math.abs(rel) > 135;
+      const x = left ? 26 : G - 26, y = FP.cy + 10;
+      const pulse = 0.6 + 0.4 * Math.sin(clock * 7);
+      tri(x, y, left ? -90 : 90, 18, GOLD, pulse);
+      tri(x + (left ? 16 : -16), y, left ? -90 : 90, 12, GOLD, pulse * 0.6);
+      textC(behind ? "TURN AROUND" : "TURN " + (left ? "LEFT" : "RIGHT"), CX, 34, GOLD);
+    }
+  }
+  function drawCloseMap(w, hd) {
+    // north up (or heading up), 35 m to the edge
+    const H = hd ? hd.h : 0, sc = 104 / 35, cy = 118;
+    const ge = Math.sin(w.b * D2R) * w.d, gn = Math.cos(w.b * D2R) * w.d;
+    const rot = (e, n) => { const c = Math.cos(H * D2R), s = Math.sin(H * D2R); return [e * c - n * s, e * s + n * c]; };
+    lo.strokeStyle = DIM;
+    for (const r of [10, 20, 30]) { lo.beginPath(); lo.arc(CX, cy, r * sc, 0, Math.PI * 2); lo.stroke(); text(r + "", CX + r * sc * 0.71 + 2, cy - r * sc * 0.71 - 8, DIM); }
+    for (const [lbl, b] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
+      const a = (b - H) * D2R; textC(lbl, CX + Math.sin(a) * 112, cy - Math.cos(a) * 112 - 6, lbl === "N" ? RED : MID);
+    }
+    const [x, y] = rot(ge, gn), px = CX + x * sc, py = cy - y * sc;
+    lo.strokeStyle = RED; lo.setLineDash([3, 3]); lo.beginPath(); lo.arc(px, py, GRAB_M * sc, 0, Math.PI * 2); lo.stroke(); lo.setLineDash([]);
+    line(CX, cy, px, py, GOLD, 0.5);
+    drawStatue(target.look | 0, px, py + 8, 26, clock * 1.6, 0.3);
+    if (hd) tri(CX, cy, 0, 7, BRIGHT); else { lo.fillStyle = BRIGHT; lo.fillRect(CX - 2, cy - 2, 5, 5); }
+    textC(hd ? "MAP: AHEAD IS UP" : "MAP: NORTH IS UP", CX, 24, ICE, 0.9);
+  }
+  function drawHuntClose(dt, w, hd) {
+    if (hd && closeView === "3D") drawClose3D(w, hd); else drawCloseMap(w, hd);
+    drawTop();
+    lo.fillStyle = "#000"; lo.globalAlpha = 0.75; lo.fillRect(0, 222, G, 78); lo.globalAlpha = 1;
+    const heat = clamp((CLOSE_M - w.d) / (CLOSE_M - GRAB_M), 0, 1);
+    const word = w.d > 22 ? "WARM" : w.d > 15 ? "WARMER" : w.d > 10 ? "HOT!" : "BURNING HOT!";
+    const col = heat > 0.75 ? RED : heat > 0.4 ? GOLD : ICE;
+    textC(fmtDist(w.d), CX, 224, BRIGHT, 1, 3);
+    // the bar from 30 m to 7 m
+    const x0 = 16, x1 = 250, by = 268;
+    lo.strokeStyle = DIM; lo.strokeRect(x0 + 0.5, by + 0.5, x1 - x0, 8);
+    for (let i = 0; i < Math.floor(heat * 24); i++) { const t = i / 23; lo.fillStyle = t > 0.75 ? RED : t > 0.4 ? GOLD : ICE; lo.fillRect(x0 + 2 + i * ((x1 - x0 - 3) / 24), by + 2, (x1 - x0) / 24 - 2, 5); }
+    text("GRAB", x1 + 6, by - 3, heat >= 1 ? GREEN : DIM);
+    const sub = raw && raw.acc > 14 && !demo ? "GPS IS FUZZY (" + Math.round(raw.acc) + " M) KEEP MOVING" : hd ? direction(w, hd).main : "GIFT IS " + compassName(w.b);
+    textC(word + "  " + sub, CX, 282, col);
+  }
+
+  function drawHunt(dt) {
+    if (!pos) {
+      drawSnow(dt);
+      drawTop();
+      drawStatue(target.look | 0, CX, 170, 110, clock, 0.2);
+      textC("GIFT FROM " + clean(target.from).slice(0, 22), CX, 30, GOLD);
+      textC(gps === "DENIED" ? "LOCATION NOT ALLOWED" : "WAITING FOR GPS...", CX, 190, gps === "DENIED" ? RED : BRIGHT);
+      textC("LOCATION COMES FROM YOUR PHONE", CX, 210, MID);
+      textC("< BACK", CX, 282, DIM);
+      return;
+    }
+    const w = where(target), hd = heading();
+    if (!close && w.d <= CLOSE_M) { close = true; flash("ALMOST THERE! " + Math.round(w.d) + " M", 2.2, GOLD); jingle(); }
+    else if (close && w.d > CLOSE_OUT_M) close = false;
+    if (close) drawHuntClose(dt, w, hd); else drawHuntFar(dt, w, hd);
+    // close: Geiger ticks, faster as you get there
+    if (close) {
+      const heat = clamp((CLOSE_M - w.d) / (CLOSE_M - GRAB_M), 0, 1);
+      drawHunt.next = drawHunt.next || 0;
+      if (clock >= drawHunt.next) { tick(heat); drawHunt.next = clock + 1.2 - heat * 1.05; }
+    }
+    // got it?
+    const okFix = demo || (raw && raw.acc <= 30);
+    if (w.d <= GRAB_M && okFix) { inZone += dt; if (inZone > 0.5) receive(false); } else inZone = 0;
+  }
+
+  /* ---------------- GOT ---------------- */
+  function drawGot(dt) {
+    drawSnow(dt, 0.6);
+    const g = got.gift, t = clock - got.at;
+    const grow = clamp(t / 0.8, 0, 1), spin = clock * (0.8 + 5 * Math.max(0, 1 - t / 2.5));
+    lo.globalAlpha = 0.25 + 0.1 * Math.sin(clock * 3);
+    for (let k = 0; k < 12; k++) { const a = clock * 0.4 + (k * Math.PI) / 6; line(CX, 118, CX + Math.cos(a) * 170, 118 + Math.sin(a) * 170, GOLD, 0.22); }
+    lo.globalAlpha = 1;
+    drawStatue(g.look | 0, CX, 178, 30 + 118 * grow, spin, 0.25 + 0.2 * Math.sin(clock * 4));
+    for (const c of confetti) {
+      c.vy += 160 * dt; c.vx *= 1 - dt * 0.6; c.x += c.vx * dt; c.y += c.vy * dt; c.r += dt * 6;
+      if (c.y > G + 5) { c.y = -5; c.x = Math.random() * G; c.vy = 20 + Math.random() * 30; c.vx = (Math.random() - 0.5) * 30; }
+      lo.fillStyle = c.c; lo.fillRect(c.x, c.y, c.s + Math.abs(Math.sin(c.r)) * 2, c.s);
+    }
+    lo.fillStyle = "#000"; lo.globalAlpha = 0.72; lo.fillRect(0, 182, G, 118); lo.fillRect(0, 2, G, 32); lo.globalAlpha = 1;
+    const blink = Math.floor(clock * 2.5) % 2 === 0;
+    textC("GIFT RECEIVED!", CX, 6, blink ? GOLD : RED, 1, 2);
+    textC("FROM " + (clean(g.from) || "?"), CX, 186, BRIGHT);
+    const lines = wrap(g.note || "", 35).slice(0, 4);
+    lines.forEach((l, i) => textC(l, CX, 204 + i * 15, GOLD));
+    const st = { SEND: ["TELLING " + (clean(g.from).slice(0, 12) || "THEM") + "...", MID], RETRY: ["NO CONNECTION, TRYING AGAIN...", RED],
+                 OK: [(clean(g.from).slice(0, 14) || "THE GIVER") + " KNOWS YOU GOT IT!", GREEN], DEMO: ["DEMO GIFT: NOBODY WAS TOLD", ICE],
+                 FAR: ["SERVER SAYS: NOT CLOSE ENOUGH", RED], GONE: ["THAT GIFT IS GONE", RED] }[got.state] || ["", DIM];
+    textC(st[0], CX, 266, st[1]);
+    textC("PINCH: BACK TO GIFTS", CX, 284, DIM);
+  }
+
+  /* ---------------- FOUND (old gifts) ---------------- */
+  function drawFound(dt) {
+    drawSnow(dt, 0.5);
+    drawTop();
+    textC("FOUND GIFTS: " + found.length, CX, 24, GOLD);
+    if (!found.length) { textC("NONE YET", CX, 120, MID); textC("< BACK", CX, 282, DIM); return; }
+    const items = [];
+    for (const g of found) {
+      items.push({ s: clean(g.from).slice(0, 18) + "  " + stamp(g.got), c: BRIGHT, look: g.look });
+      for (const l of wrap(g.note || "", 33)) items.push({ s: "  " + l, c: MID });
+      items.push({ s: "", c: DIM });
+    }
+    scroll = clamp(scroll, 0, Math.max(0, items.length - 15));
+    for (let i = 0; i < 15 && scroll + i < items.length; i++) {
+      const it = items[scroll + i];
+      text(it.s, 26, 44 + i * 15, it.c);
+      if (it.look != null) drawStatue(it.look | 0, 13, 57 + i * 15, 15, clock, 0, 1);
+    }
+    textC("SWIPE UP/DOWN: SCROLL  < BACK", CX, 284, DIM);
+  }
+
+  /* ---------------- menu, flash, present ---------------- */
+  function drawMenu() {
+    if (!menu) return;
+    const w = 236, h = 26 + menu.items.length * 18, x = (G - w) / 2, y = (G - h) / 2;
+    lo.fillStyle = "#000"; lo.fillRect(x, y, w, h);
+    lo.strokeStyle = GOLD; lo.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    textC("MENU", CX, y + 4, MID);
+    menu.items.forEach((it, i) => {
+      const yy = y + 22 + i * 18, on = i === menu.sel;
+      if (on) { lo.fillStyle = GOLD; lo.fillRect(x + 6, yy - 2, w - 12, 16); }
+      text((on ? "> " : "  ") + it.label(), x + 10, yy, on ? "#000" : GOLD);
+    });
+  }
+  function draw(dt) {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    if (screen === "HUNT" && target) drawHunt(dt);
+    else if (screen === "GOT" && got) drawGot(dt);
+    else if (screen === "FOUND") drawFound(dt);
+    else { screen = "LIST"; drawList(dt); }
+    drawMenu();
+    if (clock < flashUntil) {
+      const w = Math.min(G - 8, textW(flashMsg) + 16), x = (G - w) / 2, y = screen === "LIST" ? 244 : screen === "HUNT" ? (close ? 190 : 196) : 150;
+      lo.fillStyle = "#000"; lo.fillRect(x, y, w, 22);
+      lo.strokeStyle = flashCol; lo.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      textC(flashMsg, CX, y + 4, flashCol);
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- input ---------------- */
+  function openMenu() {
+    const items = [];
+    if (screen === "HUNT") items.push({ label: () => "STOP LOOKING", run: stopHunt });
+    else {
+      items.push({ label: () => "FOUND GIFTS (" + found.length + ")", run: () => { screen = "FOUND"; scroll = 0; } });
+      items.push({ label: () => "DEMO GIFT", run: startDemo });
+      items.push({ label: () => "CHECK FOR GIFTS", run: () => { refresh(); flash("CHECKING..."); } });
+    }
+    items.push({ label: () => "SOUND: " + (soundOn ? "ON" : "OFF"), run: () => { soundOn = !soundOn; store.set("sm.sound", soundOn); if (soundOn) jingle(); }, stay: true });
+    items.push({ label: () => "HEAD SENSOR: " + motion.axisName, run: () => { motion.nextAxis(1); courseYaw = null; }, stay: true });
+    items.push({ label: () => "CLOSE", run: () => {} });
+    menu = { items, sel: 0 };
+  }
+  function sayWhere() {
+    if (!pos) { speak("Waiting for G P S."); return; }
+    const w = where(target), hd = heading(), dir = direction(w, hd);
+    const m = w.d < 1000 ? Math.round(w.d) + " metres" : (w.d / 1000).toFixed(1) + " kilometres";
+    speak(m + ". " + dir.main.toLowerCase() + ".");
+    radarPing(w.d);
+  }
+  function primary() {
+    if (screen === "LIST") {
+      const list = sorted();
+      if (!list.length) { flash("NO GIFTS YET - MENU HAS A DEMO", 2.5); return; }
+      startHunt(list[sel].g);
+    } else if (screen === "HUNT") sayWhere();
+    else if (screen === "GOT") { got = null; target = null; screen = "LIST"; markSeen(); }
+    else if (screen === "FOUND") screen = "LIST";
+  }
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) return;
+    e.preventDefault();
+    audio(); motion.enable();
+    if (menu) {
+      if (k === "ArrowUp") menu.sel = (menu.sel + menu.items.length - 1) % menu.items.length;
+      else if (k === "ArrowDown") menu.sel = (menu.sel + 1) % menu.items.length;
+      else if ((k === "Enter" || k === " ") && !e.repeat) { const it = menu.items[menu.sel]; if (!it.stay) menu = null; it.run(); }
+      else menu = null;
+      return;
+    }
+    if (k === "Escape") {
+      if (screen === "LIST") { stopGps(); history.back(); }
+      else if (screen === "HUNT") stopHunt();
+      else primary();
+      return;
+    }
+    if (k === "Enter" || k === " ") { if (!e.repeat) primary(); return; }
+    if (k === "ArrowRight") { openMenu(); return; }
+    if (k === "ArrowLeft") {
+      if (screen === "HUNT") stopHunt();
+      else if (screen !== "LIST") primary();
+      else { refresh(); flash("CHECKING FOR GIFTS...", 1.2); }
+      return;
+    }
+    const d = k === "ArrowUp" ? -1 : 1;
+    if (screen === "LIST") { sel = clamp(sel + d, 0, Math.max(0, gifts.length - 1)); selId = null; const l = sorted(); if (l[sel]) selId = l[sel].g.id; }
+    else if (screen === "FOUND") scroll += d * 3;
+    else if (screen === "HUNT" && close) { closeView = closeView === "3D" ? "MAP" : "3D"; flash(closeView === "3D" ? "3D VIEW" : "MAP VIEW", 1); }
+  });
+  let touch = null;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, cancelable: true }));
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null; e.preventDefault();
+    if (Math.hypot(dx, dy) < 20) key("Enter");
+    else if (Math.abs(dx) > Math.abs(dy)) key(dx > 0 ? "ArrowRight" : "ArrowLeft");
+    else key(dy < 0 ? "ArrowUp" : "ArrowDown");
+  });
+  cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopGps();
+    else { startGps(); refresh(); }
+  });
+
+  /* ---------------- loop ---------------- */
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    motion.update(dt);
+    if (clock - lastNet > (screen === "HUNT" ? 30 : 15) && !refresh.busy) { lastNet = clock; refresh(); }
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+  startGps();
+  refresh();
+
+  window.__sm = { get gifts() { return gifts; }, get screen() { return screen; }, get pos() { return pos; }, get target() { return target; },
+                  get close() { return close; }, get got() { return got; }, onFix, startDemo, heading, where, refresh };
+})();
+</script>
+</body>
+</html>

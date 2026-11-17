@@ -30,6 +30,8 @@ public/                 the website
   glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
+  glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
+  glasses/SM/           Святий Миколайчик gift page for phones: leave a gift on the spot where you stand (error.blue/glasses/SM)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -127,6 +129,31 @@ character, watching a live first-person view.
   every second while held), `act` {a, id}, `stop`, `got`, `done`, `tel` {h, p, bat}, `ping`/`pong`.
   Video is WebRTC (STUN only, like TUSA), set up through the room; when it can't connect within 12 s,
   CON asks for `jpg`: about 5 small JPEG frames a second through the room (each under 16 KB)
+
+## Святий Миколайчик (error.blue/glasses/SM + error.blue/glasses/mykolai)
+
+Anyone can play Saint Nicholas and leave a little gift for Yaro on a GPS spot; Yaro finds it with the glasses.
+
+- `public/glasses/SM/index.html`: the gift page for phones (night sky, a 3D statue on an embroidered pillow,
+  a gift tag form). Find me (phone location, needs ±30 m or better), pick one of six statue colours, write
+  From and a note (140 characters), Leave the gift here. The page remembers the gifts this phone left
+  (`sm.mine` in localStorage, with each gift's secret key) and shows them with "Waiting for Yaro" or
+  "Yaro found it"; it checks every 15 s and throws confetti when one gets found. Take it back works until
+  Yaro finds it. The map uses OpenStreetMap tiles and shows only your own gifts.
+- `public/glasses/SM/statue.js`: the statue (low-poly St Nicholas with mitre, crozier, stole and a present),
+  drawn on a 2D canvas; both pages use it. `SMStatue.LOOKS` are the six colours.
+- `public/glasses/SM/fonts/`: Rubik and Rubik Bubbles (Latin + Cyrillic), served from the site.
+- `public/glasses/mykolai/index.html`: the glasses app (MYKOLAI.EXE on the home screen, Mykolai in Mini Hub).
+  LIST: waiting gifts, nearest first (pinch = go get it, swipe right = menu with DEMO GIFT, FOUND GIFTS,
+  sound and head sensor). HUNT: a 3D radar with sweep, distance, direction and walking time; within 30 m
+  the precise finder (3D view with the statue standing on its spot, a 7 m ring and a WARM/HOT bar;
+  swipe up/down switches to a map), Geiger ticks getting faster. Within 7 m (and GPS ±30 m or better)
+  the gift is received: confetti, the note, the Щедрик bells, and the server is told. Heading comes from
+  the compass when there is one, otherwise from walking plus head turns. The font has Cyrillic capitals,
+  so names like МАМА show.
+- server: `/api/sm/gifts` in `src/index.js`, D1 table `sm_gifts`. Picking up checks that the glasses are
+  within 20 m of the gift. 12 gifts per hour per network, 200 waiting at most; found gifts are listed for
+  30 days.
 
 ## Web app
 

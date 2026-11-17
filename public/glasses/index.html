@@ -315,6 +315,7 @@ const DM = (() => {
       { id: "hud",    file: "HUD.EXE",    desc: "HORIZON + TARGETS",    url: "/glasses/hud/" },
       { id: "snake",  file: "SNAKE.EXE",  desc: "CLASSIC SNAKE",        url: "/glasses/mini/?app=snake" },
       { id: "yaro",   file: "YARO.EXE",   desc: "YARO-VISSION: TAKE ORDERS", url: "/glasses/yaro/" },
+      { id: "mykolai", file: "MYKOLAI.EXE", desc: "FIND GIFTS LEFT FOR YARO", url: "/glasses/mykolai/" },
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
@@ -575,6 +576,25 @@ const DM = (() => {
     return m;
   }
 
+  // MYKOLAI: a little Saint Nicholas statue with mitre, crozier and a blinking present
+  function mykolaiMesh(t) {
+    const m = mesh();
+    box(m, 0, -0.9, 0, 1.0, 0.16, 1.0);
+    box(m, 0, -0.62, 0, 0.78, 0.4, 0.78);
+    box(m, 0, -0.28, 0, 0.64, 0.3, 0.64);
+    box(m, 0, 0.0, 0, 0.5, 0.28, 0.5);
+    box(m, 0, -0.42, -0.39, 0.14, 0.72, 0.04, "on");                      // the stole down the front
+    box(m, 0, 0.32, 0, 0.32, 0.32, 0.32);
+    box(m, 0, 0.2, -0.11, 0.3, 0.26, 0.14, "on");                         // beard
+    box(m, 0, 0.62, 0, 0.3, 0.28, 0.24, "on");                            // mitre
+    box(m, 0, 0.82, 0, 0.16, 0.14, 0.14, "on");
+    box(m, 0.42, -0.12, 0, 0.07, 1.46, 0.07, "on");                       // crozier
+    box(m, 0.5, 0.6, 0, 0.2, 0.07, 0.07, "on");
+    box(m, 0.58, 0.52, 0, 0.07, 0.18, 0.07, "on");
+    box(m, -0.38, -0.18, -0.16, 0.26, 0.26, 0.26, Math.floor(t * 2) % 2 ? "on" : "solid");   // the present
+    return m;
+  }
+
   function iconFor(id, t, now) {
     switch (id) {
       case "dice":    return [diceMesh, mul(ry(t * 0.9), mul(rx(t * 0.6), rz(t * 0.3))), 0.33];
@@ -588,6 +608,7 @@ const DM = (() => {
       case "yaro":    return [eyeMesh(t), ry(Math.sin(t * 0.3) * 0.3), 0.4];
       case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
       case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];
+      case "mykolai": return [mykolaiMesh(t), mul(rx(0.2), ry(Math.sin(t * 0.7) * 0.7)), 0.4];
     }
   }
 

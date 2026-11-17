@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1840">
+<meta name="description" content="Be Святий Миколайчик for a moment: leave a little gift for Yaro on the spot where you stand.">
+<title>Святий Миколайчик: a gift for Yaro</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%81%3C/text%3E%3C/svg%3E">
+<style>
+  @font-face { font-family: "Bubbles"; src: url(fonts/rubik-bubbles-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; font-display: swap; }
+  @font-face { font-family: "Bubbles"; src: url(fonts/rubik-bubbles-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 400; src: url(fonts/rubik-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 400; src: url(fonts/rubik-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 500; src: url(fonts/rubik-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 500; src: url(fonts/rubik-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 700; src: url(fonts/rubik-cyrillic-700-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; font-display: swap; }
+  @font-face { font-family: "Rubik"; font-weight: 700; src: url(fonts/rubik-latin-700-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; font-display: swap; }
+
+  :root {
+    --night: #1c1840;      /* the sky */
+    --dusk: #33246b;       /* lower sky */
+    --icing: #fff6e6;      /* paper, snow */
+    --ink: #2a1630;        /* writing on paper */
+    --honey: #ffc13b;      /* titles, highlights */
+    --cranberry: #e0284f;  /* the big button, stitches */
+    --pine: #1f8a5b;       /* found! */
+    --ginger: #a0582b;     /* twine */
+    --muted: #b9b0dd;      /* quiet text on the sky */
+    --r-tag: 22px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--icing);
+    font: 400 17px/1.5 "Rubik", system-ui, sans-serif;
+    background: linear-gradient(180deg, var(--night) 0%, var(--night) 35%, var(--dusk) 100%) fixed;
+    overflow-x: hidden;
+  }
+  #sky, #party { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #sky { z-index: 0; }
+  #party { z-index: 50; }
+  main { position: relative; z-index: 1; max-width: 460px; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 18px 40px; }
+  a { color: var(--honey); }
+  button { font: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--honey); outline-offset: 3px; border-radius: 8px; }
+
+  /* ---------- hero ---------- */
+  .title {
+    margin: 10px 0 0; font-family: "Bubbles", "Rubik", sans-serif; font-weight: 400; color: var(--honey);
+    line-height: .92; text-align: center; letter-spacing: .01em;
+    text-shadow: 0 3px 0 var(--cranberry), 0 6px 0 #8f1531, 0 10px 22px rgba(0, 0, 0, .35);
+  }
+  .title span { display: block; }
+  .title .a { font-size: clamp(34px, 10.5vw, 46px); transform: rotate(-4deg) translateX(-12%); }
+  .title .b { font-size: clamp(36px, 12.4vw, 58px); transform: rotate(-2deg); margin-top: 2px; }
+  .lede { margin: 18px auto 0; max-width: 30ch; text-align: center; color: var(--muted); font-size: 17px; }
+  .lede b { color: var(--icing); font-weight: 500; }
+
+  .stage { position: relative; height: 330px; margin: 6px auto 0; width: 300px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .stage canvas { position: absolute; left: 0; top: 0; width: 300px; height: 300px; z-index: 2; cursor: grab; }
+  .stage canvas:active { cursor: grabbing; }
+  .pillow { position: absolute; left: 10px; top: 236px; width: 280px; height: 92px; z-index: 1; }
+  .bubble {
+    position: absolute; left: -6px; top: 26px; z-index: 3; max-width: 170px; padding: 10px 13px;
+    background: var(--icing); color: var(--ink); border-radius: 18px 18px 18px 4px; font-weight: 500; font-size: 15px; line-height: 1.3;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, .25); transform-origin: 85% 100%;
+    transform: scale(.4) rotate(-6deg); opacity: 0; transition: transform .25s cubic-bezier(.3, 1.6, .5, 1), opacity .15s;
+  }
+  .bubble::after { content: ""; position: absolute; right: -8px; bottom: 8px; border: 9px solid transparent; border-left-color: var(--icing); border-right: 0; }
+  .bubble.on { transform: scale(1) rotate(-3deg); opacity: 1; }
+  .hint { position: absolute; right: 2px; top: 6px; z-index: 3; font-size: 13px; color: var(--muted); transform: rotate(4deg); }
+
+  .outfits { display: flex; justify-content: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+  .outfit {
+    width: 42px; height: 42px; border-radius: 50%; border: 3px solid rgba(255, 246, 230, .25); padding: 0;
+    background: conic-gradient(var(--c1) 0 50%, var(--c2) 50% 100%); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .2);
+    transition: transform .15s;
+  }
+  .outfit[aria-checked="true"] { border-color: var(--icing); transform: scale(1.15) rotate(-8deg); }
+  .outfit-name { margin: 10px 0 0; text-align: center; font-weight: 500; color: var(--icing); min-height: 1.5em; }
+
+  /* ---------- the gift tag ---------- */
+  .tagwrap { position: relative; margin: 46px 4px 0; filter: drop-shadow(0 10px 0 rgba(10, 6, 30, .35)); }
+  .twine { position: absolute; left: 50%; top: -44px; width: 120px; height: 60px; transform: translateX(-50%); z-index: 2; overflow: visible; }
+  .tag {
+    position: relative; background: var(--icing); color: var(--ink); padding: 52px 22px 24px;
+    clip-path: polygon(22% 0, 78% 0, 100% 9%, 100% 100%, 0 100%, 0 9%);
+    border-radius: 0 0 var(--r-tag) var(--r-tag); transform: rotate(-.6deg);
+  }
+  .tag::before {                          /* the stitched edge */
+    content: ""; position: absolute; inset: 9px; border: 2px dashed rgba(224, 40, 79, .55); pointer-events: none;
+    clip-path: polygon(21.5% 0, 78.5% 0, 100% 8.4%, 100% 100%, 0 100%, 0 8.4%); border-radius: 0 0 16px 16px;
+  }
+  .hole { position: absolute; left: 50%; top: 18px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: var(--dusk); box-shadow: inset 0 2px 3px rgba(0, 0, 0, .5); }
+  .tag h2 { margin: 0; font-family: "Bubbles", "Rubik", sans-serif; font-weight: 400; font-size: 34px; line-height: 1.1; color: var(--cranberry); text-align: center; }
+  .tag .sub { margin: 4px 0 18px; text-align: center; font-size: 15px; color: #6b5470; }
+
+  .map {
+    position: relative; height: 210px; border-radius: 14px; overflow: hidden; background: #efe3cf;
+    background-image: linear-gradient(rgba(42, 22, 48, .07) 1px, transparent 1px), linear-gradient(90deg, rgba(42, 22, 48, .07) 1px, transparent 1px);
+    background-size: 22px 22px; box-shadow: inset 0 0 0 2px rgba(42, 22, 48, .12);
+  }
+  .tiles { position: absolute; left: 0; top: 0; }
+  .tiles img { position: absolute; width: 256px; height: 256px; filter: sepia(.3) saturate(1.05) hue-rotate(-6deg); user-select: none; -webkit-user-drag: none; }
+  .marks { position: absolute; inset: 0; }
+  .me-acc { position: absolute; border-radius: 50%; background: rgba(224, 40, 79, .14); border: 2px solid rgba(224, 40, 79, .5); transform: translate(-50%, -50%); }
+  .me { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--cranberry); border: 3px solid var(--icing); transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0, 0, 0, .35); }
+  .gift-mark { position: absolute; transform: translate(-50%, -88%); width: 30px; height: 40px; }
+  .map-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: #6b5470; font-size: 15px; }
+  .osm { position: absolute; right: 4px; bottom: 3px; font-size: 10px; background: rgba(255, 246, 230, .85); padding: 0 4px; border-radius: 4px; color: var(--ink); }
+  .osm a { color: var(--ink); }
+
+  .fixrow { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .fix { flex: 1; margin: 0; font-size: 15px; line-height: 1.35; }
+  .fix b { font-weight: 700; }
+  .fix.good b { color: var(--pine); }
+  .fix.meh b { color: #b26b00; }
+  .fix.bad b { color: var(--cranberry); }
+
+  .btn { border: 0; border-radius: 999px; font-weight: 700; }
+  .btn-find { padding: 10px 16px; background: var(--honey); color: var(--ink); box-shadow: 0 4px 0 #c98a12; white-space: nowrap; }
+  .btn-find:active { transform: translateY(3px); box-shadow: 0 1px 0 #c98a12; }
+
+  .field { display: block; margin-top: 18px; }
+  .field span { display: block; font-weight: 500; font-size: 15px; color: #6b5470; }
+  .field input, .field textarea {
+    width: 100%; margin-top: 2px; border: 0; border-bottom: 2px dashed rgba(42, 22, 48, .35); background: transparent;
+    color: var(--ink); font: 500 19px/1.4 "Rubik", system-ui, sans-serif; padding: 6px 2px; border-radius: 0; resize: none;
+  }
+  .field input::placeholder, .field textarea::placeholder { color: rgba(42, 22, 48, .38); }
+  .field input:focus, .field textarea:focus { outline: none; border-bottom: 2px solid var(--cranberry); }
+  .count { display: block; text-align: right; font-size: 13px; color: #8a7590; }
+
+  .btn-leave {
+    position: relative; display: block; width: 100%; margin-top: 22px; padding: 18px 20px; font-size: 21px;
+    background: var(--cranberry); color: var(--icing); box-shadow: 0 6px 0 #8f1531;
+  }
+  .btn-leave::after { content: ""; position: absolute; inset: 5px; border-radius: 999px; border: 2px dashed rgba(255, 246, 230, .6); pointer-events: none; }
+  .btn-leave:active { transform: translateY(4px); box-shadow: 0 2px 0 #8f1531; }
+  .btn-leave[aria-busy="true"] { opacity: .75; }
+  .rule { margin: 12px 0 0; text-align: center; font-size: 14px; color: #6b5470; }
+
+  /* ---------- gifts you left ---------- */
+  .sack { margin-top: 48px; }
+  .sack h2 { margin: 0 0 4px; font-family: "Bubbles", "Rubik", sans-serif; font-weight: 400; font-size: 30px; color: var(--honey); text-align: center; text-shadow: 0 3px 0 #8f1531; }
+  .sack .count-line { margin: 0 0 14px; text-align: center; color: var(--muted); font-size: 15px; }
+  .mine { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .mine li {
+    display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: start;
+    background: var(--icing); color: var(--ink); border-radius: 16px; padding: 12px 14px 14px;
+  }
+  .mine li:nth-child(odd) { transform: rotate(-.8deg); }
+  .mine li:nth-child(even) { transform: rotate(.7deg); }
+  .mine canvas { width: 56px; height: 72px; }
+  .mine .note { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+  .mine .note.none { color: #8a7590; font-weight: 400; font-style: italic; }
+  .mine .meta { margin: 2px 0 0; font-size: 14px; color: #6b5470; }
+  .status { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px; font-size: 14px; font-weight: 500; }
+  .status.wait { background: #ece2f4; color: #4b3a6b; }
+  .status.found { background: var(--pine); color: var(--icing); }
+  .takeback { margin: 8px 0 0 8px; padding: 3px 10px; border: 2px solid rgba(42, 22, 48, .25); border-radius: 999px; background: none; color: var(--ink); font-size: 14px; }
+  .takeback.sure { border-color: var(--cranberry); color: var(--cranberry); }
+  .empty { text-align: center; color: var(--muted); margin: 6px 0 0; }
+
+  footer { margin-top: 44px; text-align: center; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); z-index: 60; width: min(420px, calc(100% - 28px));
+    transform: translate(-50%, 140%); transition: transform .3s cubic-bezier(.3, 1.4, .5, 1);
+    background: var(--icing); color: var(--ink); border-radius: 16px; padding: 14px 16px; font-weight: 500;
+    box-shadow: 0 6px 0 rgba(10, 6, 30, .4);
+  }
+  .toast.on { transform: translate(-50%, 0); }
+  .toast.party { background: var(--pine); color: var(--icing); }
+  .toast.oops { border-left: 8px solid var(--cranberry); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bubble, .toast, .outfit { transition: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<main>
+  <header>
+    <h1 class="title"><span class="a">Святий</span><span class="b">Миколайчик</span></h1>
+    <p class="lede">Tonight <b>you</b> are the saint. Leave a little statue where you stand, and Yaro has to go and find it.</p>
+    <div class="stage" id="stage">
+      <svg class="pillow" viewBox="0 0 280 92" aria-hidden="true">
+        <defs>
+          <radialGradient id="puff" cx="50%" cy="38%" r="65%"><stop offset="0" stop-color="#fffaf1"/><stop offset=".75" stop-color="#f3e4cc"/><stop offset="1" stop-color="#dcc5a2"/></radialGradient>
+          <pattern id="stitch" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M2 2 L8 8 M8 2 L2 8" stroke="#e0284f" stroke-width="2" stroke-linecap="round"/>
+          </pattern>
+          <pattern id="stitch2" width="10" height="10" patternUnits="userSpaceOnUse">
+            <path d="M2 2 L8 8 M8 2 L2 8" stroke="#2a1630" stroke-width="2" stroke-linecap="round"/>
+          </pattern>
+          <clipPath id="pclip"><path d="M18 22 Q140 2 262 22 Q278 46 262 70 Q140 90 18 70 Q2 46 18 22 Z"/></clipPath>
+        </defs>
+        <ellipse cx="140" cy="84" rx="118" ry="7" fill="rgba(10,6,30,.35)"/>
+        <path d="M18 22 Q140 2 262 22 Q278 46 262 70 Q140 90 18 70 Q2 46 18 22 Z" fill="url(#puff)"/>
+        <g clip-path="url(#pclip)">
+          <rect x="0" y="40" width="280" height="10" fill="url(#stitch)"/>
+          <rect x="0" y="30" width="280" height="10" fill="url(#stitch2)" opacity=".85" transform="translate(5 0)"/>
+          <rect x="0" y="50" width="280" height="10" fill="url(#stitch2)" opacity=".85" transform="translate(5 0)"/>
+        </g>
+        <circle cx="16" cy="21" r="5" fill="#e0284f"/><circle cx="264" cy="21" r="5" fill="#e0284f"/>
+        <circle cx="16" cy="71" r="5" fill="#e0284f"/><circle cx="264" cy="71" r="5" fill="#e0284f"/>
+      </svg>
+      <canvas id="statue" role="img" aria-label="The gift: a small Saint Nicholas statue. Drag to turn him, tap him to hear him talk."></canvas>
+      <div class="bubble" id="bubble" role="status" aria-live="polite"></div>
+      <div class="hint" aria-hidden="true">tap me</div>
+    </div>
+    <div class="outfits" id="outfits" role="radiogroup" aria-label="Statue colours"></div>
+    <p class="outfit-name" id="outfitName"></p>
+  </header>
+
+  <div class="tagwrap">
+    <svg class="twine" viewBox="0 0 120 60" aria-hidden="true">
+      <path d="M8 0 C 30 30, 50 40, 60 58 C 70 40, 92 28, 112 0" fill="none" stroke="#a0582b" stroke-width="4" stroke-linecap="round"/>
+      <path d="M44 34 c -14 -10 -26 2 -14 10 c 8 4 14 -2 14 -10 Z M76 34 c 14 -10 26 2 14 10 c -8 4 -14 -2 -14 -10 Z" fill="#e0284f"/>
+    </svg>
+    <section class="tag" aria-labelledby="tagTitle">
+      <span class="hole" aria-hidden="true"></span>
+      <h2 id="tagTitle">Для Яро</h2>
+      <p class="sub">The gift stays on the spot where you stand now.</p>
+
+      <div class="map" id="map">
+        <div class="tiles" id="tiles"></div>
+        <div class="marks" id="marks"></div>
+        <div class="map-empty" id="mapEmpty">Your spot shows up here.</div>
+        <div class="osm" id="osm" hidden>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+      </div>
+      <div class="fixrow">
+        <p class="fix" id="fix">First, let's see where you are.</p>
+        <button class="btn btn-find" id="find" type="button">Find me</button>
+      </div>
+
+      <label class="field"><span>From</span><input id="from" maxlength="24" autocomplete="nickname" placeholder="Святий Миколай"></label>
+      <label class="field"><span>A note for Yaro (he reads it when he finds the gift)</span>
+        <textarea id="note" maxlength="140" rows="3" placeholder="Be good. Or at least be funny."></textarea>
+        <span class="count" id="count">0 / 140</span>
+      </label>
+
+      <button class="btn btn-leave" id="leave" type="button">Leave the gift here</button>
+      <p class="rule">Yaro has to come within 7 m of this spot to pick it up.</p>
+    </section>
+  </div>
+
+  <section class="sack" aria-labelledby="sackTitle">
+    <h2 id="sackTitle">Gifts you left</h2>
+    <p class="count-line" id="countLine"></p>
+    <ul class="mine" id="mine"></ul>
+    <p class="empty" id="empty">None yet. Your sack is suspiciously full.</p>
+  </section>
+
+  <footer>
+    Yaro finds gifts with the Святий Миколайчик app on his glasses.<br>
+    Anyone who opens this page can leave one.<br>
+    <a href="/glasses/">error.blue/glasses</a>
+  </footer>
+</main>
+<canvas id="party" aria-hidden="true"></canvas>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="statue.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (s) => document.querySelector(s);
+  const API = "/api/sm/gifts";
+  const MAX_ACC = 30;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const LOOKS = SMStatue.LOOKS;
+  let look = Math.min(LOOKS.length - 1, Math.max(0, store.get("sm.look", (Math.random() * LOOKS.length) | 0) | 0));
+  let mine = store.get("sm.mine", []);                     // [{ id, key, created }]
+  const foundSeen = new Set(store.get("sm.foundSeen", []));
+  let server = null, serverOk = true;
+  let fix = null, recent = [], watchId = null, locState = "idle", wantLeave = false;
+
+  /* ---------------- sky: stars and slow snow ---------------- */
+  const sky = $("#sky"), sg = sky.getContext("2d");
+  let SW = 0, SH = 0, DPR = 1;
+  const stars = [], flakes = [];
+  function sizeSky() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    SW = innerWidth; SH = innerHeight;
+    sky.width = SW * DPR; sky.height = SH * DPR;
+    party.width = SW * DPR; party.height = SH * DPR;
+    stars.length = 0; flakes.length = 0;
+    for (let i = 0; i < Math.round(SW * SH / 5200); i++) stars.push({ x: Math.random() * SW, y: Math.random() * SH * 0.75, r: Math.random() * 1.3 + 0.3, p: Math.random() * 6 });
+    for (let i = 0; i < Math.round(SW * SH / 9000); i++) flakes.push({ x: Math.random() * SW, y: Math.random() * SH, r: Math.random() * 2.2 + 0.8, v: 14 + Math.random() * 26, w: Math.random() * 6 });
+  }
+  function drawSky(t, dt) {
+    sg.setTransform(DPR, 0, 0, DPR, 0, 0);
+    sg.clearRect(0, 0, SW, SH);
+    for (const s of stars) {
+      sg.globalAlpha = reduce ? 0.7 : 0.45 + 0.45 * Math.sin(t * 1.3 + s.p);
+      sg.fillStyle = "#fff6e6"; sg.fillRect(s.x, s.y, s.r, s.r);
+    }
+    sg.fillStyle = "#fff6e6";
+    for (const f of flakes) {
+      if (!reduce) { f.y += f.v * dt; f.x += Math.sin(t * 0.7 + f.w) * 10 * dt; if (f.y > SH + 4) { f.y = -4; f.x = Math.random() * SW; } }
+      sg.globalAlpha = 0.55; sg.beginPath(); sg.arc(f.x, f.y, f.r, 0, Math.PI * 2); sg.fill();
+    }
+    sg.globalAlpha = 1;
+  }
+
+  /* ---------------- the statue on its pillow ---------------- */
+  const sc = $("#statue"), sx = sc.getContext("2d");
+  const SDPR = Math.min(2, window.devicePixelRatio || 1);
+  sc.width = 300 * SDPR; sc.height = 300 * SDPR;
+  const st = { yaw: -0.5, spin: reduce ? 0 : 0.45, drag: null, dropAt: performance.now() / 1000, hopAt: -9, gone: null };
+  const bounce = (u) => { const n = 7.5625, d = 2.75; if (u < 1 / d) return n * u * u; if (u < 2 / d) return n * (u -= 1.5 / d) * u + 0.75; if (u < 2.5 / d) return n * (u -= 2.25 / d) * u + 0.9375; return n * (u -= 2.625 / d) * u + 0.984375; };
+  function drawStatue(t, dt) {
+    sx.setTransform(SDPR, 0, 0, SDPR, 0, 0);
+    sx.clearRect(0, 0, 300, 300);
+    if (!st.drag) st.yaw += st.spin * dt;
+    let y = 282, h = 236, alpha = 1, yawX = 0;
+    const drop = reduce ? 1 : Math.min(1, (t - st.dropAt) / 0.9);
+    y -= (1 - bounce(drop)) * 320;
+    const hop = t - st.hopAt;
+    if (hop < 0.45 && !reduce) { y -= Math.sin((hop / 0.45) * Math.PI) * 26; yawX = (hop / 0.45) * Math.PI * 2; }
+    if (st.gone !== null) {
+      const g = Math.min(1, (t - st.gone) / 0.7);
+      yawX = g * g * 14; h *= 1 - g * 0.85; y -= g * 140; alpha = 1 - g;
+      if (g >= 1) { st.gone = null; st.dropAt = t + 0.35; }
+    }
+    if (t < st.dropAt) return;
+    SMStatue.draw(sx, { x: 150, y, h, yaw: st.yaw + yawX, look, tilt: 0.16, alpha });
+  }
+  // drag to turn, tap to talk
+  sc.addEventListener("pointerdown", (e) => { st.drag = { x: e.clientX, yaw: st.yaw, moved: false }; sc.setPointerCapture(e.pointerId); });
+  sc.addEventListener("pointermove", (e) => {
+    if (!st.drag) return;
+    const dx = e.clientX - st.drag.x;
+    if (Math.abs(dx) > 4) st.drag.moved = true;
+    st.yaw = st.drag.yaw + dx * 0.018;
+  });
+  sc.addEventListener("pointerup", () => { if (st.drag && !st.drag.moved) talk(); st.drag = null; });
+  sc.addEventListener("pointercancel", () => { st.drag = null; });
+  sc.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); talk(); } });
+  sc.tabIndex = 0;
+
+  const LINES = [
+    "Not Santa. Older. Better beard.",
+    "Шшш… Яро нічого не знає.",
+    "I used to do pillows. Now it's GPS.",
+    "Різочка? Not this year.",
+    "This beard is 1,700 years old. Still fluffy.",
+    "Hide me somewhere nice. Not in a puddle, please.",
+    "Ho-ho-h… no wait, that's the other guy.",
+    "Миколаю, Миколаю, подарунки дай!",
+    "I fly by night. Mostly by tram.",
+    "Yaro has been good. Mostly. Ish.",
+  ];
+  const OUTFIT_LINES = [
+    "The classic. Never goes out of style.",
+    "Frosty blue. Very slimming.",
+    "I'm basically a little tree now.",
+    "Royal plum. Fancy, fancy.",
+    "Smells like honey cake in here.",
+    "Candy cane. Bold choice. I respect it.",
+  ];
+  let lineIdx = (Math.random() * LINES.length) | 0, bubbleT = 0;
+  function say(s, ms = 3400) {
+    const b = $("#bubble");
+    b.textContent = s; b.classList.add("on");
+    clearTimeout(bubbleT); bubbleT = setTimeout(() => b.classList.remove("on"), ms);
+  }
+  function talk() { st.hopAt = performance.now() / 1000; lineIdx = (lineIdx + 1) % LINES.length; say(LINES[lineIdx]); document.querySelector(".hint").hidden = true; }
+
+  /* ---------------- outfits ---------------- */
+  const outfits = $("#outfits");
+  LOOKS.forEach((L, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "outfit"; b.setAttribute("role", "radio"); b.setAttribute("aria-label", L.name);
+    b.style.setProperty("--c1", L.robe); b.style.setProperty("--c2", L.cape);
+    b.addEventListener("click", () => { setLook(i); st.hopAt = performance.now() / 1000; say(OUTFIT_LINES[i], 2600); });
+    b.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+      if (d) { e.preventDefault(); const n = (look + d + LOOKS.length) % LOOKS.length; setLook(n); outfits.children[n].focus(); }
+    });
+    outfits.appendChild(b);
+  });
+  function setLook(i) {
+    look = i; store.set("sm.look", i);
+    [...outfits.children].forEach((b, k) => { b.setAttribute("aria-checked", k === i ? "true" : "false"); b.tabIndex = k === i ? 0 : -1; });
+    $("#outfitName").textContent = LOOKS[i].name;
+  }
+  setLook(look);
+
+  /* ---------------- location ---------------- */
+  const fixEl = $("#fix");
+  function showFix() {
+    fixEl.className = "fix";
+    if (locState === "denied") { fixEl.innerHTML = "<b>Location is blocked.</b> Allow it for error.blue in your browser settings, then tap Find me again."; fixEl.classList.add("bad"); return; }
+    if (locState === "na") { fixEl.innerHTML = "<b>This browser can't tell where you are.</b> Try your phone's main browser."; fixEl.classList.add("bad"); return; }
+    if (!fix) { fixEl.textContent = locState === "asking" ? "Looking for you…" : "First, let's see where you are."; return; }
+    const a = Math.round(fix.acc);
+    if (a <= 6) { fixEl.innerHTML = `<b>Spot on (±${a} m).</b> A perfect hiding place.`; fixEl.classList.add("good"); }
+    else if (a <= 15) { fixEl.innerHTML = `<b>Good enough for a saint (±${a} m).</b>`; fixEl.classList.add("good"); }
+    else if (a <= MAX_ACC) { fixEl.innerHTML = `<b>A bit wobbly (±${a} m).</b> Stand still for a moment.`; fixEl.classList.add("meh"); }
+    else { fixEl.innerHTML = `<b>Too fuzzy (±${a} m).</b> Step outside, away from walls.`; fixEl.classList.add("bad"); }
+  }
+  function startLocating() {
+    if (!("geolocation" in navigator)) { locState = "na"; showFix(); return; }
+    if (watchId !== null) return;
+    locState = "asking"; showFix();
+    $("#find").textContent = "Finding…";
+    watchId = navigator.geolocation.watchPosition((p) => {
+      const f = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy || 99, t: Date.now() };
+      fix = f; locState = "ok";
+      recent.push(f); recent = recent.filter((r) => f.t - r.t < 10000);
+      $("#find").textContent = "Update";
+      showFix(); renderMap(); renderMine();
+      if (wantLeave && f.acc <= MAX_ACC) { wantLeave = false; leave(); }
+    }, (err) => {
+      if (err.code === 1) { locState = "denied"; stopLocating(); }
+      showFix();
+      if (wantLeave && err.code === 1) { wantLeave = false; toast("Location is blocked, so the gift can't be placed.", "oops"); }
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  }
+  function stopLocating() { if (watchId !== null) navigator.geolocation.clearWatch(watchId); watchId = null; $("#find").textContent = "Find me"; }
+  $("#find").addEventListener("click", () => { if (locState === "denied") { locState = "idle"; } stopLocating(); startLocating(); });
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "geolocation" }).then((r) => { if (r.state === "granted") startLocating(); }).catch(() => {});
+  }
+  // the most precise fix from the last few seconds
+  const bestFix = () => recent.reduce((b, r) => (!b || r.acc < b.acc ? r : b), null) || fix;
+
+  /* ---------------- map (OpenStreetMap tiles) ---------------- */
+  const TILE = 256;
+  const toPx = (lat, lng, z) => {
+    const n = TILE * 2 ** z, s = Math.sin((lat * Math.PI) / 180);
+    return [((lng + 180) / 360) * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n];
+  };
+  const mPerPx = (lat, z) => (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** z;
+  let mapKey = "";
+  function renderMap() {
+    const map = $("#map"), tiles = $("#tiles"), marks = $("#marks");
+    if (!fix) { $("#mapEmpty").hidden = false; return; }
+    $("#mapEmpty").hidden = true; $("#osm").hidden = false;
+    const W = map.clientWidth, H = map.clientHeight;
+    const z = fix.acc > 60 ? 16 : fix.acc > 25 ? 17 : 18;
+    const [cx, cy] = toPx(fix.lat, fix.lng, z);
+    const ox = cx - W / 2, oy = cy - H / 2;
+    const tx0 = Math.floor(ox / TILE), ty0 = Math.floor(oy / TILE), tx1 = Math.floor((ox + W) / TILE), ty1 = Math.floor((oy + H) / TILE);
+    const key = [z, tx0, ty0, tx1, ty1].join("/");
+    if (key !== mapKey) {
+      mapKey = key; tiles.innerHTML = "";
+      for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) {
+        const img = new Image(); img.alt = ""; img.decoding = "async"; img.loading = "lazy";
+        img.src = `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
+        img.dataset.tx = tx; img.dataset.ty = ty;
+        img.onerror = () => img.remove();
+        tiles.appendChild(img);
+      }
+    }
+    for (const img of tiles.children) { img.style.left = (img.dataset.tx * TILE - ox) + "px"; img.style.top = (img.dataset.ty * TILE - oy) + "px"; }
+    marks.innerHTML = "";
+    // my gifts still waiting
+    for (const g of myGifts().filter((g) => g.s && !g.s.got)) {
+      const [gx, gy] = toPx(g.s.lat, g.s.lng, z), x = gx - ox, y = gy - oy;
+      if (x < -20 || y < -20 || x > W + 20 || y > H + 40) continue;
+      const c = document.createElement("canvas"); c.className = "gift-mark"; c.width = 60; c.height = 80;
+      SMStatue.draw(c.getContext("2d"), { x: 30, y: 76, h: 70, yaw: -0.4, look: g.s.look, flat: true });
+      c.style.left = x + "px"; c.style.top = y + "px";
+      marks.appendChild(c);
+    }
+    const r = Math.max(9, fix.acc / mPerPx(fix.lat, z));
+    const acc = document.createElement("div"); acc.className = "me-acc";
+    Object.assign(acc.style, { left: W / 2 + "px", top: H / 2 + "px", width: 2 * r + "px", height: 2 * r + "px" });
+    const me = document.createElement("div"); me.className = "me"; me.title = "You";
+    Object.assign(me.style, { left: W / 2 + "px", top: H / 2 + "px" });
+    marks.append(acc, me);
+  }
+  addEventListener("resize", () => { mapKey = ""; renderMap(); });
+
+  /* ---------------- leaving a gift ---------------- */
+  const note = $("#note"), from = $("#from");
+  from.value = store.get("sm.from", "");
+  note.addEventListener("input", () => { $("#count").textContent = note.value.length + " / 140"; });
+  from.addEventListener("change", () => store.set("sm.from", from.value.trim()));
+  let busy = false;
+  async function leave() {
+    if (busy) return;
+    const f = bestFix();
+    if (!f) { wantLeave = true; startLocating(); toast("Finding you first…"); return; }
+    if (f.acc > MAX_ACC) {
+      wantLeave = true; startLocating();
+      toast(`Your location is too fuzzy (±${Math.round(f.acc)} m). Step outside and hold still: the gift goes down as soon as it's sharper.`, "oops");
+      return;
+    }
+    busy = true; const btn = $("#leave"); btn.setAttribute("aria-busy", "true"); btn.textContent = "Wrapping…";
+    try {
+      const r = await fetch(API, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lat: f.lat, lng: f.lng, acc: f.acc, from: from.value.trim(), note: note.value.trim(), look }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "error.blue said no (" + r.status + ")");
+      mine.push({ id: j.gift.id, key: j.key, created: j.gift.created });
+      store.set("sm.mine", mine);
+      store.set("sm.from", from.value.trim());
+      if (server) server.waiting.unshift(j.gift);
+      note.value = ""; $("#count").textContent = "0 / 140";
+      st.gone = performance.now() / 1000;
+      burst(innerWidth / 2, $("#stage").getBoundingClientRect().top + 150, 70);
+      toast("Gift left! Yaro has to come within 7 m to grab it.", "party");
+      if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
+      renderMine(); renderMap();
+      setTimeout(() => say("Off I go! Next one?", 2600), 1300);
+    } catch (e) {
+      toast(/fetch|network/i.test(e.message) ? "Can't reach error.blue. Check your connection and try again." : cap(e.message) + ".", "oops");
+    } finally {
+      busy = false; btn.removeAttribute("aria-busy"); btn.textContent = "Leave the gift here";
+    }
+  }
+  const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  $("#leave").addEventListener("click", leave);
+
+  /* ---------------- gifts you left ---------------- */
+  function myGifts() {
+    const all = server ? [...server.waiting, ...server.found] : [];
+    return mine.map((m) => ({ m, s: all.find((g) => g.id === m.id) || null })).sort((a, b) => b.m.created - a.m.created);
+  }
+  const ago = (ms) => {
+    const s = (Date.now() - ms) / 1000;
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400 * 1.5) return Math.round(s / 3600) + " h ago";
+    return Math.round(s / 86400) + " days ago";
+  };
+  const clock = (ms) => { const d = new Date(ms); return d.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }); };
+  function metres(a, b) {
+    const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+    return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  const fmtM = (m) => (m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0) + " km");
+  function renderMine() {
+    const list = $("#mine"), items = myGifts();
+    list.innerHTML = "";
+    $("#empty").hidden = items.length > 0;
+    for (const { m, s } of items) {
+      const li = document.createElement("li");
+      const c = document.createElement("canvas"); c.width = 112; c.height = 144;
+      SMStatue.draw(c.getContext("2d"), { x: 56, y: 140, h: 134, yaw: -0.45, look: s ? s.look : 0, flat: false, alpha: s && s.got ? 1 : 0.9 });
+      const body = document.createElement("div");
+      const p = document.createElement("p"); p.className = "note" + (s && s.note ? "" : " none");
+      p.textContent = s ? (s.note || "No note, just the statue.") : "Checking on this one…";
+      const meta = document.createElement("p"); meta.className = "meta";
+      let t = "Left " + ago(m.created);
+      if (s && fix && !s.got) t += ", " + fmtM(metres(fix, s)) + " from you";
+      if (s && s.from) t += ". From " + s.from;
+      meta.textContent = t + ".";
+      const pill = document.createElement("span");
+      if (s && s.got) { pill.className = "status found"; pill.textContent = "Yaro found it, " + clock(s.got); }
+      else { pill.className = "status wait"; pill.textContent = s ? "Waiting for Yaro… zzz" : "…"; }
+      body.append(p, meta, pill);
+      if (s && !s.got) {
+        const tb = document.createElement("button"); tb.type = "button"; tb.className = "takeback"; tb.textContent = "Take it back";
+        tb.addEventListener("click", () => {
+          if (!tb.classList.contains("sure")) { tb.classList.add("sure"); tb.textContent = "Tap again to take it back"; setTimeout(() => { tb.classList.remove("sure"); tb.textContent = "Take it back"; }, 3500); return; }
+          takeBack(m);
+        });
+        body.append(tb);
+      }
+      li.append(c, body);
+      list.appendChild(li);
+    }
+    if (server) {
+      const mineIds = new Set(mine.map((m) => m.id));
+      const others = server.waiting.filter((g) => !mineIds.has(g.id)).length;
+      const parts = [];
+      parts.push(others === 0 ? "No gifts from others are waiting" : others === 1 ? "1 gift from someone else is waiting" : others + " gifts from others are waiting");
+      parts.push(server.found.length ? "Yaro found " + server.found.length + " in the last month" : "Yaro hasn't found any yet");
+      $("#countLine").textContent = parts.join(". ") + ".";
+    } else $("#countLine").textContent = serverOk ? "" : "Can't reach error.blue right now.";
+  }
+  async function takeBack(m) {
+    try {
+      const r = await fetch(API + "/" + m.id + "?key=" + encodeURIComponent(m.key), { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "error.blue said no");
+      mine = mine.filter((x) => x.id !== m.id); store.set("sm.mine", mine);
+      if (server) server.waiting = server.waiting.filter((g) => g.id !== m.id);
+      toast("Taken back. Nobody saw a thing.");
+      renderMine(); renderMap();
+    } catch (e) { toast(cap(e.message) + ".", "oops"); }
+  }
+  async function poll() {
+    try {
+      const r = await fetch(API, { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      server = await r.json(); serverOk = true;
+      // a gift of yours was found since last time: party
+      const fresh = server.found.filter((g) => mine.some((m) => m.id === g.id) && !foundSeen.has(g.id));
+      for (const g of fresh) foundSeen.add(g.id);
+      store.set("sm.foundSeen", [...foundSeen].slice(-200));
+      if (fresh.length) {
+        toast(fresh.length === 1 ? "Yaro found your gift! 🎉" : "Yaro found " + fresh.length + " of your gifts! 🎉", "party", 6000);
+        burst(innerWidth / 2, innerHeight / 3, 160);
+        if (navigator.vibrate) navigator.vibrate([60, 60, 60, 60, 200]);
+        say("He found me! Best. Night. Ever.", 4000);
+      }
+      // forget gifts the server no longer knows (taken back elsewhere, or a month old)
+      const all = new Set([...server.waiting, ...server.found].map((g) => g.id));
+      const before = mine.length;
+      mine = mine.filter((m) => all.has(m.id) || Date.now() - m.created < 60000);
+      if (mine.length !== before) store.set("sm.mine", mine);
+    } catch { serverOk = false; }
+    renderMine(); renderMap();
+  }
+
+  /* ---------------- toast + confetti ---------------- */
+  let toastT = 0;
+  function toast(msg, kind = "", ms = 4200) {
+    const t = $("#toast");
+    t.textContent = msg; t.className = "toast on " + kind;
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), ms);
+  }
+  const party = $("#party"), pg = party.getContext("2d");
+  let bits = [];
+  function burst(x, y, n) {
+    if (reduce) return;
+    const L = LOOKS[look], cols = [L.robe, L.cape, L.box, L.ribbon, "#ffc13b", "#fff6e6", "#e0284f"];
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, v = 160 + Math.random() * 340;
+      bits.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 260, c: cols[i % cols.length], r: Math.random() * 6, w: 5 + Math.random() * 6, life: 2.6 + Math.random() });
+    }
+  }
+  function drawParty(dt) {
+    pg.setTransform(DPR, 0, 0, DPR, 0, 0);
+    pg.clearRect(0, 0, SW, SH);
+    if (!bits.length) return;
+    for (const b of bits) {
+      b.vy += 620 * dt; b.vx *= 1 - dt * 1.2; b.x += b.vx * dt; b.y += b.vy * dt; b.r += dt * 8; b.life -= dt;
+      pg.save(); pg.translate(b.x, b.y); pg.rotate(b.r); pg.fillStyle = b.c; pg.globalAlpha = Math.min(1, b.life);
+      pg.fillRect(-b.w / 2, -b.w / 4, b.w, b.w / 2 * (0.4 + Math.abs(Math.sin(b.r)))); pg.restore();
+    }
+    bits = bits.filter((b) => b.life > 0 && b.y < SH + 40);
+  }
+
+  /* ---------------- loop ---------------- */
+  sizeSky();
+  addEventListener("resize", sizeSky);
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (document.hidden) return;
+    const t = now / 1000;
+    drawSky(t, dt); drawStatue(t, dt); drawParty(dt);
+  }
+  requestAnimationFrame(frame);
+  setTimeout(() => say(mine.length ? "Back for more? Good." : "Psst. Tonight you're me.", 3600), reduce ? 300 : 1100);
+  poll();
+  setInterval(() => { if (!document.hidden) poll(); }, 15000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+  showFix(); renderMine();
+  window.__smPage = { get fix() { return fix; }, get mine() { return mine; }, leave, poll };
+})();
+</script>
+</body>
+</html>
