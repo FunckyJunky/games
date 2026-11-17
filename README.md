@@ -202,7 +202,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
 - Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
   occlusion), ray tracing (screen-space reflections on wet ground and water) and map optimization
   (the world is only built as far as the fog lets you see, and far terrain is much simpler; the
-  picture stays the same, memory use drops a lot). GI and ray tracing are heavy on phones
+  picture stays the same, memory use drops a lot). GI and ray tracing are heavy on phones.
+  Three light sliders: strength (how much fires, lanterns and lamps light up around them), distance
+  (how far their light reaches) and glow (how strongly the flames, bulbs and lamps themselves shine,
+  with a bloom halo). Picture: brightness, contrast and gamma, with a Reset button
+- Advanced settings, Quality: "Phone graphics fix" switch, for the black-and-white blotchy picture
+  some Android phones show. It renders without multisampling, keeps NaN/infinite values off the
+  screen (scene, sky, clouds and every picture pass) and drops the film look's automatic soft focus.
+  On by default on phones and tablets that aren't Apple; off elsewhere. Shaders also no longer call
+  smoothstep with reversed edges (undefined in GLSL; the rewrite looks the same where it worked)
 
 ## Вгадай що?! (error.blue/vgadai)
 
