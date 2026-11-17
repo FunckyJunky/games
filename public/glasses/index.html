@@ -355,6 +355,7 @@ const DM = (() => {
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
+      { id: "geolock", file: "GEOLOCK.EXE", desc: "LOCK A SPOT, FIND IT AGAIN", url: "/glasses/geolock/" },
       { id: "spectrum", file: "SPECTRUM.EXE", desc: "SPECTRUM ANALYZER + FILTERS", url: "/glasses/spectrum/" },
       { id: "clock",   file: "CLOCK.EXE",   desc: "TIME AND DATE",        url: "/glasses/mini/?app=clock" },
       { id: "counter", file: "COUNTER.EXE", desc: "TALLY COUNTER",        url: "/glasses/mini/?app=counter" },
@@ -565,6 +566,34 @@ const DM = (() => {
     return m;
   }
 
+  // GEOLOCK: a 3D arrow hovering over a target ring, swinging round to point
+  function geolockMesh(t) {
+    const m = mesh();
+    const out = [[0, 0.95], [0.6, 0.15], [0.24, 0.15], [0.24, -0.85], [-0.24, -0.85], [-0.24, 0.15], [-0.6, 0.15]];
+    const a = Math.sin(t * 0.9) * 1.1, c = Math.cos(a), sn = Math.sin(a), y0 = 0.12 + 0.08 * Math.sin(t * 2.2), h = 0.13;
+    const P = (x, y, z) => [x * c + z * sn, y, -x * sn + z * c];
+    const n = out.length, b = m.v.length;
+    for (const [x, z] of out) m.v.push(P(x, y0 + h, z));
+    for (const [x, z] of out) m.v.push(P(x, y0 - h, z));
+    m.f.push({ i: [...Array(n).keys()].map((k) => b + k), c: [0, y0 - 1, 0], k: "on" });
+    m.f.push({ i: [...Array(n).keys()].map((k) => b + n + k), c: [0, y0 + 1, 0], k: "solid" });
+    let area = 0;
+    for (let i = 0; i < n; i++) { const p = out[i], q = out[(i + 1) % n]; area += p[0] * q[1] - q[0] * p[1]; }
+    const sg = area > 0 ? 1 : -1;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, dx = out[j][0] - out[i][0], dz = out[j][1] - out[i][1], L = Math.hypot(dx, dz) || 1;
+      const mx = (out[i][0] + out[j][0]) / 2 - (sg * dz / L) * 0.1, mz = (out[i][1] + out[j][1]) / 2 + (sg * dx / L) * 0.1;
+      m.f.push({ i: [b + i, b + j, b + n + j, b + n + i], c: P(mx, y0, mz), k: "solid" });
+    }
+    const r0 = m.v.length, N = 24;                                   // the target ring on the ground
+    for (let i = 0; i < N; i++) { const q = (i / N) * Math.PI * 2; m.v.push([Math.cos(q) * 0.9, -0.62, Math.sin(q) * 0.9]); }
+    for (let i = 0; i < N; i++) m.l.push([r0 + i, r0 + ((i + 1) % N), "ring"]);
+    const k0 = m.v.length;
+    m.v.push([-0.16, -0.62, 0], [0.16, -0.62, 0], [0, -0.62, -0.16], [0, -0.62, 0.16]);
+    m.l.push([k0, k0 + 1, "hot"], [k0 + 2, k0 + 3, "hot"]);
+    return m;
+  }
+
   // SETTINGS: a turning gear (a disc plus box teeth, so every part stays convex)
   function gearMesh() {
     const m = mesh(), N = 16, R0 = 0.7, D = 0.18, b = m.v.length;
@@ -648,6 +677,7 @@ const DM = (() => {
       case "flight":  return [planeMesh, mul(rx(0.45), mul(ry(t * 0.7 + 2.2), mul(rx(Math.sin(t * 1.4) * 0.5), rz(Math.sin(t * 0.9) * 0.2 + 0.15)))), 0.4];
       case "synth":   return [synthMesh(t), mul(rx(0.38), ry(Math.sin(t * 0.6) * 0.6)), 0.37];
       case "crumbs":  return [crumbsMesh(t), mul(rx(0.55), ry(t * 0.35)), 0.36];
+      case "geolock": return [geolockMesh(t), rx(-0.6), 0.36];
       case "yaro":    return [eyeMesh(t), ry(Math.sin(t * 0.3) * 0.3), 0.4];
       case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
       case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];

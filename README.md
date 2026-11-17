@@ -26,6 +26,8 @@ public/                 the website
   glasses/flight/       Dot Flight: wireframe flight sim steered by where you look
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
   glasses/crumbs/       CRUMBS.EXE: breadcrumb trail recorder with turn-by-turn navigation back to the start
+  glasses/geolock/      GEOLOCK.EXE: pinch to lock a spot, then an arrow (3D or 2D), compass line, radar or 360 view
+                        leads you back. Spots + settings at /api/hud/<CODE>/geo; arrows.js is shared with /hud
   glasses/spectrum/     SPECTRUM.EXE: spectrum analyzer (bars, 3D, waterfall) with LP/HP/BP/notch/peak filters
   glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
                         and the 6-letter CODE that links the glasses to the control panel
@@ -35,7 +37,8 @@ public/                 the website
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/SM/           Святий Миколайчик gift page for phones: leave a gift on the spot where you stand (error.blue/glasses/SM)
   hud/                  Glasses HUD control panel for phones (error.blue/hud): connected or not, app in use, live preview,
-                        show/hide apps, HUD settings, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE>
+                        show/hide apps, HUD settings, GeoLock settings and saved spots, Святий Миколайчик and
+                        Yaro-Vission pages. Uses /api/hud/<CODE>
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)

@@ -20,6 +20,7 @@
 //   GET  /api/hud/<CODE>                       glasses HUD: settings + which app is open (for error.blue/hud)
 //   PUT  /api/hud/<CODE>  {settings, updated}  glasses HUD: save settings (newest wins)
 //   POST /api/hud/<CODE>/ping {app, state, focus}  glasses HUD: "I'm here, in this app" (every 15 s)
+//   GET  /api/hud/<CODE>/geo                   GeoLock: settings + saved spots (more at handleGeo)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -227,7 +228,134 @@ function hudSettings(v) {                       // keep only known settings, wit
   if (Array.isArray(b.hidden)) o.hidden = [...new Set(b.hidden.filter((x) => typeof x === "string" && HUD_APP_RE.test(x)))].slice(0, 40);
   return o;
 }
+// ---------------------------------------------------------------------------
+// GeoLock (error.blue/glasses/geolock): spots locked with the glasses, kept under the glasses
+// code, plus the app's own settings (changed on the GEOLOCK tab at error.blue/hud). They live
+// apart from the HUD settings, so the other glasses apps never overwrite them.
+//   GET    /api/hud/<CODE>/geo                                    settings + saved spots
+//   PUT    /api/hud/<CODE>/geo {settings, updated}                save settings (newest wins)
+//   POST   /api/hud/<CODE>/geo/places {id,lat,lng,acc,name,color,size,created}  save a spot
+//   PATCH  /api/hud/<CODE>/geo/places/<id> {name?, color?, size?} rename / restyle a spot
+//   DELETE /api/hud/<CODE>/geo/places/<id>                        forget a spot
+// ---------------------------------------------------------------------------
+const GEO_ID = /^[a-z0-9]{8}$/;
+const GEO_MAX = 99;
+const GEO_VIEWS = ["arrow", "compass", "360"];
+const GEO_ARROWS = ["arrow", "chevron", "dart", "needle", "wire", "flat", "outline", "chevrons"];
+const GEO_COLORS = 8, GEO_SIZES = 5;
+let geoReady = null;
+function geoDb(env) {
+  if (!geoReady) {
+    geoReady = env.DB.batch([
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS geo_settings (code TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL)`),
+      env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS geo_places (
+           code TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+           lat REAL NOT NULL, lng REAL NOT NULL, acc REAL NOT NULL,
+           color INTEGER NOT NULL, size INTEGER NOT NULL, created INTEGER NOT NULL,
+           PRIMARY KEY (code, id)
+         )`
+      ),
+    ]).catch((err) => { geoReady = null; throw err; });
+  }
+  return geoReady.then(() => env.DB);
+}
+const geoInt = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+function geoSettings(v) {                       // keep only known settings, with sane values
+  const o = {}, b = v && typeof v === "object" ? v : {};
+  if (GEO_VIEWS.includes(b.view)) o.view = b.view;
+  for (const k of ["radar", "dist"]) if (k in b) o[k] = !!b[k];
+  if ("radarM" in b) o.radarM = geoInt(b.radarM, 5, 100, 20);
+  if (GEO_ARROWS.includes(b.arrow)) o.arrow = b.arrow;
+  if ("active" in b) o.active = GEO_ID.test(String(b.active)) ? b.active : null;
+  if (Array.isArray(b.show)) o.show = [...new Set(b.show.filter((x) => typeof x === "string" && GEO_ID.test(x)))].slice(0, 30);
+  return o;
+}
+const geoPlace = (r) => ({ id: r.id, name: r.name, lat: r.lat, lng: r.lng, acc: r.acc, color: r.color, size: r.size, created: r.created });
+async function handleGeo(request, env, code, places, id) {
+  const db = await geoDb(env);
+  const now = Date.now();
+  const body = async () => {
+    const raw = await request.text();
+    if (raw.length > 4096) throw new Error("too big");
+    return JSON.parse(raw || "{}");
+  };
+  const one = (pid) => db.prepare(`SELECT * FROM geo_places WHERE code = ? AND id = ?`).bind(code, pid).first();
+
+  if (!places) {
+    if (request.method === "GET") {
+      const [row, list] = await Promise.all([
+        db.prepare(`SELECT data, updated FROM geo_settings WHERE code = ?`).bind(code).first(),
+        db.prepare(`SELECT * FROM geo_places WHERE code = ? ORDER BY created DESC LIMIT ?`).bind(code, GEO_MAX).all(),
+      ]);
+      let settings = null;
+      try { settings = row ? JSON.parse(row.data) : null; } catch {}
+      return json({ code, now, settings, updated: row ? row.updated : 0, places: list.results.map(geoPlace), max: GEO_MAX });
+    }
+    if (request.method === "PUT") {
+      let b;
+      try { b = await body(); } catch { return json({ error: "send JSON (max 4 KB)" }, 400); }
+      const settings = geoSettings(b.settings);
+      const updated = Math.min(now + 60000, Math.max(1, Number(b.updated) || now));
+      await db.prepare(
+        `INSERT INTO geo_settings (code, data, updated) VALUES (?, ?, ?)
+         ON CONFLICT(code) DO UPDATE SET data = excluded.data, updated = excluded.updated
+         WHERE excluded.updated >= geo_settings.updated`
+      ).bind(code, JSON.stringify(settings), updated).run();
+      const row = await db.prepare(`SELECT data, updated FROM geo_settings WHERE code = ?`).bind(code).first();
+      return json({ ok: true, settings: JSON.parse(row.data), updated: row.updated });
+    }
+    return json({ error: "use GET or PUT" }, 405);
+  }
+
+  if (!id) {
+    if (request.method !== "POST") return json({ error: "use POST to save a spot" }, 405);
+    let b;
+    try { b = await body(); } catch { return json({ error: "send JSON (max 4 KB)" }, 400); }
+    const lat = Number(b.lat), lng = Number(b.lng), acc = Number(b.acc);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return json({ error: "bad location" }, 400);
+    const pid = GEO_ID.test(String(b.id || "")) ? b.id : smRand(8);
+    const had = await one(pid);
+    if (had) return json({ ok: true, place: geoPlace(had) });          // sent twice (a retry): same spot
+    const n = await db.prepare(`SELECT COUNT(*) AS n FROM geo_places WHERE code = ?`).bind(code).first("n");
+    if ((n ?? 0) >= GEO_MAX) return json({ error: "full", max: GEO_MAX }, 409);
+    const created = Number(b.created) > now - 30 * 86400000 && Number(b.created) < now + 60000 ? Math.round(Number(b.created)) : now;
+    const p = {
+      id: pid, name: smText(b.name, 24) || "SPOT", lat, lng,
+      acc: Number.isFinite(acc) ? Math.max(0, Math.min(10000, Math.round(acc))) : 0,
+      color: geoInt(b.color, 0, GEO_COLORS - 1, 0), size: geoInt(b.size, 1, GEO_SIZES, 3), created,
+    };
+    await db.prepare(
+      `INSERT OR IGNORE INTO geo_places (code, id, name, lat, lng, acc, color, size, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(code, p.id, p.name, p.lat, p.lng, p.acc, p.color, p.size, p.created).run();
+    return json({ ok: true, place: p }, 201);
+  }
+
+  if (request.method === "PATCH") {
+    let b;
+    try { b = await body(); } catch { return json({ error: "send JSON (max 4 KB)" }, 400); }
+    const row = await one(id);
+    if (!row) return json({ error: "no such spot" }, 404);
+    const name = "name" in b ? smText(b.name, 24) || row.name : row.name;
+    const color = "color" in b ? geoInt(b.color, 0, GEO_COLORS - 1, row.color) : row.color;
+    const size = "size" in b ? geoInt(b.size, 1, GEO_SIZES, row.size) : row.size;
+    await db.prepare(`UPDATE geo_places SET name = ?, color = ?, size = ? WHERE code = ? AND id = ?`).bind(name, color, size, code, id).run();
+    return json({ ok: true, place: geoPlace(Object.assign({}, row, { name, color, size })) });
+  }
+  if (request.method === "DELETE") {
+    await db.prepare(`DELETE FROM geo_places WHERE code = ? AND id = ?`).bind(code, id).run();
+    return json({ ok: true });
+  }
+  return json({ error: "use PATCH or DELETE" }, 405);
+}
+
 async function handleHud(request, env, url) {
+  const g = url.pathname.match(/^\/api\/hud\/([A-Za-z0-9]{6})\/geo(\/places(?:\/([a-z0-9]{8}))?)?$/);
+  if (g) {
+    const code = g[1].toUpperCase();
+    if (!HUD_CODE_RE.test(code)) return json({ error: "bad code" }, 400);
+    return handleGeo(request, env, code, !!g[2], g[3] || null);
+  }
   const m = url.pathname.match(/^\/api\/hud\/([A-Za-z0-9]{6})(\/ping)?$/);
   if (!m) return json({ error: "not found" }, 404);
   const code = m[1].toUpperCase();

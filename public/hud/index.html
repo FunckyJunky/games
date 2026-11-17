@@ -84,6 +84,29 @@
   .found { margin-top: 8px; display: grid; gap: 4px; }
   .uk { font-size: 32px; color: var(--b); }
   footer { margin-top: 26px; color: var(--d); }
+  /* GeoLock */
+  .gcheck { cursor: pointer; user-select: none; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 10px; }
+  button.tile { border: 2px solid var(--d); background: #000; color: var(--m); padding: 6px 4px 8px; text-align: center; }
+  button.tile canvas { width: 96px; height: 96px; display: block; margin: 0 auto 4px; }
+  button.tile:hover, button.tile:focus-visible { background: #000; color: var(--b); border-color: var(--c); }
+  button.tile.on { border-color: var(--b); color: var(--b); box-shadow: 0 0 10px var(--d); }
+  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-top: 8px; }
+  .views button { text-align: left; padding: 8px 10px; }
+  .views button small { display: block; font-size: 14px; color: var(--m); margin-top: 4px; white-space: normal; }
+  .views button.inv small, .views button:hover small { color: #000; }
+  input[type=range] { accent-color: var(--c); width: min(340px, 100%); height: 28px; }
+  .val { color: var(--b); min-width: 4.5em; display: inline-block; }
+  .places { display: grid; gap: 10px; margin-top: 10px; }
+  .place { border: 1px solid var(--d); padding: 10px; display: grid; gap: 8px; }
+  .place.act { border: 2px solid var(--c); }
+  input.nm { font: inherit; font-size: 20px; color: var(--b); background: #000; border: 2px solid var(--d); padding: 3px 8px;
+    width: 13em; max-width: 100%; text-transform: uppercase; letter-spacing: 1px; }
+  input.nm:focus { outline: none; border-color: var(--c); box-shadow: 0 0 10px var(--d); }
+  .sw.sm { width: 32px; height: 26px; }
+  .chip { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; border: 2px solid #000; outline: 1px solid var(--d); }
+  .seg button.sz { min-width: 46px; padding: 4px 6px; }
+  .small { font-size: 14px; }
 </style>
 </head>
 <body>
@@ -102,7 +125,7 @@
   </div>
 
   <nav id="nav">
-    <a href="#hud">HUD</a><a href="#apps">APPS</a><a href="#settings">SETTINGS</a><a href="#mykolai">СВЯТИЙ МИКОЛАЙЧИК</a><a href="#yaro">YARO-VISSION</a>
+    <a href="#hud">HUD</a><a href="#apps">APPS</a><a href="#settings">SETTINGS</a><a href="#geolock">GEOLOCK</a><a href="#mykolai">СВЯТИЙ МИКОЛАЙЧИК</a><a href="#yaro">YARO-VISSION</a>
   </nav>
 
   <!-- ===================== HUD ===================== -->
@@ -170,6 +193,45 @@
     </div>
   </section>
 
+  <!-- ===================== GEOLOCK ===================== -->
+  <section id="tab-geolock">
+    <div class="box">
+      <span class="t">GEOLOCK</span>
+      <div class="uk glow">GEOLOCK</div>
+      <p class="muted" style="margin:6px 0 10px">On the glasses, GEOLOCK.EXE says READY. Pinch to lock the spot where you stand. Walk away and an arrow points you back; close by, a radar shows the spot as a dot. Swipe left/right for other saved spots, up/down to change the view.</p>
+      <div class="row">
+        <a class="btn" href="/glasses/geolock/" target="_blank" rel="noopener">GLASSES APP ↗</a>
+        <span id="geoInUse"></span>
+      </div>
+      <div class="err" id="geoNote"></div>
+    </div>
+    <div id="geoBody">
+      <div class="box">
+        <span class="t">VIEW ON THE GLASSES</span>
+        <div class="views" id="geoViews"></div>
+      </div>
+      <div class="box">
+        <span class="t">ARROW</span>
+        <p class="muted">The arrow takes the colour of the spot it points to.</p>
+        <div class="tiles" id="geoArrows"></div>
+        <div class="set" style="margin-top:8px"><span class="gcheck" data-g="dist" tabindex="0" role="checkbox"></span><span class="muted">Off = only the arrow on black</span></div>
+      </div>
+      <div class="box">
+        <span class="t">RADAR</span>
+        <div class="set"><span class="gcheck" data-g="radar" tabindex="0" role="checkbox"></span><span class="muted">Switch to the radar when you get close</span></div>
+        <div class="set"><span>TRIGGER DISTANCE</span>
+          <span class="row"><input type="range" id="geoRadarM" min="5" max="100" step="1" aria-label="Radar trigger distance in metres"><span class="val" id="geoRadarMv"></span></span></div>
+        <p class="muted small" style="margin-top:8px">Closer than this, the arrow (or compass) turns into the radar. The 360 view keeps its ovals.</p>
+      </div>
+      <div class="box">
+        <span class="t">SAVED LOCATIONS</span>
+        <p class="muted">Rename, recolour or delete the spots locked with the glasses. <b>IN 360 VIEW</b> picks which spots float around you in the 360 view (none picked = the one you navigate to); <b>SIZE</b> is the size of its oval there.</p>
+        <div class="places" id="geoList"></div>
+      </div>
+      <div class="saved" id="geoSaved"></div>
+    </div>
+  </section>
+
   <!-- ===================== СВЯТИЙ МИКОЛАЙЧИК ===================== -->
   <section id="tab-mykolai">
     <div class="box">
@@ -208,6 +270,7 @@
   <footer>ERROR.BLUE · GLASSES HUD PANEL · SETTINGS ARE SAVED ON THE SERVER UNDER THE GLASSES CODE</footer>
 </div>
 
+<script src="/glasses/geolock/arrows.js"></script>
 <script>
 (() => {
   "use strict";
@@ -276,9 +339,9 @@
     mirror(); paint(); renderSettings(); renderApps(); renderSummary();
     clearTimeout(saveTimer);
     msgEl.textContent = "SAVING...";
-    saving++;
+    saving = 1;                                   // a newer click replaces the waiting save
     saveTimer = setTimeout(async () => {
-      if (!code) { msgEl.textContent = "LINK THE GLASSES FIRST (HUD TAB) - SAVED ON THIS DEVICE ONLY"; saving--; return; }
+      if (!code) { msgEl.textContent = "LINK THE GLASSES FIRST (HUD TAB) - SAVED ON THIS DEVICE ONLY"; saving = 0; return; }
       try {
         const r = await fetch("/api/hud/" + code, { method: "PUT", headers: { "content-type": "application/json" },
           body: JSON.stringify({ settings: profile, updated }) });
@@ -286,7 +349,7 @@
         if (j.ok) { msgEl.textContent = "✓ " + msg + " - SAVED. THE GLASSES UPDATE WITHIN 30 S."; reloadPreview(); }
         else msgEl.textContent = "COULD NOT SAVE: " + (j.error || r.status);
       } catch { msgEl.textContent = "COULD NOT SAVE (NO CONNECTION?)"; }
-      saving--;
+      saving = 0;
     }, 350);
   }
   // the live preview uses this browser's storage: make it look like the glasses
@@ -300,7 +363,7 @@
     c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     $("linkErr").textContent = "";
     if (!CODE_RE.test(c)) { $("linkErr").textContent = "6 LETTERS/DIGITS, AS SHOWN IN SETUP.EXE (NO 0, 1, I OR O)"; return; }
-    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS);
+    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS); geoForget();
     renderLink();
     await pull();
     if (!presence && !updated) $("linkErr").textContent = "";
@@ -343,6 +406,7 @@
     });
     $("smInUse").innerHTML = inUse === "mykolai" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
     $("yaroInUse").innerHTML = inUse === "yaro" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
+    $("geoInUse").innerHTML = inUse === "geolock" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
   }
 
   /* ---------- apps ---------- */
@@ -434,10 +498,217 @@
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  /* ---------- GeoLock: spots locked with the glasses + the app's settings (/api/hud/<CODE>/geo) ---------- */
+  const GEO_COLORS = ["#33ff66", "#33e6ff", "#ffb000", "#ff4848", "#ff55ff", "#fff04d", "#5b8cff", "#e6e6e6"];
+  const GEO_COLOR_NAMES = ["GREEN", "CYAN", "AMBER", "RED", "PINK", "YELLOW", "BLUE", "WHITE"];
+  const GEO_SIZES = ["S", "M", "L", "XL", "XXL"];
+  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [] };
+  const GEO_VIEWS = [
+    ["arrow", "ARROW", "Only an arrow on black, pointing at the spot."],
+    ["compass", "COMPASS", "A compass scale that turns with your head; a long line marks the spot."],
+    ["360", "360° VIEW", "Spots float around you as ovals with their distance. Turn your head like in VR to find them."],
+  ];
+  const GEO_LABELS = { radar: "RADAR WHEN CLOSE", dist: "DISTANCE UNDER THE ARROW" };
+  const ARROW_TYPES = (window.GeoArrows && GeoArrows.TYPES) || [
+    { id: "arrow", name: "3D ARROW" }, { id: "chevron", name: "3D CHEVRON" }, { id: "dart", name: "3D DART" }, { id: "needle", name: "3D NEEDLE" },
+    { id: "wire", name: "3D WIREFRAME" }, { id: "flat", name: "2D ARROW" }, { id: "outline", name: "2D OUTLINE" }, { id: "chevrons", name: "2D CHEVRONS" }];
+  let geo = { s: Object.assign({}, GEO_DEFAULT), u: 0, places: [], loaded: false }, geoPending = 0, geoTimer = 0, geoDragging = false;
+  const geoApi = () => "/api/hud/" + code + "/geo";
+  const geoMsg = (t) => { $("geoSaved").textContent = t; };
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const stamp = (ms) => { const d = new Date(ms); return pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + "." + d.getFullYear() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); };
+  function geoForget() { geo = { s: Object.assign({}, GEO_DEFAULT), u: 0, places: [], loaded: false }; renderGeo(); }
+  async function geoPull() {
+    if (!code) { renderGeo(); return; }
+    const asked = code;
+    try {
+      const r = await fetch(geoApi(), { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (asked !== code) return;
+      let changed = !geo.loaded;
+      if (j.updated > geo.u && !geoPending) { geo.s = Object.assign({}, GEO_DEFAULT, j.settings || {}); geo.u = j.updated; changed = true; }
+      const list = j.places || [];
+      if (JSON.stringify(list) !== JSON.stringify(geo.places)) { geo.places = list; changed = true; }
+      geo.loaded = true;
+      $("geoNote").textContent = "";
+      if (changed) renderGeo();
+    } catch { if (!geo.loaded) $("geoNote").textContent = "COULD NOT REACH ERROR.BLUE - TRYING AGAIN"; }
+  }
+  function geoSave(msg) {                                  // settings: newest wins, like the HUD settings
+    geo.u = Date.now();
+    renderGeo();
+    clearTimeout(geoTimer);
+    geoMsg("SAVING...");
+    geoPending = 1;
+    geoTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(geoApi(), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: geo.s, updated: geo.u }) });
+        const j = await r.json();
+        geoMsg(j.ok ? "✓ " + msg + " - SAVED. THE GLASSES UPDATE WITHIN 10 S." : "COULD NOT SAVE: " + (j.error || r.status));
+      } catch { geoMsg("COULD NOT SAVE (NO CONNECTION?)"); }
+      geoPending = 0;
+    }, 300);
+  }
+  async function geoPatch(id, body, msg) {
+    const p = geo.places.find((x) => x.id === id);
+    if (!p) return;
+    Object.assign(p, body); renderGeo(); geoMsg("SAVING...");
+    try {
+      const r = await fetch(geoApi() + "/places/" + id, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (j.ok) { Object.assign(p, j.place); geoMsg("✓ " + msg + " - SAVED"); }
+      else { geoMsg(r.status === 404 ? "THAT SPOT IS GONE" : "COULD NOT SAVE: " + (j.error || r.status)); geoPull(); }
+    } catch { geoMsg("COULD NOT SAVE (NO CONNECTION?)"); }
+    renderGeo();
+  }
+  async function geoDelete(id) {
+    const p = geo.places.find((x) => x.id === id);
+    geoMsg("DELETING...");
+    try {
+      const r = await fetch(geoApi() + "/places/" + id, { method: "DELETE" });
+      if (!r.ok) throw new Error(r.status);
+      geo.places = geo.places.filter((x) => x.id !== id);
+      const show = (geo.s.show || []).filter((x) => x !== id);
+      if (show.length !== (geo.s.show || []).length || geo.s.active === id) {
+        geo.s.show = show;
+        if (geo.s.active === id) geo.s.active = geo.places.length ? geo.places[0].id : null;
+        geoSave((p ? p.name : "SPOT") + " DELETED");
+      } else { geoMsg("✓ " + (p ? p.name : "SPOT") + " DELETED"); renderGeo(); }
+    } catch { geoMsg("COULD NOT DELETE (NO CONNECTION?)"); }
+  }
+  const geoActive = () => geo.places.find((p) => p.id === geo.s.active) || geo.places[0] || null;
+
+  // arrow previews, turning slowly while the tab is open
+  const arrowCanvases = [];
+  function buildArrowTiles() {
+    const box = $("geoArrows");
+    if (box.childElementCount) return;
+    for (const T of ARROW_TYPES) {
+      const b = document.createElement("button");
+      b.className = "tile"; b.dataset.id = T.id; b.setAttribute("aria-label", T.name);
+      const c = document.createElement("canvas"); c.width = c.height = 96 * Math.min(3, Math.ceil(devicePixelRatio || 1));
+      b.appendChild(c); b.appendChild(document.createTextNode(T.name));
+      b.onclick = () => { geo.s.arrow = T.id; geoSave("ARROW " + T.name); };
+      box.appendChild(b); arrowCanvases.push([c, T.id]);
+    }
+  }
+  function spinArrows(now) {
+    requestAnimationFrame(spinArrows);
+    if (document.hidden || location.hash !== "#geolock" || !window.GeoArrows) return;
+    const t = now / 1000, a = geoActive(), col = a ? GEO_COLORS[a.color | 0] : getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#33ff66";
+    for (const [c, id] of arrowCanvases) {
+      const g = c.getContext("2d"), s = c.width / 96;
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
+      g.setTransform(s, 0, 0, s, 0, 0);
+      GeoArrows.draw(g, id, { x: 48, y: 50, size: 70, rel: (t * 45) % 360, color: col, t });
+    }
+  }
+  requestAnimationFrame(spinArrows);
+
+  function renderGeo() {
+    $("geoBody").hidden = !code;
+    if (!code) { $("geoNote").textContent = "LINK THE GLASSES FIRST ON THE HUD TAB: THE SPOTS ARE KEPT UNDER THE GLASSES CODE."; return; }
+    const s = geo.s;
+    // view
+    const vb = $("geoViews");
+    vb.innerHTML = "";
+    for (const [id, name, desc] of GEO_VIEWS) {
+      const b = document.createElement("button");
+      b.className = s.view === id ? "inv" : ""; b.setAttribute("aria-pressed", s.view === id);
+      b.innerHTML = (s.view === id ? "(•) " : "( ) ") + name + "<small>" + desc + "</small>";
+      b.onclick = () => { s.view = id; geoSave("VIEW " + name); };
+      vb.appendChild(b);
+    }
+    // arrows
+    buildArrowTiles();
+    for (const b of $("geoArrows").children) { const on = b.dataset.id === s.arrow; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }
+    // toggles + slider
+    document.querySelectorAll(".gcheck").forEach((el) => {
+      const k = el.dataset.g; el.textContent = (s[k] ? "[X] " : "[ ] ") + GEO_LABELS[k]; el.setAttribute("aria-checked", !!s[k]);
+    });
+    const sl = $("geoRadarM");
+    if (!geoDragging && document.activeElement !== sl) sl.value = s.radarM;
+    $("geoRadarMv").textContent = sl.value + " M";
+    sl.disabled = !s.radar;
+    // saved spots
+    const list = $("geoList");
+    if (list.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // don't disturb typing
+    list.innerHTML = "";
+    if (!geo.places.length) {
+      list.innerHTML = '<p class="muted">' + (geo.loaded ? "NO SPOTS YET. OPEN GEOLOCK.EXE ON THE GLASSES AND PINCH TO LOCK ONE." : "LOADING...") + "</p>";
+      return;
+    }
+    const act = geoActive(), show = new Set(s.show || []);
+    for (const p of geo.places) {
+      const col = GEO_COLORS[p.color | 0] || GEO_COLORS[0], isAct = act && act.id === p.id, in360 = show.has(p.id);
+      const el = document.createElement("div");
+      el.className = "place" + (isAct ? " act" : "");
+      const map = "https://www.openstreetmap.org/?mlat=" + p.lat.toFixed(6) + "&mlon=" + p.lng.toFixed(6) + "#map=19/" + p.lat.toFixed(6) + "/" + p.lng.toFixed(6);
+      el.innerHTML =
+        `<div class="row"><span class="chip" style="background:${col}"></span><input class="nm" maxlength="24" value="${esc(p.name)}" aria-label="Name of the spot" spellcheck="false" autocomplete="off">
+           ${isAct ? '<span class="muted">◄ THE ARROW POINTS HERE</span>' : ""}</div>
+         <div class="muted small">SAVED ${stamp(p.created)} · GPS ${Math.round(p.acc)} M · ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} · <a href="${map}" target="_blank" rel="noopener">MAP ↗</a></div>
+         <div class="row">
+           <button data-a="go" ${isAct ? 'class="inv" disabled' : ""}>${isAct ? "● NAVIGATING" : "► NAVIGATE TO IT"}</button>
+           <button data-a="show" class="${in360 ? "inv" : ""}" aria-pressed="${in360}">${in360 ? "[X]" : "[ ]"} IN 360 VIEW</button>
+           <button data-a="del">DELETE</button>
+         </div>
+         <div class="row"><span class="muted" style="min-width:5.5em">COLOUR</span><span class="seg" data-a="col"></span></div>
+         <div class="row"><span class="muted" style="min-width:5.5em">360 SIZE</span><span class="seg" data-a="size"></span></div>`;
+      const nm = el.querySelector(".nm");
+      const rename = () => {
+        const v = nm.value.replace(/[\u0000-\u001f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 24);
+        if (!v) { nm.value = p.name; return; }
+        if (v.toUpperCase() !== String(p.name).toUpperCase()) geoPatch(p.id, { name: v }, "RENAMED TO " + v.toUpperCase());
+      };
+      nm.onchange = rename;
+      nm.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); nm.blur(); } if (e.key === "Escape") { nm.value = p.name; nm.blur(); } };
+      nm.onblur = () => setTimeout(renderGeo, 0);
+      el.querySelector('[data-a="go"]').onclick = () => { s.active = p.id; geoSave("THE ARROW NOW POINTS TO " + p.name.toUpperCase()); };
+      el.querySelector('[data-a="show"]').onclick = () => {
+        const set = new Set(s.show || []); set.has(p.id) ? set.delete(p.id) : set.add(p.id);
+        s.show = [...set]; geoSave(p.name.toUpperCase() + (set.has(p.id) ? " SHOWN" : " HIDDEN") + " IN 360 VIEW");
+      };
+      const del = el.querySelector('[data-a="del"]');
+      del.onclick = () => {
+        if (del.dataset.sure) { del.disabled = true; geoDelete(p.id); return; }
+        del.dataset.sure = "1"; del.textContent = "SURE? TAP AGAIN"; del.classList.add("inv");
+        setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = "DELETE"; del.classList.remove("inv"); } }, 3500);
+      };
+      const cs = el.querySelector('[data-a="col"]');
+      GEO_COLORS.forEach((c, i) => {
+        const b = document.createElement("button"); b.className = "sw sm" + ((p.color | 0) === i ? " on" : ""); b.style.background = c;
+        b.title = GEO_COLOR_NAMES[i]; b.setAttribute("aria-label", GEO_COLOR_NAMES[i]);
+        b.onclick = () => geoPatch(p.id, { color: i }, p.name.toUpperCase() + " IS " + GEO_COLOR_NAMES[i]);
+        cs.appendChild(b);
+      });
+      const ss = el.querySelector('[data-a="size"]');
+      GEO_SIZES.forEach((n, i) => {
+        const b = document.createElement("button"); b.className = "sz" + ((p.size | 0) === i + 1 ? " inv" : ""); b.textContent = n;
+        b.onclick = () => geoPatch(p.id, { size: i + 1 }, p.name.toUpperCase() + " SIZE " + n);
+        ss.appendChild(b);
+      });
+      list.appendChild(el);
+    }
+  }
+  document.querySelectorAll(".gcheck").forEach((el) => {
+    const flip = () => { const k = el.dataset.g; geo.s[k] = !geo.s[k]; geoSave(GEO_LABELS[k] + (geo.s[k] ? " ON" : " OFF")); };
+    el.onclick = flip;
+    el.onkeydown = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } };
+  });
+  (() => {
+    const sl = $("geoRadarM");
+    sl.addEventListener("pointerdown", () => { geoDragging = true; });
+    window.addEventListener("pointerup", () => { geoDragging = false; });
+    sl.oninput = () => { $("geoRadarMv").textContent = sl.value + " M"; };
+    sl.onchange = () => { geo.s.radarM = +sl.value; geoSave("RADAR AT " + sl.value + " M"); };
+  })();
+
   /* ---------- tabs ---------- */
   function route() {
     const id = (location.hash || "#hud").slice(1);
-    const tab = ["hud", "apps", "settings", "mykolai", "yaro"].includes(id) ? id : "hud";
+    const tab = ["hud", "apps", "settings", "geolock", "mykolai", "yaro"].includes(id) ? id : "hud";
     document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + tab));
     const nav = $("nav");
     document.querySelectorAll("nav a").forEach((a) => {
@@ -449,16 +720,18 @@
     if (scrollY > top) scrollTo(0, top);                                      // new tab starts at its top
     for (const f of document.querySelectorAll("iframe[data-src]")) if (f.closest("section").id === "tab-" + tab && !f.src.includes(f.dataset.src)) f.src = f.dataset.src;
     if (tab === "mykolai") smStats();
+    if (tab === "geolock") { renderGeo(); geoPull(); }
     if (tab === "hud") setTimeout(fitPreview, 0);
   }
   window.addEventListener("hashchange", route);
 
   $("linkBtn").onclick = () => link($("codeIn").value);
   $("codeIn").onkeydown = (e) => { if (e.key === "Enter") link($("codeIn").value); };
-  $("unlinkBtn").onclick = () => { code = null; ls.set("hud.panel.code", ""); presence = null; renderLink(); renderStatus(); $("codeIn").focus(); };
+  $("unlinkBtn").onclick = () => { code = null; ls.set("hud.panel.code", ""); presence = null; geoForget(); renderLink(); renderStatus(); $("codeIn").focus(); };
   setInterval(() => { const d = new Date(); $("clock").textContent = d.toTimeString().slice(0, 8); }, 1000);
   setInterval(() => { if (!document.hidden) pull(); }, 5000);
   setInterval(() => { if (!document.hidden && location.hash === "#mykolai") smStats(); }, 20000);
+  setInterval(() => { if (!document.hidden && location.hash === "#geolock") geoPull(); }, 5000);
 
   // start
   if (code) mirror();
@@ -466,7 +739,7 @@
   loadCatalog();
   pull().then(() => reloadPreview());
   if (!code) reloadPreview();
-  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, link, pull };
+  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, get geo() { return geo; }, link, pull, geoPull };
 })();
 </script>
 </body>

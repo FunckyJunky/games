@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="GeoLock: pinch to lock the spot where you stand, then follow the arrow back to it">
+<title>GeoLock</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  canvas { display: block; width: 600px; height: 600px; }
+</style>
+<script src="/glasses/presence.js" data-app="geolock"></script>
+</head>
+<body>
+<canvas id="screen" aria-label="GeoLock"></canvas>
+<script src="/glasses/geolock/arrows.js"></script>
+<script>
+/* GEOLOCK.EXE: lock the spot where you stand, then find your way back to it.
+   READY   Pinch = lock this spot.  Swipe left/right = go to a saved spot.  Back = home screen.
+   NAV     ARROW: only an arrow on black, pointing at the spot.  Within the radar distance: a radar
+           with the spot as a dot.  COMPASS: a moving compass scale with a long line at the spot.
+           360 VIEW: the spots float in the world as ovals with their distance; turn your head to find them.
+           Swipe left/right = other saved spot.  Swipe up/down = next view.  Pinch = name and distance
+           (and in 360 view: "level" = how you hold your head now).  Back = READY.
+   Spots and settings live on error.blue under the glasses code (see /api/hud/<CODE>/geo); the GEOLOCK
+   tab at error.blue/hud renames and deletes spots and picks the view, arrow, radar, colours and sizes.
+   Location comes from the paired phone; heading from the compass, or from walking. */
+(() => {
+  "use strict";
+  const S = 600, CX = 300, CY = 300;
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const PLACE_COLORS = ["#33ff66", "#33e6ff", "#ffb000", "#ff4848", "#ff55ff", "#fff04d", "#5b8cff", "#e6e6e6"];
+  const OVAL = [0, 30, 42, 56, 74, 96];                  // 360 view: half width of the oval for sizes 1-5
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const RED = "#ff4848", OK = "#33ff66", WARN = "#ffb000";
+  const hud = () => Object.assign({ color: 0, sounds: true }, store.get("glasses.settings", {}));
+  const pal = () => DOS_PALETTES[(((hud().color | 0) % 5) + 5) % 5];
+  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [] };
+  const VIEWS = ["arrow", "compass", "360"];
+  const VIEW_NAME = { arrow: "ARROW", compass: "COMPASS", "360": "360 VIEW" };
+  const EYE = 1.6;                                       // metres: how high your eyes are over the spot
+  const PPD = 12.5;                                      // 360 view: px per degree (48 degrees across)
+
+  /* ---------------- head motion + compass (same as the other glasses apps) ---------------- */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------------- canvas + VGA font with Cyrillic capitals ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  cv.width = cv.height = S * K;
+  const ctx = cv.getContext("2d");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const CYR = {"Б": "00007e4040407c424242427c0000", "Г": "00007e4040404040404040400000", "Ґ": "02027e4040404040404040400000", "Д": "00001e22222222222242ff810000", "Є": "00003c42404078404040423c0000", "Ж": "0000929254543838545492920000", "З": "00003c4202021c020202423c0000", "И": "00004246464a4a52526262420000", "Й": "24184246464a4a52526262420000", "Л": "00001e2222222222222242820000", "П": "00007e4242424242424242420000", "У": "0000424222241414080810600000", "Ф": "0000107c929292927c1010100000", "Ц": "00004444444444444444447e0200", "Ч": "000042424242463a020202020000", "Ш": "0000929292929292929292fe0000", "Щ": "0000929292929292929292ff0100", "Ь": "0000404040407c424242427c0000", "Ъ": "0000e02020203c222222223c0000", "Ы": "000082828282f28a8a8a8af20000", "Э": "00003c4202023e020202423c0000", "Ю": "00008c929292f2929292928c0000", "Я": "00003e4242423e12222242420000", "Ё": "24007e4040407c404040407e0000", "Ї": "14003e08080808080808083e0000"};
+  const CYR_SAME = { "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X", "І": "I" };
+  const CYR_KEYS = Object.keys(CYR);
+  const NG = 95 + CYR_KEYS.length;
+  function glyph(ch) {
+    if (CYR_SAME[ch]) ch = CYR_SAME[ch];
+    const c = ch.charCodeAt(0);
+    if (c >= 32 && c < 127) return c - 32;
+    const k = CYR_KEYS.indexOf(ch);
+    return k >= 0 ? 95 + k : -1;
+  }
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = NG * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < NG; i++) {
+      const hx = i < 95 ? FONT_HEX.substr(i * 28, 28) : CYR[CYR_KEYS[i - 95]];
+      for (let r = 0; r < 14; r++) {
+        const bits = parseInt(hx.substr(r * 2, 2), 16);
+        for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+      }
+    }
+    return (atlases[color] = a);
+  }
+  // only what the font can show: capitals, and no emoji
+  const clean = (s) => Array.from(String(s).toUpperCase().replace(/[’`]/g, "'")).filter((ch) => glyph(ch) >= 0).join("").replace(/\s+/g, " ").trim();
+  function text(s, x, y, color, a = 1, scale = 2) {
+    const at = atlas(color);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = a;
+    const chars = Array.from(String(s).toUpperCase());
+    for (let i = 0; i < chars.length; i++) {
+      const c = glyph(chars[i]);
+      if (c > 0) ctx.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8 * scale), Math.round(y), 8 * scale, 14 * scale);
+    }
+    ctx.restore();
+  }
+  const textW = (s, scale = 2) => Array.from(String(s)).length * 8 * scale;
+  const textC = (s, cx, y, color, a, scale = 2) => text(s, cx - textW(s, scale) / 2, y, color, a, scale);
+  function circle(x, y, r, color, a = 1, w = 2, fill) {
+    ctx.save(); ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x, y, Math.max(0.1, r), 0, Math.PI * 2);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (w) { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke(); }
+    ctx.restore();
+  }
+  function seg(x0, y0, x1, y1, color, a = 1, w = 2) {
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+  }
+  function tri(x, y, ang, size, color, a = 1) {           // ang: 0 = up, clockwise degrees
+    const r = ang * D2R, c = Math.cos(r), s = Math.sin(r);
+    const P = [[0, -1], [0.75, 0.8], [0, 0.4], [-0.75, 0.8]].map(([u, v]) => [x + (u * c - v * s) * size, y + (u * s + v * c) * size]);
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.beginPath();
+    P.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  /* ---------------- geo ---------------- */
+  function distBear(aLat, aLng, bLat, bLng) {
+    const p1 = aLat * D2R, p2 = bLat * D2R, dp = (bLat - aLat) * D2R, dl = (bLng - aLng) * D2R;
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    const d = 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+    const b = Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) / D2R;
+    return { d, b: wrap360(b) };
+  }
+  const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const compassName = (b) => COMPASS[Math.round(wrap360(b) / 45) % 8];
+  function fmtDist(m) {
+    if (m < 10) return m.toFixed(1) + " M";
+    if (m < 1000) return Math.round(m) + " M";
+    if (m < 10000) return (m / 1000).toFixed(2) + " KM";
+    return Math.round(m / 1000) + " KM";
+  }
+  function ovalDist(m) {                                 // inside the 360 ovals: 1M 2M 3M ...
+    if (m < 1000) return Math.max(0, Math.round(m)) + "M";
+    if (m < 10000) return (m / 1000).toFixed(1) + "KM";
+    return Math.round(m / 1000) + "KM";
+  }
+  function direction(w, hd) {
+    if (!hd) return "SPOT IS " + compassName(w.b);
+    const rel = angDiff(w.b, hd.h), ar = Math.abs(rel), side = rel < 0 ? "LEFT" : "RIGHT";
+    if (ar < 20) return "STRAIGHT AHEAD";
+    if (ar < 60) return "BEAR " + side;
+    if (ar < 140) return "TURN " + side;
+    return "BEHIND YOU";
+  }
+
+  /* ---------------- state ---------------- */
+  const KEY = "geolock.data";
+  const geo = Object.assign({ s: {}, u: 0, places: [] }, store.get(KEY, {}));
+  geo.s = Object.assign({}, GEO_DEFAULT, geo.s);
+  if (!Array.isArray(geo.places)) geo.places = [];
+  const saveLocal = () => store.set(KEY, geo);
+  let screen = "READY";                                  // READY | LOCKING | NAV
+  let near = false, dispRel = null, info = -9, lockedAt = -9, lockStart = 0, best = null, net = "WAIT";
+  let raw = null, pos = null, gps = "OFF", watchId = null, course = null, courseYaw = null, lastCourseFix = null;
+  let clock = 0, flashMsg = "", flashUntil = 0, flashCol = "#fff";
+  const radar = { sweep: 0, blip: 0 };
+  let fake = null;                                       // tests: { h, p, r } instead of the sensors
+  const flash = (m, d = 1.8, c) => { flashMsg = clean(m); flashUntil = clock + d; flashCol = c || pal().c; };
+  const motion = createMotion();
+
+  const placesNewest = () => geo.places.slice().sort((a, b) => b.created - a.created);
+  const byId = (id) => geo.places.find((p) => p.id === id) || null;
+  const target = () => byId(geo.s.active) || placesNewest()[0] || null;
+  const colorOf = (p) => PLACE_COLORS[(p && p.color) | 0] || PLACE_COLORS[0];
+  const where = (p) => (pos && p ? distBear(pos.lat, pos.lng, p.lat, p.lng) : null);
+
+  /* ---------------- sound (only when Settings > SOUNDS is on) ---------------- */
+  let ac = null;
+  function audio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch { ac = null; } }
+    if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    return ac;
+  }
+  function tone(f, t0, dur, type = "sine", vol = 0.1, f2) {
+    if (!hud().sounds || !ac || ac.state !== "running") return;
+    const t = ac.currentTime + t0, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  const sndLock = () => { tone(660, 0, 0.09, "square", 0.05); tone(990, 0.09, 0.09, "square", 0.05); tone(1320, 0.18, 0.22, "square", 0.05); };
+  const sndTick = () => tone(1500, 0, 0.03, "square", 0.035);
+  const sndBack = () => tone(900, 0, 0.09, "square", 0.04, 380);
+  const sndNear = () => { tone(1200, 0, 0.08, "sine", 0.08); tone(1600, 0.1, 0.12, "sine", 0.08); };
+  const sndPing = (d) => tone(clamp(1300 - d * 25, 500, 1300), 0, 0.25, "sine", 0.05, 400);
+
+  /* ---------------- location ---------------- */
+  function startGps() {
+    if (watchId !== null) return;
+    if (!("geolocation" in navigator)) { gps = "N/A"; return; }
+    gps = "WAIT";
+    watchId = navigator.geolocation.watchPosition(
+      (p) => onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, p.coords.speed, p.coords.heading, Date.now()),
+      (err) => { if (err.code === 1) { gps = "DENIED"; flash("LOCATION NOT ALLOWED", 3, RED); } },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  }
+  function stopGps() { if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } gps = "OFF"; }
+
+  function onFix(lat, lng, acc, speed, hdg, t) {
+    raw = { lat, lng, acc, t, speed: Number.isFinite(speed) ? speed : null };
+    gps = acc <= 20 ? "OK" : "WEAK";
+    // smooth out the GPS wobble (a small Kalman filter in metres)
+    if (!pos) pos = { lat, lng, P: acc * acc, t };
+    else {
+      const dt = clamp((t - pos.t) / 1000, 0.1, 30);
+      const P = pos.P + 9 * dt;
+      const jump = distBear(pos.lat, pos.lng, lat, lng).d;
+      if (jump > 60 && jump > 4 * Math.sqrt(P + acc * acc)) pos = { lat, lng, P: acc * acc, t };
+      else {
+        const k = P / (P + acc * acc);
+        pos.lat += k * (lat - pos.lat); pos.lng += k * (lng - pos.lng);
+        pos.P = (1 - k) * P; pos.t = t;
+      }
+    }
+    pos.acc = Math.sqrt(pos.P);
+    // which way we walk
+    if (Number.isFinite(hdg) && (speed || 0) > 0.6) { course = hdg; courseYaw = motion.live ? motion.yaw : null; }
+    else if (lastCourseFix) {
+      const m = distBear(lastCourseFix.lat, lastCourseFix.lng, lat, lng);
+      if (m.d > Math.max(4, acc * 0.5)) { course = m.b; courseYaw = motion.live ? motion.yaw : null; lastCourseFix = { lat, lng }; }
+    } else lastCourseFix = { lat, lng };
+    if (screen === "LOCKING") {
+      if (!best || pos.acc <= best.acc) best = { lat: pos.lat, lng: pos.lng, acc: pos.acc };
+      if (best.acc <= 15 || clock - lockStart > 8) lockAt(best);
+    }
+  }
+  function heading() {
+    if (fake && fake.h != null) return { h: wrap360(fake.h), src: "TEST" };
+    const c = motion.compass;
+    if (c !== null) return { h: c, src: "COMPASS" };
+    if (course !== null) {
+      if (motion.live && courseYaw !== null) return { h: wrap360(course + angDiff(motion.yaw, courseYaw)), src: "WALK" };
+      return { h: course, src: "WALK" };
+    }
+    return null;
+  }
+  const headPitch = () => (fake && fake.p != null ? fake.p : motion.live ? motion.pitch : 0);
+  const headRoll = () => (fake && fake.r != null ? fake.r : motion.live ? motion.roll : 0);
+
+  /* ---------------- spots + settings on error.blue ---------------- */
+  const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function code() {
+    let c = window.GlassesPresence && window.GlassesPresence.code();
+    if (!c) c = store.get("glasses.code", null);
+    if (typeof c !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(c)) {
+      const b = new Uint8Array(6); crypto.getRandomValues(b);
+      c = Array.from(b, (x) => ALPHA[x % ALPHA.length]).join("");
+      store.set("glasses.code", c);
+    }
+    return c;
+  }
+  const api = () => "/api/hud/" + code() + "/geo";
+  function rid() { const ch = "abcdefghijkmnpqrstuvwxyz23456789", b = new Uint8Array(8); crypto.getRandomValues(b); return Array.from(b, (x) => ch[x % ch.length]).join(""); }
+
+  async function pull() {
+    if (pull.busy) return;
+    pull.busy = true;
+    try {
+      const r = await fetch(api(), { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (j.settings && j.updated > geo.u) { geo.s = Object.assign({}, GEO_DEFAULT, j.settings); geo.u = j.updated; }
+      else if (geo.u > (j.updated || 0)) pushSettings();
+      const server = (j.places || []).map((p) => Object.assign({}, p));
+      const waiting = geo.places.filter((p) => p.local && !server.some((q) => q.id === p.id));
+      const had = geo.s.active && byId(geo.s.active);
+      geo.places = server.concat(waiting);
+      if (screen === "NAV" && had && !byId(geo.s.active)) {
+        if (geo.places.length) { geo.s.active = placesNewest()[0].id; flash("THAT SPOT WAS DELETED", 2.5, WARN); }
+        else { screen = "READY"; flash("THAT SPOT WAS DELETED", 2.5, WARN); }
+      }
+      saveLocal();
+      net = "OK";
+      waiting.forEach(upload);
+    } catch { net = "OFF"; } finally { pull.busy = false; }
+  }
+  async function pushSettings() {
+    try {
+      const r = await fetch(api(), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: geo.s, updated: geo.u }) });
+      const j = await r.json();
+      if (j.ok && j.updated > geo.u) { geo.s = Object.assign({}, GEO_DEFAULT, j.settings); geo.u = j.updated; saveLocal(); }
+    } catch {}
+  }
+  function setS(patch) { Object.assign(geo.s, patch); geo.u = Date.now(); saveLocal(); pushSettings(); }
+  async function upload(p) {
+    if (p.sending) return;
+    p.sending = true;
+    try {
+      const r = await fetch(api() + "/places", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: p.id, name: p.name, lat: p.lat, lng: p.lng, acc: p.acc, color: p.color, size: p.size, created: p.created }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.place) { Object.assign(p, j.place); delete p.local; }
+      else if (r.status === 409) flash("MEMORY FULL: DELETE SPOTS AT ERROR.BLUE/HUD", 4, RED);
+    } catch {} finally { delete p.sending; saveLocal(); }
+  }
+
+  /* ---------------- actions ---------------- */
+  function lockHere() {
+    if (geo.places.length >= 99) { flash("MEMORY FULL: DELETE SPOTS AT ERROR.BLUE/HUD", 4, RED); return; }
+    startGps();
+    screen = "LOCKING"; lockStart = clock; best = null;
+    if (pos && Date.now() - pos.t < 15000) { best = { lat: pos.lat, lng: pos.lng, acc: pos.acc }; if (best.acc <= 15) lockAt(best); }
+  }
+  function lockAt(fix) {
+    const n = 1 + geo.places.reduce((mx, p) => Math.max(mx, +((/^SPOT (\d+)$/.exec(p.name) || [0, 0])[1])), 0);
+    const used = new Set(geo.places.map((p) => p.color));
+    const start = [0, 2, 1, 3, 7][hud().color | 0] || 0;
+    let color = (start + geo.places.length) % 8;
+    for (let k = 0; k < 8; k++) if (!used.has((start + k) % 8)) { color = (start + k) % 8; break; }
+    const p = { id: rid(), name: "SPOT " + n, lat: fix.lat, lng: fix.lng, acc: Math.round(fix.acc || 0), color, size: 3, created: Date.now(), local: true };
+    geo.places.push(p);
+    setS({ active: p.id });
+    upload(p);
+    screen = "NAV"; near = false; dispRel = null; lockedAt = clock; best = null;
+    sndLock();
+  }
+  function go(p) {
+    if (!p) return;
+    if (geo.s.active !== p.id) setS({ active: p.id });
+    screen = "NAV"; near = false; dispRel = null;
+    const w = where(p);
+    flash(p.name + (w ? "  " + fmtDist(w.d) : ""), 1.8, colorOf(p));
+  }
+  function step(d) {
+    const list = placesNewest();
+    if (!list.length) { flash("NO SAVED SPOTS YET", 1.8); return; }
+    const i = list.findIndex((p) => p.id === (target() || {}).id);
+    go(list[(i + d + list.length) % list.length]);
+    sndTick();
+  }
+  function nextView(d) {
+    const v = VIEWS[(VIEWS.indexOf(geo.s.view) + d + VIEWS.length) % VIEWS.length];
+    setS({ view: v });
+    near = false; dispRel = null;
+    flash(VIEW_NAME[v], 1.4);
+    sndTick();
+  }
+
+  /* ---------------- READY ---------------- */
+  function gpsLine() {
+    if (gps === "N/A") return ["NO LOCATION ON THIS DEVICE", RED];
+    if (gps === "DENIED") return ["LOCATION NOT ALLOWED", RED];
+    if (!raw) return ["FINDING YOU" + ".".repeat(1 + (Math.floor(clock * 2) % 3)), pal().m];
+    const a = Math.round(raw.acc);
+    return ["GPS " + a + " M", a <= 12 ? OK : a <= 30 ? WARN : RED];
+  }
+  function drawReady() {
+    const P = pal();
+    textC("GEOLOCK", CX, 34, P.d, 1, 2);
+    const w = textW("READY", 7), x = CX - (w + 40) / 2;
+    ctx.save(); ctx.shadowColor = P.c; ctx.shadowBlur = 18; text("READY", x, 196, P.c, 1, 7); ctx.restore();
+    text("READY", x, 196, P.c, 1, 7);
+    if (Math.floor(clock * 1.6) % 2 === 0) { ctx.fillStyle = P.c; ctx.fillRect(x + w + 12, 196 + 84, 30, 12); }
+    const [g, gc] = gpsLine();
+    textC(g, CX, 336, gc, 1, 2);
+    textC("PINCH TO LOCK THIS SPOT", CX, 380, P.m, 1, 2);
+    const n = geo.places.length;
+    if (n) textC("< SWIPE: SAVED SPOTS (" + n + ") >", CX, 416, P.d, 1, 2);
+  }
+  function drawLocking() {
+    const P = pal(), k = (clock * 1.2) % 1;
+    for (let i = 0; i < 3; i++) circle(CX, 250, 40 + ((k + i / 3) % 1) * 150, P.c, 0.7 * (1 - ((k + i / 3) % 1)), 2);
+    tri(CX, 250, 180, 18, P.c);
+    textC("LOCKING" + ".".repeat(1 + (Math.floor(clock * 3) % 3)), CX, 420, P.c, 1, 3);
+    const [g, gc] = gpsLine();
+    textC(raw ? g + " - HOLD STILL" : g, CX, 470, gc, 1, 2);
+  }
+  function drawLocked(t, col) {
+    const k = clamp((clock - lockedAt) / 1.4, 0, 1);
+    for (let i = 0; i < 3; i++) circle(CX, 250, (1 - k) * (200 - i * 50) + 14, col, 0.9 - i * 0.25, 3);
+    circle(CX, 250, 10, col, 1, 0, col);
+    textC("LOCKED", CX, 400, col, 1, 4);
+    textC(clean(t.name), CX, 462, col, 0.85, 2);
+  }
+
+  /* ---------------- ARROW ---------------- */
+  function drawHere(col, y = 270) {
+    const k = (clock * 0.9) % 1;
+    for (let i = 0; i < 2; i++) { const q = (k + i / 2) % 1; circle(CX, y, 20 + q * 120, col, 0.8 * (1 - q), 3); }
+    circle(CX, y, 12, col, 1, 0, col);
+    textC("HERE", CX, y + 160, col, 1, 3);
+  }
+  function drawArrow(dt, w, hd, col) {
+    const rel = hd ? angDiff(w.b, hd.h) : w.b;           // no heading: up is north
+    dispRel = dispRel === null ? rel : angDiff(dispRel + angDiff(rel, dispRel) * (1 - Math.exp(-dt * 7)), 0);
+    const here = !geo.s.radar && w.d < Math.max(3, Math.min(pos.acc || 0, 10));
+    if (here) drawHere(col);
+    else {
+      const T = GeoArrows.TYPES.find((x) => x.id === geo.s.arrow) || GeoArrows.TYPES[0];
+      GeoArrows.draw(ctx, T.id, { x: CX, y: T.d3 ? 276 : 280, size: T.d3 ? 330 : 280, rel: dispRel, color: col, t: clock });
+      if (geo.s.dist) textC(fmtDist(w.d), CX, 486, col, 1, 3);
+    }
+    hints(hd, col);
+  }
+  function hints(hd, col) {
+    const P = pal();
+    if (!hd) { textC("N", CX, 8, P.m, 0.9, 2); tri(CX, 46, 0, 8, P.m, 0.9); textC("NORTH IS UP - WALK A FEW STEPS", CX, 566, P.d, 1, 2); }
+    else if (raw && raw.acc > 30) textC("WEAK GPS " + Math.round(raw.acc) + " M", CX, 566, P.d, 1, 2);
+  }
+
+  /* ---------------- RADAR (close by) ---------------- */
+  function drawRadar(dt, w, hd, col) {
+    const cx = CX, cy = 280, R = 226, rng = geo.s.radarM, P = pal();
+    const H = hd ? hd.h : 0;
+    circle(cx, cy, R, col, 0.9, 2);
+    for (const f of [0.25, 0.5, 0.75]) circle(cx, cy, R * f, col, 0.22, 1);
+    for (let k = 0; k < 12; k++) {                       // spokes fixed to the world
+      const a = (k * 30 - H) * D2R;
+      seg(cx + Math.sin(a) * 18, cy - Math.cos(a) * 18, cx + Math.sin(a) * R, cy - Math.cos(a) * R, col, k % 3 ? 0.08 : 0.18, 1);
+    }
+    const na = -H * D2R;
+    textC("N", cx + Math.sin(na) * (R + 17), cy - Math.cos(na) * (R + 17) - 14, col, 1, 2);
+    text(fmtDist(rng / 2), cx + R * 0.5 * 0.71 + 4, cy - R * 0.5 * 0.71 - 16, col, 0.45, 1);
+    text(fmtDist(rng), cx + R * 0.71 + 6, cy - R * 0.71 - 16, col, 0.45, 1);
+    // sweep
+    const prev = radar.sweep;
+    radar.sweep = (radar.sweep + dt * 110) % 360;
+    for (let k = 0; k < 18; k++) {
+      const a = (radar.sweep - k * 2.2) * D2R;
+      seg(cx, cy, cx + Math.sin(a) * R, cy - Math.cos(a) * R, col, 0.5 * (1 - k / 18), 2);
+    }
+    // you
+    if (hd) tri(cx, cy + 4, 0, 13, P.b); else circle(cx, cy, 6, P.b, 1, 0, P.b);
+    // the spot
+    const rel = angDiff(w.b, H), rr = Math.min(1, w.d / rng) * R, a = rel * D2R;
+    const x = cx + Math.sin(a) * rr, y = cy - Math.cos(a) * rr;
+    const s0 = wrap360(rel), crossed = angDiff(radar.sweep, s0) >= 0 && angDiff(prev, s0) < 0;
+    if (crossed) { radar.blip = 1; sndPing(w.d); }
+    radar.blip = Math.max(0, radar.blip - dt * 0.8);
+    const arrived = w.d < Math.max(3, Math.min(pos.acc || 0, 8));
+    if (arrived) { const q = (clock * 0.9) % 1; circle(cx, cy, 20 + q * 70, col, 0.8 * (1 - q), 3); }
+    ctx.save();
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 34);
+    g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = 0.35 + radar.blip * 0.45; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    circle(x, y, 11, col, 1, 0, col);
+    textC(arrived ? "HERE" : fmtDist(w.d), cx, 528, col, 1, 3);
+  }
+
+  /* ---------------- COMPASS ---------------- */
+  function drawCompass(w, hd, col) {
+    const P = pal(), y = 292, PX = 5;                    // 5 px per degree: 120 degrees across
+    const H = hd ? hd.h : course !== null ? course : 0;
+    seg(0, y, S, y, P.m, 0.7, 2);
+    const from = Math.floor((H - 64) / 5) * 5;
+    for (let d = from; d <= H + 64; d += 5) {
+      const x = CX + angDiff(wrap360(d), H) * PX, n = wrap360(d);
+      const big = n % 45 === 0, mid = n % 15 === 0;
+      seg(x, y, x, y - (big ? 30 : mid ? 18 : 9), big ? P.c : P.m, big ? 1 : 0.75, big ? 3 : 2);
+      if (big) textC(COMPASS[n / 45], x, y + 12, n === 0 ? P.b : P.c, 1, 2);
+    }
+    tri(CX, y - 46, 180, 10, P.b);                       // where you look
+    textC(String(Math.round(H) % 360).padStart(3, "0"), CX, y - 86, P.m, 1, 2);
+    // the spot: a long vertical line
+    const rel = angDiff(w.b, H), x = CX + rel * PX;
+    if (Math.abs(x - CX) <= 284) {
+      seg(x, y - 190, x, y - 2, col, 1, 4);
+      seg(x, y + 32, x, y + 170, col, 1, 4);                          // a gap for the N / NE / E letters
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4); ctx.fillStyle = col; ctx.fillRect(-8, -8, 16, 16); ctx.restore();
+      textC(fmtDist(w.d), clamp(x, 70, S - 70), y + 182, col, 1, 2);
+    } else {
+      const left = rel < 0, ex = left ? 22 : S - 22;
+      tri(ex, y, left ? -90 : 90, 16, col);
+      const s = fmtDist(w.d);
+      text(s, left ? 44 : S - 44 - textW(s), y - 34, col, 1, 2);
+    }
+    if (!hd) textC("WALK A FEW STEPS TO TURN IT", CX, 566, P.d, 1, 2);
+  }
+
+  /* ---------------- 360 VIEW ---------------- */
+  function draw360() {
+    const P = pal(), hd = heading();
+    let list = (geo.s.show || []).map(byId).filter(Boolean);
+    if (!list.length && target()) list = [target()];
+    if (!pos) { textC("WAITING FOR GPS" + ".".repeat(1 + (Math.floor(clock * 2) % 3)), CX, 290, P.m, 1, 2); return; }
+    const H = hd ? hd.h : 0, pitch = headPitch(), roll = headRoll() * D2R, cr = Math.cos(-roll), sr = Math.sin(-roll);
+    const items = list.map((p) => ({ p, w: where(p) })).sort((a, b) => b.w.d - a.w.d);
+    for (const { p, w } of items) {
+      const col = colorOf(p), rx = OVAL[clamp(p.size | 0, 1, 5)], ry = rx * 0.62;
+      const elev = -Math.min(30, Math.atan2(EYE, Math.max(0.5, w.d)) / D2R);   // the spot is on the ground
+      const dx = angDiff(w.b, H) * PPD, dy = (pitch - elev) * PPD;
+      const x = CX + dx * cr - dy * sr, y = CY + dx * sr + dy * cr;
+      if (x < -rx || x > S + rx || y < -ry || y > S + ry) {            // off screen: a small mark at the edge
+        const vx = x - CX, vy = y - CY, k = Math.min((CX - 24) / Math.abs(vx || 1e-6), (CY - 24) / Math.abs(vy || 1e-6));
+        tri(CX + vx * k, CY + vy * k, Math.atan2(vx, -vy) / D2R, 13, col, 0.85);
+        continue;
+      }
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(x, y, rx, ry, -roll, 0, Math.PI * 2);
+      ctx.fillStyle = "#000"; ctx.fill();                            // nearer ovals hide the ones behind
+      ctx.globalAlpha = 0.16; ctx.fillStyle = col; ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
+      ctx.restore();
+      const s = ovalDist(w.d), sc = clamp(Math.min(Math.floor((rx * 1.56) / (s.length * 8)), Math.floor((ry * 1.5) / 14)), 1, 4);
+      textC(s, x, y - 7 * sc, col, 1, sc);
+    }
+    if (!hd) textC("WALK A FEW STEPS TO FIND NORTH", CX, 566, P.d, 1, 2);
+  }
+
+  /* ---------------- overlays ---------------- */
+  function drawInfo(t) {
+    if (clock - info > 3) return;
+    const w = where(t), hd = heading(), col = colorOf(t), list = placesNewest();
+    ctx.save(); ctx.globalAlpha = 0.8; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, 96); ctx.restore();
+    textC(clean(t.name), CX, 8, col, 1, 2);
+    textC(w ? fmtDist(w.d) + "  " + direction(w, hd) : "WAITING FOR GPS", CX, 38, col, 1, 2);
+    textC(VIEW_NAME[geo.s.view] + "  " + (list.findIndex((p) => p.id === t.id) + 1) + "/" + list.length, CX, 68, pal().m, 1, 2);
+  }
+  function drawFlash() {
+    if (clock > flashUntil || !flashMsg) return;
+    const a = clamp((flashUntil - clock) * 3, 0, 1);
+    ctx.save(); ctx.globalAlpha = 0.85 * a; ctx.fillStyle = "#000"; ctx.fillRect(0, 548, S, 44); ctx.restore();
+    textC(flashMsg, CX, 556, flashCol, a, 2);
+  }
+
+  function drawNav(dt) {
+    const t = target();
+    if (!t) { screen = "READY"; return; }
+    const col = colorOf(t);
+    if (clock - lockedAt < 1.4) { drawLocked(t, col); return; }
+    if (geo.s.view === "360") { draw360(); drawInfo(t); return; }
+    if (!pos) {
+      tri(CX, 270, 0, 70, col, 0.25 + 0.15 * Math.sin(clock * 4));
+      textC("WAITING FOR GPS" + ".".repeat(1 + (Math.floor(clock * 2) % 3)), CX, 420, col, 1, 2);
+      drawInfo(t);
+      return;
+    }
+    const w = where(t), hd = heading(), R = geo.s.radarM;
+    if (geo.s.radar) {
+      if (!near && w.d < R) { near = true; sndNear(); }
+      else if (near && w.d > R * 1.15 + 2) { near = false; dispRel = null; }
+    } else near = false;
+    if (near) drawRadar(dt, w, hd, col);
+    else if (geo.s.view === "compass") drawCompass(w, hd, col);
+    else drawArrow(dt, w, hd, col);
+    drawInfo(t);
+  }
+
+  function draw(dt) {
+    ctx.setTransform(K, 0, 0, K, 0, 0);
+    ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+    if (screen === "READY") drawReady();
+    else if (screen === "LOCKING") drawLocking();
+    else drawNav(dt);
+    drawFlash();
+  }
+
+  /* ---------------- input ---------------- */
+  function primary() {
+    if (screen === "READY") lockHere();
+    else if (screen === "NAV") {
+      info = clock;
+      if (geo.s.view === "360") { motion.zero(); flash("LEVEL SET", 1.2); }
+      sndTick();
+    }
+  }
+  function back() {
+    sndBack();
+    if (screen !== "READY") { screen = "READY"; near = false; return; }
+    stopGps();
+    if (history.length > 1) history.back(); else location.href = "/glasses/";
+  }
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Backspace"].includes(k)) return;
+    e.preventDefault();
+    audio(); motion.enable();
+    if (k === "Escape" || k === "Backspace") { back(); return; }
+    if (k === "Enter" || k === " ") { if (!e.repeat) primary(); return; }
+    if (screen === "LOCKING") return;
+    if (k === "ArrowLeft" || k === "ArrowRight") {
+      if (screen === "READY") { if (geo.places.length) { go(target()); sndTick(); } else flash("NO SAVED SPOTS YET", 1.8); }
+      else step(k === "ArrowRight" ? 1 : -1);
+      return;
+    }
+    if (screen === "NAV") nextView(k === "ArrowDown" ? 1 : -1);
+  });
+  let touch = null;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, cancelable: true }));
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null; e.preventDefault();
+    if (Math.hypot(dx, dy) < 20) key("Enter");
+    else if (Math.abs(dx) > Math.abs(dy)) key(dx > 0 ? "ArrowRight" : "ArrowLeft");
+    else key(dy < 0 ? "ArrowUp" : "ArrowDown");
+  });
+  cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopGps();
+    else { startGps(); pull(); }
+  });
+
+  /* ---------------- loop ---------------- */
+  let last = performance.now(), lastPull = -99;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    motion.update(dt);
+    if (screen === "LOCKING" && clock - lockStart > 8 && (best || pos)) lockAt(best || pos);   // weak GPS: take the best we got
+    if (clock - lastPull > 10 && !document.hidden) { lastPull = clock; pull(); }
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+  startGps();
+
+  window.__geo = {
+    onFix, heading, where, pull, lockHere, go, nextView, setS, target,
+    get geo() { return geo; }, get screen() { return screen; }, get near() { return near; }, get pos() { return pos; },
+    set fake(v) { fake = v; }, get fake() { return fake; },
+    reset() { pos = null; raw = null; course = null; lastCourseFix = null; },
+  };
+})();
+</script>
+</body>
+</html>
