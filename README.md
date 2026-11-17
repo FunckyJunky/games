@@ -21,7 +21,8 @@ public/                 the website
   games/mistwalkers/    Mistwalkers (3D walk for three, built from the World Tester project)
   glasses/              Mini Hub for Meta Ray-Ban Display glasses (600x600, D-pad keys), at error.blue/glasses
   glasses/hud/          Target HUD: dot-matrix horizon/tilt display with simulated targets (head-motion sensors)
-  glasses/flight/       Dot Flight: wireframe flight sim steered by tilting your head
+  glasses/flight/       Dot Flight: wireframe flight sim steered by where you look
+  glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)

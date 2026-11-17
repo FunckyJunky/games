@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<title>Synth DOS</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABaElEQVR42u3d243CMBBG4ZkVxaSDrcQUmTSyJaQb7zOstJYVwLl85xFZEfjo9/gik4yYa2AYX7qAAAIwjtvzB7UuXQ/ILHpRAggAAcckrQMkgAAQcOUaEGqABBAAAsJe0BEp9bGELZkSAAIIwElrQGvMP1pNkAACCAABBIAAAhDOA16+17P3dYEEEEAA1IDPjdl7qwkSYAgiAAQQAAIIwBXXAc/z8tF8el0gAYYgAjCyBpRaD3U/YL73tb/PEgACCMBe1gG1HOtKWi4pAYYgEHDaGlBL/dENEkAACIir3hH7fue8uTXvb7VvzcNf3X7r95UAQxAIsA6ABBAAAs5wHtA7L47O84Ct++17e15vf0mAIYgAWAdIAAggAO4JSwAIIAAEEAACCECMeJdkKY397Md3TU7T9G/7dV2j517w3/+CLo32275PbTw/c+vvLRJgCAIBBIAAAkAAASCAABAQzoQhAQSAgMH8Ai8bcIo6gtd2AAAAAElFTkSuQmCC">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* touch-action: none opts into the Neural Band pinch-and-move stream
+     (pointerdown / pointermove with movementX/Y / pointerup). */
+  html, body { background: #000; touch-action: none; }
+  body {
+    width: 600px; height: 600px; overflow: hidden;
+    user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+/* SYNTH.EXE: a synth sequencer + drum machine for Meta Ray-Ban Display, in lo-res 3D DOS style.
+
+   Hands play it:
+     Pinch                    play / stop
+     Pinch + move hand        up/down = melody higher/lower, left/right = beat calmer/busier,
+                              moving faster = more notes
+     Neural Band wrist        (when the glasses expose it) raise/lower hand = melody, twist = beat
+     Swipe up / down          mood (key, chords, tempo)
+     Swipe left / right       lead sound
+     Back                     exit
+
+   It always sounds good because nothing is free: every note comes from the mood's scale,
+   strong beats land on chord tones, melodies move in small steps and repeat their rhythm,
+   and drum/bass patterns only change on the beat grid, between hand-picked patterns. */
+(() => {
+  "use strict";
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerpK = (dt, rate) => 1 - Math.exp(-dt * rate);
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* ============================== MUSIC ============================== */
+  const SCALES = { minor: [0, 2, 3, 5, 7, 8, 10], major: [0, 2, 4, 5, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10] };
+  const PENTA = { minor: [0, 2, 3, 4, 6], major: [0, 1, 2, 4, 5], dorian: [0, 2, 3, 4, 6] };   // scale-degree indices
+  const MOODS = [
+    { name: "NIGHT DRIVE", bpm: 104, key: 57, scale: "minor",  prog: [0, 5, 2, 6], lead: 0, swing: 0 },    // Am F C G
+    { name: "8-BIT QUEST", bpm: 124, key: 60, scale: "major",  prog: [0, 5, 3, 4], lead: 1, swing: 0 },    // C Am F G
+    { name: "DEEP SPACE",  bpm: 90,  key: 52, scale: "dorian", prog: [0, 3, 0, 6], lead: 3, swing: 0.12 }, // Em A Em D
+    { name: "DUNGEON",     bpm: 98,  key: 50, scale: "minor",  prog: [0, 5, 6, 4], lead: 2, swing: 0.08 }, // Dm Bb C Am
+  ];
+  const LEADS = ["SAW", "CHIP", "PLUCK", "BELL"];
+  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+  let moodIdx = clamp(store.get("synth.mood", 0) | 0, 0, MOODS.length - 1);
+  let mood = MOODS[moodIdx];
+  let leadIdx = store.get("synth.lead", mood.lead) | 0;
+
+  const mod7 = (d) => ((d % 7) + 7) % 7;
+  const degNote = (deg) => mood.key + SCALES[mood.scale][mod7(deg)] + 12 * Math.floor(deg / 7);
+  const chordDegs = (bar) => { const d = mood.prog[bar % 4]; return [d, d + 2, d + 4]; };
+  const mtof = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  function chordName(bar) {
+    const [a, b] = chordDegs(bar);
+    const root = degNote(a), third = degNote(b);
+    return NOTE_NAMES[root % 12] + ((third - root + 12) % 12 === 3 ? " MIN" : " MAJ");
+  }
+
+  // drum patterns by energy level (16 steps)
+  const ALL16 = [...Array(16).keys()];
+  const EIGHTHS = [0, 2, 4, 6, 8, 10, 12, 14];
+  const DRUMS = [
+    { k: [0],                s: [],       h: [0, 4, 8, 12], o: [],              c: [], g: [] },
+    { k: [0, 8],             s: [4, 12],  h: EIGHTHS,       o: [],              c: [], g: [] },
+    { k: [0, 8, 10],         s: [4, 12],  h: EIGHTHS,       o: [14],            c: [], g: [7, 15] },
+    { k: [0, 3, 8, 10],      s: [4, 12],  h: ALL16,         o: [6, 14],         c: [12], g: [14] },
+    { k: [0, 4, 8, 12, 14],  s: [4, 12],  h: ALL16,         o: [2, 6, 10, 14],  c: [4, 12], g: [] },
+  ];
+  // bass patterns by energy level: [step, tone, length in steps]; r = root, f = fifth, o = octave
+  const BASS = [
+    [[0, "r", 15]],
+    [[0, "r", 6], [8, "r", 6]],
+    [[0, "r", 2], [2, "r", 2], [4, "r", 2], [6, "o", 2], [8, "r", 2], [10, "r", 2], [12, "f", 2], [14, "o", 2]],
+    [[0, "r", 3], [3, "r", 2], [6, "f", 2], [8, "r", 3], [11, "r", 2], [14, "o", 2]],
+    [[0, "r", 2], [2, "o", 1], [4, "r", 2], [6, "o", 1], [8, "r", 2], [10, "o", 1], [12, "f", 2], [14, "o", 1]],
+  ];
+  const RHYTHM_W = [1, 0.15, 0.45, 0.2, 0.8, 0.15, 0.5, 0.3, 0.9, 0.15, 0.45, 0.2, 0.75, 0.3, 0.55, 0.35];
+
+  /* ============================== CONTROLS ============================== */
+  // pitch: -1 low .. +1 high melody;  beat: 0 calm .. 1 busy;  motion: 0 still .. 1 lively
+  const ctl = { pitch: 0, beat: 0.45, motion: 0.3 };
+  const target = { pitch: 0, beat: 0.45 };
+  let dragMotion = 0, wristMotion = 0, lastInputAt = -1e9, auto = true;
+
+  /* ============================== AUDIO ============================== */
+  let ac = null, master, drumBus, leadFilter, leadOut, padFilter, delaySend, noiseBuf;
+
+  function buildGraph(ctx) {
+    ac = ctx;
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 4;
+    comp.attack.value = 0.004; comp.release.value = 0.18;
+    master = ac.createGain(); master.gain.value = 0.76;
+    master.connect(comp); comp.connect(ac.destination);
+
+    drumBus = ac.createGain(); drumBus.gain.value = 0.9; drumBus.connect(master);
+
+    // echo: dotted-eighth feedback delay, darkened
+    const delay = ac.createDelay(1.5), fb = ac.createGain(), dl = ac.createBiquadFilter();
+    dl.type = "lowpass"; dl.frequency.value = 2400; fb.gain.value = 0.33;
+    delay.connect(dl); dl.connect(fb); fb.connect(delay); dl.connect(master);
+    delaySend = ac.createGain(); delaySend.gain.value = 0.26; delaySend.connect(delay);
+    setDelayTime(delay);
+    buildGraph.delay = delay;
+
+    leadFilter = ac.createBiquadFilter(); leadFilter.type = "lowpass"; leadFilter.frequency.value = 2400; leadFilter.Q.value = 2;
+    leadOut = ac.createGain(); leadOut.gain.value = 0.9;
+    leadFilter.connect(leadOut); leadOut.connect(master); leadOut.connect(delaySend);
+
+    padFilter = ac.createBiquadFilter(); padFilter.type = "lowpass"; padFilter.frequency.value = 1200;
+    padFilter.connect(master); padFilter.connect(delaySend);
+
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  function setDelayTime(delay) {
+    const t = (60 / mood.bpm) * 0.75;
+    if (delay) delay.delayTime.setValueAtTime(t, ac.currentTime);
+  }
+
+  function ensureAudio() {           // must run inside a pinch / key / tap handler
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      buildGraph(new AC());
+    }
+    if (ac.state === "suspended" && ac.resume) ac.resume();
+    return true;
+  }
+
+  // ---- instruments ----
+  function env(g, t, peak, a, d, sus, rel, end) {
+    end = Math.max(end, t + a + 0.01);
+    const s = Math.max(0.0002, peak * sus);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    if (t + a + d < end) {
+      g.gain.exponentialRampToValueAtTime(s, t + a + d);
+      g.gain.setValueAtTime(s, end);
+    } else {                                   // note ends during the decay
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak * Math.pow(sus, (end - t - a) / d)), end);
+    }
+    g.gain.exponentialRampToValueAtTime(0.0001, end + rel);
+  }
+  function osc(type, freq, t, stop, dest, detune = 0) {
+    const o = ac.createOscillator();
+    o.type = type; o.frequency.setValueAtTime(freq, t); o.detune.value = detune;
+    o.connect(dest); o.start(t); o.stop(stop);
+    return o;
+  }
+  function noise(t, dur, type, freq, q, v) {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; s.loop = true; f.type = type; f.frequency.value = freq; f.Q.value = q;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(drumBus);
+    s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+  }
+  function kick(t, v) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.11);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+    o.connect(g); g.connect(drumBus); o.start(t); o.stop(t + 0.45);
+  }
+  function snare(t, v) {
+    noise(t, 0.2, "bandpass", 1900, 0.8, 0.55 * v);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "triangle"; o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+    g.gain.setValueAtTime(0.35 * v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g); g.connect(drumBus); o.start(t); o.stop(t + 0.14);
+  }
+  const hat = (t, v) => noise(t, 0.045, "highpass", 7800, 0.7, 0.22 * v);
+  const openHat = (t, v) => noise(t, 0.28, "highpass", 7000, 0.7, 0.16 * v);
+  function clap(t, v) {
+    for (let i = 0; i < 3; i++) noise(t + i * 0.011, 0.03, "bandpass", 1300, 1.2, 0.35 * v);
+    noise(t + 0.033, 0.16, "bandpass", 1300, 1.0, 0.3 * v);
+  }
+  const crash = (t) => noise(t, 1.3, "highpass", 5200, 0.5, 0.2);
+
+  function bass(t, note, dur) {
+    const end = t + dur, g = ac.createGain(), f = ac.createBiquadFilter();
+    f.type = "lowpass"; f.Q.value = 6;
+    const cut = 260 + 1300 * ctl.beat;
+    f.frequency.setValueAtTime(cut * 2.4, t); f.frequency.exponentialRampToValueAtTime(cut, t + 0.12);
+    env(g, t, 0.34, 0.005, 0.12, 0.7, 0.08, end);
+    f.connect(g); g.connect(master);
+    osc("sawtooth", mtof(note), t, end + 0.12, f);
+    osc("sine", mtof(note - 12), t, end + 0.12, g);
+  }
+  function pad(t, notes, dur) {
+    for (const n of notes) {
+      const g = ac.createGain();
+      env(g, t, 0.045, 0.3, 0.4, 0.8, 0.6, t + dur);
+      g.connect(padFilter);
+      osc("triangle", mtof(n), t, t + dur + 0.7, g, -4);
+      osc("triangle", mtof(n), t, t + dur + 0.7, g, 4);
+    }
+  }
+  function lead(t, note, dur) {
+    const f = mtof(note), end = t + dur, g = ac.createGain();
+    g.connect(leadFilter);
+    if (leadIdx === 0) {            // SAW: two detuned saws
+      env(g, t, 0.16, 0.012, 0.25, 0.55, 0.14, end);
+      osc("sawtooth", f, t, end + 0.2, g, -9); osc("sawtooth", f, t, end + 0.2, g, 9);
+    } else if (leadIdx === 1) {     // CHIP: square, short and bright
+      env(g, t, 0.11, 0.002, 0.05, 0.8, 0.03, Math.min(end, t + 0.22));
+      osc("square", f, t, t + 0.3, g);
+    } else if (leadIdx === 2) {     // PLUCK: own filter sweep, no sustain
+      const pf = ac.createBiquadFilter();
+      pf.type = "lowpass"; pf.Q.value = 4;
+      pf.frequency.setValueAtTime(4200, t); pf.frequency.exponentialRampToValueAtTime(320, t + 0.35);
+      pf.connect(g);
+      env(g, t, 0.22, 0.003, 0.4, 0.05, 0.2, t + 0.45);
+      osc("sawtooth", f, t, t + 0.7, pf); osc("triangle", f * 2, t, t + 0.7, pf);
+    } else {                         // BELL: 2-op FM
+      const mod = ac.createOscillator(), mg = ac.createGain();
+      mod.frequency.setValueAtTime(f * 3.5, t);
+      mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * 0.05, t + 0.9);
+      mod.connect(mg);
+      const c = osc("sine", f, t, t + 1.4, g);
+      mg.connect(c.frequency); mod.start(t); mod.stop(t + 1.4);
+      env(g, t, 0.2, 0.004, 1.1, 0.01, 0.2, t + 1.1);
+    }
+  }
+
+  /* ============================== SEQUENCER ============================== */
+  let playing = false, step = 0, nextTime = 0, timer = 0, level = 1;
+  let motif = makeMotif(0.6), motifDensity = 0.6, melDeg = 9, lastBar = -1;
+  const DEG_LO = 3, DEG_HI = 19;                 // melody range in scale degrees above the key
+  const events = [];             // what to animate, and when
+  const stepDur = () => 60 / mood.bpm / 4;
+
+  function makeMotif(density) {
+    let m;
+    do { m = RHYTHM_W.map((w) => Math.random() < clamp(w * density, 0.04, 0.95)); }
+    while (m.filter(Boolean).length < 2);
+    return m;
+  }
+  function mutateMotif(n) {
+    for (let i = 0; i < n; i++) {
+      const s = Math.floor(Math.random() * 16);
+      motif[s] = Math.random() < RHYTHM_W[s] * (0.4 + ctl.motion);
+    }
+  }
+  const melodyTarget = () => 5 + Math.round(((ctl.pitch + 1) / 2) * 12);   // scale degrees 5..17
+
+  function nextMelodyDeg(strong, chord) {
+    const pent = PENTA[mood.scale], T = melodyTarget(), chordI = chord.map(mod7);
+    const cands = [];
+    for (let d = melDeg - 4; d <= melDeg + 4; d++) {
+      if (d < DEG_LO || d > DEG_HI) continue;
+      const di = mod7(d), isChord = chordI.includes(di), isPent = pent.includes(di);
+      if (strong ? !isChord : !(isPent || isChord)) continue;     // strong beats: chord tones only
+      const w = Math.exp(-Math.abs(d - T) * 0.55                    // drift toward the hand
+                         - Math.abs(d - melDeg) * (0.55 - ctl.motion * 0.3)   // small steps
+                         - (d === melDeg ? 0.7 : 0)                 // don't drone
+                         + Math.random() * 1.1);
+      cands.push([d, w]);
+    }
+    if (!cands.length) return melDeg;
+    let r = Math.random() * cands.reduce((a, c) => a + c[1], 0);
+    for (const [d, w] of cands) { r -= w; if (r <= 0) return d; }
+    return cands[cands.length - 1][0];
+  }
+
+  function scheduleStep(s, t) {
+    const sb = s % 16, bar = Math.floor(s / 16), sd = stepDur();
+    const chord = chordDegs(bar);
+
+    if (sb === 0 || sb === 8) {
+      // pattern changes only on the half bar, so the groove never stumbles
+      const want = clamp(Math.floor(ctl.beat * 5), 0, 4);
+      if (want !== level && Math.abs(ctl.beat * 5 - (level + 0.5)) > 0.75) level = want;
+    }
+    if (sb === 0 && bar !== lastBar) {
+      lastBar = bar;
+      const density = 0.3 + ctl.motion * 1.0;
+      if (bar % 2 === 0 || Math.abs(density - motifDensity) > 0.3) { motif = makeMotif(density); motifDensity = density; }
+      else if (ctl.motion > 0.5) mutateMotif(2);
+      const padNotes = chord.map((d) => { let n = degNote(d); while (n > 64) n -= 12; while (n < 52) n += 12; return n; });
+      pad(t, padNotes, sd * 16);
+      if (level >= 3 && bar % 4 === 0) crash(t);
+      events.push({ t, kind: "bar", bar });
+    }
+
+    // drums
+    const P = DRUMS[level];
+    const accent = sb % 4 === 0 ? 1 : 0.75;
+    if (P.k.includes(sb)) { kick(t, 0.95); events.push({ t, kind: "kick" }); }
+    if (P.s.includes(sb)) { snare(t, 1); events.push({ t, kind: "snare" }); }
+    if (P.c.includes(sb)) clap(t, 0.8);
+    if (P.g.includes(sb)) snare(t, 0.25);
+    if (P.o.includes(sb)) openHat(t, 1);
+    else if (P.h.includes(sb)) { hat(t, sb % 2 === 0 ? accent : 0.45); events.push({ t, kind: "hat" }); }
+    if (level >= 3 && bar % 4 === 3 && sb >= 13) snare(t, 0.35 + (sb - 12) * 0.2);    // fill into the next phrase
+
+    // bass
+    for (const [bs, tone, len] of BASS[level]) {
+      if (bs !== sb) continue;
+      let n = degNote(tone === "f" ? chord[2] : chord[0]);
+      while (n > 52) n -= 12;
+      if (tone === "o") n += 12;
+      bass(t, n, len * sd * 0.92);
+      events.push({ t, kind: "bass" });
+    }
+
+    // melody
+    let hit = motif[sb];
+    if (bar % 4 === 3 && sb >= 12 && Math.random() < 0.6) hit = false;     // let phrases breathe
+    if (hit) {
+      melDeg = nextMelodyDeg(sb % 4 === 0, chord);
+      let len = 1;
+      while (len < 4 && !motif[(sb + len) % 16]) len++;
+      const note = degNote(melDeg);
+      lead(t, note, len * sd * (leadIdx === 1 ? 0.6 : 0.9));
+      events.push({ t, kind: "note", deg: melDeg, note });
+    }
+    events.push({ t, kind: "step", sb });
+  }
+
+  function scheduler() {
+    const sd = stepDur();
+    while (nextTime < ac.currentTime + 0.12) {
+      const swing = step % 2 === 1 ? mood.swing * sd : 0;
+      scheduleStep(step, nextTime + swing);
+      nextTime += sd;
+      step++;
+    }
+  }
+  function startPlay() {
+    if (!ensureAudio()) return;
+    playing = true;
+    step = 0; lastBar = -1;
+    nextTime = ac.currentTime + 0.06;
+    clearInterval(timer);
+    timer = setInterval(scheduler, 25);
+    scheduler();
+    wristRecenter();
+  }
+  function stopPlay() {
+    playing = false;
+    clearInterval(timer);
+    events.length = 0;
+  }
+  const togglePlay = () => (playing ? stopPlay() : startPlay());
+
+  /* ============================== WRIST (Meta Neural Band) ==============================
+     RelativeOrientationSensor({ sensorId: 'emg-wrist' }) on the glasses. Detect it with the
+     runtime marker RelativeOrientationSensor.__imuQuatWrapped (desktop Chrome has its own
+     constructor that would read the computer instead). Readings arrive w-first [w, x, y, z]. */
+  const wrist = { status: "...", available: false, sensor: null, q0: null, prev: null, prevT: 0,
+                  startT: 0, anchor: null, stableSince: 0, rx: 0, ry: 0, speed: 0, retries: 0, lastAt: 0 };
+  const hasWrist = () => typeof window.RelativeOrientationSensor === "function" &&
+                         window.RelativeOrientationSensor.__imuQuatWrapped === true;
+  (async () => {
+    const until = performance.now() + 5000;
+    while (performance.now() < until && !hasWrist()) await new Promise((r) => setTimeout(r, 250));
+    wrist.available = hasWrist();
+    wrist.status = wrist.available ? "READY" : "N/A";
+  })();
+
+  const qmul = (a, b) => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+  const qconj = (q) => [-q[0], -q[1], -q[2], q[3]];
+  const qangle = (a, b) => 2 * Math.acos(clamp(Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]), 0, 1)) * 180 / Math.PI;
+  function toW3C(raw) {
+    if (!raw || raw.length < 4) return null;
+    let q = [raw[1], raw[2], raw[3], raw[0]];
+    if (!q.every(Number.isFinite)) return null;
+    const len = Math.hypot(...q);
+    if (len < 1e-6) return null;
+    q = q.map((v) => v / len);
+    return q[3] < 0 ? q.map((v) => -v) : q;
+  }
+  function wristRecenter() { wrist.q0 = null; wrist.anchor = null; wrist.rx = wrist.ry = 0; wrist.startT = performance.now(); if (wrist.sensor) wrist.status = "HOLD"; }
+  function wristReading(raw, ts) {
+    const t = Number.isFinite(ts) && ts > 0 ? ts : performance.now(), q = toW3C(raw);
+    if (!q) return;
+    wrist.lastAt = performance.now();
+    if (wrist.prev) {
+      const ang = qangle(wrist.prev, q), dt = Math.max(1, t - wrist.prevT) / 1000;
+      // the frame can flip early in a stream while the band learns which wrist it is on
+      if (performance.now() - wrist.sensorAt < 6000 && ang > 35 && ang / dt > 1500) wristRecenter();
+      else wrist.speed += (ang / dt - wrist.speed) * 0.3;
+    }
+    wrist.prev = q; wrist.prevT = t;
+    if (!wrist.q0) {                                                       // settle: 1 s warm-up, then 0.8 s steady
+      if (!wrist.anchor || qangle(wrist.anchor, q) > 10) { wrist.anchor = q; wrist.stableSince = t; }
+      if (performance.now() - wrist.startT > 1000 && t - wrist.stableSince > 800) { wrist.q0 = q; wrist.status = "ON"; }
+      return;
+    }
+    let r = qmul(qconj(wrist.q0), q);                                      // rotation since centre, in the band's frame
+    if (r[3] < 0) r = r.map((v) => -v);
+    const ang = 2 * Math.acos(clamp(r[3], -1, 1)), s = Math.sqrt(Math.max(1e-9, 1 - r[3] * r[3]));
+    const k = (ang * 180 / Math.PI) / s;
+    wrist.rx = r[0] * k;                                                   // hand up / down (degrees)
+    wrist.ry = r[1] * k;                                                   // twist about the forearm (degrees)
+  }
+  function startWrist() {
+    if (!wrist.available || wrist.sensor) return;
+    try {
+      const s = new window.RelativeOrientationSensor({ sensorId: "emg-wrist", frequency: 30 });
+      s.onreading = () => wristReading(s.quaternion, s.timestamp);
+      s.onerror = (e) => {
+        const name = (e && e.error && e.error.name) || "Error";
+        stopWrist();
+        if (name === "NotAllowedError") { wrist.status = "DENY"; return; }
+        wrist.status = "RETRY";
+        if (wrist.retries < 3) setTimeout(startWrist, 2000 * 2 ** wrist.retries++);
+        else wrist.status = "N/A";
+      };
+      s.start();
+      wrist.sensor = s;
+      wrist.sensorAt = performance.now();
+      wristRecenter();
+    } catch (err) { wrist.status = "N/A"; }
+  }
+  function stopWrist() {
+    if (!wrist.sensor) return;
+    try { wrist.sensor.onreading = null; wrist.sensor.onerror = null; wrist.sensor.stop(); } catch {}
+    wrist.sensor = null;
+  }
+
+  /* ============================== VISUALS (150 x 150, 4x pixels) ============================== */
+  const R = 150, HY = 58, F3 = 70, CAMY = 1.0;
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = R;
+  const lo = loC.getContext("2d");
+  // CRT scanlines: every 4th screen row a little darker
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 4 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.45)"; slg.fillRect(0, 3 * K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+
+  const VGA = { cyan: "#55ffff", magenta: "#ff55ff", yellow: "#ffff55", green: "#55ff55", red: "#ff5555",
+                white: "#ffffff", grey: "#aaaaaa", blue: "#0000aa", lblue: "#5555ff" };
+
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711", "5": "74717", "6": "74757", "7": "71122",
+    "8": "75757", "9": "75717", A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555", O: "25552", P: "65644",
+    Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557", V: "55522", W: "55775", X: "55255", Y: "55222",
+    Z: "71247", " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244", "%": "51245",
+    "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575", "=": "07070", "_": "00007", "!": "22202",
+    "?": "71202", "*": "05250", "^": "25000", "'": "22000", "|": "22222",
+  };
+  const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+  function text(str, x, y, color, a = 1) {
+    lo.fillStyle = color; lo.globalAlpha = a;
+    x = Math.round(x); y = Math.round(y);
+    for (const ch of String(str).toUpperCase()) {
+      const g = FONT[ch];
+      if (g) for (let r = 0; r < 5; r++) { const b = g.charCodeAt(r) - 48; for (let c = 0; c < 3; c++) if (b & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1); }
+      x += 4;
+    }
+    lo.globalAlpha = 1;
+  }
+  const textC = (s, cx, y, c, a) => text(s, Math.round(cx - tw(s) / 2), y, c, a);
+  const textR = (s, rx, y, c, a) => text(s, rx - tw(s) + 1, y, c, a);
+  function line(x0, y0, x1, y1, color, a = 1) {
+    lo.strokeStyle = color; lo.globalAlpha = a;
+    lo.beginPath(); lo.moveTo(x0, y0); lo.lineTo(x1, y1); lo.stroke();
+    lo.globalAlpha = 1;
+  }
+  function frame2(x, y, w, h, color) {                 // DOS double-line window border
+    lo.strokeStyle = color; lo.lineWidth = 1;
+    lo.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    lo.strokeRect(x + 2.5, y + 2.5, w - 5, h - 5);
+  }
+  const p3 = (x, y, z) => [R / 2 + (F3 * x) / z, HY + (F3 * (CAMY - y)) / z];
+
+  // icosahedron for the sky
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const IV = [[-1, PHI, 0], [1, PHI, 0], [-1, -PHI, 0], [1, -PHI, 0], [0, -1, PHI], [0, 1, PHI], [0, -1, -PHI], [0, 1, -PHI],
+              [PHI, 0, -1], [PHI, 0, 1], [-PHI, 0, -1], [-PHI, 0, 1]].map((v) => v.map((c) => c / Math.hypot(1, PHI)));
+  const IE = [];
+  for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) {
+    if (Math.abs(Math.hypot(IV[i][0] - IV[j][0], IV[i][1] - IV[j][1], IV[i][2] - IV[j][2]) - 1.0515) < 0.05) IE.push([i, j]);
+  }
+  const STARS = Array.from({ length: 34 }, (_, i) => [((i * 97) % 146) + 2, ((i * 53) % 44) + 11, (i * 31) % 7]);
+
+  // animation state
+  const fx = { kick: 0, snare: 0, hat: 0, bass: 0, bar: 0, curStep: -1, curBar: 0, chordFlash: 0 };
+  const flying = [];   // notes flying into the distance
+  let beatPhase = 0, clock = 0, flashMsg = "", flashUntil = 0;
+  const flash = (m, d = 1.5) => { flashMsg = m; flashUntil = clock + d; };
+
+  function consumeEvents() {
+    if (!ac) return;
+    const now = ac.currentTime;
+    while (events.length && events[0].t <= now) {
+      const e = events.shift();
+      if (e.kind === "kick") fx.kick = 1;
+      else if (e.kind === "snare") fx.snare = 1;
+      else if (e.kind === "hat") fx.hat = 1;
+      else if (e.kind === "bass") fx.bass = 1;
+      else if (e.kind === "bar") { fx.curBar = e.bar; fx.chordFlash = 1; }
+      else if (e.kind === "step") fx.curStep = e.sb;
+      else if (e.kind === "note") {
+        const u = (e.deg - DEG_LO) / (DEG_HI - DEG_LO);
+        flying.push({ x: -3 + u * 6, y: 0.15 + u * 0.9, z: 1.4, deg: e.deg, born: clock });
+        if (flying.length > 40) flying.shift();
+      }
+    }
+  }
+
+  function drawSky() {
+    for (const [x, y, ph] of STARS) {
+      const tw2 = 0.25 + 0.5 * fx.hat * ((ph + fx.curStep) % 3 === 0 ? 1 : 0.3) + 0.15 * Math.sin(clock * 2 + ph);
+      lo.globalAlpha = clamp(tw2, 0.1, 1); lo.fillStyle = VGA.white; lo.fillRect(x, y, 1, 1);
+    }
+    lo.globalAlpha = 1;
+    // icosahedron, pulsing with the kick
+    const cx = 58, cy = 33, rad = 15 * (1 + fx.kick * 0.22), a = clock * 0.6, b = clock * 0.37;
+    const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+    const P = IV.map(([x, y, z]) => {
+      const x1 = x * ca - z * sa, z1 = x * sa + z * ca;
+      const y1 = y * cb - z1 * sb, z2 = y * sb + z1 * cb;
+      const s = 3 / (3 + z2);
+      return [cx + x1 * rad * s, cy + y1 * rad * s, z2];
+    });
+    const col = fx.snare > 0.5 ? VGA.white : (fx.curBar % 2 ? VGA.cyan : VGA.magenta);
+    for (const [i, j] of IE) line(P[i][0], P[i][1], P[j][0], P[j][1], col, (P[i][2] + P[j][2]) > 0 ? 0.45 : 1);
+  }
+
+  function drawGround() {
+    const boost = 0.35 + fx.kick * 0.65;
+    for (let x = -8; x <= 8; x++) {                                   // lines running to the horizon
+      const [ax, ay] = p3(x, 0, 1), [bx, by] = p3(x, 0, 40);
+      line(ax, ay, bx, by, VGA.magenta, 0.55 * boost);
+    }
+    for (let k = 0; k < 26; k++) {                                     // cross lines rolling toward you on the beat
+      const z = 1 + k - beatPhase;
+      if (z < 1) continue;
+      const [ax, ay] = p3(-8, 0, z), [bx] = p3(8, 0, z);
+      line(ax, ay, bx, ay, VGA.magenta, clamp((1 - z / 26) * boost, 0.08, 1));
+    }
+    line(0, HY + 0.5, R, HY + 0.5, VGA.cyan, 0.5 + fx.bass * 0.5);  // horizon
+  }
+
+  function drawFlying(dt) {
+    const speed = (mood.bpm / 60) * 1.0;
+    for (const n of flying) n.z += dt * speed;
+    while (flying.length && flying[0].z > 26) flying.shift();
+    const colors = [VGA.green, VGA.yellow, VGA.cyan, VGA.white];
+    for (const n of flying) {
+      const s = 0.22, c = colors[leadIdx % 4], a = clamp(1.25 - n.z / 22, 0.15, 1);
+      const [x0, y0] = p3(n.x - s, n.y + s, n.z), [x1, y1] = p3(n.x + s, n.y - s, n.z);
+      const [bx0, by0] = p3(n.x - s, n.y + s, n.z + s * 2), [bx1] = p3(n.x + s, n.y + s, n.z + s * 2);
+      lo.globalAlpha = a; lo.fillStyle = c;
+      lo.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));            // front face
+      lo.globalAlpha = a * 0.6;
+      lo.beginPath(); lo.moveTo(x0, y0); lo.lineTo(bx0, by0); lo.lineTo(bx1, by0); lo.lineTo(x1, y0); lo.closePath(); lo.fill();  // top face
+      if (n.z < 2.2) { lo.globalAlpha = 1 - (n.z - 1.4) / 0.8; lo.strokeStyle = VGA.white; lo.strokeRect(x0 - 1.5, y0 - 1.5, x1 - x0 + 3, y1 - y0 + 3); }
+    }
+    lo.globalAlpha = 1;
+  }
+
+  function drawXY() {
+    const x = 118, y = 12, s = 24;
+    lo.strokeStyle = VGA.cyan; lo.globalAlpha = 0.8; lo.strokeRect(x + 0.5, y + 0.5, s, s); lo.globalAlpha = 1;
+    lo.globalAlpha = 0.25; lo.fillStyle = VGA.cyan;
+    lo.fillRect(x + 1, y + 1 + Math.round((1 - (target.pitch + 1) / 2) * (s - 2)), s - 1, 1);
+    lo.fillRect(x + 1 + Math.round(target.beat * (s - 2)), y + 1, 1, s - 1);
+    lo.globalAlpha = 1;
+    const dx = x + 1 + Math.round(ctl.beat * (s - 2)), dy = y + 1 + Math.round((1 - (ctl.pitch + 1) / 2) * (s - 2));
+    lo.fillStyle = VGA.yellow; lo.fillRect(dx - 1, dy - 1, 3, 3);
+    // motion meter
+    const mh = Math.round(ctl.motion * s);
+    lo.fillStyle = VGA.green; lo.globalAlpha = 0.25; lo.fillRect(x + s + 3, y + 1, 2, s); lo.globalAlpha = 1;
+    lo.fillRect(x + s + 3, y + 1 + s - mh, 2, mh);
+    textC(auto ? "AUTO" : "HAND", x + s / 2 + 1, y + s + 3, auto ? VGA.grey : VGA.yellow, 0.9);
+  }
+
+  function drawSequencer() {
+    const X0 = 18, Y0 = 108, CW = 8;
+    frame2(0, 101, R, 40, VGA.lblue);
+    lo.fillStyle = "#000"; lo.fillRect(54, 100, 42, 5);
+    textC("SEQUENCER", R / 2, 100, VGA.yellow);
+    const P = DRUMS[level], bassSteps = BASS[level].map((b) => b[0]);
+    const rows = [["K", P.k, VGA.red], ["S", [...P.s, ...P.c], VGA.yellow], ["H", [...P.h, ...P.o], VGA.cyan],
+                  ["B", bassSteps, VGA.magenta], ["M", motif.map((v, i) => (v ? i : -1)).filter((i) => i >= 0), VGA.green]];
+    rows.forEach(([lbl, hits, col], r) => {
+      const y = Y0 + r * 6;
+      text(lbl, 7, y, col, 0.9);
+      for (let i = 0; i < 16; i++) {
+        const x = X0 + i * CW, on = hits.includes(i), cur = playing && i === fx.curStep;
+        if (on) { lo.globalAlpha = cur ? 1 : 0.5; lo.fillStyle = col; lo.fillRect(x, y, CW - 2, 4); }
+        else { lo.globalAlpha = 0.25; lo.fillStyle = VGA.grey; lo.fillRect(x + 2, y + 2, 1, 1); }
+        if (i % 4 === 0 && !on) { lo.globalAlpha = 0.35; lo.fillRect(x + 2, y + 2, 1, 1); }
+      }
+      lo.globalAlpha = 1;
+    });
+    if (playing && fx.curStep >= 0) {
+      lo.strokeStyle = VGA.white; lo.globalAlpha = 0.7;
+      lo.strokeRect(X0 + fx.curStep * CW - 1.5, Y0 - 1.5, CW + 1, 30);
+      lo.globalAlpha = 1;
+    }
+  }
+
+  function drawBars() {
+    lo.fillStyle = VGA.blue; lo.globalAlpha = 0.9; lo.fillRect(0, 0, R, 8); lo.globalAlpha = 1;
+    text("SYNTH.EXE", 2, 2, VGA.yellow);
+    textR(mood.name, R - 3, 2, VGA.white);
+    const chord = chordName(playing ? fx.curBar : 0);
+    text(mood.bpm + "BPM", 2, 143, VGA.cyan);
+    text(LEADS[leadIdx], 34, 143, VGA.green);
+    text("LVL" + level, 60, 143, VGA.red);
+    text(chord, 84, 143, VGA.yellow, 0.6 + fx.chordFlash * 0.4);
+    textR("WR:" + wrist.status, R - 2, 143, wrist.status === "ON" ? VGA.green : VGA.grey);
+  }
+
+  function drawOverlay() {
+    if (!playing) {
+      const x = 14, y = 40, w = 122, h = 56;
+      lo.fillStyle = VGA.blue; lo.globalAlpha = 0.75; lo.fillRect(x, y, w, h); lo.globalAlpha = 1;
+      frame2(x, y, w, h, VGA.white);
+      textC("[ SYNTH.EXE ]", R / 2, y + 6, VGA.yellow);
+      if (Math.floor(clock * 2.5) % 2 === 0) textC("PINCH TO PLAY", R / 2, y + 16, VGA.white);
+      textC("PINCH+MOVE HAND:", R / 2, y + 27, VGA.cyan);
+      textC("UP/DOWN = MELODY", R / 2, y + 33, VGA.green);
+      textC("LEFT/RIGHT = BEAT", R / 2, y + 39, VGA.red);
+      textC("SWIPE ^V MOOD <> SOUND", R / 2, y + 47, VGA.grey);
+    }
+    if (clock < flashUntil) {
+      const w = tw(flashMsg) + 10, x = Math.round(R / 2 - w / 2);
+      lo.fillStyle = VGA.blue; lo.fillRect(x, 84, w, 11);
+      lo.strokeStyle = VGA.yellow; lo.strokeRect(x + 0.5, 84.5, w - 1, 10);
+      textC(flashMsg, R / 2, 87, VGA.yellow);
+    }
+  }
+
+  function present() {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function draw(dt) {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, R, R);
+    lo.lineWidth = 1;
+    drawSky();
+    drawGround();
+    drawFlying(dt);
+    drawXY();
+    drawSequencer();
+    drawBars();
+    drawOverlay();
+    present();
+  }
+
+  /* ============================== CONTROL UPDATE ============================== */
+  function updateControls(dt) {
+    const wristOn = wrist.status === "ON" && performance.now() - wrist.lastAt < 3000;
+    if (wristOn && !drag) {
+      target.pitch = clamp(wrist.rx / 35, -1, 1);
+      target.beat = clamp(0.5 + wrist.ry / 90, 0, 1);
+      const wm = clamp((wrist.speed - 12) / 140, 0, 1);
+      wristMotion += (wm - wristMotion) * lerpK(dt, wm > wristMotion ? 6 : 0.6);
+      if (wm > 0.05) lastInputAt = clock;
+    } else wristMotion *= Math.exp(-dt * 0.6);
+    dragMotion *= Math.exp(-dt * (drag ? 1.2 : 0.5));
+
+    auto = clock - lastInputAt > 6 && !drag && !wristOn;
+    let autoMotion = 0;
+    if (auto) {                                                       // gentle self-playing drift
+      target.pitch = 0.55 * Math.sin(clock * 0.13) + 0.3 * Math.sin(clock * 0.41 + 1);
+      target.beat = 0.55 + 0.35 * Math.sin(clock * 0.05);
+      autoMotion = 0.3 + 0.25 * Math.sin(clock * 0.23);
+    }
+    const k = lerpK(dt, 5);
+    ctl.pitch += (target.pitch - ctl.pitch) * k;
+    ctl.beat += (target.beat - ctl.beat) * lerpK(dt, 3);
+    const m = Math.max(dragMotion, wristMotion, autoMotion);
+    ctl.motion += (m - ctl.motion) * lerpK(dt, m > ctl.motion ? 5 : 0.8);
+
+    if (ac && playing) {                                               // live tone colour follows the hand at once
+      const t = ac.currentTime;
+      const cut = clamp(500 + 7000 * Math.pow(0.25 + 0.45 * ctl.beat + 0.35 * ctl.motion, 2), 400, 9000);
+      leadFilter.frequency.setTargetAtTime(cut, t, 0.05);
+      padFilter.frequency.setTargetAtTime(500 + 2200 * ctl.beat, t, 0.1);
+    }
+  }
+
+  /* ============================== INPUT ============================== */
+  let lastEnterAt = -1e9;
+  const onGlasses = /\bwv\b/.test(navigator.userAgent) && /Android/.test(navigator.userAgent);
+  const GAIN = onGlasses ? 2 : 1;
+
+  function primary() {
+    ensureAudio();
+    if (!wrist.sensor) startWrist();
+    togglePlay();
+  }
+  function setMood(d) {
+    moodIdx = (moodIdx + d + MOODS.length) % MOODS.length;
+    mood = MOODS[moodIdx];
+    leadIdx = mood.lead;
+    store.set("synth.mood", moodIdx); store.set("synth.lead", leadIdx);
+    if (ac && buildGraph.delay) setDelayTime(buildGraph.delay);
+    melDeg = 9;
+    flash(mood.name);
+  }
+  function setLead(d) {
+    leadIdx = (leadIdx + d + LEADS.length) % LEADS.length;
+    store.set("synth.lead", leadIdx);
+    flash("LEAD: " + LEADS[leadIdx]);
+  }
+
+  // On the glasses a pinch sends Enter AND (because of touch-action: none) a pointer press.
+  // The pointer press is the select; an Enter that arrives together with one is ignored.
+  let lastPointerAt = -1e9;
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); stopPlay(); stopWrist(); history.back(); return; }
+    if (!["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(k)) return;
+    e.preventDefault();
+    if (k === "Enter") {
+      if (e.repeat) return;
+      const at = performance.now();
+      lastEnterAt = at;
+      ensureAudio();                                                  // unlock sound inside the gesture
+      setTimeout(() => {
+        if (drag || Math.abs(lastPointerAt - at) < 450) return;       // part of a pinch: the pointer handles it
+        primary();
+      }, 220);
+    }
+    else if (k === "ArrowUp") setMood(1);
+    else if (k === "ArrowDown") setMood(-1);
+    else if (k === "ArrowRight") setLead(1);
+    else setLead(-1);
+  });
+
+  // Pinch-and-move (and mouse/touch drag for previewing): relative movement plays the music.
+  let drag = null;
+  cv.addEventListener("pointerdown", (e) => {
+    ensureAudio();                                                    // unlock sound inside the gesture
+    lastPointerAt = performance.now();
+    drag = { moved: 0, x: e.clientX, y: e.clientY, t: performance.now() };
+    try { cv.setPointerCapture(e.pointerId); } catch {}
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    let dx = e.movementX, dy = e.movementY;
+    if (typeof dx !== "number" || (dx === 0 && dy === 0)) { dx = e.clientX - drag.x; dy = e.clientY - drag.y; }
+    // device bug: the EMG pointer can snap back to screen centre; drop that jump
+    if (Math.abs(dx) > 150 && Math.abs(e.clientX - 300) < 3) dx = 0;
+    if (Math.abs(dy) > 150 && Math.abs(e.clientY - 300) < 3) dy = 0;
+    const now = performance.now(), dtm = Math.max(8, now - drag.t) / 1000;
+    drag.x = e.clientX; drag.y = e.clientY; drag.t = now;
+    drag.moved += Math.abs(dx) + Math.abs(dy);
+    target.beat = clamp(target.beat + (dx * GAIN) / 260, 0, 1);
+    target.pitch = clamp(target.pitch - (dy * GAIN) / 200, -1, 1);
+    dragMotion = Math.max(dragMotion, clamp((Math.hypot(dx, dy) * GAIN / dtm) / 700, 0, 1));
+    lastInputAt = clock;
+  });
+  function endDrag() {
+    if (!drag) return;
+    const tap = drag.moved < 8;
+    drag = null;
+    lastPointerAt = performance.now();
+    if (tap) primary();                                               // a still pinch / click = play or stop
+  }
+  cv.addEventListener("pointerup", endDrag);
+  cv.addEventListener("pointercancel", () => { drag = null; lastPointerAt = performance.now(); });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { stopPlay(); stopWrist(); if (ac && ac.suspend) ac.suspend(); }
+  });
+
+  /* ============================== LOOP ============================== */
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;                                              // the panel runs at 30 Hz
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    updateControls(dt);
+    consumeEvents();
+    if (playing && ac) beatPhase = ((((ac.currentTime - nextTime) / (stepDur() * 4) + step / 4) % 1) + 1) % 1;
+    else beatPhase = (beatPhase + dt * 0.4) % 1;
+    for (const key of ["kick", "snare", "hat", "bass", "chordFlash"]) fx[key] *= Math.exp(-dt * (key === "chordFlash" ? 2 : 9));
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+
+  // test hooks
+  window.__synth = {
+    ctl, target, wrist, get playing() { return playing; }, get level() { return level; }, get mood() { return mood; },
+    get leadIdx() { return leadIdx; }, get motif() { return motif; }, degNote, chordDegs, PENTA, SCALES, MOODS,
+    wristReading, startWrist,
+    // render N bars offline with a scripted hand, for checking levels and keys
+    async renderOffline(seconds, script, withData) {
+      const sr = 44100, oc = new OfflineAudioContext(2, Math.ceil(sr * seconds), sr);
+      const saved = ac; buildGraph(oc);
+      lastBar = -1;
+      const notes = [], levels = [];
+      const sd = stepDur();
+      let t = 0.05, s = 0;
+      while (t < seconds - 1) {
+        if (script) script(s, ctl);
+        const before = events.length;
+        scheduleStep(s, t + (s % 2 ? mood.swing * sd : 0));
+        for (const e of events.slice(before)) if (e.kind === "note") notes.push([e.note, s % 16, Math.floor(s / 16)]);
+        events.length = before;
+        if (s % 16 === 0) levels.push(level);
+        t += sd; s++;
+      }
+      const buf = await oc.startRendering();
+      ac = saved; if (saved) buildGraph(saved);
+      const ch = [buf.getChannelData(0), buf.getChannelData(1)];
+      let peak = 0, sum = 0, nan = 0;
+      for (const c of ch) for (let i = 0; i < c.length; i++) { const v = c[i]; if (!Number.isFinite(v)) nan++; else { peak = Math.max(peak, Math.abs(v)); sum += v * v; } }
+      const out = { peak, rms: Math.sqrt(sum / (ch[0].length * 2)), nan, notes, levels, steps: s };
+      if (withData) {                                                 // 16-bit PCM, base64, for a WAV preview
+        const L = ch[0], Rr = ch[1], pcm = new Int16Array(L.length * 2);
+        for (let i = 0; i < L.length; i++) { pcm[2 * i] = clamp(L[i], -1, 1) * 32767; pcm[2 * i + 1] = clamp(Rr[i], -1, 1) * 32767; }
+        let bin = ""; const bytes = new Uint8Array(pcm.buffer);
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        out.pcm = btoa(bin); out.sr = sr;
+      }
+      return out;
+    },
+  };
+})();
+</script>
+</body>
+</html>

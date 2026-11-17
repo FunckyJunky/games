@@ -50,9 +50,9 @@
   .title { font-size: 28px; font-weight: 700; color: var(--cyan); margin-bottom: 24px; letter-spacing: .5px; }
 
   /* ---------- Menu ---------- */
-  .grid { display: grid; grid-template-columns: repeat(3, 168px); gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 130px); gap: 12px; }
   .tile {
-    width: 168px; height: 160px;
+    width: 130px; height: 150px;
     background: var(--panel);
     border: 3px solid var(--edge);
     border-radius: 24px;
@@ -61,8 +61,8 @@
     outline: none; cursor: pointer;
     transition: transform .12s, border-color .12s, box-shadow .12s;
   }
-  .tile .ico { font-size: 52px; line-height: 1; }
-  .tile .lbl { font-size: 22px; font-weight: 600; }
+  .tile .ico { font-size: 46px; line-height: 1; }
+  .tile .lbl { font-size: 20px; font-weight: 600; }
   .tile:focus {
     border-color: var(--cyan);
     box-shadow: 0 0 0 4px rgba(77, 232, 255, .35);
@@ -114,6 +114,7 @@
     <button class="tile focusable" data-go="snake"><span class="ico">🐍</span><span class="lbl">Snake</span></button>
     <button class="tile focusable" data-href="/glasses/hud/"><span class="ico">🎯</span><span class="lbl">HUD</span></button>
     <button class="tile focusable" data-href="/glasses/flight/"><span class="ico">✈️</span><span class="lbl">Flight</span></button>
+    <button class="tile focusable" data-href="/glasses/synth/"><span class="ico">🎹</span><span class="lbl">Synth</span></button>
   </div>
   <div class="hint">Swipe to move · Pinch to open</div>
 </section>
@@ -220,8 +221,8 @@
     document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
   });
 
-  /* ---------- MENU (3 x 2 grid) ---------- */
-  const COLS = 3;
+  /* ---------- MENU (4 x 2 grid) ---------- */
+  const COLS = 4;
   apps.menu = {
     key(k) {
       let i = Math.max(0, tiles.indexOf(document.activeElement));
