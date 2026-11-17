@@ -141,7 +141,7 @@ const DM = (() => {
       { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
     ];
     let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
-    let live = false, raw = null, needZero = true, zp = 0, zr = 0, listening = false;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
     const att = { h: 0, p: 0, r: 0 };
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -190,7 +190,7 @@ const DM = (() => {
       if (!live || !raw) return false;
       const a = attitude(raw[0], raw[1], raw[2]);
       if (needZero) {   // "level" = how you hold your head right now
-        zp = a.pitch; zr = a.roll;
+        zp = a.pitch; zr = a.roll; zh = a.heading;
         att.h = a.heading; att.p = a.pitch; att.r = a.roll;
         needZero = false;
       }
@@ -205,6 +205,7 @@ const DM = (() => {
       get live() { return live; },
       get axisName() { return AXES[axis].name; },
       get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
       get pitch() { return att.p - zp; },
       get roll() { return angDiff(att.r, zr); },
       enable, update, attitude,

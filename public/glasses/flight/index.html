@@ -141,7 +141,7 @@ const DM = (() => {
       { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
     ];
     let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
-    let live = false, raw = null, needZero = true, zp = 0, zr = 0, listening = false;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
     const att = { h: 0, p: 0, r: 0 };
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -190,7 +190,7 @@ const DM = (() => {
       if (!live || !raw) return false;
       const a = attitude(raw[0], raw[1], raw[2]);
       if (needZero) {   // "level" = how you hold your head right now
-        zp = a.pitch; zr = a.roll;
+        zp = a.pitch; zr = a.roll; zh = a.heading;
         att.h = a.heading; att.p = a.pitch; att.r = a.roll;
         needZero = false;
       }
@@ -205,6 +205,7 @@ const DM = (() => {
       get live() { return live; },
       get axisName() { return AXES[axis].name; },
       get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
       get pitch() { return att.p - zp; },
       get roll() { return angDiff(att.r, zr); },
       enable, update, attitude,
@@ -237,7 +238,8 @@ const DM = (() => {
 </script>
 <script>
 /* DOT FLIGHT: a tiny wireframe flight sim on the dot-matrix display.
-   Tilt your head = bank and turn.  Nod up / down = climb / dive.  Fly through the gates.
+   Look left / right = turn (the plane banks into the turn).  Look up / down = climb / dive.
+   Fly through the gates.  The small cross shows where you're looking.
    Pinch = take off / re-centre   Swipe up/down = throttle   Swipe left/right = colour   Back = exit
    Without sensors: arrow keys or drag = control stick. */
 (() => {
@@ -333,17 +335,20 @@ const DM = (() => {
   /* ---------- physics ---------- */
   const dead = (v, z) => (Math.abs(v) < z ? 0 : v - Math.sign(v) * z);
 
+  // steering input in degrees: where you look (left/right, up/down) relative to centre
+  const input = { x: 0, y: 0 };
+  function readInput(dt) {
+    if (motion.live) { input.x = motion.yaw; input.y = motion.pitch; return; }
+    if (clock > stick.until && !dragging) { stick.tx = 0; stick.ty = 0; }
+    const k = 1 - Math.exp(-dt * 6);
+    stick.x += (stick.tx - stick.x) * k; stick.y += (stick.ty - stick.y) * k;
+    input.x = stick.x * 34; input.y = stick.y * 28;
+  }
+
   function physics(dt) {
-    let inRoll, inPitch;
-    if (motion.live) { inRoll = motion.roll; inPitch = motion.pitch; }
-    else {
-      if (clock > stick.until && !dragging) { stick.tx = 0; stick.ty = 0; }
-      const k = 1 - Math.exp(-dt * 6);
-      stick.x += (stick.tx - stick.x) * k; stick.y += (stick.ty - stick.y) * k;
-      inRoll = stick.x * 33; inPitch = stick.y * 28;
-    }
-    const tRoll = clamp(dead(inRoll, 3) * 2, -60, 60);        // head tilt 30 deg = full bank
-    const tPitch = clamp(dead(inPitch, 3) * 1.4, -35, 35);    // nod 25 deg = full climb
+    readInput(dt);
+    const tRoll = clamp(dead(input.x, 4) * 2, -60, 60);       // look 34 deg to the side = full bank
+    const tPitch = clamp(dead(input.y, 3) * 1.4, -35, 35);    // look 25 deg up/down = full climb/dive
     plane.roll += (tRoll - plane.roll) * (1 - Math.exp(-dt * 3));
     plane.pitch += (tPitch - plane.pitch) * (1 - Math.exp(-dt * 2.5));
     plane.yaw = wrap360(plane.yaw + 50 * Math.sin(plane.roll * D2R) * dt);
@@ -516,6 +521,14 @@ const DM = (() => {
     lo.fillRect(CX - 12, CY, 8, 1); lo.fillRect(CX + 5, CY, 8, 1);
     for (let i = 0; i <= 2; i++) { lo.fillRect(CX - 2 + i, CY + 2 - i, 1, 1); lo.fillRect(CX + 2 - i, CY + 2 - i, 1, 1); }
 
+    // steering reticle: shows where you're looking; the plane follows it
+    if (state === "fly") {
+      const rx = Math.round(CX + clamp(input.x, -34, 34) * 1.2), ry = Math.round(CY - clamp(input.y, -28, 28) * 1.2);
+      lo.beginPath(); lo.arc(rx + 0.5, ry + 0.5, 3.5, 0, Math.PI * 2); lo.stroke();
+      lo.fillRect(rx, ry, 1, 1);
+      lo.fillRect(rx - 6, ry, 2, 1); lo.fillRect(rx + 5, ry, 2, 1);
+    }
+
     const kmh = Math.round(plane.v * 3.6);
     text("SPD " + kmh, 2, 2);
     textR("ALT " + Math.max(0, Math.round(plane.y)), 118, 2);
@@ -541,8 +554,8 @@ const DM = (() => {
     const blink = Math.floor(clock * 2.5) % 2 === 0;
     if (state === "ready") {
       textC("DOT FLIGHT", CX, 30);
-      textC("TILT HEAD = TURN", CX, 72, 0.85);
-      textC("NOD = CLIMB/DIVE", CX, 79, 0.85);
+      textC("LOOK LEFT/RIGHT = TURN", CX, 72, 0.85);
+      textC("LOOK UP/DOWN = CLIMB/DIVE", CX, 79, 0.85);
       if (blink) textC("PINCH TO TAKE OFF", CX, 90);
     } else if (state === "crash") {
       const t = clock - crashAt;
