@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<title>Dot Flight</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAACHklEQVR42u3bMW7DMAyF4WfBU8acIgU65y49Q86TM/QumQu0p+jY1Z0MGG5T2ClFUvbPidBAqI0hfRClTtIgSYfTUZL09fGpaTBed7xMB8n98+5wOg4iwqLwLwj+AeZr1Lg+Me4zXuYbBblvzhKUYQ9AIygIBREoCAWRoyAURI6CUBCBglAQOQpCQeQoCAURKAgFkaMgFESOglAQgYJQEDkKQkHkKAgFESgIBZH/P+9ZBHzj+f1FknTrrijIOz8Plx85CnL+8lEQCtrn+LjmT+PWXVGQZz79Eca8r73LW49nm8/a8ben13pnQb/t8pZ5tvlYzN9MQfd2eauYfznR87GaPwraioLu7fJW49nmYzX/UnuXt8yzzcdi/r3XWmc1XltNtf+upjtimfSivXXEolSzVl90xDgL8j1LyaavTXfEMulFdMRi9bLLe0GZ9IKCgvWCglBQbgVxLyiBgrgX5NBRam3ND1FQC2cym1WQ1RlOq184Ctq7glo5k9m0glo4k0mroCi9bHXNX6Ug9BKoIPSCgvatIPSSQEHoxVFB2c5eat+OzlKneNxGps4fb8TOw2WoeRuZOrwRy62g2reRqbPgjVjt28jUWfBG7NE1bamaqGP4Rgzt2NVZ3RFDO7Z1UFBrHTG0Y1unoJTYOj1Kia1TUEpsndUdMbRjWwcFtdYRQzu2dQpKia3To5TYOnTE6IiJjhhBR4yOGEqJqfMN5cw403+cNBQAAAAASUVORK5CYII=">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body {
+    width: 600px; height: 600px; overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 600px; height: 600px; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop };
+})();
+
+</script>
+<script>
+/* DOT FLIGHT: a tiny wireframe flight sim on the dot-matrix display.
+   Tilt your head = bank and turn.  Nod up / down = climb / dive.  Fly through the gates.
+   Pinch = take off / re-centre   Swipe up/down = throttle   Swipe left/right = colour   Back = exit
+   Without sensors: arrow keys or drag = control stick. */
+(() => {
+  "use strict";
+  const { CX, CY, D2R, clamp, angDiff, wrap360, THEMES, store } = DM;
+  const disp = DM.createDisplay(document.getElementById("screen"));
+  const { lo, text, textC, textR } = disp;
+
+  let theme = (store.get("glasses.theme", 0) | 0) % THEMES.length;
+  let clock = 0, flashMsg = "", flashUntil = 0;
+  const flash = (m, d = 1.6) => { flashMsg = m; flashUntil = clock + d; };
+  const motion = DM.createMotion(() => flash("SENSORS LIVE"));
+
+  const F = 80;            // focal length in dots (~74 degree view)
+  const NEAR = 1;
+  const CELL = 500;        // one possible mountain per 500 m cell
+
+  /* ---------- world ---------- */
+  function hash(x, z, k) {
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(z | 0, 668265263) ^ Math.imul(k | 0, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  const mtnCache = new Map();
+  function mountain(cx, cz) {
+    const key = cx + "," + cz;
+    if (mtnCache.has(key)) return mtnCache.get(key);
+    let m = null;
+    if (hash(cx, cz, 1) < 0.42 && (Math.abs(cx) > 1 || Math.abs(cz) > 1)) {
+      m = {
+        x: (cx + 0.2 + hash(cx, cz, 4) * 0.6) * CELL,
+        z: (cz + 0.2 + hash(cx, cz, 5) * 0.6) * CELL,
+        B: 70 + hash(cx, cz, 2) * 150,
+        H: 60 + hash(cx, cz, 3) * 240,
+      };
+    }
+    if (mtnCache.size > 5000) mtnCache.clear();
+    mtnCache.set(key, m);
+    return m;
+  }
+  function groundAt(x, z) {
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    let h = 0;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const m = mountain(cx + i, cz + j);
+      if (!m) continue;
+      const d = Math.max(Math.abs(x - m.x), Math.abs(z - m.z));
+      if (d < m.B) h = Math.max(h, m.H * (1 - d / m.B));
+    }
+    return h;
+  }
+
+  /* ---------- plane ---------- */
+  const plane = {};
+  let state = "ready";                     // ready | fly | crash
+  let gate = null, gates = 0, best = store.get("flight.best", 0), crashAt = 0, crashWhy = "";
+  let prevSide = null;
+  const stick = { x: 0, y: 0, until: 0, tx: 0, ty: 0 };
+
+  function reset() {
+    Object.assign(plane, { x: 0, y: 160, z: 0, yaw: 0, pitch: 0, roll: 0, v: 85, thr: plane.thr ?? 0.6 });
+    gates = 0;
+    gate = null;
+    prevSide = null;
+  }
+
+  function newGate() {
+    const ang = plane.yaw + (Math.random() - 0.5) * 50;
+    const dist = 650 + Math.random() * 300;
+    const x = plane.x + Math.sin(ang * D2R) * dist, z = plane.z + Math.cos(ang * D2R) * dist;
+    let y = clamp(plane.y + (Math.random() - 0.5) * 160, 70, 380);
+    y = Math.max(y, groundAt(x, z) + 70);
+    gate = { x, y, z, nx: Math.sin(ang * D2R), nz: Math.cos(ang * D2R), half: 24 };
+    prevSide = null;
+  }
+  const gateSide = () => (plane.x - gate.x) * gate.nx + (plane.z - gate.z) * gate.nz;
+
+  function crash(why) {
+    state = "crash";
+    crashAt = clock;
+    crashWhy = why;
+    if (gates > best) { best = gates; store.set("flight.best", best); }
+  }
+
+  function takeOff() {
+    reset();
+    motion.zero();
+    state = "fly";
+    newGate();
+    flash("GO! FLY THROUGH GATES", 2);
+  }
+
+  /* ---------- physics ---------- */
+  const dead = (v, z) => (Math.abs(v) < z ? 0 : v - Math.sign(v) * z);
+
+  function physics(dt) {
+    let inRoll, inPitch;
+    if (motion.live) { inRoll = motion.roll; inPitch = motion.pitch; }
+    else {
+      if (clock > stick.until && !dragging) { stick.tx = 0; stick.ty = 0; }
+      const k = 1 - Math.exp(-dt * 6);
+      stick.x += (stick.tx - stick.x) * k; stick.y += (stick.ty - stick.y) * k;
+      inRoll = stick.x * 33; inPitch = stick.y * 28;
+    }
+    const tRoll = clamp(dead(inRoll, 3) * 2, -60, 60);        // head tilt 30 deg = full bank
+    const tPitch = clamp(dead(inPitch, 3) * 1.4, -35, 35);    // nod 25 deg = full climb
+    plane.roll += (tRoll - plane.roll) * (1 - Math.exp(-dt * 3));
+    plane.pitch += (tPitch - plane.pitch) * (1 - Math.exp(-dt * 2.5));
+    plane.yaw = wrap360(plane.yaw + 50 * Math.sin(plane.roll * D2R) * dt);
+
+    const vt = 45 + 95 * plane.thr - 70 * Math.sin(plane.pitch * D2R);
+    plane.v = clamp(plane.v + (vt - plane.v) * (1 - Math.exp(-dt * 0.6)), 35, 200);
+
+    const cp = Math.cos(plane.pitch * D2R);
+    plane.x += Math.sin(plane.yaw * D2R) * cp * plane.v * dt;
+    plane.z += Math.cos(plane.yaw * D2R) * cp * plane.v * dt;
+    plane.y = Math.min(1200, plane.y + Math.sin(plane.pitch * D2R) * plane.v * dt);
+
+    const gnd = groundAt(plane.x, plane.z);
+    if (plane.y < gnd + 2) { crash(gnd > 0 ? "HIT A MOUNTAIN" : "HIT THE GROUND"); return; }
+
+    // gates
+    const s = gateSide();
+    if (prevSide !== null && prevSide < 0 && s >= 0) {
+      const lat = (plane.x - gate.x) * gate.nz - (plane.z - gate.z) * gate.nx;
+      const vert = plane.y - gate.y;
+      if (Math.abs(lat) < gate.half && Math.abs(vert) < gate.half) { gates++; flash("GATE " + gates + "!", 1.4); }
+      else flash("MISSED", 1.4);
+      newGate();
+      return;
+    }
+    prevSide = s;
+    if (Math.hypot(plane.x - gate.x, plane.z - gate.z) > 1800) { flash("GATE LOST", 1.4); newGate(); }
+  }
+
+  /* ---------- 3D ---------- */
+  let cam;
+  function setCam() {
+    cam = {
+      x: plane.x, y: plane.y, z: plane.z,
+      cy: Math.cos(plane.yaw * D2R), sy: Math.sin(plane.yaw * D2R),
+      cp: Math.cos(plane.pitch * D2R), sp: Math.sin(plane.pitch * D2R),
+      cr: Math.cos(plane.roll * D2R), sr: Math.sin(plane.roll * D2R),
+    };
+  }
+  function toCam(X, Y, Z) {   // world (x east, y up, z north) -> camera (x right, y up, z ahead)
+    const dx = X - cam.x, dy = Y - cam.y, dz = Z - cam.z;
+    const x1 = dx * cam.cy - dz * cam.sy, z1 = dx * cam.sy + dz * cam.cy;
+    const y2 = dy * cam.cp - z1 * cam.sp, z2 = dy * cam.sp + z1 * cam.cp;
+    return [x1 * cam.cr - y2 * cam.sr, x1 * cam.sr + y2 * cam.cr, z2];
+  }
+  const scr = (P) => [CX + (F * P[0]) / P[2], CY - (F * P[1]) / P[2]];
+
+  // line segments are collected per brightness and drawn in batches
+  const BUCKETS = 8;
+  let buckets;
+  const resetBuckets = () => { buckets = Array.from({ length: BUCKETS }, () => []); };
+  function seg(a, b, alpha) {
+    let A = toCam(a[0], a[1], a[2]), B = toCam(b[0], b[1], b[2]);
+    if (A[2] < NEAR && B[2] < NEAR) return;
+    if (A[2] < NEAR) A = clipNear(A, B); else if (B[2] < NEAR) B = clipNear(B, A);
+    const i = clamp(Math.round(alpha * (BUCKETS - 1)), 0, BUCKETS - 1);
+    if (i === 0) return;
+    const pa = scr(A), pb = scr(B);
+    buckets[i].push(pa[0], pa[1], pb[0], pb[1]);
+  }
+  function clipNear(P, Q) {
+    const t = (NEAR - P[2]) / (Q[2] - P[2]);
+    return [P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t, NEAR];
+  }
+  function flush() {
+    for (let i = 1; i < BUCKETS; i++) {
+      const b = buckets[i];
+      if (!b.length) continue;
+      lo.globalAlpha = i / (BUCKETS - 1);
+      lo.beginPath();
+      for (let j = 0; j < b.length; j += 4) { lo.moveTo(b[j], b[j + 1]); lo.lineTo(b[j + 2], b[j + 3]); }
+      lo.stroke();
+    }
+    lo.globalAlpha = 1;
+  }
+
+  function drawSkyAndGround() {
+    const hy = F * Math.tan(clamp(plane.pitch, -80, 80) * D2R);
+    lo.save();
+    lo.translate(CX, CY);
+    lo.rotate(-plane.roll * D2R);
+    lo.globalAlpha = 0.13;
+    lo.fillRect(-130, hy, 260, 260);                      // ground glows faintly
+    lo.globalAlpha = 1;
+    lo.fillRect(-130, Math.round(hy), 260, 1);            // horizon
+    lo.restore();
+
+    // sun
+    const az = 60 * D2R, el = 14 * D2R, R = 1e5;
+    const S = toCam(plane.x + Math.cos(el) * Math.sin(az) * R, plane.y + Math.sin(el) * R, plane.z + Math.cos(el) * Math.cos(az) * R);
+    if (S[2] > 0) {
+      const [sx, sy] = scr(S);
+      lo.beginPath(); lo.arc(sx, sy, 5, 0, Math.PI * 2); lo.stroke();
+      lo.globalAlpha = 0.5; lo.beginPath(); lo.arc(sx, sy, 3, 0, Math.PI * 2); lo.fill(); lo.globalAlpha = 1;
+    }
+  }
+
+  function drawWorld() {
+    resetBuckets();
+    // ground grid
+    const S = 100, R = 800;
+    const x0 = Math.floor((plane.x - R) / S) * S, z0 = Math.floor((plane.z - R) / S) * S;
+    for (let gx = x0; gx <= plane.x + R; gx += S) {
+      for (let gz = z0; gz <= plane.z + R; gz += S) {
+        const d = Math.hypot(gx + S / 2 - plane.x, gz + S / 2 - plane.z);
+        if (d > R) continue;
+        const a = (1 - d / R) * 0.7;
+        seg([gx, 0, gz], [gx, 0, gz + S], a);
+        seg([gx, 0, gz], [gx + S, 0, gz], a);
+      }
+    }
+    // mountains
+    const MR = 2400, cr = Math.ceil(MR / CELL);
+    const pcx = Math.floor(plane.x / CELL), pcz = Math.floor(plane.z / CELL);
+    for (let i = -cr; i <= cr; i++) for (let j = -cr; j <= cr; j++) {
+      const m = mountain(pcx + i, pcz + j);
+      if (!m) continue;
+      const d = Math.hypot(m.x - plane.x, m.z - plane.z);
+      if (d > MR) continue;
+      const a = clamp(1.15 - d / MR, 0.15, 1);
+      const B = m.B, top = [m.x, m.H, m.z];
+      const c = [[m.x - B, 0, m.z - B], [m.x + B, 0, m.z - B], [m.x + B, 0, m.z + B], [m.x - B, 0, m.z + B]];
+      const h2 = m.H * 0.45, B2 = B * 0.55;
+      const c2 = [[m.x - B2, h2, m.z - B2], [m.x + B2, h2, m.z - B2], [m.x + B2, h2, m.z + B2], [m.x - B2, h2, m.z + B2]];
+      for (let k = 0; k < 4; k++) {
+        seg(c[k], c[(k + 1) % 4], a);
+        seg(c[k], top, a);
+        seg(c2[k], c2[(k + 1) % 4], a * 0.6);
+      }
+    }
+    // gate: square frame on a pole
+    if (gate) {
+      const rx = gate.nz, rz = -gate.nx, h = gate.half;
+      const P = (u, v) => [gate.x + rx * u, gate.y + v, gate.z + rz * u];
+      const pulse = 0.75 + 0.25 * Math.sin(clock * 6);
+      const cs = [P(-h, -h), P(h, -h), P(h, h), P(-h, h)];
+      for (let k = 0; k < 4; k++) seg(cs[k], cs[(k + 1) % 4], pulse);
+      const i = h * 0.6, ci = [P(-i, -i), P(i, -i), P(i, i), P(-i, i)];
+      for (let k = 0; k < 4; k++) seg(ci[k], ci[(k + 1) % 4], pulse * 0.5);
+      seg([gate.x, gate.y - h, gate.z], [gate.x, 0, gate.z], 0.4);
+    }
+    flush();
+  }
+
+  function drawGateArrow() {
+    if (!gate || state !== "fly") return;
+    const P = toCam(gate.x, gate.y, gate.z);
+    const dist = Math.round(Math.hypot(gate.x - plane.x, gate.y - plane.y, gate.z - plane.z));
+    let on = false, sx = 0, sy = 0;
+    if (P[2] > NEAR) { [sx, sy] = scr(P); on = sx > 6 && sx < 114 && sy > 10 && sy < 100; }
+    if (on) {
+      textC(dist + "M", sx, sy + 10, 0.8);
+    } else {
+      const a = Math.atan2(-P[1], P[0]);                 // direction on screen
+      const ex = CX + Math.cos(a) * 44, ey = CY + Math.sin(a) * 44;
+      const nx = Math.cos(a), ny = Math.sin(a), tx = -ny, ty = nx;
+      if (Math.floor(clock * 4) % 2 === 0) {
+        lo.beginPath();
+        lo.moveTo(ex + nx * 4, ey + ny * 4);
+        lo.lineTo(ex + tx * 3, ey + ty * 3);
+        lo.lineTo(ex - tx * 3, ey - ty * 3);
+        lo.closePath(); lo.fill();
+      }
+    }
+    textC("GATE " + dist + "M", CX, 108, 0.85);
+  }
+
+  function drawHud() {
+    // fixed aircraft symbol
+    lo.fillRect(CX - 12, CY, 8, 1); lo.fillRect(CX + 5, CY, 8, 1);
+    for (let i = 0; i <= 2; i++) { lo.fillRect(CX - 2 + i, CY + 2 - i, 1, 1); lo.fillRect(CX + 2 - i, CY + 2 - i, 1, 1); }
+
+    const kmh = Math.round(plane.v * 3.6);
+    text("SPD " + kmh, 2, 2);
+    textR("ALT " + Math.max(0, Math.round(plane.y)), 118, 2);
+    textC("[" + String(Math.round(plane.yaw) % 360).padStart(3, "0") + "]", CX, 2);
+
+    // throttle bar on the left, climb rate on the right
+    lo.globalAlpha = 0.3; lo.fillRect(2, 30, 2, 60); lo.globalAlpha = 1;
+    const th = Math.round(60 * plane.thr);
+    lo.fillRect(2, 90 - th, 2, th);
+    text("T", 1, 92);
+    const vs = plane.v * Math.sin(plane.pitch * D2R);
+    textR((vs >= 0 ? "+" : "-") + Math.min(99, Math.round(Math.abs(vs))), 118, 58, 0.85);
+    textR("VS", 118, 52, 0.6);
+
+    text("GATES " + gates, 2, 114);
+    textR("BEST " + best, 118, 114);
+
+    const agl = plane.y - groundAt(plane.x, plane.z);
+    if (state === "fly" && agl < 60 && plane.pitch < 2 && Math.floor(clock * 4) % 2 === 0) textC("PULL UP", CX, 80);
+  }
+
+  function drawOverlay() {
+    const blink = Math.floor(clock * 2.5) % 2 === 0;
+    if (state === "ready") {
+      textC("DOT FLIGHT", CX, 30);
+      textC("TILT HEAD = TURN", CX, 72, 0.85);
+      textC("NOD = CLIMB/DIVE", CX, 79, 0.85);
+      if (blink) textC("PINCH TO TAKE OFF", CX, 90);
+    } else if (state === "crash") {
+      const t = clock - crashAt;
+      for (let k = 0; k < 3; k++) {                         // explosion rings
+        const r = (t * 40 + k * 12) % 60;
+        lo.globalAlpha = clamp(1 - r / 60, 0, 1);
+        lo.beginPath(); lo.arc(CX, CY, r, 0, Math.PI * 2); lo.stroke();
+      }
+      lo.globalAlpha = 1;
+      for (let k = 0; k < 24; k++) {                        // debris
+        const a = k * 2.4, sp = 12 + (k * 7) % 23;
+        const x = CX + Math.cos(a) * sp * t * 1.6, y = CY + Math.sin(a) * sp * t * 1.6 + 6 * t * t;
+        if (t < 3) lo.fillRect(Math.round(x), Math.round(y), 1, 1);
+      }
+      textC("CRASHED", CX, 30);
+      textC(crashWhy, CX, 37, 0.8);
+      textC("GATES " + gates + "  BEST " + best, CX, 84);
+      if (t > 1 && blink) textC("PINCH TO FLY AGAIN", CX, 91);
+    }
+    if (clock < flashUntil && state === "fly") textC(flashMsg, CX, 22);
+    else if (clock < flashUntil) textC(flashMsg, CX, 100, 0.8);
+  }
+
+  function draw() {
+    disp.begin(THEMES[theme].c, 0.06);
+    setCam();
+    drawSkyAndGround();
+    if (!(state === "crash" && clock - crashAt > 0.6)) drawWorld();
+    drawGateArrow();
+    drawHud();
+    drawOverlay();
+    disp.present();
+  }
+
+  /* ---------- input ---------- */
+  async function primary() {
+    if (!motion.live) {
+      const res = await motion.enable();
+      if (res === "denied") flash("NO MOTION PERMISSION", 2.5);
+    }
+    if (state === "fly") { motion.zero(); flash("CENTERED", 1.2); return; }
+    if (state === "crash" && clock - crashAt < 1) return;
+    takeOff();
+  }
+  function setTheme(d) {
+    theme = (theme + d + THEMES.length) % THEMES.length;
+    store.set("glasses.theme", theme);
+    flash(THEMES[theme].name, 1.2);
+  }
+  function nudge(x, y) { stick.tx = x; stick.ty = y; stick.until = clock + 0.5; }
+
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); history.back(); return; }
+    if (!["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(k)) return;
+    e.preventDefault();
+    if (k === "Enter") { primary(); return; }
+    if (motion.live) {                       // head steers; swipes trim the rest
+      if (k === "ArrowUp") { plane.thr = clamp(plane.thr + 0.1, 0, 1); flash("THROTTLE " + Math.round(plane.thr * 100) + "%", 1); }
+      if (k === "ArrowDown") { plane.thr = clamp(plane.thr - 0.1, 0, 1); flash("THROTTLE " + Math.round(plane.thr * 100) + "%", 1); }
+      if (k === "ArrowLeft") setTheme(-1);
+      if (k === "ArrowRight") setTheme(1);
+    } else {                                 // no sensors: arrows are the stick
+      if (k === "ArrowLeft") nudge(-1, stick.ty);
+      if (k === "ArrowRight") nudge(1, stick.ty);
+      if (k === "ArrowUp") nudge(stick.tx, 1);
+      if (k === "ArrowDown") nudge(stick.tx, -1);
+    }
+  });
+
+  // preview on a phone/computer: drag = stick, tap = pinch
+  let drag = null, dragging = false, moved = false;
+  const cv = document.getElementById("screen");
+  cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY }; dragging = false; moved = false; });
+  window.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 8) dragging = moved = true;
+    if (dragging) { stick.tx = clamp(dx / 90, -1, 1); stick.ty = clamp(-dy / 90, -1, 1); }
+  });
+  window.addEventListener("pointerup", () => { drag = null; if (dragging) stick.until = clock + 0.15; dragging = false; });
+  cv.addEventListener("click", () => { if (!moved) primary(); });
+
+  window.__flight = { motion, plane, get state() { return state; }, get gate() { return gate; }, get gates() { return gates; } };
+
+  reset();
+  DM.loop((dt, t) => {
+    clock = t;
+    motion.update(dt);
+    if (state === "fly") physics(dt);
+    draw();
+  });
+})();
+</script>
+</body>
+</html>

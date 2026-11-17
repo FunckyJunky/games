@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<title>Target HUD</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAChElEQVR42u2dQW7CMBBFJ1ZWLDkFlbrmLj0D5+kZepeukdpTdNltuqgiIQQSEZ74f+fNyrLQBAcwL54/M0NETBERu8M+IiJ+v3/i0tTmj9MpIiI+h/eH5tXXVS4n1cfzTX507LCuYXfYT2Fgr19vi15/fvlwWNb/LwBr+AFc71Hz/qQ2f723z/v9vXmXdZXrPwrl8eXNfmTssK5Rfc+/9Q1v4Sf1P8CddpzpSI6CltLOUlOjIygICnqOdtzpqPRAO850NLammlaUovJ+Sg9U40xN6RSUTTXZlk1NUFDvFJRNNe7UVHqgGmdqGluf4dzbY2vtvbX8Z9FRcYpYuftPpaDsiJW7fyiodwrKpgt3/6tQUDZduPuvSkG1aMf9yfdZOipO+pwer7uYglrRQq/XhYLcKKgVLfR63eKkz+nxuqPb+Xn22dHa66pKQS4q62w6akJBLpwfyZE+KGirFOSiRs6mo6YU5KKyzqajqhSkri52V3eXreVkqZ0R3aWgXnOy1HLWoCBVCuo1J0vtjKhsLSdL7YxoXCsnC/+3/RQn1bGa/xrj4TidJqfYq4p/1NG9UJCL6ljNf6354qQ6VvNfY8wWpJAnDAVBQVAQBgVBQVDQ+vdhVM3J2op/ImJExIKIGEZELIiIERFrGxFjb2/zpI86GnU06mgMdTTqaNTRqupotVrNraodStULIlOeTPkgUx4jU55MeTLl21GQStVB1aqPVE2kaiJVE6EgqiZSNZGqib1WTcymI7WcL6l6QXTQoING0EEDo4MGHTTooOHTR6xVtUP190M3Vbqp0k0Vo5sq3VTpphr0lF8154ue8ka6oE1RkFrECgqCgvrKyYKCDHVBmeM/+1WvWJ+RaxoAAAAASUVORK5CYII=">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body {
+    width: 600px; height: 600px; overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 600px; height: 600px; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop };
+})();
+
+</script>
+<script>
+/* TARGET HUD: a dot-matrix head-up display.
+   Pinch = start sensors / set level   Swipe left/right = colour   Swipe up/down = sensor axis   Back = exit
+   Without sensors it runs a simulation; drag to look around. */
+(() => {
+  "use strict";
+  const { CX, CY, D2R, clamp, angDiff, wrap360, THEMES, store } = DM;
+  const disp = DM.createDisplay(document.getElementById("screen"));
+  const { lo, text, textC, textR, tw } = disp;
+
+  const PPD = 4;            // dots per degree: horizon and targets are drawn at true scale
+  const LOCK_TIME = 1.2;    // seconds on target to lock
+
+  let theme = (store.get("glasses.theme", 0) | 0) % THEMES.length;
+  let clock = 0, flashMsg = "", flashUntil = 0;
+  const flash = (m, d = 1.6) => { flashMsg = m; flashUntil = clock + d; };
+  const motion = DM.createMotion(() => flash("SENSORS LIVE"));
+
+  /* ---------- state ---------- */
+  let view = { h: 0, p: 0, r: 0 };
+  let prevH = null, prevP = 0, speed = 0, moving = false;
+  let targets = [], nextId = 1, lastSpawn = 0;
+  let lockId = null, lockT = 0;
+  let hex = ["0000 00", "0000 00", "0000 00"], lastHex = 0;
+  let dragYaw = 0, dragPitch = 0;
+
+  const TYPES = [["DRONE", "MED"], ["BIRD", "NIL"], ["PLANE", "LOW"], ["BALLOON", "NIL"], ["HELI", "LOW"],
+                 ["SAT", "NIL"], ["KITE", "NIL"], ["UFO", "HI"], ["JET", "MED"]];
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const hx = (n) => Array.from({ length: n }, () => "0123456789ABCDEF"[rnd(16)]).join("");
+  const signed = (v) => (v < 0 ? "-" : "+") + String(Math.min(99, Math.round(Math.abs(v)))).padStart(2, "0");
+
+  /* simulated head movement when there are no sensors (computer / phone preview) */
+  function simView(t) {
+    return {
+      h: wrap360(50 * Math.sin(t * 0.25) + 25 * Math.sin(t * 0.6 + 1) + dragYaw),
+      p: clamp(7 * Math.sin(t * 0.33) + 3 * Math.sin(t * 0.9) + dragPitch, -80, 80),
+      r: 12 * Math.sin(t * 0.27) + 4 * Math.sin(t * 0.71),
+    };
+  }
+
+  /* where a world direction (yaw, pitch) lands on the dot grid */
+  function project(yaw, pitch) {
+    const dx = angDiff(yaw, view.h) * PPD, dy = -(pitch - view.p) * PPD;
+    const a = -view.r * D2R, c = Math.cos(a), s = Math.sin(a);
+    return { x: CX + dx * c - dy * s, y: CY + dx * s + dy * c };
+  }
+
+  function spawn(dir) {
+    const [type, thr] = TYPES[rnd(TYPES.length)];
+    targets.push({
+      id: nextId, type, thr,
+      yaw: wrap360(view.h + dir * (6 + Math.random() * 24)),
+      pitch: clamp(view.p + (Math.random() - 0.5) * 20, -25, 35),
+      vy: (Math.random() - 0.5) * 3, vp: (Math.random() - 0.5) * 1.2,
+      rng: 80 + rnd(2300), match: 60 + rnd(40),
+      born: clock, life: 18 + Math.random() * 10,
+    });
+    nextId = (nextId % 99) + 1;
+  }
+
+  /* ---------- update ---------- */
+  function update(dt) {
+    if (motion.update(dt)) view = { h: motion.heading, p: motion.pitch, r: motion.roll };
+    else view = simView(clock);
+
+    // how fast is the head moving?
+    if (prevH === null) prevH = view.h;
+    const dh = angDiff(view.h, prevH), dp = view.p - prevP;
+    speed += (Math.hypot(dh, dp) / dt - speed) * (1 - Math.exp(-dt * 6));
+    prevH = view.h; prevP = view.p;
+    moving = speed > 14;
+    if (moving && clock - lastSpawn > 0.45 && targets.length < 7) { spawn(dh >= 0 ? 1 : -1); lastSpawn = clock; }
+
+    // targets drift and expire
+    for (const t of targets) { t.yaw = wrap360(t.yaw + t.vy * dt); t.pitch += t.vp * dt; }
+    targets = targets.filter((t) => clock - t.born < t.life);
+
+    // lock onto whatever sits in the middle
+    let best = null, bd = 14;
+    for (const t of targets) {
+      const p = project(t.yaw, t.pitch), d = Math.hypot(p.x - CX, p.y - CY);
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best) {
+      if (best.id === lockId) lockT += dt; else { lockId = best.id; lockT = dt; }
+    } else {
+      lockT = Math.max(0, lockT - dt * 2);
+      if (lockT === 0) lockId = null;
+    }
+    if (lockId !== null && !targets.some((t) => t.id === lockId)) { lockId = null; lockT = 0; }
+
+    if (clock - lastHex > (lockedTarget() ? 0.06 : 0.16)) { hex.shift(); hex.push(hx(4) + " " + hx(2)); lastHex = clock; }
+  }
+
+  const lockedTarget = () => (lockId !== null && lockT >= LOCK_TIME ? targets.find((t) => t.id === lockId) : null);
+
+  /* ---------- drawing ---------- */
+  function brackets(x, y, s) {
+    x = Math.round(x); y = Math.round(y);
+    const L = 2;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const px = x + sx * s, py = y + sy * s;
+      lo.fillRect(Math.min(px, px - sx * L), py, L + 1, 1);
+      lo.fillRect(px, Math.min(py, py - sy * L), 1, L + 1);
+    }
+  }
+
+  function drawLadder() {
+    const { p, r } = view;
+    lo.save();
+    lo.beginPath(); lo.arc(CX + 0.5, CY + 0.5, 43, 0, Math.PI * 2); lo.clip();
+    lo.translate(CX + 0.5, CY + 0.5);
+    lo.rotate(-r * D2R);
+    const yOf = (q) => (p - q) * PPD;
+    const yh = yOf(0);
+    lo.beginPath(); lo.moveTo(-46, yh); lo.lineTo(-7, yh); lo.moveTo(7, yh); lo.lineTo(46, yh); lo.stroke();
+    lo.globalAlpha = 0.6;                                           // ground hatching under the horizon
+    for (let x = -40; x <= 40; x += 8) {
+      if (Math.abs(x) < 8) continue;
+      lo.beginPath(); lo.moveTo(x, yh); lo.lineTo(x - 2, yh + 2); lo.stroke();
+    }
+    lo.globalAlpha = 1;
+    for (let q = -90; q <= 90; q += 5) {
+      if (q === 0) continue;
+      const y = yOf(q);
+      if (Math.abs(y) > 46) continue;
+      const major = q % 10 === 0, w = major ? 20 : 13;
+      lo.setLineDash(q < 0 ? [2, 2] : []);                          // below the horizon: dashed
+      lo.beginPath(); lo.moveTo(-w, y); lo.lineTo(-8, y); lo.moveTo(8, y); lo.lineTo(w, y); lo.stroke();
+      lo.setLineDash([]);
+      if (major) {
+        const d = q > 0 ? 2 : -2;
+        lo.beginPath(); lo.moveTo(-w, y); lo.lineTo(-w, y + d); lo.moveTo(w, y); lo.lineTo(w, y + d); lo.stroke();
+      }
+    }
+    lo.restore();
+    // pitch numbers stay upright
+    const c = Math.cos(-r * D2R), s = Math.sin(-r * D2R);
+    for (let q = -90; q <= 90; q += 10) {
+      if (q === 0) continue;
+      const y = (p - q) * PPD;
+      if (Math.abs(y) > 40) continue;
+      const lbl = String(Math.abs(q));
+      for (const sx of [-1, 1]) {
+        const x = sx * (23 + tw(lbl) / 2);
+        const X = CX + x * c - y * s, Y = CY + x * s + y * c;
+        if (Math.hypot(X - CX, Y - CY) > 41) continue;
+        textC(lbl, X, Y - 2, 0.9);
+      }
+    }
+  }
+
+  function drawRollScale() {
+    const R = 40, o = 0.5;
+    lo.globalAlpha = 0.8;
+    lo.beginPath(); lo.arc(CX + o, CY + o, R, -135 * D2R, -45 * D2R); lo.stroke();
+    for (const a of [-45, -30, -20, -10, 0, 10, 20, 30, 45]) {
+      const L = a % 30 === 0 || Math.abs(a) === 45 ? 4 : 2;
+      const th = (a - 90) * D2R;
+      lo.beginPath();
+      lo.moveTo(CX + o + Math.cos(th) * R, CY + o + Math.sin(th) * R);
+      lo.lineTo(CX + o + Math.cos(th) * (R + L), CY + o + Math.sin(th) * (R + L));
+      lo.stroke();
+    }
+    lo.globalAlpha = 1;
+    const th = (-view.r - 90) * D2R, nx = Math.cos(th), ny = Math.sin(th), tx = -ny, ty = nx;
+    lo.beginPath();
+    lo.moveTo(CX + o + nx * (R - 1), CY + o + ny * (R - 1));
+    lo.lineTo(CX + o + nx * (R - 5) + tx * 2.5, CY + o + ny * (R - 5) + ty * 2.5);
+    lo.lineTo(CX + o + nx * (R - 5) - tx * 2.5, CY + o + ny * (R - 5) - ty * 2.5);
+    lo.closePath(); lo.fill();
+  }
+
+  function drawAircraft() {
+    lo.fillRect(CX - 17, CY, 10, 1);
+    lo.fillRect(CX + 8, CY, 10, 1);
+    lo.fillRect(CX - 8, CY, 1, 3);
+    lo.fillRect(CX + 8, CY, 1, 3);
+    for (let i = 0; i <= 2; i++) { lo.fillRect(CX - i, CY + i, 1, 1); lo.fillRect(CX + i, CY + i, 1, 1); }
+  }
+
+  function drawHeading() {
+    const h = view.h, S = 1.2, Y = 105;
+    for (let d = Math.ceil((h - 34) / 5) * 5; d <= h + 34; d += 5) {
+      const deg = wrap360(d), x = Math.round(CX + (d - h) * S);
+      if (x < 18 || x > 102) continue;
+      const a = 1 - Math.abs(x - CX) / 50;
+      lo.globalAlpha = a;
+      lo.fillRect(x, Y, 1, deg % 10 === 0 ? 3 : 2);
+      if (deg % 30 === 0) {
+        const lbl = { 0: "N", 90: "E", 180: "S", 270: "W" }[deg] || String(deg / 10);
+        textC(lbl, x, Y + 4, a);
+      }
+    }
+    lo.globalAlpha = 1;
+    lo.fillRect(CX, 103, 1, 1); lo.fillRect(CX - 1, 102, 3, 1);
+    textC("[" + String(Math.round(h) % 360).padStart(3, "0") + "]", CX, 114);
+  }
+
+  function drawTargets() {
+    for (const t of targets) {
+      const p = project(t.yaw, t.pitch), age = clock - t.born;
+      const fade = clamp(Math.min(age / 0.4, (t.life - age) / 1.5), 0, 1);
+      const x = Math.round(p.x), y = Math.round(p.y);
+      if (x >= 5 && x <= 115 && y >= 6 && y <= 100) {
+        const cand = t.id === lockId && lockT > 0;
+        const prog = cand ? clamp(lockT / LOCK_TIME, 0, 1) : 0;
+        const s = cand ? Math.round(10 - prog * 6) : 4;
+        lo.globalAlpha = fade;
+        brackets(x, y, s);
+        if (cand || Math.floor(clock * 4 + t.id) % 2 === 0) lo.fillRect(x, y, 1, 1);
+        if (prog >= 1) {                                   // locked: double box and crosshair
+          brackets(x, y, s + 2);
+          lo.fillRect(x - s - 7, y, 4, 1); lo.fillRect(x + s + 4, y, 4, 1);
+          lo.fillRect(x, y - s - 7, 1, 4); lo.fillRect(x, y + s + 4, 1, 4);
+        }
+        text(pad2(t.id), x + s + 2, y - s - 5, fade);
+      } else {                                             // off screen: blinking marker on the rim
+        const a = Math.atan2(p.y - CY, p.x - CX);
+        lo.globalAlpha = fade * (Math.floor(clock * 3) % 2 ? 0.9 : 0.4);
+        lo.fillRect(Math.round(CX + Math.cos(a) * 46), Math.round(CY + Math.sin(a) * 46), 2, 2);
+      }
+      lo.globalAlpha = 1;
+    }
+  }
+
+  function drawText() {
+    const locked = lockedTarget();
+    const cand = !locked && lockId !== null && lockT > 0 ? targets.find((t) => t.id === lockId) : null;
+
+    text("ANALYSIS", 2, 2);
+    hex.forEach((s, i) => text(s, 2, 8 + i * 6, locked ? (Math.random() < 0.5 ? 1 : 0.6) : 0.75));
+
+    let right;
+    if (locked) {
+      right = ["TGT " + pad2(locked.id), locked.type,
+               locked.rng < 1000 ? "RNG " + locked.rng : "RNG" + (locked.rng / 1000).toFixed(1) + "K",
+               "THR " + locked.thr];
+    } else if (cand) {
+      right = ["TGT " + pad2(cand.id), "ANALYZE", Math.round(clamp(lockT / LOCK_TIME, 0, 1) * 100) + "%"];
+    } else {
+      right = ["SCAN", "TGTS " + targets.length, "MOV " + Math.min(999, Math.round(speed))];
+    }
+    right.forEach((s, i) => textR(s, 118, 2 + i * 6));
+
+    if (moving && Math.floor(clock * 3) % 2 === 0) textC("MOTION", CX, 2);
+
+    text("PIT", 2, 52); text(signed(view.p), 2, 58);
+    textR("ROL", 118, 52); textR(signed(view.r), 118, 58);
+
+    text(motion.live ? "LIVE" : "SIM", 2, 114);
+    textR("AX " + motion.axisName, 118, 114);
+
+    // status line
+    const blink = Math.floor(clock * 2.5) % 2 === 0;
+    if (clock < flashUntil) textC(flashMsg, CX, 84);
+    else if (locked) { if (blink) textC("TARGET LOCKED", CX, 84); textC("MATCH " + locked.match + "%", CX, 91, 0.85); }
+    else if (cand) {
+      textC("LOCKING", CX, 84);
+      const w = Math.round(41 * clamp(lockT / LOCK_TIME, 0, 1));
+      lo.globalAlpha = 0.3; lo.fillRect(40, 92, 41, 2);
+      lo.globalAlpha = 1; lo.fillRect(40, 92, w, 2);
+    } else if (!motion.live) {
+      if (blink) textC("PINCH: SENSORS", CX, 84);
+      textC("<> COLOR  ^V AXIS", CX, 91, 0.7);
+    }
+  }
+
+  function draw() {
+    disp.begin(THEMES[theme].c);
+    const sweep = (clock * 24) % 140 - 10;                  // slow refresh bar
+    lo.globalAlpha = 0.08; lo.fillRect(0, Math.round(sweep), 120, 2); lo.globalAlpha = 1;
+    drawLadder();
+    drawRollScale();
+    drawAircraft();
+    drawTargets();
+    drawHeading();
+    drawText();
+    disp.present();
+  }
+
+  /* ---------- input ---------- */
+  async function primary() {
+    if (!motion.live) {
+      flash("WAITING SENSORS", 2);
+      const res = await motion.enable();
+      if (res !== "ok") { flash(res === "denied" ? "NO PERMISSION" : "SENSOR ERROR", 2.5); return; }
+      motion.zero();
+      setTimeout(() => { if (!motion.live) flash("NO SENSORS: SIM", 2.5); }, 1800);
+      return;
+    }
+    motion.zero();
+    flash("LEVEL SET");
+  }
+  function setTheme(d) {
+    theme = (theme + d + THEMES.length) % THEMES.length;
+    store.set("glasses.theme", theme);
+    flash(THEMES[theme].name, 1.2);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); history.back(); return; }
+    if (!["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(k)) return;
+    e.preventDefault();
+    if (k === "Enter") primary();
+    else if (k === "ArrowLeft") setTheme(-1);
+    else if (k === "ArrowRight") setTheme(1);
+    else flash("AXIS " + motion.nextAxis(k === "ArrowUp" ? 1 : -1));
+  });
+
+  // preview on a phone/computer: drag = look around, tap = pinch
+  let drag = null, dragged = false;
+  const cv = document.getElementById("screen");
+  cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY }; dragged = false; });
+  window.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) dragged = true;
+    dragYaw += dx * 0.15;
+    dragPitch = clamp(dragPitch - dy * 0.15, -40, 40);
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener("pointerup", () => { drag = null; });
+  cv.addEventListener("click", () => { if (!dragged) primary(); });
+
+  window.__hud = { motion, get view() { return view; }, get targets() { return targets; } };
+
+  DM.loop((dt, t) => { clock = t; update(dt); draw(); });
+})();
+</script>
+</body>
+</html>

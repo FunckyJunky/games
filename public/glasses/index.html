@@ -50,9 +50,9 @@
   .title { font-size: 28px; font-weight: 700; color: var(--cyan); margin-bottom: 24px; letter-spacing: .5px; }
 
   /* ---------- Menu ---------- */
-  .grid { display: grid; grid-template-columns: 220px 220px; gap: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 168px); gap: 16px; }
   .tile {
-    width: 220px; height: 176px;
+    width: 168px; height: 160px;
     background: var(--panel);
     border: 3px solid var(--edge);
     border-radius: 24px;
@@ -61,8 +61,8 @@
     outline: none; cursor: pointer;
     transition: transform .12s, border-color .12s, box-shadow .12s;
   }
-  .tile .ico { font-size: 56px; line-height: 1; }
-  .tile .lbl { font-size: 24px; font-weight: 600; }
+  .tile .ico { font-size: 52px; line-height: 1; }
+  .tile .lbl { font-size: 22px; font-weight: 600; }
   .tile:focus {
     border-color: var(--cyan);
     box-shadow: 0 0 0 4px rgba(77, 232, 255, .35);
@@ -112,6 +112,8 @@
     <button class="tile focusable" data-go="counter"><span class="ico">➕</span><span class="lbl">Counter</span></button>
     <button class="tile focusable" data-go="dice"><span class="ico">🎲</span><span class="lbl">Dice</span></button>
     <button class="tile focusable" data-go="snake"><span class="ico">🐍</span><span class="lbl">Snake</span></button>
+    <button class="tile focusable" data-href="/glasses/hud/"><span class="ico">🎯</span><span class="lbl">HUD</span></button>
+    <button class="tile focusable" data-href="/glasses/flight/"><span class="ico">✈️</span><span class="lbl">Flight</span></button>
   </div>
   <div class="hint">Swipe to move · Pinch to open</div>
 </section>
@@ -182,7 +184,17 @@
   window.addEventListener("popstate", () => show("menu"));
   history.replaceState({ screen: "menu" }, "");
 
-  tiles.forEach((t) => t.addEventListener("click", () => { lastTile = t; open(t.dataset.go); }));
+  tiles.forEach((t, i) => t.addEventListener("click", () => {
+    lastTile = t;
+    if (t.dataset.href) {                 // HUD and Flight are their own pages; Back returns here
+      try { sessionStorage.setItem("minihub.tile", i); } catch {}
+      location.href = t.dataset.href;
+    } else open(t.dataset.go);
+  }));
+  try {
+    const saved = +sessionStorage.getItem("minihub.tile");
+    if (saved > 0 && tiles[saved]) lastTile = tiles[saved];
+  } catch {}
 
   /* ---------- input: Neural Band / captouch arrive as key events ---------- */
   const NAV_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"];
@@ -208,15 +220,16 @@
     document.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
   });
 
-  /* ---------- MENU (2 x 2 grid) ---------- */
+  /* ---------- MENU (3 x 2 grid) ---------- */
+  const COLS = 3;
   apps.menu = {
     key(k) {
       let i = Math.max(0, tiles.indexOf(document.activeElement));
       if (k === "Enter") { tiles[i].click(); return; }
-      if (k === "ArrowRight" && i % 2 === 0) i += 1;
-      if (k === "ArrowLeft"  && i % 2 === 1) i -= 1;
-      if (k === "ArrowDown"  && i < 2) i += 2;
-      if (k === "ArrowUp"    && i >= 2) i -= 2;
+      if (k === "ArrowRight" && i % COLS < COLS - 1 && i + 1 < tiles.length) i += 1;
+      if (k === "ArrowLeft"  && i % COLS > 0) i -= 1;
+      if (k === "ArrowDown"  && i + COLS < tiles.length) i += COLS;
+      if (k === "ArrowUp"    && i - COLS >= 0) i -= COLS;
       tiles[i].focus();
     },
   };
@@ -415,7 +428,7 @@
   });
 
   /* ---------- start ---------- */
-  tiles[0].focus();
+  lastTile.focus();
 })();
 </script>
 </body>
