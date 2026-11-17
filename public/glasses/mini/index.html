@@ -101,6 +101,7 @@
   .snake-score b { color: var(--green); }
   #snakeCanvas { width: 450px; height: 450px; margin-top: 12px; }
 </style>
+<script src="/glasses/presence.js" data-app="mini"></script>
 </head>
 <body>
 
@@ -175,6 +176,7 @@
     if (apps[current] && apps[current].leave) apps[current].leave();
     document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("active", s.id === name));
     current = name;
+    if (window.GlassesPresence) GlassesPresence.setApp(name === "menu" ? "mini" : name);
     if (name === "menu") lastTile.focus();
     else if (apps[name] && apps[name].enter) apps[name].enter();
   }

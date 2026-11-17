@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Control panel for the error.blue glasses HUD">
+<title>Glasses HUD · Control Panel</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABoklEQVR42u3cPVLDMBDF8TXDUahpuFMOxZ1oqLmL6Jg0YWz0sRL6vSpNbMVv3n+0WXmPiChBaXryCBjAAGIAA4gBDCAGbKfnFRf9Vm4/nz+OdwkgBkBQFnZWx5EEMACCltbqOJIABuytIxp1xO7jfwYXvQuuq989s/6a3yIBEETDdkGP4jky5o92RzX3urp+CYAgmqoQyyqOZi7KJIABEESJ3TcJgCAI8rewBDCA7IJ+12f5+vN3X48XCSAGQFANdmow0uo6EgBBFCs05WuKr964qLl+jwJTAiAIgspq2GnVZG+Fo5rumwRAkEJsifezrp7J6b3OM2efztxXAiAIgrZ6LTQme2FEAiAIgpqcNN4ZTTXPRAIgCIJSCpAZXrgYiRoJgCCKnh2xVjiarSPmdDQE0Vbngu6x4FwQMQCCJsSR09HEAAhKxFH8o5FoEgBBEBTmOUsAA2izXdDIrlbWREQJgCBKQVCPKYVZQ18lAIIoVmvKzzA6bJXCUAIYYBcUJhxKAAQRBG05lVECGKAQK2HnIwEQRBAkAcQABhADGEDD9A3GRr/kWb9x4AAAAABJRU5ErkJggg==">
+<style>
+  @font-face { font-family: "VGA"; src: url("/hud/vga.woff2") format("woff2"); font-display: swap; }
+  :root { --c: #33ff66; --b: #d2ffdc; --m: #22b84e; --d: #0e5f27; --k: #031c0b; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; color: var(--c); font: 16px/1.25 "VGA", ui-monospace, Menlo, Consolas, monospace; }
+  body { min-height: 100vh; padding: max(12px, env(safe-area-inset-top)) 12px 40px; -webkit-font-smoothing: none; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9;
+    background: repeating-linear-gradient(rgba(0,0,0,.22) 0 1px, transparent 1px 3px); }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  a { color: var(--b); }
+  .glow { text-shadow: 0 0 6px var(--d), 0 0 2px var(--m); }
+  .prompt { color: var(--m); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .cursor { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  h1 { font-size: 32px; font-weight: normal; color: var(--b); letter-spacing: 1px; }
+  h2 { font-size: 16px; font-weight: normal; color: var(--b); margin-bottom: 8px; }
+  .sub { color: var(--m); margin-bottom: 14px; }
+  /* DOS double-line boxes */
+  .box { border: 3px double var(--c); padding: 14px 14px 12px; margin: 16px 0; position: relative; background: #000; }
+  .box > .t { position: absolute; top: -11px; left: 12px; background: #000; padding: 0 6px; color: var(--b); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--m); }
+  .dim { color: var(--d); }
+  /* status */
+  .status { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
+  .dot { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; background: var(--d); }
+  .dot.on { background: var(--c); box-shadow: 0 0 8px var(--c); animation: pulse 1.6s infinite; }
+  .dot.sleep { background: var(--m); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  /* menu bar */
+  nav { display: flex; gap: 0; overflow-x: auto; border-top: 1px solid var(--d); border-bottom: 1px solid var(--d); margin: 6px -12px 0; padding: 0 12px; scrollbar-width: none; position: sticky; top: 0; background: #000; z-index: 5; }
+  nav::-webkit-scrollbar { display: none; }
+  nav a { flex: none; padding: 8px 12px; text-decoration: none; color: var(--c); white-space: nowrap; }
+  nav a.on { background: var(--c); color: #000; }
+  section { display: none; }
+  section.on { display: block; }
+  /* buttons and inputs */
+  button, .btn { font: inherit; color: var(--c); background: #000; border: 2px solid var(--c); padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block; }
+  button:hover, .btn:hover, button:focus-visible, .btn:focus-visible { background: var(--c); color: #000; outline: none; }
+  button.inv { background: var(--c); color: #000; }
+  input[type=text] { font: inherit; font-size: 32px; letter-spacing: 6px; text-transform: uppercase; width: 8.4em; max-width: 100%;
+    background: #000; color: var(--b); border: 2px solid var(--c); padding: 4px 8px; caret-color: var(--b); }
+  input[type=text]:focus { outline: none; box-shadow: 0 0 10px var(--d); }
+  .err { color: #ff6060; margin-top: 8px; min-height: 20px; }
+  /* preview */
+  .preview { display: grid; grid-template-columns: minmax(0, 420px) 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .preview { grid-template-columns: 1fr; } }
+  .lens { position: relative; width: 100%; aspect-ratio: 1; border: 3px double var(--c); border-radius: 18px; overflow: hidden; background: #000; }
+  .lens iframe { position: absolute; left: 0; top: 0; width: 600px; height: 600px; border: 0; transform-origin: 0 0; }
+  .pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 52px); gap: 6px; margin: 4px 0 12px; }
+  .pad button { padding: 0; font-size: 20px; }
+  .pad .u { grid-column: 2; } .pad .l { grid-column: 1; grid-row: 2; } .pad .p { grid-column: 2; grid-row: 2; }
+  .pad .r { grid-column: 3; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 3; } .pad .x { grid-column: 3; grid-row: 3; font-size: 14px; }
+  /* apps */
+  .apps { display: grid; gap: 8px; }
+  .app { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--d); }
+  .app.hidden { opacity: .55; }
+  .app .name { color: var(--b); }
+  .app .desc { color: var(--m); grid-column: 2 / 4; }
+  .app .use { color: #000; background: var(--c); padding: 0 6px; margin-left: 8px; white-space: nowrap; display: inline-block; }
+  .app .btn { white-space: nowrap; }
+  .toggle { min-width: 104px; text-align: left; }
+  .rowname { margin: 16px 0 6px; color: var(--m); }
+  /* settings */
+  .set { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--d); flex-wrap: wrap; }
+  .check { cursor: pointer; user-select: none; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sw { width: 44px; height: 32px; border: 2px solid #000; outline: 2px solid var(--d); cursor: pointer; }
+  .sw.on { outline: 3px solid var(--b); }
+  .saved { color: var(--m); min-height: 20px; margin-top: 10px; }
+  /* embedded pages */
+  .embed { width: 100%; height: min(86vh, 900px); border: 3px double var(--c); background: #000; display: block; }
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .stat b { display: block; font-size: 32px; font-weight: normal; color: var(--b); }
+  .found { margin-top: 8px; display: grid; gap: 4px; }
+  .uk { font-size: 32px; color: var(--b); }
+  footer { margin-top: 26px; color: var(--d); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="prompt"><span>C:\HUD&gt;<span class="cursor">_</span></span><span id="clock" class="muted"></span></div>
+  <h1 class="glow">GLASSES HUD</h1>
+  <div class="sub">CONTROL PANEL FOR ERROR.BLUE/GLASSES</div>
+
+  <div class="box" id="statusBox">
+    <span class="t">GLASSES</span>
+    <div class="status">
+      <span>LINK</span><span id="stLink" class="muted">-</span>
+      <span>STATE</span><span id="stState"><span class="dot"></span>-</span>
+      <span>APP</span><span id="stApp" class="muted">-</span>
+    </div>
+  </div>
+
+  <nav id="nav">
+    <a href="#hud">HUD</a><a href="#apps">APPS</a><a href="#settings">SETTINGS</a><a href="#mykolai">СВЯТИЙ МИКОЛАЙЧИК</a><a href="#yaro">YARO-VISSION</a>
+  </nav>
+
+  <!-- ===================== HUD ===================== -->
+  <section id="tab-hud">
+    <div class="box" id="linkBox">
+      <span class="t">LINK THE GLASSES</span>
+      <div id="linkForm">
+        <p>On the glasses open <b>SETUP.EXE</b> (the gear on the home screen, bottom row). The 6-letter <b>CODE</b> is at the top right. Type it here:</p>
+        <div class="row" style="margin-top:10px">
+          <input id="codeIn" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC234" aria-label="Glasses code">
+          <button id="linkBtn">LINK</button>
+        </div>
+        <div class="err" id="linkErr"></div>
+      </div>
+      <div id="linked" hidden>
+        <div class="row"><span>LINKED TO</span><span id="codeShow" class="uk" style="letter-spacing:4px"></span><button id="unlinkBtn">CHANGE</button></div>
+        <p class="muted" style="margin-top:8px">Changes here reach the glasses within 30 seconds, or straight away when they open the home screen.</p>
+      </div>
+    </div>
+
+    <div class="box">
+      <span class="t">LIVE PREVIEW</span>
+      <div class="preview">
+        <div>
+          <div class="lens" id="lens"><iframe id="pv" title="Glasses home preview" src="about:blank" allow="autoplay; fullscreen"></iframe></div>
+        </div>
+        <div>
+          <p class="muted">The real home screen, running here. Drive it like the glasses:</p>
+          <div class="pad" role="group" aria-label="Preview controls">
+            <button class="u" data-k="ArrowUp" aria-label="Swipe up">▲</button>
+            <button class="l" data-k="ArrowLeft" aria-label="Swipe left">◄</button>
+            <button class="p" data-k="Enter" aria-label="Pinch">●</button>
+            <button class="r" data-k="ArrowRight" aria-label="Swipe right">►</button>
+            <button class="d" data-k="ArrowDown" aria-label="Swipe down">▼</button>
+            <button class="x" data-k="Escape" aria-label="Back">BACK</button>
+          </div>
+          <p class="muted">● = PINCH &nbsp; BACK = BACK GESTURE</p>
+          <div style="margin-top:14px" id="summary"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== APPS ===================== -->
+  <section id="tab-apps">
+    <div class="box">
+      <span class="t">APPS ON THE GLASSES HUD</span>
+      <p class="muted">Hide apps you don't use. Hidden apps stay installed; they just leave the home screen. SETUP.EXE always stays.</p>
+      <div class="row" style="margin:12px 0 0"><button id="showAll">SHOW ALL</button><span class="saved" id="appsSaved"></span></div>
+      <div id="appList"></div>
+    </div>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section id="tab-settings">
+    <div class="box">
+      <span class="t">HUD SETTINGS</span>
+      <div class="set"><span class="check" data-b="compass" tabindex="0" role="checkbox"></span><span class="muted">Compass lines under the clock</span></div>
+      <div class="set"><span class="check" data-b="head" tabindex="0" role="checkbox"></span><span class="muted">Turn / tilt your head to move through the apps</span></div>
+      <div class="set"><span>HEAD SPEED</span><span class="seg" id="speedSeg"></span></div>
+      <div class="set"><span class="check" data-b="invert" tabindex="0" role="checkbox"></span><span class="muted">If turning moves the wrong way</span></div>
+      <div class="set"><span>HUD COLOUR</span><span class="seg" id="colorSeg"></span></div>
+      <div class="set"><span class="check" data-b="sounds" tabindex="0" role="checkbox"></span><span class="muted">Clicks when you move and open apps</span></div>
+      <div class="saved" id="setSaved"></div>
+    </div>
+  </section>
+
+  <!-- ===================== СВЯТИЙ МИКОЛАЙЧИК ===================== -->
+  <section id="tab-mykolai">
+    <div class="box">
+      <span class="t">СВЯТИЙ МИКОЛАЙЧИК</span>
+      <div class="uk glow">СВЯТИЙ МИКОЛАЙЧИК</div>
+      <p class="muted" style="margin:6px 0 10px">Play Saint Nicholas: stand on a spot, choose a statue, write a note and leave the gift there. Yaro finds it with the glasses app MYKOLAI.EXE.</p>
+      <div class="stats">
+        <div class="stat"><b id="smWaiting">-</b>GIFTS WAITING</div>
+        <div class="stat"><b id="smFound">-</b>FOUND (30 DAYS)</div>
+      </div>
+      <div class="row">
+        <a class="btn" href="/glasses/SM/" target="_blank" rel="noopener">LEAVE A GIFT ↗</a>
+        <a class="btn" href="/glasses/mykolai/" target="_blank" rel="noopener">GLASSES APP ↗</a>
+        <span id="smInUse"></span>
+      </div>
+      <div class="found" id="smList"></div>
+    </div>
+    <iframe class="embed" id="smFrame" title="Святий Миколайчик" data-src="/glasses/SM/" allow="geolocation; fullscreen"></iframe>
+  </section>
+
+  <!-- ===================== YARO-VISSION ===================== -->
+  <section id="tab-yaro">
+    <div class="box">
+      <span class="t">YARO-VISSION</span>
+      <div class="uk glow">YARO-VISSION</div>
+      <p class="muted" style="margin:6px 0 10px">One person wears the glasses (YARO.EXE), another steers them like a game character from CON, with a live first-person view: move, take, jump, hug, dance.</p>
+      <div class="row">
+        <a class="btn" href="/glasses/con/" target="_blank" rel="noopener">OPEN CON FULL SCREEN ↗</a>
+        <a class="btn" href="/glasses/yaro/" target="_blank" rel="noopener">GLASSES APP ↗</a>
+        <span id="yaroInUse"></span>
+      </div>
+    </div>
+    <iframe class="embed" id="yaroFrame" title="Yaro-Vission CON" data-src="/glasses/con/" allow="camera; microphone; autoplay; fullscreen; gamepad; geolocation"></iframe>
+  </section>
+
+  <footer>ERROR.BLUE · GLASSES HUD PANEL · SETTINGS ARE SAVED ON THE SERVER UNDER THE GLASSES CODE</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+  const PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const DEFAULTS = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  const LABELS = { compass: "COMPASS UNDER CLOCK", head: "HEAD MOTION MOVES APPS", invert: "INVERT HEAD MOTION", sounds: "SOUNDS" };
+  const ls = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  let code = null, profile = Object.assign({}, DEFAULTS), updated = 0, presence = null, serverNow = Date.now(), catalog = [];
+  const params = new URLSearchParams(location.search);
+  code = (params.get("code") || ls.get("hud.panel.code", "") || "").toUpperCase();
+  if (!CODE_RE.test(code)) code = null;
+
+  /* ---------- colours follow the HUD colour ---------- */
+  function paint() {
+    const p = PALETTES[profile.color] || PALETTES[0], r = document.documentElement.style;
+    r.setProperty("--c", p.c); r.setProperty("--b", p.b); r.setProperty("--m", p.m); r.setProperty("--d", p.d); r.setProperty("--k", p.k);
+  }
+
+  /* ---------- app list: read straight from the glasses home screen ---------- */
+  async function loadCatalog() {
+    try {
+      const html = await (await fetch("/glasses/", { cache: "no-store" })).text();
+      const rows = [], rowRe = /\{\s*name:\s*"([^"]+)",\s*apps:\s*\[([\s\S]*?)\]\s*\}/g;
+      let m;
+      while ((m = rowRe.exec(html))) {
+        const apps = [], appRe = /\{\s*id:\s*"([^"]+)",\s*file:\s*"([^"]+)",\s*desc:\s*"([^"]+)",\s*url:\s*"([^"]+)"\s*\}/g;
+        let a;
+        while ((a = appRe.exec(m[2]))) apps.push({ id: a[1], file: a[2], desc: a[3], url: a[4] });
+        if (apps.length) rows.push({ name: m[1], apps });
+      }
+      catalog = rows;
+    } catch { catalog = []; }
+    renderApps(); renderSummary(); renderStatus();
+  }
+  const appById = (id) => { for (const r of catalog) for (const a of r.apps) if (a.id === id) return a; return null; };
+  const EXTRA = { home: "HOME SCREEN", mini: "MINI HUB", time: "THE CLOCK", unknown: "AN APP" };
+  const appName = (id) => (appById(id) ? appById(id).file : EXTRA[id] || String(id || "").toUpperCase());
+
+  /* ---------- server ---------- */
+  async function pull() {
+    if (!code) return;
+    try {
+      const r = await fetch("/api/hud/" + code, { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      serverNow = j.now; presence = j.presence;
+      if (j.settings && j.updated > updated && !saving) { profile = Object.assign({}, DEFAULTS, j.settings); updated = j.updated; mirror(); paint(); renderSettings(); renderApps(); renderSummary(); }
+      renderStatus();
+    } catch {}
+  }
+  let saving = 0, saveTimer = 0;
+  function save(msgEl, msg) {
+    updated = Date.now();
+    mirror(); paint(); renderSettings(); renderApps(); renderSummary();
+    clearTimeout(saveTimer);
+    msgEl.textContent = "SAVING...";
+    saving++;
+    saveTimer = setTimeout(async () => {
+      if (!code) { msgEl.textContent = "LINK THE GLASSES FIRST (HUD TAB) - SAVED ON THIS DEVICE ONLY"; saving--; return; }
+      try {
+        const r = await fetch("/api/hud/" + code, { method: "PUT", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ settings: profile, updated }) });
+        const j = await r.json();
+        if (j.ok) { msgEl.textContent = "✓ " + msg + " - SAVED. THE GLASSES UPDATE WITHIN 30 S."; reloadPreview(); }
+        else msgEl.textContent = "COULD NOT SAVE: " + (j.error || r.status);
+      } catch { msgEl.textContent = "COULD NOT SAVE (NO CONNECTION?)"; }
+      saving--;
+    }, 350);
+  }
+  // the live preview uses this browser's storage: make it look like the glasses
+  function mirror() {
+    if (code) ls.set("glasses.code", code);
+    ls.set("glasses.settings", Object.assign({}, profile, { updatedAt: updated }));
+  }
+
+  /* ---------- link ---------- */
+  async function link(c) {
+    c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    $("linkErr").textContent = "";
+    if (!CODE_RE.test(c)) { $("linkErr").textContent = "6 LETTERS/DIGITS, AS SHOWN IN SETUP.EXE (NO 0, 1, I OR O)"; return; }
+    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS);
+    renderLink();
+    await pull();
+    if (!presence && !updated) $("linkErr").textContent = "";
+    reloadPreview();
+  }
+  function renderLink() {
+    $("linkForm").hidden = !!code; $("linked").hidden = !code;
+    if (code) $("codeShow").textContent = code;
+    $("stLink").textContent = code ? "CODE " + code : "NOT LINKED - SEE THE HUD TAB";
+  }
+
+  /* ---------- status ---------- */
+  const ago = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + " S AGO" : s < 3600 ? Math.round(s / 60) + " MIN AGO" : s < 86400 ? Math.round(s / 3600) + " H AGO" : Math.round(s / 86400) + " DAYS AGO"; };
+  function renderStatus() {
+    const st = $("stState"), ap = $("stApp");
+    let inUse = null;
+    if (!code) { st.innerHTML = '<span class="dot"></span>UNKNOWN'; ap.textContent = "-"; }
+    else if (!presence) { st.innerHTML = '<span class="dot"></span>NEVER SEEN WITH THIS CODE'; ap.textContent = "OPEN THE HOME SCREEN ON THE GLASSES"; }
+    else {
+      const age = serverNow - presence.seen, live = age < 40000;
+      if (live && presence.state === "active") {
+        st.innerHTML = '<span class="dot on"></span>CONNECTED <span class="muted">(' + ago(age) + ")</span>";
+        inUse = presence.app;
+        let t = "NOW IN " + appName(presence.app);
+        const a = appById(presence.app);
+        if (a) t += " - " + a.desc;
+        if (presence.app === "home" && presence.focus) t += " · LOOKING AT " + appName(presence.focus);
+        ap.textContent = t;
+      } else if (presence.state === "hidden" && age < 6 * 3600 * 1000) {
+        st.innerHTML = '<span class="dot sleep"></span>DISPLAY OFF <span class="muted">(' + ago(age) + ")</span>";
+        ap.textContent = "LAST IN " + appName(presence.app);
+      } else {
+        st.innerHTML = '<span class="dot"></span>NOT CONNECTED <span class="muted">(LAST SEEN ' + ago(age) + ")</span>";
+        ap.textContent = "LAST IN " + appName(presence.app);
+      }
+    }
+    document.querySelectorAll(".app").forEach((el) => {
+      const u = el.querySelector(".use");
+      if (u) u.hidden = el.dataset.id !== inUse;
+    });
+    $("smInUse").innerHTML = inUse === "mykolai" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
+    $("yaroInUse").innerHTML = inUse === "yaro" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
+  }
+
+  /* ---------- apps ---------- */
+  function renderApps() {
+    const box = $("appList");
+    if (!catalog.length) { box.innerHTML = '<p class="muted" style="margin-top:12px">LOADING THE APP LIST...</p>'; return; }
+    const hid = new Set(profile.hidden || []);
+    box.innerHTML = "";
+    for (const r of catalog) {
+      const h = document.createElement("div"); h.className = "rowname"; h.textContent = "── " + r.name + " ──"; box.appendChild(h);
+      const list = document.createElement("div"); list.className = "apps";
+      for (const a of r.apps) {
+        const shown = !hid.has(a.id), locked = a.id === "settings";
+        const el = document.createElement("div");
+        el.className = "app" + (shown ? "" : " hidden"); el.dataset.id = a.id;
+        el.innerHTML = `<button class="toggle ${shown ? "inv" : ""}" ${locked ? "disabled" : ""} aria-pressed="${shown}">${shown ? "[X] SHOWN" : "[ ] HIDDEN"}</button>
+          <span class="name">${a.file}<span class="use" hidden>IN USE</span></span>
+          <a class="btn" href="${a.url}" target="_blank" rel="noopener" title="Open it here">OPEN ↗</a>
+          <span class="desc">${a.desc}${locked ? " · ALWAYS SHOWN" : ""}</span>`;
+        if (!locked) el.querySelector("button").onclick = () => {
+          const s = new Set(profile.hidden || []);
+          s.has(a.id) ? s.delete(a.id) : s.add(a.id);
+          profile.hidden = [...s];
+          save($("appsSaved"), a.file + (s.has(a.id) ? " HIDDEN" : " SHOWN"));
+        };
+        list.appendChild(el);
+      }
+      box.appendChild(list);
+    }
+    renderStatus();
+  }
+  $("showAll").onclick = () => { profile.hidden = []; save($("appsSaved"), "ALL APPS SHOWN"); };
+
+  /* ---------- settings ---------- */
+  function renderSettings() {
+    document.querySelectorAll(".check").forEach((el) => {
+      const k = el.dataset.b;
+      el.textContent = (profile[k] ? "[X] " : "[ ] ") + LABELS[k];
+      el.setAttribute("aria-checked", !!profile[k]);
+    });
+    $("speedSeg").innerHTML = "";
+    ["SLOW", "MEDIUM", "FAST"].forEach((n, i) => {
+      const b = document.createElement("button"); b.textContent = n; if (profile.speed === i) b.className = "inv";
+      b.onclick = () => { profile.speed = i; save($("setSaved"), "HEAD SPEED " + n); };
+      $("speedSeg").appendChild(b);
+    });
+    $("colorSeg").innerHTML = "";
+    PALETTES.forEach((p, i) => {
+      const b = document.createElement("button"); b.className = "sw" + (profile.color === i ? " on" : ""); b.style.background = p.c;
+      b.title = p.name; b.setAttribute("aria-label", p.name);
+      b.onclick = () => { profile.color = i; save($("setSaved"), "HUD COLOUR " + p.name); };
+      $("colorSeg").appendChild(b);
+    });
+  }
+  document.querySelectorAll(".check").forEach((el) => {
+    const flip = () => { const k = el.dataset.b; profile[k] = !profile[k]; save($("setSaved"), LABELS[k] + (profile[k] ? " ON" : " OFF")); };
+    el.onclick = flip;
+    el.onkeydown = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } };
+  });
+  function renderSummary() {
+    const total = catalog.reduce((n, r) => n + r.apps.length, 0), hidden = (profile.hidden || []).length;
+    const p = PALETTES[profile.color] || PALETTES[0];
+    $("summary").innerHTML =
+      `<div class="muted">APPS SHOWN</div><div>${Math.max(0, total - hidden)} OF ${total} <a href="#apps">CHANGE</a></div>
+       <div class="muted" style="margin-top:8px">HUD</div><div>${p.name} · HEAD ${profile.head ? "ON" : "OFF"} · COMPASS ${profile.compass ? "ON" : "OFF"} · SOUNDS ${profile.sounds ? "ON" : "OFF"} <a href="#settings">CHANGE</a></div>`;
+  }
+
+  /* ---------- live preview ---------- */
+  const pv = $("pv"), lens = $("lens");
+  function fitPreview() { const s = lens.clientWidth / 600; pv.style.transform = "scale(" + s + ")"; }
+  new ResizeObserver(fitPreview).observe(lens);
+  let pvTimer = 0;
+  function reloadPreview() { clearTimeout(pvTimer); pvTimer = setTimeout(() => { pv.src = "/glasses/?preview=1&t=" + Date.now(); }, 250); }
+  document.querySelectorAll(".pad button").forEach((b) => b.addEventListener("click", () => {
+    try {
+      const w = pv.contentWindow;
+      w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: b.dataset.k, bubbles: true, cancelable: true }));
+    } catch {}
+  }));
+
+  /* ---------- Святий Миколайчик stats ---------- */
+  async function smStats() {
+    try {
+      const j = await (await fetch("/api/sm/gifts", { cache: "no-store" })).json();
+      $("smWaiting").textContent = j.waiting.length; $("smFound").textContent = j.found.length;
+      $("smList").innerHTML = j.found.slice(0, 4).map((g) =>
+        `<div class="muted">✓ ${esc(g.from)}: ${esc(g.note || "-")} <span class="dim">(${ago(j.now - g.got)})</span></div>`).join("");
+    } catch { $("smWaiting").textContent = "?"; $("smFound").textContent = "?"; }
+  }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  /* ---------- tabs ---------- */
+  function route() {
+    const id = (location.hash || "#hud").slice(1);
+    const tab = ["hud", "apps", "settings", "mykolai", "yaro"].includes(id) ? id : "hud";
+    document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + tab));
+    const nav = $("nav");
+    document.querySelectorAll("nav a").forEach((a) => {
+      const on = a.getAttribute("href") === "#" + tab;
+      a.classList.toggle("on", on);
+      if (on) { const l = a.offsetLeft - nav.offsetLeft, r = l + a.offsetWidth; if (l < nav.scrollLeft) nav.scrollLeft = l - 12; else if (r > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = r - nav.clientWidth + 12; }
+    });
+    const top = $("statusBox").offsetTop + $("statusBox").offsetHeight + 16;   // where the menu sits when not stuck
+    if (scrollY > top) scrollTo(0, top);                                      // new tab starts at its top
+    for (const f of document.querySelectorAll("iframe[data-src]")) if (f.closest("section").id === "tab-" + tab && !f.src.includes(f.dataset.src)) f.src = f.dataset.src;
+    if (tab === "mykolai") smStats();
+    if (tab === "hud") setTimeout(fitPreview, 0);
+  }
+  window.addEventListener("hashchange", route);
+
+  $("linkBtn").onclick = () => link($("codeIn").value);
+  $("codeIn").onkeydown = (e) => { if (e.key === "Enter") link($("codeIn").value); };
+  $("unlinkBtn").onclick = () => { code = null; ls.set("hud.panel.code", ""); presence = null; renderLink(); renderStatus(); $("codeIn").focus(); };
+  setInterval(() => { const d = new Date(); $("clock").textContent = d.toTimeString().slice(0, 8); }, 1000);
+  setInterval(() => { if (!document.hidden) pull(); }, 5000);
+  setInterval(() => { if (!document.hidden && location.hash === "#mykolai") smStats(); }, 20000);
+
+  // start
+  if (code) mirror();
+  paint(); renderLink(); renderSettings(); renderSummary(); renderStatus(); route();
+  loadCatalog();
+  pull().then(() => reloadPreview());
+  if (!code) reloadPreview();
+  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, link, pull };
+})();
+</script>
+</body>
+</html>

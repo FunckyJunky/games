@@ -16,6 +16,7 @@
 </head>
 <body>
 <canvas id="screen" aria-label="Glasses home: swipe to choose an app, pinch to open"></canvas>
+<script src="/glasses/presence.js" data-app="home"></script>
 <script>
 /* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
 const DM = (() => {
@@ -229,10 +230,45 @@ const DM = (() => {
   }
 
   /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
-  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true };
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  // The same settings live on the server under the glasses' pairing code, so the control
+  // panel at error.blue/hud can change them; the newest change wins.
+  const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function hudCode() {
+    let c = store.get("glasses.code", null);
+    if (typeof c !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(c)) {
+      const b = new Uint8Array(6);
+      crypto.getRandomValues(b);
+      c = Array.from(b, (x) => CODE_ALPHA[x % CODE_ALPHA.length]).join("");
+      store.set("glasses.code", c);
+    }
+    return c;
+  }
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "hidden"];
+  const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
+  function push(v) {
+    try {
+      fetch("/api/hud/" + hudCode(), { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: pick(v), updated: v.updatedAt || Date.now() }) }).catch(() => {});
+    } catch {}
+  }
   const settings = {
     get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
-    set(v) { store.set("glasses.settings", v); },
+    set(v) { v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v); },
+    code: hudCode,
+    async sync() {                               // -> true when the server had newer settings
+      try {
+        const r = await fetch("/api/hud/" + hudCode(), { cache: "no-store" });
+        if (!r.ok) return false;
+        const j = await r.json(), local = settings.get(), lt = local.updatedAt || 0;
+        if (j.settings && j.updated > lt) {
+          store.set("glasses.settings", Object.assign({}, local, j.settings, { updatedAt: j.updated }));
+          return true;
+        }
+        if (lt > (j.updated || 0)) push(local);
+      } catch {}
+      return false;
+    },
   };
   // DOS phosphor colours: main, bright, mid, dim, dark
   const DOS_PALETTES = [
@@ -308,7 +344,7 @@ const DM = (() => {
   };
 
   /* ---------------- apps ---------------- */
-  const ROWS = [
+  const ALL_ROWS = [
     { name: "APPS", apps: [
       { id: "flight", file: "FLIGHT.EXE", desc: "WIREFRAME FLIGHT SIM", url: "/glasses/flight/" },
       { id: "synth",  file: "SYNTH.EXE",  desc: "SEQUENCER + DRUMS",    url: "/glasses/synth/" },
@@ -328,6 +364,13 @@ const DM = (() => {
       { id: "settings", file: "SETUP.EXE", desc: "HUD SETTINGS", url: "/glasses/settings/" },
     ] },
   ];
+  // apps hidden in Settings (or at error.blue/hud) stay off the home screen; SETUP always stays
+  const hiddenKey = (v) => JSON.stringify((v.hidden || []).slice().sort());
+  const ROWS = (() => {
+    const hid = new Set(S.hidden || []);
+    return ALL_ROWS.map((r) => ({ name: r.name, apps: r.apps.filter((a) => a.id === "settings" || !hid.has(a.id)) })).filter((r) => r.apps.length);
+  })();
+  store.set("glasses.catalog", ALL_ROWS.map((r) => ({ name: r.name, apps: r.apps.map((a) => ({ id: a.id, file: a.file, desc: a.desc })) })));
   const nav = store.get("home.nav", { row: 0, cols: [0, 0] }, sessionStorage);
   let row = clamp(nav.row | 0, -1, ROWS.length - 1);
   const cols = ROWS.map((r, i) => clamp((nav.cols && nav.cols[i]) | 0, 0, r.apps.length - 1));
@@ -960,14 +1003,21 @@ const DM = (() => {
     wheelAt = performance.now();
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) move(e.deltaX > 0 ? 1 : -1, 0); else move(0, e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
+  function applyFresh() {                                               // settings changed (Settings app or the panel)
+    const fresh = DM.settings.get();
+    if (fresh.color !== S.color || hiddenKey(fresh) !== hiddenKey(S)) { location.reload(); return; }
+    S = fresh;
+  }
   window.addEventListener("pageshow", (e) => {
     if (!e.persisted) return;
     launching = null;
-    const fresh = DM.settings.get();                                    // coming back from Settings?
-    if (fresh.color !== S.color) { location.reload(); return; }
-    S = fresh;
+    applyFresh();
+    DM.settings.sync().then((changed) => changed && applyFresh());
     motion.zero(); headLive = false;                                    // where you look now = the card you left from
   });
+  // pick up changes made at error.blue/hud: on start, then every 30 s while the screen is on
+  DM.settings.sync().then((changed) => changed && applyFresh());
+  setInterval(() => { if (!document.hidden && !launching) DM.settings.sync().then((changed) => changed && applyFresh()); }, 30000);
 
   /* ---------------- loop (30 Hz) ---------------- */
   let last = performance.now();
@@ -980,6 +1030,7 @@ const DM = (() => {
     clock += dt;
     motion.update(dt);
     headControl();
+    if (window.GlassesPresence) GlassesPresence.focus(row < 0 ? "time" : ROWS[row].apps[cols[row]].id);
     const k = 1 - Math.exp(-dt * 9);
     rowA += ((headRow !== null ? headRow : row) - rowA) * k;
     for (let r = 0; r < ROWS.length; r++) colA[r] += ((headCol !== null && r === row ? headCol : cols[r]) - colA[r]) * k;

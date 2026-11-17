@@ -17,6 +17,9 @@
 //   GET  /api/vgadai/episodes                  Вгадай що?!: all episodes (for erasing)
 //   POST /api/vgadai/erase {what, code|season} Вгадай що?!: erase an episode, a season, the players or all
 //   GET  /api/sm/gifts                         Святий Миколайчик: gifts for Yaro (more at handleSm)
+//   GET  /api/hud/<CODE>                       glasses HUD: settings + which app is open (for error.blue/hud)
+//   PUT  /api/hud/<CODE>  {settings, updated}  glasses HUD: save settings (newest wins)
+//   POST /api/hud/<CODE>/ping {app, state, focus}  glasses HUD: "I'm here, in this app" (every 15 s)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -198,6 +201,82 @@ const smGift = (g) => ({
   id: g.id, lat: g.lat, lng: g.lng, acc: g.acc, from: g.giver, note: g.note, look: g.look,
   created: g.created, got: g.got || null,
 });
+// ---------------------------------------------------------------------------
+// Glasses HUD: one profile per pairing code (6 letters shown in SETUP.EXE on the glasses).
+// Holds the HUD settings (shared by the glasses and the control panel at /hud) and a
+// presence heartbeat: which app the glasses have open, and when they last said so.
+const HUD_CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const HUD_APP_RE = /^[a-z0-9-]{1,24}$/;
+let hudReady = null;
+function hudDb(env) {
+  if (!hudReady) {
+    hudReady = env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS hud_profiles (
+         code TEXT PRIMARY KEY, data TEXT NOT NULL DEFAULT '{}', updated INTEGER NOT NULL DEFAULT 0,
+         app TEXT, state TEXT, focus TEXT, seen INTEGER
+       )`
+    ).run().catch((err) => { hudReady = null; throw err; });
+  }
+  return hudReady.then(() => env.DB);
+}
+function hudSettings(v) {                       // keep only known settings, with sane values
+  const o = {}, b = v && typeof v === "object" ? v : {};
+  for (const k of ["compass", "head", "invert", "sounds"]) if (k in b) o[k] = !!b[k];
+  if ("speed" in b) o.speed = Math.max(0, Math.min(2, Number(b.speed) | 0));
+  if ("color" in b) o.color = Math.max(0, Math.min(9, Number(b.color) | 0));
+  if (Array.isArray(b.hidden)) o.hidden = [...new Set(b.hidden.filter((x) => typeof x === "string" && HUD_APP_RE.test(x)))].slice(0, 40);
+  return o;
+}
+async function handleHud(request, env, url) {
+  const m = url.pathname.match(/^\/api\/hud\/([A-Za-z0-9]{6})(\/ping)?$/);
+  if (!m) return json({ error: "not found" }, 404);
+  const code = m[1].toUpperCase();
+  if (!HUD_CODE_RE.test(code)) return json({ error: "bad code" }, 400);
+  const db = await hudDb(env);
+  const now = Date.now();
+
+  if (m[2]) {                                   // POST /api/hud/<code>/ping (also sent with sendBeacon)
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+    let b = {};
+    try { b = JSON.parse((await request.text()).slice(0, 2000) || "{}"); } catch {}
+    const app = HUD_APP_RE.test(String(b.app || "")) ? b.app : "unknown";
+    const state = b.state === "hidden" ? "hidden" : "active";
+    const focus = HUD_APP_RE.test(String(b.focus || "")) ? b.focus : null;
+    await db.prepare(
+      `INSERT INTO hud_profiles (code, app, state, focus, seen) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(code) DO UPDATE SET app = excluded.app, state = excluded.state, focus = excluded.focus, seen = excluded.seen`
+    ).bind(code, app, state, focus, now).run();
+    return json({ ok: true, now });
+  }
+
+  if (request.method === "GET") {
+    const row = await db.prepare(`SELECT * FROM hud_profiles WHERE code = ?`).bind(code).first();
+    let settings = null;
+    try { settings = row && row.updated ? JSON.parse(row.data) : null; } catch {}
+    return json({
+      code, now, settings, updated: row ? row.updated : 0,
+      presence: row && row.seen ? { app: row.app, state: row.state, focus: row.focus, seen: row.seen } : null,
+    });
+  }
+
+  if (request.method === "PUT") {
+    const raw = await request.text();
+    if (raw.length > 4096) return json({ error: "too big" }, 413);
+    let b;
+    try { b = JSON.parse(raw); } catch { return json({ error: "send JSON" }, 400); }
+    const settings = hudSettings(b.settings);
+    const updated = Math.min(now + 60000, Math.max(1, Number(b.updated) || now));
+    await db.prepare(
+      `INSERT INTO hud_profiles (code, data, updated) VALUES (?, ?, ?)
+       ON CONFLICT(code) DO UPDATE SET data = excluded.data, updated = excluded.updated
+       WHERE excluded.updated >= hud_profiles.updated`
+    ).bind(code, JSON.stringify(settings), updated).run();
+    const row = await db.prepare(`SELECT data, updated FROM hud_profiles WHERE code = ?`).bind(code).first();
+    return json({ ok: true, settings: JSON.parse(row.data), updated: row.updated });
+  }
+  return json({ error: "use GET, PUT or POST /ping" }, 405);
+}
+
 async function handleSm(request, env, url) {
   const db = await smDb(env);
   const path = url.pathname;
@@ -600,6 +679,8 @@ export default {
       if (path === "/api/tusa/hello") return await handleHello(request, env, ctx, url);
 
       if (path.startsWith("/api/sm/")) return await handleSm(request, env, url);
+
+      if (path.startsWith("/api/hud/")) return await handleHud(request, env, url);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 

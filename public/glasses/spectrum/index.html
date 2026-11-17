@@ -17,6 +17,7 @@
 </head>
 <body>
 <canvas id="screen" aria-label="Spectrum analyzer"></canvas>
+<script src="/glasses/presence.js" data-app="spectrum"></script>
 <script>
 /* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
 const DM = (() => {
@@ -230,10 +231,45 @@ const DM = (() => {
   }
 
   /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
-  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true };
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  // The same settings live on the server under the glasses' pairing code, so the control
+  // panel at error.blue/hud can change them; the newest change wins.
+  const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function hudCode() {
+    let c = store.get("glasses.code", null);
+    if (typeof c !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(c)) {
+      const b = new Uint8Array(6);
+      crypto.getRandomValues(b);
+      c = Array.from(b, (x) => CODE_ALPHA[x % CODE_ALPHA.length]).join("");
+      store.set("glasses.code", c);
+    }
+    return c;
+  }
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "hidden"];
+  const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
+  function push(v) {
+    try {
+      fetch("/api/hud/" + hudCode(), { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: pick(v), updated: v.updatedAt || Date.now() }) }).catch(() => {});
+    } catch {}
+  }
   const settings = {
     get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
-    set(v) { store.set("glasses.settings", v); },
+    set(v) { v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v); },
+    code: hudCode,
+    async sync() {                               // -> true when the server had newer settings
+      try {
+        const r = await fetch("/api/hud/" + hudCode(), { cache: "no-store" });
+        if (!r.ok) return false;
+        const j = await r.json(), local = settings.get(), lt = local.updatedAt || 0;
+        if (j.settings && j.updated > lt) {
+          store.set("glasses.settings", Object.assign({}, local, j.settings, { updatedAt: j.updated }));
+          return true;
+        }
+        if (lt > (j.updated || 0)) push(local);
+      } catch {}
+      return false;
+    },
   };
   // DOS phosphor colours: main, bright, mid, dim, dark
   const DOS_PALETTES = [

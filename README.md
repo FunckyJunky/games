@@ -27,11 +27,15 @@ public/                 the website
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
   glasses/crumbs/       CRUMBS.EXE: breadcrumb trail recorder with turn-by-turn navigation back to the start
   glasses/spectrum/     SPECTRUM.EXE: spectrum analyzer (bars, 3D, waterfall) with LP/HP/BP/notch/peak filters
-  glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds
+  glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
+                        and the 6-letter CODE that links the glasses to the control panel
+  glasses/presence.js   tells the control panel the glasses are on and which app is open (every glasses app loads it)
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/SM/           Святий Миколайчик gift page for phones: leave a gift on the spot where you stand (error.blue/glasses/SM)
+  hud/                  Glasses HUD control panel for phones (error.blue/hud): connected or not, app in use, live preview,
+                        show/hide apps, HUD settings, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE>
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -104,6 +108,23 @@ Music files: mp3 works in every browser. Each file can be up to 25 MB.
 npm install
 npm run dev      # http://localhost:8787 with a local test database
 ```
+
+## Glasses HUD control panel (error.blue/hud)
+
+A phone page for the glasses home screen at error.blue/glasses.
+
+- Linking: SETUP.EXE on the glasses shows a 6-letter CODE (top right). Type it on error.blue/hud.
+  The code is made on the glasses the first time (localStorage `glasses.code`).
+- Settings and hidden apps are saved on the server under that code: `GET/PUT /api/hud/<CODE>`,
+  D1 table `hud_profiles`. The newest change wins (glasses or panel). The glasses check on opening
+  the home screen and every 30 s.
+- Connected / app in use: every glasses app loads `/glasses/presence.js`, which posts
+  `/api/hud/<CODE>/ping` every 15 s (and "hidden" when the display goes off). The panel counts the
+  glasses as connected if a ping came in the last 40 s; on the home screen it also shows the card
+  you're looking at. Inside the panel's live preview the script stays silent.
+- The app list is read from `ALL_ROWS` in `public/glasses/index.html`, so new apps added there show
+  up in the panel by themselves. A new glasses app should load
+  `<script src="/glasses/presence.js" data-app="<id>"></script>` with the same id as in `ALL_ROWS`.
 
 ## Yaro-Vission (error.blue/glasses/yaro + error.blue/glasses/con)
 
