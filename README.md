@@ -25,6 +25,7 @@ public/                 the website
   glasses/flight/       Dot Flight: wireframe flight sim steered by where you look
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
   glasses/crumbs/       CRUMBS.EXE: breadcrumb trail recorder with turn-by-turn navigation back to the start
+  glasses/spectrum/     SPECTRUM.EXE: spectrum analyzer (bars, 3D, waterfall) with LP/HP/BP/notch/peak filters
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)

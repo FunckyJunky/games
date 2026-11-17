@@ -42,6 +42,7 @@
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
+      { id: "spectrum", file: "SPECTRUM.EXE", desc: "SPECTRUM ANALYZER + FILTERS", url: "/glasses/spectrum/" },
       { id: "clock",   file: "CLOCK.EXE",   desc: "TIME AND DATE",        url: "/glasses/mini/?app=clock" },
       { id: "counter", file: "COUNTER.EXE", desc: "TALLY COUNTER",        url: "/glasses/mini/?app=counter" },
       { id: "dice",    file: "DICE.EXE",    desc: "ROLL 1-3 DICE",        url: "/glasses/mini/?app=dice" },
@@ -241,6 +242,22 @@
     return m;
   }
 
+  // SPECTRUM: rolling 3D spectrum ridges
+  function spectrumMesh(t) {
+    const m = mesh(), R = 6, N = 14;
+    for (let j = 0; j < R; j++) {
+      const z = -0.8 + j * 0.32, b = m.v.length;
+      for (let i = 0; i < N; i++) {
+        const x = -1 + (i / (N - 1)) * 2, ph = t * 3 - j * 0.7;
+        const h = 0.12 + 0.75 * Math.pow(Math.abs(Math.sin(i * 0.9 + ph) * Math.cos(i * 0.37 - ph * 0.6)), 1.5) * (1 - Math.abs(x) * 0.35);
+        m.v.push([x, -0.6 + h * 1.5, z]);
+      }
+      for (let i = 0; i < N - 1; i++) m.l.push([b + i, b + i + 1, j === 0 ? "hot" : "ring"]);
+      const k = m.v.length; m.v.push([-1, -0.6, z], [1, -0.6, z]); m.l.push([k, k + 1, "ring"]);
+    }
+    return m;
+  }
+
   // YARO: an eyeball that looks around
   function eyeMesh(t) {
     const m = mesh(), N = 10, Mr = 6, R = 1.0;
@@ -274,6 +291,7 @@
       case "synth":   return [synthMesh(t), mul(rx(0.38), ry(Math.sin(t * 0.6) * 0.6)), 0.37];
       case "crumbs":  return [crumbsMesh(t), mul(rx(0.55), ry(t * 0.35)), 0.36];
       case "yaro":    return [eyeMesh(t), ry(Math.sin(t * 0.3) * 0.3), 0.4];
+      case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
     }
   }
 

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Spectrum analyzer with filters for the glasses">
+<title>Spectrum</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABZUlEQVR42u3cPQ6CQBRF4YdxKdY2rsjGxbgE92Rj7V7GwoTQkEBg/sh3KkIMDpy8mxsEh4hIgWqcXAICCAABBIAAAkAAASCAABBAAAggAAQQAAIIAAEEgAACsD9nl+DPJ33H7etwMQEiCEUYwqOJJoAAtNeCpq2gFiXbiBYkgqAFNRILJkAEobt7Qbf0GLffw6vZE55bZ631mwARpAUlt4tNgAhCJxHUQovYEkdaEAjQgjQiE0AA+m1BW+Jo7fpzn5cJEEEiKHm80ASIIEQfv4jVagtLvjfH+rUgEQQt6MCNyAQQIIJSDy1iy/GncXSPZ9b1r/28CRBBIih5BdUEiCBoQUXuQc29+7a2HWlBIghaUKamFAVflTUBIkgENdWC9jr+XvuX/GPANKa0IBEELaijBmUCRFB4LqiHNtLy/rkWtCSaTIAI0oK0IBNAALSgY+83ASIIWpAJAAEEgAACQAABIKABfuK4HNW5ib4zAAAAAElFTkSuQmCC">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* touch-action: none opts into the Neural Band pinch-and-move stream (sweeps the filter) */
+  html, body { background: #000; touch-action: none; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Spectrum analyzer"></canvas>
+<script>
+/* SPECTRUM.EXE: a spectrum analyzer with filters, green DOS style.
+   Pinch              play / stop
+   Swipe up / down    pick a setting (SOURCE, FILTER, FREQ, RES, VIEW)
+   Swipe left / right change it
+   Pinch + move hand  sweep the filter: left/right = frequency, up/down = resonance
+   Sources: built-in MUSIC, NOISE, PINK noise, SWEEP, SAW tone, and MIC (Meta's web apps don't
+   list the microphone, so it is tried and skipped when it isn't there). */
+(() => {
+  "use strict";
+  const G = 300, CX = 150;
+  const GREEN = "#33ff66", BRIGHT = "#d2ffdc", MID = "#22b84e", DIM = "#0e5f27";
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* ---------------- canvas + VGA font ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.38)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = 95 * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < 95; i++) for (let r = 0; r < 14; r++) {
+      const bits = parseInt(FONT_HEX.substr((i * 14 + r) * 2, 2), 16);
+      for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+    }
+    return (atlases[color] = a);
+  }
+  function text(s, x, y, color = GREEN, a = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a; s = String(s);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i) - 32;
+      if (c > 0 && c < 95) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8), Math.round(y), 8, 14);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s) => String(s).length * 8;
+
+  /* ---------------- settings ---------------- */
+  const SOURCES = ["MUSIC", "NOISE", "PINK", "SWEEP", "SAW", "MIC"];
+  const FILTERS = [["OFF", null], ["LOWPASS", "lowpass"], ["HIGHPASS", "highpass"], ["BANDPASS", "bandpass"], ["NOTCH", "notch"], ["PEAK +12DB", "peaking"]];
+  const VIEWS = ["BARS", "3D", "WATERFALL"];
+  const set = Object.assign({ src: 0, filt: 1, freq: 1200, q: 4, view: 0 }, store.get("spectrum.settings", {}));
+  const save = () => store.set("spectrum.settings", set);
+  let sel = 1;                                    // highlighted settings row
+  const ROWS = ["SOURCE", "FILTER", "FREQ", "RES", "VIEW"];
+  const fmtHz = (f) => (f < 1000 ? Math.round(f) + " HZ" : (f / 1000).toFixed(f < 10000 ? 2 : 1) + " KHZ");
+  const NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const noteName = (f) => { const n = Math.round(69 + 12 * Math.log2(f / 440)); return NOTE[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1); };
+
+  /* ---------------- audio ---------------- */
+  let ac = null, filter, analyser, out, srcBus, noiseBuf, pinkBuf;
+  let playing = false, source = null, srcName = "", micStream = null, srcTimer = 0;
+  const fftData = new Float32Array(4096), timeData = new Float32Array(2048);
+
+  function ensureAudio() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      ac = new AC();
+      srcBus = ac.createGain();
+      filter = ac.createBiquadFilter();
+      analyser = ac.createAnalyser(); analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.55;
+      analyser.minDecibels = -110; analyser.maxDecibels = -10;
+      out = ac.createGain(); out.gain.value = 0.6;
+      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -12; comp.ratio.value = 6;
+      srcBus.connect(filter); filter.connect(analyser); analyser.connect(out); out.connect(comp); comp.connect(ac.destination);
+      // noise buffers
+      const n = ac.sampleRate * 2;
+      noiseBuf = ac.createBuffer(1, n, ac.sampleRate); pinkBuf = ac.createBuffer(1, n, ac.sampleRate);
+      const w = noiseBuf.getChannelData(0), p = pinkBuf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < n; i++) {
+        const x = Math.random() * 2 - 1; w[i] = x * 0.5;
+        b0 = 0.99886 * b0 + x * 0.0555179; b1 = 0.99332 * b1 + x * 0.0750759; b2 = 0.969 * b2 + x * 0.153852;
+        b3 = 0.8665 * b3 + x * 0.3104856; b4 = 0.55 * b4 + x * 0.5329522; b5 = -0.7616 * b5 - x * 0.016898;
+        p[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + x * 0.5362) * 0.08; b6 = x * 0.115926;
+      }
+      applyFilter();
+    }
+    if (ac.state === "suspended" && ac.resume) ac.resume();
+    return true;
+  }
+
+  function applyFilter() {
+    if (!ac) return;
+    const [, type] = FILTERS[set.filt], t = ac.currentTime;
+    filter.type = type || "allpass";
+    filter.frequency.setTargetAtTime(type ? set.freq : 1000, t, 0.03);
+    filter.Q.setTargetAtTime(type ? set.q : 0.7, t, 0.03);
+    filter.gain.setTargetAtTime(type === "peaking" ? 12 : 0, t, 0.03);
+  }
+
+  function stopSource() {
+    clearInterval(srcTimer); srcTimer = 0;
+    if (source) { try { source.stop && source.stop(); } catch {} try { source.disconnect(); } catch {} source = null; }
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    out && out.gain.setTargetAtTime(0.6, ac.currentTime, 0.02);
+  }
+
+  async function startSource() {
+    stopSource();
+    const name = SOURCES[set.src];
+    srcName = name;
+    const t = ac.currentTime;
+    if (name === "NOISE" || name === "PINK") {
+      const s = ac.createBufferSource(); s.buffer = name === "NOISE" ? noiseBuf : pinkBuf; s.loop = true;
+      s.connect(srcBus); s.start(); source = s;
+    } else if (name === "SAW") {
+      const o = ac.createOscillator(), g = ac.createGain(); o.type = "sawtooth"; o.frequency.value = 110; g.gain.value = 0.35;
+      o.connect(g); g.connect(srcBus); o.start(); source = o; source.disconnect = () => g.disconnect();
+    } else if (name === "SWEEP") {
+      const o = ac.createOscillator(), g = ac.createGain(); g.gain.value = 0.4;
+      o.connect(g); g.connect(srcBus); o.start(); source = o; source.disconnect = () => g.disconnect();
+      const sweep = () => { const n = ac.currentTime; o.frequency.cancelScheduledValues(n); o.frequency.setValueAtTime(30, n); o.frequency.exponentialRampToValueAtTime(16000, n + 6); };
+      sweep(); srcTimer = setInterval(sweep, 6000);
+    } else if (name === "MUSIC") {
+      startMusic();
+    } else if (name === "MIC") {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("none");
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        const m = ac.createMediaStreamSource(micStream);
+        m.connect(srcBus); source = m;
+        out.gain.setTargetAtTime(0, ac.currentTime, 0.02);         // listen only: no feedback
+        flash("MIC ON (NOT PLAYED BACK)");
+      } catch (e) {
+        flash("NO MIC HERE - USING MUSIC", 2.5);
+        set.src = 0; save(); return startSource();
+      }
+    }
+  }
+
+  // ---- a small built-in groove: drums, bass, chords, arpeggio ----
+  function startMusic() {
+    const bus = ac.createGain(); bus.gain.value = 0.9; bus.connect(srcBus);
+    source = { stop() {}, disconnect() { bus.disconnect(); } };
+    const bpm = 112, sd = 60 / bpm / 4;
+    const prog = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];      // Am F C G
+    let step = 0, next = ac.currentTime + 0.05;
+    const mt = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const envG = (t, peak, dur) => { const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); g.connect(bus); return g; };
+    const tone = (type, f, t, peak, dur) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; o.connect(envG(t, peak, dur)); o.start(t); o.stop(t + dur + 0.05); return o; };
+    const nz = (t, ftype, f, peak, dur) => { const s = ac.createBufferSource(), fl = ac.createBiquadFilter(); s.buffer = noiseBuf; fl.type = ftype; fl.frequency.value = f; s.connect(fl); fl.connect(envG(t, peak, dur)); s.start(t, Math.random()); s.stop(t + dur + 0.05); };
+    function stepAt(s, t) {
+      const sb = s % 16, ch = prog[Math.floor(s / 16) % 4];
+      if (sb % 4 === 0) { const o = tone("sine", 150, t, 0.9, 0.35); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.1); }
+      if (sb === 4 || sb === 12) nz(t, "bandpass", 1800, 0.5, 0.18);
+      if (sb % 2 === 0) nz(t, "highpass", 8000, sb % 4 === 2 ? 0.25 : 0.12, 0.05);
+      if (sb % 4 === 2 || sb === 0) tone("sawtooth", mt(ch[0] - 24), t, 0.35, sd * 1.8);
+      if (sb === 0) for (const n of ch) { tone("sawtooth", mt(n), t, 0.06, sd * 15); tone("triangle", mt(n + 12), t, 0.05, sd * 15); }
+      if (sb % 2 === 1) tone("square", mt(ch[(sb >> 1) % 3] + 12), t, 0.07, sd * 0.9);
+    }
+    srcTimer = setInterval(() => { while (next < ac.currentTime + 0.12) { stepAt(step, next); next += sd; step++; } }, 25);
+  }
+
+  async function play() {
+    if (!ensureAudio()) { flash("NO AUDIO ON THIS DEVICE"); return; }
+    playing = true;
+    await startSource();
+  }
+  function stop() { playing = false; stopSource(); }
+
+  /* ---------------- analysis: 64 log bands, 20 Hz - 20 kHz ---------------- */
+  const NB = 64, FMIN = 20, FMAX = 20000;
+  const bandF = (i) => FMIN * Math.pow(FMAX / FMIN, i / NB);
+  const xOfF = (f) => 14 + (Math.log(f / FMIN) / Math.log(FMAX / FMIN)) * 272;
+  const bands = new Float32Array(NB), peaks = new Float32Array(NB), peakT = new Float32Array(NB);
+  const HIST = 34, hist = [];                                     // for the 3D view
+  const wf = document.createElement("canvas"); wf.width = NB; wf.height = 120;   // waterfall
+  const wfx = wf.getContext("2d");
+  let level = -100, peakHz = 0;
+  const respF = new Float32Array(136), respMag = new Float32Array(136), respPh = new Float32Array(136);
+  for (let i = 0; i < 136; i++) respF[i] = FMIN * Math.pow(FMAX / FMIN, i / 135);
+
+  function analyse(dt) {
+    if (!ac || !playing) {                                           // gently fall to silence
+      for (let i = 0; i < NB; i++) { bands[i] *= Math.exp(-dt * 4); peaks[i] = Math.max(0, peaks[i] - dt * 0.6); }
+      level = Math.max(-100, level - dt * 60);
+      pushHistory();
+      return;
+    }
+    analyser.getFloatFrequencyData(fftData);
+    const binHz = ac.sampleRate / analyser.fftSize, nb = analyser.frequencyBinCount;
+    let best = -999, bestBin = 0;
+    for (let k = 2; k < nb; k++) if (fftData[k] > best) { best = fftData[k]; bestBin = k; }
+    peakHz = best > -75 ? bestBin * binHz : 0;
+    for (let i = 0; i < NB; i++) {
+      const lo2 = bandF(i), hi = bandF(i + 1);
+      let k0 = Math.floor(lo2 / binHz), k1 = Math.max(k0, Math.ceil(hi / binHz));
+      let m = -200;
+      for (let k = k0; k <= Math.min(k1, nb - 1); k++) m = Math.max(m, fftData[k]);
+      const v = clamp((m + 100) / 85, 0, 1);                         // -100 .. -15 dB
+      bands[i] += (v - bands[i]) * (v > bands[i] ? 0.7 : 0.25);
+      if (bands[i] >= peaks[i]) { peaks[i] = bands[i]; peakT[i] = 0.5; }
+      else if ((peakT[i] -= dt) < 0) peaks[i] = Math.max(bands[i], peaks[i] - dt * 0.5);
+    }
+    analyser.getFloatTimeDomainData(timeData);
+    let sum = 0;
+    for (let i = 0; i < timeData.length; i++) sum += timeData[i] * timeData[i];
+    level = 10 * Math.log10(sum / timeData.length + 1e-12);
+    pushHistory();
+  }
+  function pushHistory() {
+    hist.unshift(Float32Array.from(bands));
+    if (hist.length > HIST) hist.pop();
+    wfx.drawImage(wf, 0, 1);                                         // waterfall: scroll down one row
+    for (let i = 0; i < NB; i++) { wfx.fillStyle = "#000"; wfx.fillRect(i, 0, 1, 1); wfx.globalAlpha = clamp(Math.pow(bands[i], 1.3) * 1.5, 0, 1); wfx.fillStyle = bands[i] > 0.8 ? BRIGHT : GREEN; wfx.fillRect(i, 0, 1, 1); wfx.globalAlpha = 1; }
+  }
+
+  /* ---------------- drawing ---------------- */
+  const AT = 24, AB = 196;                                          // analyzer area (y)
+  let clock = 0, flashMsg = "", flashUntil = 0;
+  const flash = (m, d = 1.8) => { flashMsg = m; flashUntil = clock + d; };
+
+  function drawAxis() {
+    for (const [f, l] of [[50, "50"], [100, "100"], [200, "200"], [500, "500"], [1000, "1K"], [2000, "2K"], [5000, "5K"], [10000, "10K"]]) {
+      const x = Math.round(xOfF(f));
+      lo.fillStyle = DIM; lo.fillRect(x, AT, 1, AB - AT);
+      text(l, x - textW(l) / 2, AB + 1, MID, 0.9);
+    }
+  }
+  function drawFilterCurve(y0, scale) {
+    const [, type] = FILTERS[set.filt];
+    if (!type || !ac) {
+      if (type) {                                                     // before audio starts: just mark the frequency
+        const x = xOfF(set.freq); lo.fillStyle = BRIGHT; lo.globalAlpha = 0.6; lo.fillRect(Math.round(x), AT, 1, AB - AT); lo.globalAlpha = 1;
+      }
+      return;
+    }
+    filter.getFrequencyResponse(respF, respMag, respPh);
+    lo.strokeStyle = BRIGHT; lo.lineWidth = 1.5; lo.globalAlpha = 0.9; lo.beginPath();
+    for (let i = 0; i < 136; i++) {
+      const db = 20 * Math.log10(respMag[i] + 1e-6), x = xOfF(respF[i]), y = clamp(y0 - db * scale, AT + 1, AB - 1);
+      i ? lo.lineTo(x, y) : lo.moveTo(x, y);
+    }
+    lo.stroke(); lo.lineWidth = 1; lo.globalAlpha = 1;
+    lo.setLineDash([2, 3]); lo.strokeStyle = MID; lo.beginPath(); lo.moveTo(14, y0 + 0.5); lo.lineTo(286, y0 + 0.5); lo.stroke(); lo.setLineDash([]);
+    text("0DB", 2, y0 - 14, MID, 0.8);
+    const fx = xOfF(set.freq);
+    lo.fillStyle = BRIGHT; lo.fillRect(Math.round(fx) - 1, AT, 3, 3);
+  }
+
+  function drawBars() {
+    drawAxis();
+    const bw = 272 / NB, H = AB - AT - 4;
+    for (let i = 0; i < NB; i++) {
+      const x = Math.round(14 + i * bw), h = Math.round(bands[i] * H);
+      for (let y = 0; y < h; y += 3) {                                 // LED-style segments
+        const hot = y > H * 0.82;
+        lo.fillStyle = hot ? BRIGHT : y > H * 0.55 ? GREEN : MID;
+        lo.fillRect(x, AB - 2 - y, Math.max(2, Math.floor(bw) - 1), 2);
+      }
+      const py = Math.round(AB - 2 - peaks[i] * H);
+      lo.fillStyle = BRIGHT; lo.fillRect(x, py, Math.max(2, Math.floor(bw) - 1), 1);
+    }
+    drawFilterCurve(AT + 40, 1.6);
+  }
+
+  function draw3D() {
+    drawAxis();
+    // older spectra recede up and inward; drawn back to front, each one hiding what is behind it
+    for (let j = hist.length - 1; j >= 0; j--) {
+      const h = hist[j], depth = j / HIST, s = 1 - depth * 0.45, ox = CX - 136 * s, base = AB - 4 - depth * 120, amp = 70 * s;
+      lo.beginPath();
+      lo.moveTo(ox, base);
+      for (let i = 0; i < NB; i++) lo.lineTo(ox + (i / (NB - 1)) * 272 * s, base - h[i] * amp);
+      lo.lineTo(ox + 272 * s, base);
+      lo.closePath();
+      lo.fillStyle = "#000"; lo.fill();
+      lo.strokeStyle = j === 0 ? BRIGHT : j % 4 === 0 ? GREEN : MID; lo.globalAlpha = clamp(1.1 - depth, 0.2, 1);
+      lo.stroke(); lo.globalAlpha = 1;
+    }
+    drawFilterCurve(AT + 30, 1.2);
+  }
+
+  function drawWaterfall() {
+    lo.imageSmoothingEnabled = false;
+    lo.drawImage(wf, 14, AT, 272, AB - AT);
+    drawAxis();
+    drawFilterCurve(AT + 40, 1.6);
+  }
+
+  function drawTop() {
+    lo.fillStyle = "#000"; lo.fillRect(0, 0, G, 19);
+    text("C:\\SPECTRUM>" + (playing ? srcName : "STOP"), 4, 3, GREEN);
+    if (playing && peakHz > 0) { const s = fmtHz(peakHz) + " " + noteName(peakHz); text(s, G - textW(s) - 4, 3, BRIGHT); }
+    lo.fillStyle = DIM; lo.fillRect(0, 19, G, 1);
+    // level meter on the right edge
+    const lv = clamp((level + 60) / 60, 0, 1), mh = AB - AT;
+    lo.fillStyle = DIM; lo.fillRect(G - 6, AT, 3, mh);
+    lo.fillStyle = lv > 0.85 ? BRIGHT : GREEN; lo.fillRect(G - 6, AT + mh - Math.round(lv * mh), 3, Math.round(lv * mh));
+  }
+
+  function drawPanel() {
+    const y0 = 214;
+    lo.fillStyle = "#000"; lo.fillRect(0, y0 - 2, G, G - y0 + 2);
+    lo.fillStyle = DIM; lo.fillRect(0, y0 - 2, G, 1);
+    const vals = [SOURCES[set.src], FILTERS[set.filt][0], fmtHz(set.freq), set.q.toFixed(set.q < 10 ? 1 : 0), VIEWS[set.view]];
+    const off = !FILTERS[set.filt][1];
+    ROWS.forEach((r, i) => {
+      const y = y0 + i * 15, on = i === sel, dim = off && (i === 2 || i === 3);
+      if (on) { lo.fillStyle = GREEN; lo.fillRect(4, y, G - 16, 14); }
+      const c = on ? "#000000" : dim ? DIM : GREEN;
+      text((on ? ">" : " ") + r.padEnd(7) + "< " + vals[i] + " >", 8, y, c);
+    });
+    if (!playing && Math.floor(clock * 2) % 2 === 0) text("PINCH = PLAY", G - 112, y0 + 60, BRIGHT);
+  }
+
+  function draw(dt) {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    if (set.view === 0) drawBars(); else if (set.view === 1) draw3D(); else drawWaterfall();
+    drawTop();
+    drawPanel();
+    if (clock < flashUntil) {
+      const w = textW(flashMsg) + 16, x = (G - w) / 2, y = 90;
+      lo.fillStyle = "#000"; lo.fillRect(x, y, w, 22);
+      lo.strokeStyle = BRIGHT; lo.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      text(flashMsg, x + 8, y + 4, BRIGHT);
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- input ---------------- */
+  function change(d) {
+    if (sel === 0) { set.src = (set.src + d + SOURCES.length) % SOURCES.length; if (playing) startSource(); }
+    else if (sel === 1) { set.filt = (set.filt + d + FILTERS.length) % FILTERS.length; applyFilter(); }
+    else if (sel === 2) { set.freq = clamp(set.freq * Math.pow(2, d / 3), 30, 16000); applyFilter(); }      // 1/3 octave
+    else if (sel === 3) { set.q = clamp(set.q * Math.pow(1.5, d), 0.5, 30); applyFilter(); }
+    else set.view = (set.view + d + VIEWS.length) % VIEWS.length;
+    save();
+  }
+  function primary() { ensureAudio(); playing ? stop() : play(); }
+
+  // On the glasses a pinch sends Enter AND a pointer press; the pointer press is the select.
+  let lastPointerAt = -1e9, drag = null;
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); stop(); history.back(); return; }
+    if (!["Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) return;
+    e.preventDefault();
+    if (k === "ArrowUp") sel = (sel + ROWS.length - 1) % ROWS.length;
+    else if (k === "ArrowDown") sel = (sel + 1) % ROWS.length;
+    else if (k === "ArrowLeft") change(-1);
+    else if (k === "ArrowRight") change(1);
+    else if (!e.repeat) {
+      const at = performance.now();
+      ensureAudio();                                                   // unlock sound inside the gesture
+      setTimeout(() => { if (drag || Math.abs(lastPointerAt - at) < 450) return; primary(); }, 220);
+    }
+  });
+  // pinch-and-move (or mouse/touch drag): sweep the filter
+  cv.addEventListener("pointerdown", (e) => {
+    ensureAudio();
+    lastPointerAt = performance.now();
+    drag = { moved: 0, x: e.clientX, y: e.clientY };
+    try { cv.setPointerCapture(e.pointerId); } catch {}
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    let dx = e.movementX, dy = e.movementY;
+    if (typeof dx !== "number" || (dx === 0 && dy === 0)) { dx = e.clientX - drag.x; dy = e.clientY - drag.y; }
+    if (Math.abs(dx) > 150 && Math.abs(e.clientX - 300) < 3) dx = 0;   // device recenter snap
+    if (Math.abs(dy) > 150 && Math.abs(e.clientY - 300) < 3) dy = 0;
+    drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+    if (drag.moved < 8) return;
+    if (!FILTERS[set.filt][1]) { set.filt = 1; }
+    set.freq = clamp(set.freq * Math.pow(2, dx / 90), 30, 16000);
+    set.q = clamp(set.q * Math.pow(2, -dy / 120), 0.5, 30);
+    applyFilter();
+  });
+  function endDrag() {
+    if (!drag) return;
+    const tap = drag.moved < 8;
+    drag = null; lastPointerAt = performance.now();
+    if (tap) primary(); else save();
+  }
+  cv.addEventListener("pointerup", endDrag);
+  cv.addEventListener("pointercancel", () => { drag = null; lastPointerAt = performance.now(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { stop(); if (ac && ac.suspend) ac.suspend(); } });
+
+  /* ---------------- loop (30 Hz) ---------------- */
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    analyse(dt);
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+
+  window.__spec = { set, bands, peaks, get playing() { return playing; }, get peakHz() { return peakHz; }, get level() { return level; }, applyFilter, change, select: (i) => (sel = i) };
+})();
+</script>
+</body>
+</html>
