@@ -23,6 +23,8 @@ public/                 the website
   glasses/hud/          Target HUD: dot-matrix horizon/tilt display with simulated targets (head-motion sensors)
   glasses/flight/       Dot Flight: wireframe flight sim steered by where you look
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
+  glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
+  glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -95,6 +97,31 @@ Music files: mp3 works in every browser. Each file can be up to 25 MB.
 npm install
 npm run dev      # http://localhost:8787 with a local test database
 ```
+
+## Yaro-Vission (error.blue/glasses/yaro + error.blue/glasses/con)
+
+A game where one person wears the Meta Ray-Ban Display glasses and another steers them like a game
+character, watching a live first-person view.
+
+- `public/glasses/yaro/index.html`: the glasses app (Mini Hub tile "Yaro"). It shows a link code; pinch
+  starts it (sound, voice, head sensors and the camera need that gesture). Orders appear as dot-matrix
+  arrows and stick-figure animations and are spoken (swipe up: voice on/off). Pinch = DONE, which tells
+  CON. Swipe left/right: colour. Swipe down twice: new code. A move that CON stops refreshing ends by
+  itself after 2.5 s
+- `public/glasses/con/index.html`: CON. Type the code, then CONTROL YARO: full-screen live view with an
+  FPV HUD (compass and tilt from the glasses' head sensors, battery, ping, fps), a D-pad held to move
+  (8 ways; the red middle is STOP), ACTION with take, jump, hug and dance, XP for every action Yaro
+  confirms. Keys W A S D / arrows, Space, 1-4, E, F; gamepads too. Settings: video Auto / Direct /
+  Low-res, which camera, picture fit, sound
+- BE THE CAMERA (on the CON page): Meta's web apps don't list camera access, so the glasses app only
+  tries `getUserMedia` and goes on without it. The wearer's phone can be the camera instead: same code,
+  BE THE CAMERA, phone in a shirt pocket. It also shows the orders, buzzes, has a DONE button and sends
+  its compass heading
+- `public/glasses/yaro/link.js`: the shared link. Everyone is in the GameLab room
+  `yaro-vission/<CODE>` (names GLASSES, CON, CAM). Messages: `hi` (role, cam), `mv` {f, r} (resent
+  every second while held), `act` {a, id}, `stop`, `got`, `done`, `tel` {h, p, bat}, `ping`/`pong`.
+  Video is WebRTC (STUN only, like TUSA), set up through the room; when it can't connect within 12 s,
+  CON asks for `jpg`: about 5 small JPEG frames a second through the room (each under 16 KB)
 
 ## Web app
 
