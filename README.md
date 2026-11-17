@@ -199,6 +199,11 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   shuffle, half time, bossa, dusty) with the odd fill. No record crackle or hiss on the music
 - while your intercom is on, the game's own sounds (music, rain, wind) go quiet on your phone, so
   nothing echoes back into the call
+- starting setup (the owner's own settings, `GD` in the World Tester's main.js): quality Low, Cinematic
+  lens, film look, GI, ray tracing, map optimization and the phone fix on, light strength 185%,
+  distance 255%, glow 55%, brightness +4, contrast +33, gamma 1.51. A player's own choices are kept;
+  lens and quality saved automatically under the old defaults gave way once (`wt.cfgv` = 2).
+  Advanced settings ends with "Copy my settings" (one line of text with everything set right now)
 - Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
   occlusion), ray tracing (screen-space reflections on wet ground and water) and map optimization
   (the world is only built as far as the fog lets you see, and far terrain is much simpler; the
@@ -209,7 +214,7 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
 - Advanced settings, Quality: "Phone graphics fix" switch, for the black-and-white blotchy picture
   some Android phones show. It renders without multisampling, keeps NaN/infinite values off the
   screen (scene, sky, clouds and every picture pass) and drops the film look's automatic soft focus.
-  On by default on phones and tablets that aren't Apple; off elsewhere. Shaders also no longer call
+  On by default in Mistwalkers (in the World Tester: on for phones and tablets that aren't Apple). Shaders also no longer call
   smoothstep with reversed edges (undefined in GLSL; the rewrite looks the same where it worked)
 
 ## Вгадай що?! (error.blue/vgadai)
