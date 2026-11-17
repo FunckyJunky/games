@@ -105,7 +105,7 @@ npm run dev      # http://localhost:8787 with a local test database
 A game where one person wears the Meta Ray-Ban Display glasses and another steers them like a game
 character, watching a live first-person view.
 
-- `public/glasses/yaro/index.html`: the glasses app (Mini Hub tile "Yaro"). It shows a link code; pinch
+- `public/glasses/yaro/index.html`: the glasses app (YARO card on the glasses home screen, and the Mini Hub tile "Yaro"). It shows a link code; pinch
   starts it (sound, voice, head sensors and the camera need that gesture). Orders appear as dot-matrix
   arrows and stick-figure animations and are spoken (swipe up: voice on/off). Pinch = DONE, which tells
   CON. Swipe left/right: colour. Swipe down twice: new code. A move that CON stops refreshing ends by
