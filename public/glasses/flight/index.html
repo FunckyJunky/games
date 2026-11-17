@@ -169,10 +169,21 @@ const DM = (() => {
       raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
       if (!live) { live = true; if (onLive) onLive(); }
     }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
     function listen() {
       if (listening) return;
       listening = true;
       window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
     }
     async function enable() {   // call from a pinch / tap
       try {
@@ -206,6 +217,7 @@ const DM = (() => {
       get axisName() { return AXES[axis].name; },
       get heading() { return att.h; },
       get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
       get pitch() { return att.p - zp; },
       get roll() { return angDiff(att.r, zr); },
       enable, update, attitude,

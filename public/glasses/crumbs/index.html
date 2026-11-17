@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Breadcrumb trail: record where you walk and find your way back">
+<title>Breadcrumbs</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABWElEQVR42u3cMRLBQByF8RfjKGqNE2kcwSEcQeNEGrW7RCfGjGEjQezvq1Jo5Jv35r+7VpOkDb7GzCsggAAQQAAIIAAEVMfcK+jHqT1fn5fNQgJUEHrRxF5Qr9p5RGkdSYAKIgAEEABT0HQnn3cmIglQQSpIBQ1YO6V1JAEqKLajMdxUU1pfEqCCVBBGmnxeOUGTABWkgnBXCxZiKggqqJJJSQJUUGxH1/rlV+3m6WcO2ToRU0EwBX2SY7PvaiR7P01UQVBBQ004t/Vy+ywBKggqKNPcsnZHTAUh9oIkAASYgn5ywSUBIIAAEEAALMQkAAQQAAIIQJIf3wua+j6PBBAAAggAAbEXBAkgAEMsxMZYHNWw4JIAAlBUQcW3wtvuOuc6u5Tcw5IAEKCC8tl/C1RHEkAARjoRM+FIAAEggAAQ8B9T0Nj/qywBICAO5SEBBIAAAkBARVwArONPV6ELnk8AAAAASUVORK5CYII=">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Breadcrumb trail map"></canvas>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop };
+})();
+
+</script>
+<script>
+/* CRUMBS.EXE: records where you walk as a trail of breadcrumbs, and leads you back.
+   Pinch          record / pause  (while navigating: 3D view <-> map)
+   Swipe up/down  zoom in / out   Swipe left  fit the whole trail   Swipe right  menu
+   Menu           NAVIGATE BACK - NEW TRAIL - DEMO WALK
+   Location comes from the paired phone (navigator.geolocation). */
+(() => {
+  "use strict";
+  const G = 300, CX = 150, MAP_T = 20, MAP_B = 214, MAP_CY = 117;
+  const GREEN = "#33ff66", BRIGHT = "#d2ffdc", MID = "#22b84e", DIM = "#0e5f27", DARK = "#031c0b";
+  const D2R = Math.PI / 180;
+  const { clamp, angDiff, wrap360 } = DM;
+  const store = DM.store;
+  const pad = (n, l = 2) => String(n).padStart(l, "0");
+
+  /* ---------------- canvas + VGA font (same look as the home screen) ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.38)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = 95 * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < 95; i++) for (let r = 0; r < 14; r++) {
+      const bits = parseInt(FONT_HEX.substr((i * 14 + r) * 2, 2), 16);
+      for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+    }
+    return (atlases[color] = a);
+  }
+  function text(s, x, y, color = GREEN, a = 1, scale = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a; s = String(s);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i) - 32;
+      if (c > 0 && c < 95) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8 * scale), Math.round(y), 8 * scale, 14 * scale);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s, scale = 1) => String(s).length * 8 * scale;
+  const textC = (s, cx, y, color, a, scale = 1) => text(s, cx - textW(s, scale) / 2, y, color, a, scale);
+  function line(x0, y0, x1, y1, color, a = 1, w = 1) {
+    lo.strokeStyle = color; lo.globalAlpha = a; lo.lineWidth = w;
+    lo.beginPath(); lo.moveTo(x0, y0); lo.lineTo(x1, y1); lo.stroke();
+    lo.globalAlpha = 1; lo.lineWidth = 1;
+  }
+  function arrow(x, y, ang, size, color, a = 1, outline = false) {      // ang: 0 = up, clockwise degrees
+    const r = ang * D2R, c = Math.cos(r), s = Math.sin(r);
+    const P = [[0, -1], [0.62, 0.15], [0.24, 0.15], [0.24, 0.85], [-0.24, 0.85], [-0.24, 0.15], [-0.62, 0.15]]
+      .map(([u, v]) => [x + (u * c - v * s) * size, y + (u * s + v * c) * size]);
+    lo.globalAlpha = a; lo.beginPath();
+    P.forEach((p, i) => (i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1])));
+    lo.closePath();
+    if (outline) { lo.strokeStyle = color; lo.stroke(); } else { lo.fillStyle = color; lo.fill(); lo.strokeStyle = BRIGHT; lo.stroke(); }
+    lo.globalAlpha = 1;
+  }
+
+  /* ---------------- geo helpers ---------------- */
+  // local flat metres around an origin; fine for walks of a few km
+  const toXY = (o, lat, lon) => [(lon - o[1]) * Math.cos(o[0] * D2R) * 111320, (lat - o[0]) * 110540];
+  const bearing = (ax, ay, bx, by) => wrap360(Math.atan2(bx - ax, by - ay) / D2R);
+  const dist = (ax, ay, bx, by) => Math.hypot(bx - ax, by - ay);
+  const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const compassName = (b) => COMPASS[Math.round(wrap360(b) / 45) % 8];
+  const fmtDist = (m) => (m < 1000 ? Math.round(m) + " M" : (m / 1000).toFixed(m < 10000 ? 2 : 1) + " KM");
+  function fmtTime(ms) { const s = Math.floor(ms / 1000); return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60); }
+
+  /* ---------------- state ---------------- */
+  const saved = store.get("crumbs.trail", null);
+  const trail = saved && Array.isArray(saved.pts) ? saved : { pts: [], dist: 0, recMs: 0 };   // pts: [lat, lon, time]
+  let recording = false, recSince = 0;
+  let cur = null;                     // { lat, lon, acc, t, speed }
+  let course = null, lastCourseFix = null;
+  let gps = "OFF", watchId = null, demo = null;
+  let mode = "REC";                   // REC | NAV
+  let navView = "3D";                 // 3D | MAP
+  let zoom = -1;                      // -1 = fit the trail; else index into ZOOMS
+  const ZOOMS = [30, 60, 120, 250, 500, 1000, 2500, 6000];             // metres across the map
+  const CAM_H = [8, 14, 25, 45, 90, 180];                              // nav 3D camera heights (m)
+  let camIdx = 1;
+  let menu = null;                    // { items, sel }
+  let flashMsg = "", flashUntil = 0, clock = 0, lastCrumbAt = -10;
+  const view = { cx: 0, cy: 0, span: 120, rot: 0 };
+  const flash = (m, d = 2) => { flashMsg = m; flashUntil = clock + d; };
+  const motion = DM.createMotion();
+  const origin = () => (trail.pts.length ? trail.pts[0] : cur ? [cur.lat, cur.lon] : null);
+  const saveTrail = () => store.set("crumbs.trail", trail);
+
+  /* ---------------- location ---------------- */
+  function startGps() {
+    if (demo) return;
+    if (!("geolocation" in navigator)) { gps = "N/A"; flash("NO LOCATION ON THIS DEVICE", 3); return; }
+    if (watchId !== null) return;
+    gps = "WAIT";
+    watchId = navigator.geolocation.watchPosition(
+      (p) => onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, p.coords.speed, p.coords.heading, Date.now()),
+      (err) => { gps = err.code === 1 ? "DENIED" : "WAIT"; if (err.code === 1) flash("LOCATION NOT ALLOWED", 3); },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  }
+  function stopGps() { if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } if (!demo) gps = "OFF"; }
+
+  function onFix(lat, lon, acc, speed, heading, t) {
+    gps = acc <= 35 ? "OK" : "WEAK";
+    const prev = cur;
+    cur = { lat, lon, acc, t, speed: Number.isFinite(speed) ? speed : null };
+    // direction of travel: from the GPS, or from the last few metres walked
+    if (Number.isFinite(heading) && (speed || 0) > 0.6) course = heading;
+    else if (lastCourseFix) {
+      const [x, y] = toXY([lastCourseFix.lat, lastCourseFix.lon], lat, lon);
+      if (Math.hypot(x, y) > Math.max(4, acc * 0.3)) { course = bearing(0, 0, x, y); lastCourseFix = { lat, lon }; }
+    } else lastCourseFix = { lat, lon };
+    if (prev && cur.speed === null) {
+      const [x, y] = toXY([prev.lat, prev.lon], lat, lon);
+      cur.speed = Math.hypot(x, y) / Math.max(0.5, (t - prev.t) / 1000);
+    }
+    if (recording && acc <= 35) dropCrumb(lat, lon, acc, t);
+    if (mode === "NAV") updateNav();
+  }
+
+  function dropCrumb(lat, lon, acc, t) {
+    const n = trail.pts.length;
+    if (n) {
+      const lastP = trail.pts[n - 1], [x, y] = toXY([lastP[0], lastP[1]], lat, lon), d = Math.hypot(x, y);
+      if (d < Math.max(5, acc * 0.4)) return;                       // not far enough for a new crumb
+      if (d > 300 && t - lastP[2] < 30000) return;                  // a GPS jump, not a walk
+      trail.dist += d;
+    }
+    trail.pts.push([+lat.toFixed(6), +lon.toFixed(6), t]);
+    if (trail.pts.length > 6000) trail.pts.splice(1, 1);
+    lastCrumbAt = clock;
+    saveTrail();
+  }
+
+  function setRecording(on) {
+    if (on === recording) return;
+    if (on) { recording = true; recSince = Date.now(); startGps(); flash(trail.pts.length ? "RECORDING (CONTINUED)" : "RECORDING"); }
+    else { recording = false; trail.recMs += Date.now() - recSince; saveTrail(); flash("PAUSED"); }
+  }
+  const recMs = () => trail.recMs + (recording ? Date.now() - recSince : 0);
+
+  /* ---------------- navigate back ---------------- */
+  let nav = null;   // { route: [[x,y]], cum: [], total, idx, along, off, target, turn, arrived }
+  function startNav() {
+    if (trail.pts.length < 2) { flash("RECORD A TRAIL FIRST", 2.5); return; }
+    const o = origin();
+    const route = trail.pts.map((p) => toXY(o, p[0], p[1])).reverse();   // from the last crumb back to the start
+    const cum = [0];
+    for (let i = 1; i < route.length; i++) cum.push(cum[i - 1] + dist(...route[i - 1], ...route[i]));
+    nav = { route, cum, total: cum[cum.length - 1], idx: 0, along: 0, off: 0, arrived: false };
+    if (recording) setRecording(false);
+    mode = "NAV"; navView = "3D"; zoom = -1;
+    startGps();
+    updateNav();
+    flash("NAVIGATING BACK TO START", 2.5);
+  }
+  function stopNav() { nav = null; mode = "REC"; flash("NAVIGATION STOPPED"); }
+  function pointAt(along) {                                              // position on the route at a distance
+    const { route, cum } = nav;
+    along = clamp(along, 0, nav.total);
+    let i = 0;
+    while (i < cum.length - 2 && cum[i + 1] < along) i++;
+    const seg = cum[i + 1] - cum[i] || 1, u = (along - cum[i]) / seg;
+    return [route[i][0] + (route[i + 1][0] - route[i][0]) * u, route[i][1] + (route[i + 1][1] - route[i][1]) * u];
+  }
+  function dirAt(along) { const a = pointAt(along - 4), b = pointAt(along + 4); return bearing(a[0], a[1], b[0], b[1]); }
+  function updateNav() {
+    if (!nav || !cur) return;
+    const o = origin(), [px, py] = toXY(o, cur.lat, cur.lon);
+    const { route, cum } = nav;
+    let best = { d: 1e9, i: nav.idx, u: 0 };
+    for (let i = Math.max(0, nav.idx - 3); i < Math.min(route.length - 1, nav.idx + 60); i++) {
+      const [ax, ay] = route[i], [bx, by] = route[i + 1], vx = bx - ax, vy = by - ay;
+      const L2 = vx * vx + vy * vy || 1, u = clamp(((px - ax) * vx + (py - ay) * vy) / L2, 0, 1);
+      const d = dist(px, py, ax + vx * u, ay + vy * u);
+      if (d < best.d - 0.5) best = { d, i, u };
+    }
+    nav.idx = best.i;
+    nav.along = Math.max(nav.along - 5, cum[best.i] + (cum[best.i + 1] - cum[best.i]) * best.u);
+    nav.off = best.d;
+    nav.pos = [px, py];
+    const start = route[route.length - 1];
+    nav.toStart = dist(px, py, ...start);
+    nav.startBearing = bearing(px, py, ...start);
+    nav.arrived = nav.toStart < Math.max(10, cur.acc * 0.6) || nav.total - nav.along < 6;
+    // where to walk now: a point a little ahead on the trail (or the nearest trail point when off it)
+    const offTrail = nav.off > Math.max(25, cur.acc * 1.5);
+    nav.target = offTrail ? pointAt(nav.along) : pointAt(nav.along + 18);
+    nav.offTrail = offTrail;
+    // the next real bend in the trail, within 90 m
+    nav.turn = null;
+    const here = dirAt(nav.along + 6);
+    for (let a = nav.along + 12; a < Math.min(nav.total - 4, nav.along + 90); a += 4) {
+      const ch = angDiff(dirAt(a + 8), here);
+      if (Math.abs(ch) > 40) { nav.turn = { at: a - nav.along, dir: ch > 0 ? "RIGHT" : "LEFT", sharp: Math.abs(ch) > 110 }; break; }
+    }
+  }
+  function heading() {
+    const c = motion.compass;
+    if (cur && course !== null && (cur.speed || 0) > 0.6) return course;   // walking: direction of travel
+    if (c !== null) return c;                                              // standing: compass
+    return course;                                                         // last known, or null
+  }
+  function instruction(h) {
+    if (!nav || !nav.pos) return { main: "WAITING FOR GPS", sub: "", rel: null };
+    if (nav.arrived) return { main: "YOU MADE IT!", sub: "BACK AT THE START", rel: null };
+    const tb = bearing(...nav.pos, ...nav.target);
+    if (h === null) return { main: "HEAD " + compassName(tb), sub: "WALK A FEW STEPS FOR HEADING", rel: null, abs: tb };
+    const rel = angDiff(tb, h), ar = Math.abs(rel), side = rel < 0 ? "LEFT" : "RIGHT";
+    let main;
+    if (ar < 25) main = "GO STRAIGHT";
+    else if (ar < 70) main = "BEAR " + side;
+    else if (ar < 140) main = "TURN " + side;
+    else main = "TURN AROUND";
+    let sub = nav.offTrail ? "OFF TRAIL " + fmtDist(nav.off) + " - BACK TO IT" : "FOLLOW THE CRUMBS";
+    if (!nav.offTrail && ar < 25 && nav.turn) sub = "IN " + fmtDist(Math.max(5, Math.round(nav.turn.at / 5) * 5)) + ": " + (nav.turn.sharp ? "SHARP " : "TURN ") + nav.turn.dir;
+    return { main, sub, rel };
+  }
+
+  /* ---------------- demo walk (clearly labelled, never mixed with real data) ---------------- */
+  function startDemo() {
+    stopGps();
+    const base = cur ? [cur.lat, cur.lon] : [52.5163, 13.3777];
+    trail.pts = []; trail.dist = 0; trail.recMs = 0; nav = null; mode = "REC";
+    // a wandering walk: straight bits and turns, at 4x walking speed
+    const legs = [[0, 60], [35, 50], [90, 70], [60, 40], [150, 55], [200, 35], [120, 45]];
+    const path = [[0, 0]];
+    for (const [b, len] of legs) for (let s = 0; s < len; s += 2) { const p = path[path.length - 1]; path.push([p[0] + Math.sin(b * D2R) * 2, p[1] + Math.cos(b * D2R) * 2]); }
+    demo = { base, path, i: 0, back: false, timer: setInterval(demoTick, 350) };
+    recording = true; recSince = Date.now(); gps = "OK";
+    flash("DEMO WALK (NOT REAL GPS)", 3);
+  }
+  function demoTick() {
+    const d = demo, step = d.back ? -3 : 3;
+    d.i = clamp(d.i + step, 0, d.path.length - 1);
+    const [x, y] = d.path[d.i], jx = (Math.random() - 0.5) * 3, jy = (Math.random() - 0.5) * 3;
+    const lat = d.base[0] + (y + jy) / 110540, lon = d.base[1] + (x + jx) / (111320 * Math.cos(d.base[0] * D2R));
+    onFix(lat, lon, 6, 1.4 * 4, null, Date.now());
+    if (!d.back && d.i >= d.path.length - 1) { setRecording(false); d.back = true; setTimeout(() => demo && startNav(), 600); }
+    if (d.back && nav && nav.arrived) stopDemo(true);
+  }
+  function stopDemo(done) { if (!demo) return; clearInterval(demo.timer); demo = null; gps = "OFF"; if (!done) flash("DEMO STOPPED"); }
+
+  /* ---------------- drawing: 2D map ---------------- */
+  function niceStep(span) { const raw = span / 5, p = Math.pow(10, Math.floor(Math.log10(raw))); for (const m of [1, 2, 5, 10]) if (m * p >= raw) return m * p; return 10 * p; }
+  function updateView(dt) {
+    const o = origin();
+    let cx = 0, cy = 0, span = 120, rot = 0;
+    const here = cur && o ? toXY(o, cur.lat, cur.lon) : [0, 0];
+    if (zoom < 0) {                                                     // fit everything recorded
+      let x0 = here[0], x1 = here[0], y0 = here[1], y1 = here[1];
+      if (o) for (const p of trail.pts) { const [x, y] = toXY(o, p[0], p[1]); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      cx = (x0 + x1) / 2; cy = (y0 + y1) / 2;
+      // the map is 260 px wide and 194 px tall (134 px under the navigation banner); a rotated map needs the diagonal
+      span = mode === "NAV" ? Math.hypot(x1 - x0, y1 - y0) * 2.05 : Math.max(x1 - x0, (y1 - y0) * 1.4) * 1.25;
+      span = Math.max(40, span);
+    } else { [cx, cy] = here; span = ZOOMS[zoom]; }
+    if (mode === "NAV") { const h = heading(); rot = h === null ? 0 : h; }
+    const k = 1 - Math.exp(-dt * 5);
+    view.cx += (cx - view.cx) * k; view.cy += (cy - view.cy) * k;
+    view.span *= Math.exp((Math.log(span) - Math.log(view.span)) * k);
+    view.rot = wrap360(view.rot + angDiff(rot, view.rot) * k);
+  }
+  function mapXY(x, y) {
+    const s = 260 / view.span, r = -view.rot * D2R, dx = x - view.cx, dy = y - view.cy;
+    const X = dx * Math.cos(r) - dy * Math.sin(r), Y = dx * Math.sin(r) + dy * Math.cos(r);
+    return [CX + X * s, (mode === "NAV" ? 148 : MAP_CY) - Y * s];
+  }
+  function drawMap() {
+    const o = origin();
+    lo.save(); lo.beginPath(); lo.rect(0, MAP_T, G, MAP_B - MAP_T); lo.clip();
+    // grid
+    const step = niceStep(view.span), half = view.span;
+    lo.strokeStyle = DIM; lo.globalAlpha = 0.6; lo.beginPath();
+    for (let gx = Math.floor((view.cx - half) / step) * step; gx <= view.cx + half; gx += step) { const a = mapXY(gx, view.cy - half), b = mapXY(gx, view.cy + half); lo.moveTo(a[0], a[1]); lo.lineTo(b[0], b[1]); }
+    for (let gy = Math.floor((view.cy - half) / step) * step; gy <= view.cy + half; gy += step) { const a = mapXY(view.cx - half, gy), b = mapXY(view.cx + half, gy); lo.moveTo(a[0], a[1]); lo.lineTo(b[0], b[1]); }
+    lo.stroke(); lo.globalAlpha = 1;
+    if (o && trail.pts.length) {
+      const P = trail.pts.map((p) => mapXY(...toXY(o, p[0], p[1])));
+      // trail line; while navigating the part already walked back is dim
+      const doneFrom = nav ? trail.pts.length - 1 - nav.idx : P.length;
+      lo.strokeStyle = MID; lo.lineWidth = 1.5; lo.beginPath();
+      P.forEach((p, i) => (i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1])));
+      lo.stroke(); lo.lineWidth = 1;
+      const n = P.length, every = Math.max(1, Math.ceil(n / 400));
+      for (let i = 0; i < n; i += every) {
+        const done = nav && i > doneFrom, age = (i + 1) / n;
+        lo.fillStyle = done ? DIM : GREEN; lo.globalAlpha = done ? 0.6 : 0.45 + 0.55 * age;
+        lo.fillRect(Math.round(P[i][0]) - 1, Math.round(P[i][1]) - 1, 3, 3);
+      }
+      lo.globalAlpha = 1;
+      const fresh = clock - lastCrumbAt;                                  // a ripple where the newest crumb fell
+      if (fresh < 0.8 && !nav) { const p = P[n - 1]; lo.strokeStyle = BRIGHT; lo.globalAlpha = 1 - fresh / 0.8; lo.beginPath(); lo.arc(p[0], p[1], 2 + fresh * 14, 0, 7); lo.stroke(); lo.globalAlpha = 1; }
+      // start marker
+      const s = P[0];
+      lo.fillStyle = "#000"; lo.fillRect(s[0] - 6, s[1] - 7, 13, 15);
+      lo.strokeStyle = BRIGHT; lo.strokeRect(s[0] - 5.5, s[1] - 6.5, 12, 14);
+      text("S", s[0] - 3, s[1] - 6, BRIGHT);
+      if (nav && nav.target) { const tp = mapXY(...nav.target); if (Math.floor(clock * 3) % 2) { lo.strokeStyle = BRIGHT; lo.strokeRect(tp[0] - 4.5, tp[1] - 4.5, 9, 9); } }
+    }
+    if (cur && o) {
+      const p = mapXY(...toXY(o, cur.lat, cur.lon)), h = heading();
+      lo.strokeStyle = DIM; lo.beginPath(); lo.arc(p[0], p[1], Math.max(3, cur.acc * 260 / view.span), 0, 7); lo.stroke();
+      if (h !== null) arrow(p[0], p[1], h - view.rot, 9, GREEN);
+      else { lo.fillStyle = BRIGHT; lo.fillRect(p[0] - 3, p[1] - 3, 7, 7); }
+    }
+    lo.restore();
+    // north pointer + scale bar
+    const nx = G - 18, ny = MAP_T + 18;
+    arrow(nx, ny, -view.rot, 9, MID, 0.9, true);
+    const nr = -view.rot * D2R; text("N", nx - 4 + Math.sin(nr) * 15, ny - 7 - Math.cos(nr) * 15, MID);
+    const bar = niceStep(view.span), bw = bar * 260 / view.span;
+    line(8, MAP_B - 8, 8 + bw, MAP_B - 8, GREEN); line(8, MAP_B - 11, 8, MAP_B - 5, GREEN); line(8 + bw, MAP_B - 11, 8 + bw, MAP_B - 5, GREEN);
+    text(fmtDist(bar), 12 + bw, MAP_B - 15, MID);
+  }
+
+  /* ---------------- drawing: 3D navigation view ---------------- */
+  function drawNav3D() {
+    const h = heading(), rot = (h === null ? 0 : h) * D2R;
+    const camH = CAM_H[camIdx], F = 210, HZ = 72, back = (F * camH) / 135;
+    const [px, py] = nav.pos || [0, 0];
+    const toCam = (x, y) => { const dx = x - px, dy = y - py; return [dx * Math.cos(rot) - dy * Math.sin(rot), dx * Math.sin(rot) + dy * Math.cos(rot) + back]; };
+    const scr = (X, Z, hgt = 0) => [CX + (F * X) / Z, HZ + (F * (camH - hgt)) / Z];
+    function seg3(a, b, color, alpha, w = 1, hgt = 0) {
+      let [ax, az] = toCam(...a), [bx, bz] = toCam(...b);
+      const near = 2;
+      if (az < near && bz < near) return;
+      if (az < near) { const u = (near - az) / (bz - az); ax += (bx - ax) * u; az = near; }
+      if (bz < near) { const u = (near - bz) / (az - bz); bx += (ax - bx) * u; bz = near; }
+      const p0 = scr(ax, az, hgt), p1 = scr(bx, bz, hgt);
+      line(p0[0], p0[1], p1[0], p1[1], color, alpha * clamp(2.2 - Math.min(az, bz) / (camH * 9), 0.15, 1), w);
+    }
+    lo.save(); lo.beginPath(); lo.rect(0, MAP_T, G, MAP_B - MAP_T); lo.clip();
+    line(0, HZ, G, HZ, DIM, 0.8);                                         // horizon
+    const step = camH < 20 ? 10 : camH < 60 ? 25 : 100, R = camH * 14;  // ground grid
+    for (let g = Math.floor((px - R) / step) * step; g <= px + R; g += step) seg3([g, py - R], [g, py + R], DIM, 0.55);
+    for (let g = Math.floor((py - R) / step) * step; g <= py + R; g += step) seg3([px - R, g], [px + R, g], DIM, 0.55);
+    const { route } = nav;
+    for (let i = 0; i < route.length - 1; i++) {                          // walked-back part dim, the rest bright
+      const done = i < nav.idx;
+      seg3(route[i], route[i + 1], done ? DIM : GREEN, done ? 0.7 : 1, done ? 1 : 2);
+    }
+    for (let i = nav.idx + 1; i < route.length; i++) {                    // crumbs as little posts
+      const [X, Z] = toCam(...route[i]);
+      if (Z < 3) continue;
+      const p = scr(X, Z), q = scr(X, Z, Math.min(3, camH * 0.2));
+      line(p[0], p[1], q[0], q[1], GREEN, clamp(1.6 - Z / (camH * 10), 0.2, 1));
+    }
+    // start beacon: a tall pillar you can aim for
+    const st = route[route.length - 1], [sX, sZ] = toCam(...st);
+    if (sZ > 2 && nav.toStart > 15) {
+      const p = scr(sX, sZ), q = scr(sX, sZ, Math.max(12, camH * 1.5));
+      line(p[0], p[1], q[0], q[1], BRIGHT, 1, 2);
+      lo.fillStyle = BRIGHT; lo.fillRect(q[0] - 3, q[1] - 3, 7, 7);
+      text("S", q[0] - 3, q[1] - 18, BRIGHT);
+    }
+    // you
+    const me = scr(0, back);
+    arrow(me[0], me[1] - 6, 0, 8, GREEN);
+    // the target point ahead
+    if (nav.target) {
+      const [tX, tZ] = toCam(...nav.target);
+      if (tZ > 2 && Math.floor(clock * 3) % 2) { const p = scr(tX, tZ); lo.strokeStyle = BRIGHT; lo.strokeRect(p[0] - 4.5, p[1] - 4.5, 9, 9); }
+    }
+    lo.restore();
+  }
+
+  /* ---------------- chrome ---------------- */
+  function drawTop() {
+    lo.fillStyle = "#000"; lo.fillRect(0, 0, G, 19);
+    const blink = Math.floor(clock * 2) % 2;
+    let state = mode === "NAV" ? "NAV" : recording ? "REC" : "PAUSED";
+    text("C:\\CRUMBS>" + state, 4, 3, GREEN);
+    if (mode !== "NAV" && recording && blink) { lo.fillStyle = BRIGHT; lo.beginPath(); lo.arc(4 + textW("C:\\CRUMBS>REC") + 8, 10, 3.5, 0, 7); lo.fill(); }
+    if (demo) text("DEMO", 150, 3, BRIGHT);
+    const gl = "GPS " + (gps === "OK" || gps === "WEAK" ? (cur ? Math.round(cur.acc) + "M" : "") : gps);
+    text(gl, G - textW(gl) - 4, 3, gps === "OK" ? MID : gps === "WEAK" ? GREEN : DIM);
+    lo.fillStyle = DIM; lo.fillRect(0, 19, G, 1);
+  }
+  function drawBottom() {
+    lo.fillStyle = "#000"; lo.fillRect(0, MAP_B, G, G - MAP_B);
+    lo.fillStyle = DIM; lo.fillRect(0, MAP_B, G, 1);
+    if (mode === "NAV" && nav) {
+      const prog = nav.total > 0 ? clamp(nav.along / nav.total, 0, 1) : 0, done = nav.arrived ? 1 : prog;
+      // progress bar
+      lo.strokeStyle = GREEN; lo.strokeRect(8.5, MAP_B + 8.5, 200, 12);
+      lo.fillStyle = GREEN; lo.fillRect(11, MAP_B + 11, Math.round(195 * done), 7);
+      text(Math.round(done * 100) + "%", 216, MAP_B + 7, BRIGHT);
+      text(fmtDist(Math.max(0, nav.total - nav.along)) + " TO GO", 8, MAP_B + 26, GREEN);
+      // straight-line direction to the start
+      const h = heading();
+      if (nav.toStart !== undefined) {
+        const rel = h === null ? nav.startBearing : angDiff(nav.startBearing, h);
+        const s = "START " + fmtDist(nav.toStart) + " " + compassName(nav.startBearing);
+        text(s, 8, MAP_B + 44, MID);
+        arrow(16 + textW(s) + 10, MAP_B + 51, rel, 7, MID);
+      }
+      text("PINCH " + (navView === "3D" ? "MAP" : "3D") + "  ^V ZOOM  > MENU", 8, MAP_B + 66, DIM);
+    } else {
+      const spd = cur && cur.speed !== null ? (cur.speed * 3.6).toFixed(1) : "-";
+      text("DIST " + fmtDist(trail.dist), 8, MAP_B + 6, BRIGHT);
+      text("TIME " + fmtTime(recMs()), 160, MAP_B + 6, GREEN);
+      text("SPD " + spd + " KM/H", 8, MAP_B + 24, GREEN);
+      text("CRUMBS " + trail.pts.length, 160, MAP_B + 24, GREEN);
+      text((recording ? "PINCH PAUSE" : "PINCH RECORD") + " ^V ZOOM <FIT >MENU", 8, MAP_B + 48, DIM);
+      text(zoom < 0 ? "VIEW: WHOLE TRAIL" : "VIEW: " + fmtDist(ZOOMS[zoom]) + " ACROSS", 8, MAP_B + 64, DIM);
+    }
+  }
+  function drawInstruction() {
+    const h = heading(), ins = instruction(h);
+    const y = MAP_T + 8;
+    lo.fillStyle = "#000"; lo.globalAlpha = 0.75; lo.fillRect(0, MAP_T, G, 60); lo.globalAlpha = 1;
+    if (ins.rel !== null && ins.rel !== undefined) arrow(30, y + 24, ins.rel, 20, GREEN);
+    else if (ins.abs !== undefined) arrow(30, y + 24, ins.abs, 20, MID, 1, true);
+    else if (nav && nav.arrived) { lo.strokeStyle = BRIGHT; lo.beginPath(); lo.arc(30, y + 24, 14 + 3 * Math.sin(clock * 6), 0, 7); lo.stroke(); }
+    const big = textW(ins.main, 2) <= 236;
+    text(ins.main, 58, y + (big ? 2 : 10), BRIGHT, 1, big ? 2 : 1);
+    text(ins.sub, 58, y + 34, GREEN);
+  }
+  function drawMenu() {
+    if (!menu) return;
+    const w = 220, h = 26 + menu.items.length * 18, x = (G - w) / 2, y = 60;
+    lo.fillStyle = "#000"; lo.fillRect(x, y, w, h);
+    lo.strokeStyle = GREEN; lo.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); lo.strokeRect(x + 3.5, y + 3.5, w - 7, h - 7);
+    textC(" MENU ", G / 2, y - 6, BRIGHT);
+    menu.items.forEach((it, i) => {
+      const yy = y + 14 + i * 18, sel = i === menu.sel;
+      if (sel) { lo.fillStyle = GREEN; lo.fillRect(x + 8, yy - 2, w - 16, 16); }
+      text((sel ? "> " : "  ") + it.label, x + 12, yy, sel ? "#000000" : GREEN);
+    });
+  }
+  function draw(dt) {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    updateView(dt);
+    if (mode === "NAV" && nav && navView === "3D") drawNav3D(); else drawMap();
+    if (mode === "NAV" && nav) drawInstruction();
+    else if (!trail.pts.length && !cur) {
+      textC("NO TRAIL YET", CX, 90, BRIGHT, 1, 2);
+      textC("PINCH TO START RECORDING", CX, 126, GREEN);
+      textC("CRUMBS DROP AS YOU WALK", CX, 144, MID);
+    }
+    drawTop();
+    drawBottom();
+    drawMenu();
+    if (clock < flashUntil) {
+      const w = textW(flashMsg) + 16, x = (G - w) / 2, y = 168;
+      lo.fillStyle = "#000"; lo.fillRect(x, y, w, 22);
+      lo.strokeStyle = BRIGHT; lo.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      text(flashMsg, x + 8, y + 4, BRIGHT);
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- input ---------------- */
+  function openMenu() {
+    const items = [];
+    if (mode === "NAV") items.push({ label: "STOP NAVIGATION", run: stopNav });
+    else items.push({ label: "NAVIGATE BACK", run: startNav });
+    items.push({ label: "NEW TRAIL", run: () => { stopDemo(); stopNavQuiet(); recording = false; trail.pts = []; trail.dist = 0; trail.recMs = 0; saveTrail(); flash("TRAIL CLEARED"); } });
+    items.push(demo ? { label: "STOP DEMO", run: () => stopDemo() } : { label: "DEMO WALK", run: startDemo });
+    items.push({ label: "CLOSE", run: () => {} });
+    menu = { items, sel: 0 };
+  }
+  function stopNavQuiet() { nav = null; mode = "REC"; }
+  function primary() {
+    motion.enable();                                                    // compass (permission inside the gesture)
+    if (mode === "NAV") { navView = navView === "3D" ? "MAP" : "3D"; return; }
+    if (demo) { flash("DEMO RUNNING - MENU TO STOP"); return; }
+    setRecording(!recording);
+  }
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) return;
+    e.preventDefault();
+    if (menu) {
+      if (k === "ArrowUp") menu.sel = (menu.sel + menu.items.length - 1) % menu.items.length;
+      else if (k === "ArrowDown") menu.sel = (menu.sel + 1) % menu.items.length;
+      else if (k === "Enter" && !e.repeat) { const it = menu.items[menu.sel]; menu = null; motion.enable(); it.run(); }
+      else menu = null;                                                 // left / right / back close it
+      return;
+    }
+    if (k === "Escape") { if (recording) setRecording(false); stopGps(); stopDemo(true); history.back(); return; }
+    if (k === "Enter") { if (!e.repeat) primary(); return; }
+    if (k === "ArrowRight") { openMenu(); return; }
+    if (k === "ArrowLeft") { zoom = -1; if (mode === "NAV") navView = "MAP"; flash("WHOLE TRAIL", 1); return; }
+    const dir = k === "ArrowUp" ? 1 : -1;                               // up = zoom in
+    if (mode === "NAV" && navView === "3D") { camIdx = clamp(camIdx - dir, 0, CAM_H.length - 1); return; }
+    if (zoom < 0) { const s = view.span; zoom = ZOOMS.findIndex((z) => z >= s); if (zoom < 0) zoom = ZOOMS.length - 1; }
+    zoom = clamp(zoom - dir, 0, ZOOMS.length - 1);
+    flash(fmtDist(ZOOMS[zoom]) + " ACROSS", 1);
+  });
+  // previewing on a phone/computer: tap = pinch, swipe = arrows
+  let touch = null;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, cancelable: true }));
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null; e.preventDefault();
+    if (Math.hypot(dx, dy) < 20) key("Enter");
+    else if (Math.abs(dx) > Math.abs(dy)) key(dx > 0 ? "ArrowRight" : "ArrowLeft");
+    else key(dy < 0 ? "ArrowUp" : "ArrowDown");
+  });
+  cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
+
+  document.addEventListener("visibilitychange", () => {               // location only while the app is open
+    if (document.hidden) { stopGps(); }
+    else if (recording || mode === "NAV") startGps();
+  });
+
+  /* ---------------- loop ---------------- */
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 30) return;
+    last = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    motion.update(dt);
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+  if (trail.pts.length) { const o = origin(); const p = trail.pts[trail.pts.length - 1]; [view.cx, view.cy] = toXY(o, p[0], p[1]); }
+
+  window.__crumbs = { trail, get nav() { return nav; }, get mode() { return mode; }, get recording() { return recording; },
+                      get gps() { return gps; }, get cur() { return cur; }, onFix, startNav, instruction: () => instruction(heading()), heading };
+})();
+</script>
+</body>
+</html>

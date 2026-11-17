@@ -19,10 +19,12 @@ public/                 the website
   music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
   games/mistwalkers/    Mistwalkers (3D walk for three, built from the World Tester project)
-  glasses/              Mini Hub for Meta Ray-Ban Display glasses (600x600, D-pad keys), at error.blue/glasses
+  glasses/              Home screen for Meta Ray-Ban Display glasses: 3D app slider, big clock above (green DOS look)
+  glasses/mini/         Mini Hub: Clock, Counter, Dice, Snake (open one directly with ?app=clock|counter|dice|snake)
   glasses/hud/          Target HUD: dot-matrix horizon/tilt display with simulated targets (head-motion sensors)
   glasses/flight/       Dot Flight: wireframe flight sim steered by where you look
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
+  glasses/crumbs/       CRUMBS.EXE: breadcrumb trail recorder with turn-by-turn navigation back to the start
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
