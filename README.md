@@ -19,6 +19,7 @@ public/                 the website
   music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
   games/mistwalkers/    Mistwalkers (3D walk for three, built from the World Tester project)
+  glasses/              Mini Hub for Meta Ray-Ban Display glasses (600x600, D-pad keys), at error.blue/glasses
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
