@@ -44,7 +44,12 @@ public/                 the website
   coms/                 COMS phone page (error.blue/coms): send camera (front/back), mic and text to COMS.EXE
   radar/                Friend Radar (error.blue/radar): show a QR code, a friend scans it and sees you live on a radar;
                         accept them to see them back. Room friend-radar/<CODE>, positions end-to-end encrypted with the key
-                        in the link's #part. qrcode.js = QR generator (MIT, Kazuhiko Arase)
+                        in the link's #part
+  rifle/                SPACE RIFLE (error.blue/rifle): GPS + compass laser tag for phones. Join by QR (room space-rifle/<CODE>,
+                        encrypted like Friend Radar). The phone's top edge is the barrel; a red-dot scope shows a fisheye 3D
+                        neon grid world (own canvas renderer, drawn at half resolution) with wireframe troopers where the
+                        players really are. Hit zone widens with GPS error. 3 hull, 5 cells, shield, respawn, practice drone
+  lib/qrcode.js         QR code generator used by radar/ and rifle/ (MIT, Kazuhiko Arase)
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/room404/      ROOM404.EXE (Room 404): a small 3D room you look round with head motion, like VR. Pinch = walk/stop,
                         hold pinch = walk, pinch twice = take or put down (table, chairs, shelf, sill, floor, on the dice).
