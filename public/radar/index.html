@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#03110c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="Show a code, your friend scans it and sees you live on their radar.">
+<title>Friend Radar</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23072419' stroke='%238dffc0' stroke-width='2'/%3E%3Cpath d='M16 16 L16 2 A14 14 0 0 1 29 11 Z' fill='%238dffc0' fill-opacity='.5'/%3E%3Ccircle cx='22' cy='9' r='3' fill='%23ff7a5c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* VOICE  playful, tactical, at night
+   IDEA   a ship's radar scope that finds your friends
+   PICTURE the live scope with phosphor sweep and coloured blips
+   COLOUR deep scope green, phosphor mint, coral and warm blips
+   TYPE   Chakra Petch for names and numbers, Inter for text
+   LAYOUT status bar, scope, controls, people, action bar at the thumb */
+:root{--bg:#03110c;--pan:#072419;--pan2:#0b3022;--line:#17573f;--ph:#8dffc0;--ink:#e8fff2;--mute:#8fb9a5;--co:#ff7a5c;color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip;min-height:100dvh;-webkit-tap-highlight-color:transparent;background:radial-gradient(130% 55% at 50% 0%,#0b3626 0%,var(--bg) 62%) fixed}
+button,input{font:inherit;color:inherit}
+.app{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 190px)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.brand{display:flex;align-items:center;gap:8px;font:700 20px/1 "Chakra Petch",sans-serif}
+.brand svg{width:28px;height:28px;flex:none}
+.stat{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--pan);border:1px solid var(--line);font:500 13px/1.3 "Chakra Petch",sans-serif;color:var(--mute);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:#f5b84a;flex:none}
+.pill.ok i{background:var(--ph);box-shadow:0 0 8px var(--ph)}
+.pill.bad i{background:var(--co)}
+.scope{position:relative;width:min(100%,56vh);aspect-ratio:1;margin:16px auto 0}
+.scope canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;box-shadow:0 0 0 6px #062016,0 0 0 7px var(--line),0 24px 60px rgba(0,0,0,.55),0 0 90px rgba(141,255,192,.09)}
+.empty{position:absolute;left:50%;top:64%;transform:translateX(-50%);margin:0;padding:6px 12px;border-radius:99px;background:rgba(3,17,12,.82);border:1px solid var(--line);font:500 14px/1.3 "Chakra Petch",sans-serif;color:var(--ph);white-space:nowrap;pointer-events:none}
+.ctl{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:18px}
+.ctl .grp{display:flex;gap:6px}
+.chip{min-height:44px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--pan);font:600 14px "Chakra Petch",sans-serif;color:var(--ph);display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap}
+.chip.sq{width:44px;padding:0;justify-content:center;font-size:20px}
+.chip[aria-pressed=true]{background:var(--ph);color:var(--bg);border-color:var(--ph)}
+.chip svg{width:18px;height:18px}
+.note{margin:12px 0 0;font-size:13px;color:var(--mute);text-align:center}
+.list{display:grid;gap:10px;margin-top:16px}
+.card{--c:var(--co);display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:6px 12px;padding:12px 14px;border-radius:18px;background:var(--pan);border:1px solid var(--line);transition:opacity .4s}
+.card.stale{opacity:.62}
+.dir{width:44px;height:44px;display:block}
+.dir circle{fill:none;stroke:var(--c);stroke-opacity:.35;stroke-width:2}
+.dir g{transform-origin:20px 20px;transition:transform .5s}
+.dir path{fill:var(--c)}
+.nm{display:block;font:600 17px/1.2 "Chakra Petch",sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nm em{font-style:normal;font-weight:500;font-size:12px;color:var(--mute);margin-left:6px}
+.sub{display:block;font-size:13px;line-height:1.35;color:var(--mute)}
+.dist{font:700 24px/1 "Chakra Petch",sans-serif;color:var(--c);white-space:nowrap;text-align:right}
+.acts{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap}
+.blank{padding:18px;border-radius:18px;border:1px dashed var(--line);color:var(--mute);font-size:14px;text-align:center;margin:0}
+.btn{min-height:44px;padding:0 18px;border-radius:14px;border:1px solid var(--line);background:var(--pan2);font:600 15px "Chakra Petch",sans-serif;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap}
+.btn.pri{background:var(--ph);color:var(--bg);border-color:var(--ph)}
+.btn.sm{min-height:40px;padding:0 14px;font-size:14px;border-radius:12px}
+.btn.warn{color:var(--co)}
+.btn:active,.chip:active{transform:translateY(1px)}
+.btn:focus-visible,.chip:focus-visible,input:focus-visible,.link:focus-visible{outline:2px solid var(--ph);outline-offset:2px}
+input{min-height:46px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:#041a12;font-size:16px;width:100%}
+input::placeholder{color:#5f8c78}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:20px 12px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(to top,var(--bg) 62%,rgba(3,17,12,0))}
+.bar .in{max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:22px;background:var(--pan);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.bar .in.col{flex-direction:column;align-items:stretch}
+.bt{flex:1;margin:0}
+.bt b{display:block;font:600 16px/1.25 "Chakra Petch",sans-serif}
+.bt small{display:block;font-size:13px;line-height:1.35;color:var(--mute);margin-top:2px}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.sheet{position:fixed;inset:0;z-index:10;background:rgba(2,10,7,.97);overflow-y:auto;padding:calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 22px)}
+.sh{max-width:400px;margin:0 auto;display:flex;flex-direction:column;gap:14px;text-align:center}
+h2{font:700 32px/1.06 "Chakra Petch",sans-serif;margin:0;text-wrap:balance}
+.lead{margin:-4px 0 0;color:var(--mute);font-size:15px}
+.qrcard{position:relative;overflow:hidden;background:#eafff3;border-radius:26px;padding:16px;width:min(100%,300px);margin:4px auto;box-shadow:0 0 0 6px rgba(141,255,192,.14),0 0 70px rgba(141,255,192,.28)}
+.qrcard svg{display:block;width:100%;height:auto}
+.qrcard::after{content:"";position:absolute;left:0;right:0;height:22%;top:-22%;background:linear-gradient(to bottom,rgba(141,255,192,0),rgba(141,255,192,.4),rgba(141,255,192,0));animation:scan 2.6s ease-in-out infinite}
+@keyframes scan{to{top:100%}}
+.fld{display:grid;gap:6px;text-align:left;font-size:13px;color:var(--mute)}
+.linkin{font-size:13px;min-height:38px;color:var(--mute);text-align:center}
+.link{background:none;border:0;color:var(--co);font:600 15px "Chakra Petch",sans-serif;min-height:44px;cursor:pointer}
+.fine{margin:-8px 0 0;font-size:13px;color:var(--mute)}
+.modal{position:fixed;inset:0;z-index:20;display:grid;place-items:end center;background:rgba(0,0,0,.6);padding:16px 12px calc(env(safe-area-inset-bottom) + 16px)}
+.mbox{width:100%;max-width:440px;background:var(--pan);border:1px solid var(--line);border-radius:26px;padding:22px;display:grid;gap:14px;animation:up .28s ease-out}
+.mbox h2{font-size:26px}
+.mbox p{margin:0;color:var(--mute)}
+.blip{width:56px;height:56px;border-radius:50%;background:radial-gradient(circle,var(--co) 0 28%,rgba(255,122,92,.25) 30% 100%);animation:pulse 1.4s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,122,92,.6)}100%{box-shadow:0 0 0 22px rgba(255,122,92,0)}}
+@keyframes up{from{transform:translateY(30px);opacity:0}}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 12px);z-index:30;transform:translate(-50%,calc(-100% - 60px));visibility:hidden;max-width:calc(100% - 32px);padding:10px 16px;border-radius:14px;background:var(--ph);color:var(--bg);font:600 15px/1.3 "Chakra Petch",sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.4);transition:transform .3s,visibility .3s;text-align:center}
+.toast.on{transform:translate(-50%,0);visibility:visible}
+@media (prefers-reduced-motion:reduce){.qrcard::after,.blip,.mbox{animation:none}.toast,.dir g{transition:none}}
+@media (max-height:700px){h2{font-size:26px}.qrcard{width:min(100%,240px)}}
+</style>
+</head>
+<body>
+<noscript><p style="padding:20px">Friend Radar needs JavaScript.</p></noscript>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#072419" stroke="#8dffc0" stroke-width="2"/><circle cx="16" cy="16" r="7" fill="none" stroke="#8dffc0" stroke-opacity=".45"/><path d="M16 16 L16 2 A14 14 0 0 1 29 11 Z" fill="#8dffc0" fill-opacity=".45"/><circle cx="22" cy="9" r="2.6" fill="#ff7a5c"/></svg>
+      Friend Radar
+    </div>
+    <div class="stat">
+      <span class="pill" id="conn"><i></i><span>Connecting</span></span>
+      <span class="pill" id="gps"><i></i><span>GPS</span></span>
+    </div>
+  </header>
+
+  <section class="scope" aria-label="Radar">
+    <canvas id="cv"></canvas>
+    <p class="empty" id="empty" hidden></p>
+  </section>
+
+  <div class="ctl">
+    <button class="chip" id="rng" title="Tap for automatic range">Auto · 250 m</button>
+    <div class="grp">
+      <button class="chip sq" id="zout" aria-label="Zoom out">−</button>
+      <button class="chip sq" id="zin" aria-label="Zoom in">+</button>
+      <button class="chip" id="cmp" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 4 L15 12 L12 11 L9 12 Z" fill="currentColor"/><path d="M12 20 L9 12 L12 13 L15 12 Z" fill="currentColor" opacity=".45"/></svg><span>North up</span></button>
+    </div>
+  </div>
+  <p class="note">Keep this page open with the screen on. Phones pause location when the browser is in the background.</p>
+
+  <section class="list" id="list" aria-live="polite"></section>
+</div>
+
+<footer class="bar">
+  <div class="in" id="hostBar" hidden>
+    <p class="bt"><b id="hbT">Nobody on your radar yet</b><small>Anyone with your code can see you live</small></p>
+    <button class="btn pri" id="invite">Invite</button>
+  </div>
+  <div class="in col" id="gJoin" hidden>
+    <p class="bt"><b>You can see <span class="hn">your friend</span></b><small>Connect so <span class="hn">they</span> can see you too. Your location stays on this phone until <span class="hn">they</span> says yes.</small></p>
+    <div class="row"><input id="gName" maxlength="16" placeholder="Your name" autocomplete="nickname" enterkeyhint="go"><button class="btn pri" id="gGo" style="flex:none">Connect</button></div>
+  </div>
+  <div class="in" id="gWait" hidden>
+    <p class="bt"><b>Waiting for <span class="hn"></span> to accept…</b><small>You're not sharing yet</small></p>
+    <button class="btn" id="gCancel">Cancel</button>
+  </div>
+  <div class="in" id="gOn" hidden>
+    <p class="bt"><b>You and <span class="hn"></span> see each other</b><small>Sharing your location live</small></p>
+    <button class="btn warn" id="gStop">Stop</button>
+  </div>
+  <div class="in" id="gOff" hidden>
+    <p class="bt"><b>Not connected</b><small id="gOffWhy"></small></p>
+    <button class="btn" id="gRe">Try again</button>
+  </div>
+</footer>
+
+<div class="sheet" id="qr" hidden>
+  <div class="sh">
+    <h2>Scan to find me</h2>
+    <p class="lead">Your friend points their phone camera here and sees you on their radar.</p>
+    <div class="qrcard" id="qrbox"></div>
+    <input class="linkin" id="linkIn" readonly aria-label="Your radar link">
+    <label class="fld"><span>Your name on their radar</span><input id="hName" maxlength="16" placeholder="Your name" autocomplete="nickname"></label>
+    <div class="row"><button class="btn" id="copy">Copy link</button><button class="btn" id="share">Share</button></div>
+    <button class="btn pri" id="qrDone">Show radar</button>
+    <button class="link" id="newCode">Make a new code</button>
+    <p class="fine">Anyone with this code sees where you are. A new code cuts everyone off.</p>
+  </div>
+</div>
+
+<div class="modal" id="ask" hidden>
+  <div class="mbox" role="dialog" aria-labelledby="askT">
+    <div class="blip" aria-hidden="true"></div>
+    <h2 id="askT"><span class="an"></span> wants to connect</h2>
+    <p><span class="an"></span> can already see you. Accept to see <span class="an"></span> on your radar too.</p>
+    <div class="row"><button class="btn" id="decline">Decline</button><button class="btn pri" id="accept">Accept</button></div>
+  </div>
+</div>
+
+<div class="modal" id="msg" hidden>
+  <div class="mbox" role="dialog" aria-labelledby="msgT">
+    <h2 id="msgT"></h2>
+    <p id="msgP"></p>
+    <button class="btn pri" id="msgB">OK</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="qrcode.js"></script>
+<script>
+{
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const GAME = 'friend-radar';
+const CODE_CH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ID_CH = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const COLORS = ['#ff7a5c', '#ffd166', '#7cc8ff', '#ff9be0', '#c4a7ff'];
+const STEPS = [25, 50, 100, 250, 500, 1000, 2500, 5000, 1e4, 2.5e4, 5e4, 1e5, 2.5e5, 5e5, 1e6, 2.5e6, 5e6, 2e7];
+const rad = Math.PI / 180;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const rnd = (n, ch) => { const b = new Uint8Array(n); crypto.getRandomValues(b); return Array.from(b, (x) => ch[x % ch.length]).join(''); };
+const b64 = {
+  enc(u8) { let s = ''; for (const x of u8) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+  dec(str) { const s = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4)); return Uint8Array.from(s, (c) => c.charCodeAt(0)); },
+};
+const fmt = (m) => m < 1000 ? Math.round(m) + ' m' : m < 1e4 ? (m / 1000).toFixed(1).replace(/\.0$/, '') + ' km' : Math.round(m / 1000).toLocaleString('en') + ' km';
+const colorOf = (id) => { let h = 7; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
+const vib = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
+const clean = (s) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16);
+function geo(a, b) {
+  const p1 = a.la * rad, p2 = b.la * rad, dp = p2 - p1, dl = (b.lo - a.lo) * rad;
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return { d: 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h))), b: (Math.atan2(y, x) / rad + 360) % 360 };
+}
+
+/* ---------- who am I, which radar ---------- */
+const me = { id: store.get('fr.id', '') || rnd(12, ID_CH), name: clean(store.get('fr.name', '')) };
+store.set('fr.id', me.id);
+const hm = /^([A-Z2-9]{8})-([A-Za-z0-9_-]{22})$/.exec(location.hash.slice(1));
+let host = store.get('fr.host', null);
+const role = hm && !(host && host.code === hm[1]) ? 'guest' : 'host';
+function newHost() { const k = new Uint8Array(16); crypto.getRandomValues(k); const h = { code: rnd(8, CODE_CH), key: b64.enc(k), friends: {} }; store.set('fr.host', h); return h; }
+let sess, g = null;
+if (role === 'guest') {
+  sess = { code: hm[1], key: hm[2] };
+  const s = store.get('fr.guest', null);
+  g = s && s.code === sess.code ? s : { code: sess.code, joined: false, accepted: false };
+} else {
+  if (hm) history.replaceState(null, '', location.pathname + location.search);
+  if (!host || !host.code || !host.friends) host = newHost();
+  sess = host;
+}
+const saveHost = () => store.set('fr.host', host);
+const saveG = () => store.set('fr.guest', g);
+const link = () => location.origin + location.pathname + '#' + sess.code + '-' + sess.key;
+
+const peers = new Map();
+let okList = [], queue = [], acceptedAt = 0, lastSent = 0, lastReq = 0, offWhy = '';
+const declined = new Set();
+const hostName = () => (g && g.hostName) || 'your friend';
+const Cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* ---------- end-to-end encryption: the key lives only in the link's #part ---------- */
+let ckey = null;
+async function setKey() { ckey = await crypto.subtle.importKey('raw', b64.dec(sess.key), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']); }
+async function seal(obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ckey, new TextEncoder().encode(JSON.stringify(obj))));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return b64.enc(out);
+}
+async function unseal(s) { const b = b64.dec(s); const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.slice(0, 12) }, ckey, b.slice(12)); return JSON.parse(new TextDecoder().decode(pt)); }
+
+/* ---------- live link: a GameLab room on error.blue ---------- */
+const net = { ws: null, want: false, retry: 0, timer: 0, ping: 0, live: false };
+function connect() {
+  net.want = true; clearTimeout(net.timer);
+  if (net.ws && net.ws.readyState < 2) return;
+  const url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/room/' + GAME + '/' + sess.code + '?name=radar';
+  let ws; try { ws = new WebSocket(url); } catch (e) { return later(); }
+  net.ws = ws; const code = sess.code;
+  ws.onmessage = async (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'welcome') {
+      net.live = true; net.retry = 0; setConn();
+      clearInterval(net.ping); net.ping = setInterval(() => { if (ws.readyState === 1) ws.send('{"type":"ping"}'); }, 25000);
+      send({ t: 'hi' }); sendPos(true); if (role === 'guest' && g.joined && !g.accepted) sendReq();
+    } else if (m.type === 'msg' && m.data && typeof m.data.e === 'string') {
+      let d; try { d = await unseal(m.data.e); } catch (e) { return; }
+      if (code === sess.code && net.ws === ws) onData(d);
+    } else if (m.type === 'error') { offWhy = 'This radar is full (16 people).'; }
+  };
+  ws.onclose = () => { if (net.ws !== ws) return; net.live = false; clearInterval(net.ping); setConn(); if (net.want) later(); };
+}
+function later() { clearTimeout(net.timer); net.timer = setTimeout(connect, Math.min(8000, 700 * 2 ** net.retry++)); }
+function disconnect() { net.want = false; clearTimeout(net.timer); clearInterval(net.ping); const w = net.ws; net.ws = null; net.live = false; if (w) try { w.close(1000); } catch (e) {} setConn(); }
+async function send(obj) {
+  if (!ckey || !net.ws || net.ws.readyState !== 1) return;
+  obj.id = me.id; obj.ts = Date.now(); if (role === 'host') obj.h = 1;
+  const ws = net.ws, e = await seal(obj);
+  try { if (ws.readyState === 1) ws.send(JSON.stringify({ e })); } catch (err) {}
+}
+
+/* ---------- GPS ---------- */
+const pos = { fix: null, err: 0, watch: null };
+function startGps() {
+  if (pos.watch != null) return;
+  if (!navigator.geolocation) { pos.err = 2; setGps(); return; }
+  pos.watch = navigator.geolocation.watchPosition((p) => {
+    pos.fix = { la: p.coords.latitude, lo: p.coords.longitude, ac: Math.max(1, Math.round(p.coords.accuracy || 0)), at: Date.now() };
+    pos.err = 0; setGps(); sendPos(false);
+  }, (e) => {
+    pos.err = e.code; setGps();
+    if (e.code === 1) { pos.watch = null; showMsg('Location is off', 'Allow location for this site in your browser settings, then reload the page.', 'Reload', () => location.reload()); }
+  }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
+}
+function sharing() { return role === 'host' || (g.joined && g.accepted); }
+function sendPos(force) {
+  if (!sharing()) return;
+  const now = Date.now(); if (!force && now - lastSent < 1500) return;
+  lastSent = now;
+  const o = { t: 'pos', n: me.name || 'Friend' };
+  if (pos.fix) { o.la = +pos.fix.la.toFixed(6); o.lo = +pos.fix.lo.toFixed(6); o.ac = pos.fix.ac; o.fa = now - pos.fix.at; }
+  if (role === 'host') o.ok = Object.keys(host.friends);
+  send(o);
+}
+function sendReq() { lastReq = Date.now(); if (role === 'guest' && g.joined && !g.accepted) send({ t: 'req', n: me.name || 'Friend' }); }
+
+/* ---------- compass ---------- */
+const comp = { on: false, h: null, listening: false };
+function headingFrom(al, be, ga) {   // direction the top / back of the phone points to
+  const cA = Math.cos(al * rad), sA = Math.sin(al * rad), cB = Math.cos(be * rad), sB = Math.sin(be * rad), cG = Math.cos(ga * rad), sG = Math.sin(ga * rad);
+  const fx = -sA * cB - (cA * sG + sA * sB * cG), fy = cA * cB - (sA * sG - cA * sB * cG);
+  return (Math.atan2(fx, fy) / rad + 360) % 360;
+}
+function onOri(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) h = e.webkitCompassHeading;
+  else if ((e.type === 'deviceorientationabsolute' || e.absolute) && e.alpha != null) h = headingFrom(e.alpha, e.beta || 0, e.gamma || 0);
+  if (h == null || isNaN(h)) return;
+  comp.h = comp.h == null ? h : (comp.h + ((h - comp.h + 540) % 360 - 180) * 0.25 + 360) % 360;
+}
+async function toggleCompass() {
+  if (comp.on) { comp.on = false; setCmp(); return; }
+  let denied = false;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') denied = await DeviceOrientationEvent.requestPermission() !== 'granted';
+  } catch (e) { denied = true; }
+  if (!comp.listening) { comp.listening = true; addEventListener('deviceorientationabsolute', onOri); addEventListener('deviceorientation', onOri); }
+  comp.on = true; setCmp();
+  setTimeout(() => { if (comp.on && comp.h == null) { comp.on = false; setCmp(); toast(denied ? 'Compass not allowed' : 'No compass found on this phone'); } }, 2500);
+}
+function setCmp() { const b = $('#cmp'); b.setAttribute('aria-pressed', comp.on); b.querySelector('span').textContent = comp.on ? 'Compass' : 'North up'; renderList(); }
+
+/* ---------- messages between phones ---------- */
+function upsert(d) {
+  const p = peers.get(d.id) || { id: d.id, color: colorOf(d.id) };
+  p.n = clean(d.n) || 'Friend'; p.h = !!d.h; p.seen = Date.now();
+  if (typeof d.la === 'number' && typeof d.lo === 'number' && Math.abs(d.la) <= 90 && Math.abs(d.lo) <= 180) { p.la = d.la; p.lo = d.lo; p.ac = Math.min(99999, d.ac | 0); p.fa = d.fa | 0; }
+  peers.set(d.id, p);
+}
+function onData(d) {
+  if (!d || typeof d.id !== 'string' || d.id === me.id) return;
+  if (d.t === 'hi') { sendPos(true); if (role === 'guest' && g.joined && !g.accepted) sendReq(); return; }
+  if (d.t === 'pos') {
+    if (role === 'host') {
+      const f = host.friends[d.id]; if (!f) return;
+      const n = clean(d.n) || 'Friend'; if (f.n !== n) { f.n = n; saveHost(); }
+      upsert(d);
+    } else if (d.h) {
+      upsert(d);
+      okList = Array.isArray(d.ok) ? d.ok : [];
+      const n = clean(d.n) || 'your friend';
+      if (g.hostName !== n) { g.hostName = n; saveG(); renderBar(); }
+      if (g.joined && !g.accepted && okList.includes(me.id)) setAccepted();
+      else if (g.accepted && Date.now() - acceptedAt > 8000 && !okList.includes(me.id)) cutOff(Cap(hostName()) + ' removed you', 'You are no longer on ' + hostName() + "'s radar.");
+      for (const id of peers.keys()) if (!peers.get(id).h && !okList.includes(id)) peers.delete(id);
+    } else if (okList.includes(d.id)) upsert(d);
+    renderList(); return;
+  }
+  if (role === 'host') {
+    if (d.t === 'req') {
+      const n = clean(d.n) || 'Friend';
+      if (host.friends[d.id]) { send({ t: 'ack', to: d.id, ok: true }); sendPos(true); }
+      else if (declined.has(d.id)) send({ t: 'ack', to: d.id, ok: false });
+      else { const q = queue.find((r) => r.id === d.id); if (q) q.n = n; else { queue.push({ id: d.id, n }); showAsk(); } }
+    } else if (d.t === 'bye') {
+      queue = queue.filter((r) => r.id !== d.id);
+      if (host.friends[d.id]) { toast(host.friends[d.id].n + ' stopped sharing'); delete host.friends[d.id]; saveHost(); sendPos(true); }
+      peers.delete(d.id); if (!$('#ask').hidden) { $('#ask').hidden = true; setTimeout(showAsk, 200); }
+      renderBar(); renderList();
+    }
+    return;
+  }
+  if (!d.h) return;   // only the radar's owner may answer, remove or end
+  if (d.t === 'ack' && d.to === me.id) {
+    if (d.ok) setAccepted();
+    else cutOff(Cap(hostName()) + ' said no', 'You are not connected. Ask ' + hostName() + ' for a new code if that was a mistake.');
+  } else if (d.t === 'kick' && d.to === me.id) cutOff(Cap(hostName()) + ' removed you', 'You are no longer on ' + hostName() + "'s radar.");
+  else if (d.t === 'end') cutOff('This radar has ended', Cap(hostName()) + ' made a new code. Scan the new one to find them again.');
+}
+function setAccepted() {
+  if (g.accepted) return;
+  g.accepted = true; acceptedAt = Date.now(); saveG(); sendPos(true);
+  renderBar(); renderList(); beep(990); vib([60, 50, 60]);
+  toast(Cap(hostName()) + ' accepted. You see each other now');
+}
+function cutOff(t, p) {
+  g.joined = false; g.accepted = false; saveG(); peers.clear(); okList = [];
+  disconnect(); offWhy = p; renderBar(); renderList(); showMsg(t, p);
+}
+
+/* ---------- sounds, screen, little helpers ---------- */
+let actx = null, lock = null, toastT = 0;
+function unlock() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} wake(); }
+function beep(f) {
+  if (!actx) return; f = f || 1320;
+  try {
+    const t = actx.currentTime, o = actx.createOscillator(), v = actx.createGain();
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f / 2, t + 0.4);
+    v.gain.setValueAtTime(0.0001, t); v.gain.exponentialRampToValueAtTime(0.22, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(v); v.connect(actx.destination); o.start(t); o.stop(t + 0.75);
+  } catch (e) {}
+}
+async function wake() { try { if ('wakeLock' in navigator && !lock && document.visibilityState === 'visible') { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (e) {} }
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 3400); }
+function showMsg(t, p, btn, fn) {
+  $('#msgT').textContent = t; $('#msgP').textContent = p;
+  const b = $('#msgB'); b.textContent = btn || 'OK'; b.onclick = () => { $('#msg').hidden = true; if (fn) fn(); };
+  $('#msg').hidden = false;
+}
+function showAsk() {
+  if (!queue.length || !$('#ask').hidden) return;
+  for (const s of document.querySelectorAll('.an')) s.textContent = queue[0].n;
+  $('#ask').hidden = false; beep(); vib([90, 60, 90]);
+}
+function answer(ok) {
+  const r = queue.shift(); $('#ask').hidden = true; if (!r) return;
+  if (ok) { host.friends[r.id] = { n: r.n }; saveHost(); send({ t: 'ack', to: r.id, ok: true }); sendPos(true); $('#qr').hidden = true; toast(r.n + ' is on your radar'); }
+  else { declined.add(r.id); send({ t: 'ack', to: r.id, ok: false }); }
+  renderBar(); renderList(); setTimeout(showAsk, 250);
+}
+
+/* ---------- screens ---------- */
+function setConn() {
+  const el = $('#conn'), on = net.live;
+  el.className = 'pill ' + (on ? 'ok' : net.want ? '' : 'bad');
+  el.querySelector('span').textContent = on ? 'Live' : net.want ? 'Connecting' : 'Offline';
+}
+function setGps() {
+  const el = $('#gps'), f = pos.fix, fresh = f && Date.now() - f.at < 30000;
+  el.className = 'pill ' + (pos.err === 1 || pos.err === 2 ? 'bad' : fresh ? 'ok' : '');
+  el.querySelector('span').textContent = pos.err === 1 ? 'GPS off' : pos.err === 2 && !f ? 'No GPS' : f ? 'GPS ±' + fmt(f.ac) : 'GPS…';
+}
+function renderBar() {
+  const show = (id) => { for (const x of ['hostBar', 'gJoin', 'gWait', 'gOn', 'gOff']) $('#' + x).hidden = x !== id; };
+  if (role === 'host') {
+    const n = Object.keys(host.friends).length;
+    $('#hbT').textContent = n === 1 ? host.friends[Object.keys(host.friends)[0]].n + ' is on your radar' : n ? n + ' friends on your radar' : 'Nobody on your radar yet';
+    show('hostBar'); return;
+  }
+  for (const s of document.querySelectorAll('.hn')) s.textContent = hostName();
+  if (offWhy && !g.joined && !net.want) { $('#gOffWhy').textContent = offWhy || 'The link is closed.'; show('gOff'); }
+  else show(!g.joined ? 'gJoin' : g.accepted ? 'gOn' : 'gWait');
+}
+function list() {
+  const now = Date.now(), out = [];
+  for (const p of peers.values()) {
+    if (role === 'host' ? !host.friends[p.id] : !p.h && !okList.includes(p.id)) continue;
+    let d = null, b = null;
+    if (p.la != null && pos.fix) { const r = geo(pos.fix, p); d = r.d; b = r.b; }
+    out.push(Object.assign({}, p, { d, b, age: now - p.seen }));
+  }
+  return out;
+}
+function ago(ms) { const s = Math.round(ms / 1000); return s < 15 ? 'live' : s < 60 ? s + ' s ago' : s < 3600 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago'; }
+function dirText(b) {
+  if (comp.on && comp.h != null) {
+    const r = ((b - comp.h) + 540) % 360 - 180, a = Math.abs(r), side = r > 0 ? 'right' : 'left';
+    return a < 22.5 ? 'straight ahead' : a < 67.5 ? 'ahead ' + side : a < 112.5 ? 'to your ' + side : a < 157.5 ? 'behind ' + side : 'behind you';
+  }
+  return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(b / 45) % 8] + ' ' + Math.round(b) + '°';
+}
+let confirmRm = null, confirmT = 0;
+function cardEl(id) {
+  let el = document.getElementById('c-' + id);
+  if (el) return el;
+  el = document.createElement('article'); el.className = 'card'; el.id = 'c-' + id;
+  el.innerHTML = '<svg class="dir" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18"/><g><path d="M20 6 L27.5 27 L20 22.5 L12.5 27 Z"/></g></svg>' +
+    '<div><span class="nm"></span><span class="sub"></span></div><div class="dist"></div>' +
+    '<div class="acts"><a class="btn sm maps" target="_blank" rel="noopener">Open in Maps</a>' + (role === 'host' ? '<button class="btn sm warn rm">Remove</button>' : '') + '</div>';
+  const rm = el.querySelector('.rm');
+  if (rm) rm.addEventListener('click', () => removeFriend(id));
+  return el;
+}
+function renderList() {
+  const box = $('#list'), L = list(), byId = new Map(L.map((p) => [p.id, p]));
+  const rows = role === 'host'
+    ? Object.keys(host.friends).map((id) => byId.get(id) || { id, n: host.friends[id].n, color: colorOf(id), la: null, d: null, seen: 0, age: Infinity })
+    : L.sort((a, b) => (b.h ? 1 : 0) - (a.h ? 1 : 0));
+  const keep = new Set(rows.map((r) => 'c-' + r.id));
+  for (const el of [...box.children]) if (!keep.has(el.id)) el.remove();
+  if (!rows.length) {
+    if (!box.querySelector('.blank')) box.innerHTML = '<p class="blank"></p>';
+    box.querySelector('.blank').textContent = role === 'host' ? 'No friends yet. Tap Invite and let a friend scan your code.' : net.want ? 'Looking for ' + hostName() + '… Friend Radar has to be open on their phone.' : 'Not connected.';
+  } else { const b = box.querySelector('.blank'); if (b) b.remove(); }
+  const rot = comp.on && comp.h != null ? comp.h : 0;
+  rows.forEach((p, i) => {
+    const el = cardEl(p.id); if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+    el.style.setProperty('--c', p.color);
+    el.classList.toggle('stale', !(p.age < 30000));
+    const nm = el.querySelector('.nm'); nm.textContent = p.n || 'Friend';
+    if (role === 'guest' && p.h) { const t = document.createElement('em'); t.textContent = 'radar owner'; nm.appendChild(t); }
+    let sub;
+    if (!p.seen) sub = 'Offline. Not on Friend Radar right now';
+    else if (p.la == null) sub = 'Waiting for their GPS · ' + ago(p.age);
+    else if (!pos.fix) sub = 'Waiting for your GPS · ' + ago(p.age);
+    else sub = dirText(p.b) + ' · ' + (p.fa > 60000 ? 'old GPS fix' : '±' + fmt(p.ac || 0)) + ' · ' + ago(p.age);
+    el.querySelector('.sub').textContent = sub;
+    el.querySelector('.dist').textContent = p.d != null ? fmt(p.d) : '—';
+    const gEl = el.querySelector('.dir g'); gEl.style.transform = 'rotate(' + (p.b != null ? p.b - rot : 0) + 'deg)'; gEl.style.opacity = p.b != null ? 1 : 0.25;
+    const mp = el.querySelector('.maps'); mp.hidden = p.la == null; if (p.la != null) mp.href = 'https://www.google.com/maps/search/?api=1&query=' + p.la + ',' + p.lo;
+    const rm = el.querySelector('.rm'); if (rm) rm.textContent = confirmRm === p.id ? 'Tap again to remove' : 'Remove';
+  });
+  updEmpty();
+}
+function removeFriend(id) {
+  if (confirmRm !== id) { confirmRm = id; clearTimeout(confirmT); confirmT = setTimeout(() => { confirmRm = null; renderList(); }, 3500); renderList(); return; }
+  confirmRm = null; const f = host.friends[id];
+  send({ t: 'kick', to: id }); delete host.friends[id]; saveHost(); peers.delete(id); declined.add(id); sendPos(true);
+  toast((f ? f.n : 'Friend') + ' removed. For full privacy, make a new code');
+  renderBar(); renderList();
+}
+function updEmpty() {
+  const el = $('#empty'); let t = '';
+  if (pos.err === 1) t = 'Location is blocked';
+  else if (!pos.fix) t = 'Finding your GPS…';
+  else if (role === 'guest' && net.want && ![...peers.values()].some((p) => p.h && p.la != null)) t = 'Looking for ' + hostName() + '…';
+  el.textContent = t; el.hidden = !t;
+}
+function drawQR() {
+  const url = link(); $('#linkIn').value = url.replace(/^https?:\/\//, '');
+  if (typeof qrcode !== 'function') { $('#qrbox').textContent = 'QR code could not load. Share the link instead.'; return; }
+  const q = qrcode(0, 'M'); q.addData(url); q.make();
+  const n = q.getModuleCount(); let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += 'M' + (c + 2) + ' ' + (r + 2) + 'h1v1h-1z';
+  $('#qrbox').innerHTML = '<svg viewBox="0 0 ' + (n + 4) + ' ' + (n + 4) + '" shape-rendering="crispEdges" role="img" aria-label="QR code of your radar link"><rect width="100%" height="100%" fill="#eafff3"/><path d="' + d + '" fill="#03110c"/></svg>';
+}
+function showQR() { drawQR(); $('#hName').value = me.name; $('#qr').hidden = false; }
+let newCodeArmed = 0;
+async function newCode() {
+  const b = $('#newCode');
+  if (!newCodeArmed) { newCodeArmed = setTimeout(() => { newCodeArmed = 0; b.textContent = 'Make a new code'; }, 3500); b.textContent = 'Tap again: everyone gets cut off'; return; }
+  clearTimeout(newCodeArmed); newCodeArmed = 0; b.textContent = 'Make a new code';
+  await send({ t: 'end' });
+  disconnect(); host = newHost(); sess = host; peers.clear(); queue = []; declined.clear();
+  await setKey(); connect(); drawQR(); renderBar(); renderList();
+  toast('New code ready. The old one no longer works');
+}
+
+/* ---------- radar scope ---------- */
+const cv = $('#cv'), cx2 = cv.getContext('2d');
+let rIdx = 3, auto = true, rngLabel = '';
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (document.hidden) return;
+  const S = cv.clientWidth; if (!S) return;
+  const dpr = Math.min(devicePixelRatio || 1, 3), px = Math.round(S * dpr);
+  if (cv.width !== px) { cv.width = px; cv.height = px; }
+  const c = cx2; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, S, S);
+  const C = S / 2, R = S / 2 - 1, rot = comp.on && comp.h != null ? comp.h : 0, ts = list();
+  if (auto) { let far = 0; for (const p of ts) if (p.d != null && p.age < 6e5) far = Math.max(far, p.d); let i = 0; while (i < STEPS.length - 1 && STEPS[i] < Math.max(far * 1.25, 40)) i++; rIdx = i; }
+  const range = STEPS[rIdx], lbl = (auto ? 'Auto · ' : '') + fmt(range);
+  if (lbl !== rngLabel) { rngLabel = lbl; $('#rng').textContent = lbl; }
+  const xy = (ang, r) => [C + Math.sin(ang * rad) * r, C - Math.cos(ang * rad) * r];
+  const bg = c.createRadialGradient(C, C, 0, C, C, R); bg.addColorStop(0, '#0c3d2a'); bg.addColorStop(1, '#03150e');
+  c.fillStyle = bg; c.beginPath(); c.arc(C, C, R, 0, 7); c.fill();
+  c.strokeStyle = 'rgba(141,255,192,.17)'; c.lineWidth = 1;
+  for (let k = 1; k <= 3; k++) { c.beginPath(); c.arc(C, C, R * k / 4, 0, 7); c.stroke(); }
+  c.beginPath();
+  for (const a of [0, 90]) { const [x1, y1] = xy(a - rot, R), [x2, y2] = xy(a - rot + 180, R); c.moveTo(x1, y1); c.lineTo(x2, y2); }
+  c.stroke();
+  c.strokeStyle = 'rgba(141,255,192,.45)';
+  c.beginPath();
+  for (let a = 0; a < 360; a += 10) { const L = a % 90 === 0 ? 12 : a % 30 === 0 ? 8 : 4, [x1, y1] = xy(a - rot, R - 2), [x2, y2] = xy(a - rot, R - 2 - L); c.moveTo(x1, y1); c.lineTo(x2, y2); }
+  c.stroke();
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '700 15px "Chakra Petch", sans-serif';
+  [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([l, a]) => { const [x, y] = xy(a - rot, R - 27); c.fillStyle = l === 'N' ? '#ff7a5c' : 'rgba(141,255,192,.7)'; c.fillText(l, x, y); });
+  c.font = '500 11px "Chakra Petch", sans-serif'; c.fillStyle = 'rgba(141,255,192,.55)';
+  for (const k of [2, 3]) { const [x, y] = xy(135, R * k / 4); c.fillText(fmt(range * k / 4), x + 2, y + 9); }
+  const sw = (t / (reduce ? 9000 : 3400) * 360) % 360;
+  for (let i = 0; i < 32; i++) {
+    c.fillStyle = 'rgba(141,255,192,' + (0.2 * (1 - i / 32)).toFixed(3) + ')';
+    c.beginPath(); c.moveTo(C, C); c.arc(C, C, R, (sw - (i + 1) * 2.4 - 90) * rad, (sw - i * 2.4 - 90) * rad); c.closePath(); c.fill();
+  }
+  const [ex, ey] = xy(sw, R); c.strokeStyle = 'rgba(200,255,225,.85)'; c.lineWidth = 2; c.beginPath(); c.moveTo(C, C); c.lineTo(ex, ey); c.stroke();
+  if (pos.fix) {
+    const ar = pos.fix.ac / range * R;
+    if (ar > 5) { c.fillStyle = 'rgba(232,255,242,.06)'; c.strokeStyle = 'rgba(232,255,242,.2)'; c.lineWidth = 1; c.beginPath(); c.arc(C, C, Math.min(ar, R), 0, 7); c.fill(); c.stroke(); }
+    c.fillStyle = '#e8fff2';
+    if (comp.on && comp.h != null) { c.beginPath(); c.moveTo(C, C - 11); c.lineTo(C + 8, C + 8); c.lineTo(C, C + 4); c.lineTo(C - 8, C + 8); c.closePath(); c.fill(); }
+    else { c.beginPath(); c.arc(C, C, 5.5, 0, 7); c.fill(); c.strokeStyle = 'rgba(232,255,242,.5)'; c.lineWidth = 1.5; c.beginPath(); c.arc(C, C, 10, 0, 7); c.stroke(); }
+  }
+  const pulse = (t % 1700) / 1700, labels = [];
+  for (const p of ts) {
+    if (p.d == null) continue;
+    const sa = p.b - rot, out = p.d > range, rr = out ? R - 16 : p.d / range * R, [x, y] = xy(sa, rr);
+    const since = (((sw - sa) % 360) + 360) % 360, glow = Math.exp(-since / 75), stale = !(p.age < 30000);
+    const al = stale ? 0.45 : 0.55 + 0.45 * glow;
+    if (!out && p.ac) { const ar = p.ac / range * R; if (ar > 6) { c.globalAlpha = 0.14; c.fillStyle = p.color; c.beginPath(); c.arc(x, y, Math.min(ar, R), 0, 7); c.fill(); } }
+    c.strokeStyle = p.color; c.fillStyle = p.color; c.lineWidth = 2;
+    if (!stale && !reduce) { c.globalAlpha = al * (1 - pulse); c.beginPath(); c.arc(x, y, 8 + 14 * pulse, 0, 7); c.stroke(); }
+    c.globalAlpha = al;
+    if (out) { c.save(); c.translate(x, y); c.rotate(sa * rad); c.beginPath(); c.moveTo(0, -9); c.lineTo(7, 5); c.lineTo(-7, 5); c.closePath(); c.fill(); c.restore(); }
+    else { c.beginPath(); c.arc(x, y, 6 + glow * 2.5, 0, 7); c.fill(); }
+    c.globalAlpha = 1; labels.push({ p, x, y, al, out });
+  }
+  c.textAlign = 'left';
+  for (const L of labels) {
+    const name = L.p.n || 'Friend', dist = (L.out ? '› ' : '') + fmt(L.p.d);
+    c.font = '600 13px "Chakra Petch", sans-serif'; const w1 = c.measureText(name).width;
+    c.font = '500 12px "Chakra Petch", sans-serif'; const w2 = c.measureText(dist).width;
+    const w = Math.max(w1, w2) + 16, h = 36;
+    let bx = L.x + 13; if (bx + w > S - 4 || L.x > C + R * 0.45) bx = L.x - 13 - w; bx = Math.max(4, Math.min(S - w - 4, bx));
+    const by = Math.max(4, Math.min(S - h - 4, L.y - h / 2));
+    c.globalAlpha = Math.max(0.75, L.al); c.fillStyle = 'rgba(3,17,12,.82)'; c.strokeStyle = L.p.color; c.lineWidth = 1;
+    c.beginPath(); if (c.roundRect) c.roundRect(bx, by, w, h, 9); else c.rect(bx, by, w, h); c.fill(); c.stroke();
+    c.textBaseline = 'alphabetic'; c.font = '600 13px "Chakra Petch", sans-serif'; c.fillStyle = '#e8fff2'; c.fillText(name, bx + 8, by + 15);
+    c.font = '500 12px "Chakra Petch", sans-serif'; c.fillStyle = L.p.color; c.fillText(dist, bx + 8, by + 29); c.globalAlpha = 1;
+  }
+}
+
+/* ---------- start ---------- */
+function bind() {
+  document.addEventListener('pointerdown', unlock, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    wake(); if (net.want && (!net.ws || net.ws.readyState > 1)) { net.retry = 0; connect(); }
+    sendPos(true);
+  });
+  addEventListener('hashchange', () => location.reload());
+  $('#rng').onclick = () => { auto = true; };
+  $('#zin').onclick = () => { auto = false; rIdx = Math.max(0, rIdx - 1); };
+  $('#zout').onclick = () => { auto = false; rIdx = Math.min(STEPS.length - 1, rIdx + 1); };
+  $('#cmp').onclick = toggleCompass;
+  $('#invite').onclick = showQR;
+  $('#qrDone').onclick = () => { $('#qr').hidden = true; };
+  $('#hName').oninput = (e) => { me.name = clean(e.target.value); store.set('fr.name', me.name); };
+  $('#hName').onchange = () => sendPos(true);
+  $('#copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(link()); toast('Link copied'); }
+    catch (e) { const i = $('#linkIn'); i.value = link(); i.focus(); i.select(); toast('Press and hold the link to copy it'); }
+  };
+  if (!navigator.share) $('#share').hidden = true;
+  $('#share').onclick = () => { navigator.share({ title: 'Friend Radar', text: 'Find ' + (me.name || 'me') + ' on Friend Radar', url: link() }).catch(() => {}); };
+  $('#newCode').onclick = newCode;
+  $('#accept').onclick = () => answer(true);
+  $('#decline').onclick = () => answer(false);
+  $('#gName').value = me.name;
+  const join = () => { me.name = clean($('#gName').value) || 'Friend'; store.set('fr.name', me.name); g.joined = true; g.accepted = false; saveG(); unlock(); startGps(); sendReq(); renderBar(); };
+  $('#gGo').onclick = join;
+  $('#gName').onkeydown = (e) => { if (e.key === 'Enter') join(); };
+  $('#gCancel').onclick = $('#gStop').onclick = () => { send({ t: 'bye' }); g.joined = false; g.accepted = false; saveG(); renderBar(); toast('You stopped sharing'); };
+  $('#gRe').onclick = () => location.reload();
+}
+async function boot() {
+  bind(); setConn(); setGps(); renderBar(); renderList();
+  if (!window.isSecureContext || !crypto.subtle || !window.WebSocket) { showMsg('Open this over https', 'Friend Radar needs a secure page for GPS and encryption: open https://error.blue/radar/'); return; }
+  await setKey();
+  if (role === 'guest' && g.accepted) acceptedAt = Date.now();
+  startGps(); connect();
+  if (role === 'host' && !Object.keys(host.friends).length) showQR();
+  setInterval(() => {
+    const now = Date.now();
+    if (now - lastSent > 5000) sendPos(true);
+    if (role === 'guest' && g.joined && !g.accepted && now - lastReq > 4000) sendReq();
+    setGps(); renderList();
+  }, 1000);
+  requestAnimationFrame(frame);
+}
+boot();
+}
+</script>
+</body>
+</html>
