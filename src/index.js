@@ -21,6 +21,7 @@
 //   PUT  /api/hud/<CODE>  {settings, updated}  glasses HUD: save settings (newest wins)
 //   POST /api/hud/<CODE>/ping {app, state, focus}  glasses HUD: "I'm here, in this app" (every 15 s)
 //   GET  /api/hud/<CODE>/geo                   GeoLock: settings + saved spots (more at handleGeo)
+//   GET  /api/hud/<CODE>/app/<app>             any glasses app: its settings + recent results (handleHudApp)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -352,7 +353,82 @@ async function handleGeo(request, env, code, places, id) {
   return json({ error: "use PATCH or DELETE" }, 405);
 }
 
+// Settings and a short results log for one glasses app (DRUNK.EXE first), kept under the glasses
+// code so error.blue/hud can change them. Values are flat: true/false, numbers, short text.
+//   GET  /api/hud/<CODE>/app/<app>                     { settings, updated, log: [newest first] }
+//   PUT  /api/hud/<CODE>/app/<app>  {settings, updated} save settings (newest wins)
+//   POST /api/hud/<CODE>/app/<app>/log {entry}          add a result (the newest 30 are kept)
+let hudAppReady = null;
+function hudAppDb(env) {
+  if (!hudAppReady) {
+    hudAppReady = env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS hud_apps (
+         code TEXT NOT NULL, app TEXT NOT NULL, data TEXT NOT NULL DEFAULT '{}', updated INTEGER NOT NULL DEFAULT 0,
+         log TEXT NOT NULL DEFAULT '[]', PRIMARY KEY (code, app)
+       )`
+    ).run().catch((err) => { hudAppReady = null; throw err; });
+  }
+  return hudAppReady.then(() => env.DB);
+}
+function flatValues(v, maxKeys) {                // { key: true | 12.5 | "TEXT" }, nothing else
+  const o = {}, b = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  for (const [k, x] of Object.entries(b).slice(0, maxKeys)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9]{0,23}$/.test(k)) continue;
+    if (typeof x === "boolean") o[k] = x;
+    else if (typeof x === "number" && Number.isFinite(x)) o[k] = Math.round(x * 1e4) / 1e4;
+    else if (typeof x === "string") o[k] = x.replace(/[\u0000-\u001f\u007f<>]/g, "").slice(0, 60);
+  }
+  return o;
+}
+async function handleHudApp(request, env, code, app, isLog) {
+  const db = await hudAppDb(env);
+  const now = Date.now();
+  const row = () => db.prepare(`SELECT data, updated, log FROM hud_apps WHERE code = ? AND app = ?`).bind(code, app).first();
+  if (isLog) {
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+    const raw = await request.text();
+    if (raw.length > 2048) return json({ error: "too big" }, 413);
+    let b; try { b = JSON.parse(raw); } catch { return json({ error: "send JSON" }, 400); }
+    const entry = Object.assign(flatValues(b && b.entry, 30), { at: now });
+    const r = await row();
+    let log = []; try { log = JSON.parse((r && r.log) || "[]"); } catch {}
+    log = [entry].concat(Array.isArray(log) ? log : []).slice(0, 30);
+    await db.prepare(
+      `INSERT INTO hud_apps (code, app, log) VALUES (?, ?, ?) ON CONFLICT(code, app) DO UPDATE SET log = excluded.log`
+    ).bind(code, app, JSON.stringify(log)).run();
+    return json({ ok: true, entry });
+  }
+  if (request.method === "GET") {
+    const r = await row();
+    let settings = null, log = [];
+    try { settings = r && r.updated ? JSON.parse(r.data) : null; } catch {}
+    try { log = JSON.parse((r && r.log) || "[]"); } catch {}
+    return json({ code, app, now, settings, updated: r ? r.updated : 0, log });
+  }
+  if (request.method === "PUT") {
+    const raw = await request.text();
+    if (raw.length > 4096) return json({ error: "too big" }, 413);
+    let b; try { b = JSON.parse(raw); } catch { return json({ error: "send JSON" }, 400); }
+    const settings = flatValues(b && b.settings, 40);
+    const updated = Math.min(now + 60000, Math.max(1, Number(b && b.updated) || now));
+    await db.prepare(
+      `INSERT INTO hud_apps (code, app, data, updated) VALUES (?, ?, ?, ?)
+       ON CONFLICT(code, app) DO UPDATE SET data = excluded.data, updated = excluded.updated
+       WHERE excluded.updated >= hud_apps.updated`
+    ).bind(code, app, JSON.stringify(settings), updated).run();
+    const r = await row();
+    return json({ ok: true, settings: JSON.parse(r.data), updated: r.updated });
+  }
+  return json({ error: "use GET, PUT or POST /log" }, 405);
+}
+
 async function handleHud(request, env, url) {
+  const ap = url.pathname.match(/^\/api\/hud\/([A-Za-z0-9]{6})\/app\/([a-z0-9-]{1,24})(\/log)?$/);
+  if (ap) {
+    const code = ap[1].toUpperCase();
+    if (!HUD_CODE_RE.test(code)) return json({ error: "bad code" }, 400);
+    return handleHudApp(request, env, code, ap[2], !!ap[3]);
+  }
   const g = url.pathname.match(/^\/api\/hud\/([A-Za-z0-9]{6})\/geo(\/places(?:\/([a-z0-9]{8}))?)?$/);
   if (g) {
     const code = g[1].toUpperCase();

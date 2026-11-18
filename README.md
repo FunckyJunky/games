@@ -30,6 +30,9 @@ public/                 the website
                         leads you back, with optional voice directions (or voice only, screen blank).
                         Spots + settings at /api/hud/<CODE>/geo; arrows.js is shared with /hud
   glasses/spectrum/     SPECTRUM.EXE: spectrum analyzer (bars, 3D, waterfall) with LP/HP/BP/notch/peak filters
+  glasses/drunk/        DRUNK.EXE (Drunk-o-meter): walking stability game - WALK THE LINE (head sway/tilt, straight line,
+                        Neural Band hand steadiness) and EGG & SPOON (keep a virtual egg on a spoon). Settings + results:
+                        /api/hud/<CODE>/app/drunk, set on error.blue/hud (DRUNK screen). Just a game, not a sobriety test
   glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
                         and the 6-letter CODE that links the glasses to the control panel
   glasses/presence.js   tells the control panel the glasses are on and which app is open (every glasses app loads it)
@@ -133,6 +136,12 @@ A phone page for the glasses home screen at error.blue/glasses.
   - glasses → panel: `{t:"hello"|"state", app, focus, state}` (app in use, card in view) and
     `{t:"settings"}` when SETUP.EXE changes something. The glasses answer each change with `{t:"ack"}`,
     so the panel can say "applied on the glasses".
+- Any glasses app can keep its own settings and a results log there: `GET/PUT /api/hud/<CODE>/app/<app>`
+  (flat values only: true/false, numbers, short text; newest wins) and `POST .../app/<app>/log {entry}`
+  (the newest 30 are kept). Live: the panel sends `{t:"<app>", settings, updated}` and the app listens with
+  `GlassesPresence.on("<app>", fn)`; the app sends results with `GlassesPresence.send("<app>-result", {entry})`.
+  DRUNK.EXE is the first to use it.
+- The bottom of the panel is a rail of 3D keycaps that scrolls sideways (cover-flow, like the glasses home).
 - Web app: `public/hud/manifest.webmanifest`, icons and `sw.js` (keeps the page for a bad connection;
   never caches /api/). The page's INSTALL.EXE box shows how to add it to an iPhone or Android home screen.
 - Connected / app in use: every glasses app loads `/glasses/presence.js`, which posts

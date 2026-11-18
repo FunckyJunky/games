@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Drunk level check: a walking stability game for the glasses">
+<title>Drunk-o-meter</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABnklEQVR42u3bLU4EMRjG8Q5Bk+DwkKDAcIhFcgOC4QAIDoHgABjgBoQEgcdiQJEAh+ACi5vUTNJup/Ox+3tUxeym88/zPvu+TTcEIiIiIiIiGlpN7gd2zg/b9d/j1yxesmTPWzwCEECjZNAcs6ZGNnGQEgOIiGiz+6BYNXqij+V31vPHzcFgc5lfMYAAGi6Dhpy/cnOndh515SwHKTGApnUm3VfuHIX9dv0ZfkbPIw4CCKD1zKC++p2x8oiDAAKoqrantqGz16us558WtxykxADSBxX1Qbm5k5JH+iAlBpA+aIjcqf2dHAQQQPPLoJPlZbu+CDft+j5cc5ASA4iKZrE4X7r03txlzWh99S+7i71e9sZBAAE0rQyKcye3hrvu4MR6e3hZOY9+T59XztCUd+EggAAaJ4NSajUlX2rfdSzZQ8o7cpASAyiMch4U12RJHzQ16YOUGECbdR6U0qeUKO5x+jqr4iCAAJr3/aCULKihGj0aBwEE0Pr8Xyx3PprCDMhBAAG0nhmUmy9j5REHAQQQQAABBBBAABFAAFXQP/8IdpHSoWvmAAAAAElFTkSuQmCC">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; touch-action: none; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Drunk level check"></canvas>
+<script src="/glasses/presence.js" data-app="drunk"></script>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  // The same settings live on the server under the glasses' pairing code, so the control
+  // panel at error.blue/hud can change them; the newest change wins.
+  const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function hudCode() {
+    let c = store.get("glasses.code", null);
+    if (typeof c !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(c)) {
+      const b = new Uint8Array(6);
+      crypto.getRandomValues(b);
+      c = Array.from(b, (x) => CODE_ALPHA[x % CODE_ALPHA.length]).join("");
+      store.set("glasses.code", c);
+    }
+    return c;
+  }
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "hidden"];
+  const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
+  function push(v) {
+    try {
+      fetch("/api/hud/" + hudCode(), { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: pick(v), updated: v.updatedAt || Date.now() }) }).catch(() => {});
+    } catch {}
+  }
+  const settings = {
+    get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
+    set(v) {
+      v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v);
+      if (window.GlassesPresence) GlassesPresence.sendSettings(pick(v), v.updatedAt);   // live to error.blue/hud
+    },
+    code: hudCode,
+    async sync() {                               // -> true when the server had newer settings
+      try {
+        const r = await fetch("/api/hud/" + hudCode(), { cache: "no-store" });
+        if (!r.ok) return false;
+        const j = await r.json(), local = settings.get(), lt = local.updatedAt || 0;
+        if (j.settings && j.updated > lt) {
+          store.set("glasses.settings", Object.assign({}, local, j.settings, { updatedAt: j.updated }));
+          return true;
+        }
+        if (lt > (j.updated || 0)) push(local);
+      } catch {}
+      return false;
+    },
+  };
+  // DOS phosphor colours: main, bright, mid, dim, dark
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const dosPalette = (i) => {
+    const n = DOS_PALETTES.length, k = i === undefined ? settings.get().color : i;
+    return DOS_PALETTES[(((k | 0) % n) + n) % n];
+  };
+
+  /* ---------- tiny UI sounds (only when Settings > SOUNDS is on) ---------- */
+  let sfxCtx = null;
+  const SFX = {                 // [from Hz, to Hz, seconds, wave, volume]
+    tick: [1500, 1500, 0.02, "square", 0.04], row: [650, 950, 0.05, "square", 0.045],
+    open: [420, 1700, 0.17, "sawtooth", 0.05], on: [880, 1320, 0.07, "square", 0.045],
+    off: [1320, 660, 0.07, "square", 0.045], back: [900, 380, 0.09, "square", 0.04],
+  };
+  function sfx(kind) {
+    if (!settings.get().sounds) return;
+    try {
+      if (!sfxCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; sfxCtx = new AC(); }
+      if (sfxCtx.state === "suspended") sfxCtx.resume();
+      const P = SFX[kind] || SFX.tick, t = sfxCtx.currentTime + 0.005;
+      const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+      o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+      g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0001, t + P[2] + 0.03);
+      o.connect(g); g.connect(sfxCtx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+    } catch {}
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop,
+           settings, DOS_PALETTES, dosPalette, sfx };
+})();
+
+</script>
+<script>
+/* DRUNK.EXE (DRUNK-O-METER): how steady are you? A game, not a sobriety test.
+   WALK THE LINE  arms stretched out in front, head straight, walk a straight line. The glasses
+                  measure how much your head sways and tilts, how far you wander off the line and,
+                  with the Neural Band, how steady your stretched-out hand is.
+   EGG & SPOON    a spoon in your mouth with an egg on it: keep your head level and walk without
+                  dropping the egg. Tilting your head tips the spoon; quick moves shake it.
+   Swipe left / right  mode        Pinch  start / again        Back  menu / exit
+   Settings (test length, difficulty, egg, spoon, sensors, voice) live on error.blue/hud
+   under the glasses code: /api/hud/<CODE>/app/drunk, and arrive live over the panel link.
+   Every result goes to the panel's DRUNK.LOG. */
+(() => {
+  "use strict";
+  const G = 300, CX = 150, D2R = Math.PI / 180;
+  const PAL = DM.dosPalette();
+  if (window.GlassesPresence) GlassesPresence.onSettings((n, o) => { if (n.color !== o.color) location.reload(); });
+  const GREEN = PAL.c, BRIGHT = PAL.b, MID = PAL.m, DIM = PAL.d;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* ---------------- canvas + VGA font ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.38)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = 95 * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < 95; i++) for (let r = 0; r < 14; r++) {
+      const bits = parseInt(FONT_HEX.substr((i * 14 + r) * 2, 2), 16);
+      for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+    }
+    return (atlases[color] = a);
+  }
+  function text(s, x, y, color = GREEN, a = 1, sc = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a; s = String(s);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i) - 32;
+      if (c > 0 && c < 95) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8 * sc), Math.round(y), 8 * sc, 14 * sc);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s, sc = 1) => String(s).length * 8 * sc;
+  const textC = (s, y, color, a, sc = 1) => text(s, CX - textW(s, sc) / 2, y, color, a, sc);
+  function line(x1, y1, x2, y2, c, a = 1) { lo.globalAlpha = a; lo.strokeStyle = c; lo.lineWidth = 1; lo.beginPath(); lo.moveTo(x1 + 0.5, y1 + 0.5); lo.lineTo(x2 + 0.5, y2 + 0.5); lo.stroke(); lo.globalAlpha = 1; }
+  function ell(x, y, rx, ry, c, fill, a = 1, rot = 0) {
+    lo.globalAlpha = a; lo.beginPath(); lo.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), rot, 0, Math.PI * 2);
+    if (fill) { lo.fillStyle = c; lo.fill(); } else { lo.strokeStyle = c; lo.lineWidth = 1; lo.stroke(); }
+    lo.globalAlpha = 1;
+  }
+
+  /* ---------------- settings (from error.blue/hud) ---------------- */
+  const DEF = { mode: "walk", secs: 20, diff: 1, wrist: true, straight: true, meter: true, egg: 1, spoon: 1, voice: true };
+  const DIFFS = [{ n: "EASY", base: 4.0, step: 1.4, fall: 1.35, shake: 0.75 }, { n: "NORMAL", base: 3.0, step: 1.0, fall: 1, shake: 1 },
+                 { n: "HARD", base: 2.2, step: 0.7, fall: 0.75, shake: 1.3 }];
+  const EGGS = [{ n: "QUAIL EGG", r: 0.15, damp: 1.0, shake: 1.35 }, { n: "HEN EGG", r: 0.22, damp: 1.7, shake: 1 }, { n: "OSTRICH EGG", r: 0.3, damp: 2.6, shake: 0.75 }];
+  const SPOONS = [{ n: "TEASPOON", rim: 0.55, fall: 8 }, { n: "SOUP SPOON", rim: 0.75, fall: 12 }, { n: "LADLE", rim: 1.0, fall: 18 }];
+  const LEVELS = ["STONE COLD SOBER", "SOBER AS A JUDGE", "JUST THE ONE", "TIPSY", "MERRY", "WOBBLY",
+                  "TIPSY TOWER", "PROPER DRUNK", "SEEING DOUBLE", "LEGLESS", "CALL A TAXI!"];
+  let S = Object.assign({}, DEF, store.get("drunk.settings", {})), Su = store.get("drunk.updated", 0);
+  const fix = () => {
+    S.mode = S.mode === "egg" ? "egg" : "walk";
+    S.secs = clamp(Math.round(+S.secs || 20), 5, 120);
+    S.diff = clamp(S.diff | 0, 0, 2); S.egg = clamp(S.egg | 0, 0, 2); S.spoon = clamp(S.spoon | 0, 0, 2);
+  };
+  fix();
+  const glassesCode = () => (window.GlassesPresence && GlassesPresence.code && GlassesPresence.code()) || store.get("glasses.code", null);
+  const api = () => "/api/hud/" + glassesCode() + "/app/drunk";
+  function takeSettings(s, upd, note) {
+    if (!s || !(upd > Su)) return false;
+    S = Object.assign({}, DEF, s); Su = upd; fix();
+    store.set("drunk.settings", S); store.set("drunk.updated", Su);
+    if (screen === "MENU" || screen === "RESULT") mode = S.mode;
+    if (note) flash("SETTINGS FROM ERROR.BLUE/HUD");
+    return true;
+  }
+  async function pullSettings(note) {
+    if (!glassesCode()) return;
+    try { const j = await (await fetch(api(), { cache: "no-store" })).json(); takeSettings(j.settings, j.updated, note); } catch {}
+  }
+  if (window.GlassesPresence && GlassesPresence.on) GlassesPresence.on("drunk", (d) => { if (!takeSettings(d.settings, Number(d.updated), true)) pullSettings(true); });
+  function report(entry) {                       // results to the panel's DRUNK.LOG
+    if (window.GlassesPresence && GlassesPresence.send) GlassesPresence.send("drunk-result", { entry });
+    if (!glassesCode()) return;
+    try { fetch(api() + "/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entry }) }).catch(() => {}); } catch {}
+  }
+
+  /* ---------------- voice (if the glasses can speak) ---------------- */
+  function say(t) {
+    if (!S.voice || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "en-GB"; u.rate = 1.05; speechSynthesis.speak(u); } catch {}
+  }
+
+  /* ---------------- sensors: head (glasses) + hand (Neural Band) ---------------- */
+  const motion = DM.createMotion();
+  let fake = null;                                   // tests: { p, r, y }
+  const demo = { p: 0, r: 0, y: 0, vp: 0, vr: 0, vy: 0, amp: 1 };
+  function stepDemo(dt) {                            // no sensors (phone/computer preview): a made-up wobble
+    for (const [k, v] of [["p", "vp"], ["r", "vr"], ["y", "vy"]]) {
+      demo[v] += ((Math.random() - 0.5) * 60 * demo.amp - demo[k] * 2.2 - demo[v] * 1.6) * dt;
+      demo[k] += demo[v] * dt;
+    }
+  }
+  const head = () => fake ? { p: fake.p || 0, r: fake.r || 0, y: fake.y || 0, live: true }
+    : motion.live ? { p: motion.pitch, r: motion.roll, y: motion.yaw, live: true } : { p: demo.p, r: demo.r, y: demo.y, live: false };
+
+  const wrist = { available: false, sensor: null, q0: null, prev: null, prevT: 0, startT: 0, anchor: null, stableSince: 0, ang: 0, speed: 0, at: 0, sensorAt: 0 };
+  const hasWrist = () => typeof window.RelativeOrientationSensor === "function" && window.RelativeOrientationSensor.__imuQuatWrapped === true;
+  (async () => { const until = performance.now() + 5000; while (performance.now() < until && !hasWrist()) await new Promise((r) => setTimeout(r, 250)); wrist.available = hasWrist(); })();
+  const qangle = (a, b) => 2 * Math.acos(clamp(Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]), 0, 1)) / D2R;
+  function toW3C(raw) {
+    if (!raw || raw.length < 4) return null;
+    let q = [raw[1], raw[2], raw[3], raw[0]];
+    if (!q.every(Number.isFinite)) return null;
+    const len = Math.hypot(...q); if (len < 1e-6) return null;
+    q = q.map((v) => v / len); return q[3] < 0 ? q.map((v) => -v) : q;
+  }
+  function wristRecenter() { wrist.q0 = null; wrist.anchor = null; wrist.ang = 0; wrist.startT = performance.now(); }
+  function wristReading(raw, ts) {
+    const t = Number.isFinite(ts) && ts > 0 ? ts : performance.now(), q = toW3C(raw);
+    if (!q) return;
+    wrist.at = performance.now();
+    if (wrist.prev) {
+      const a = qangle(wrist.prev, q), dt = Math.max(1, t - wrist.prevT) / 1000;
+      if (performance.now() - wrist.sensorAt < 6000 && a > 35 && a / dt > 1500) wristRecenter();   // frame flip while the band settles
+      else wrist.speed += (a / dt - wrist.speed) * 0.3;
+    }
+    wrist.prev = q; wrist.prevT = t;
+    if (!wrist.q0) {
+      if (!wrist.anchor || qangle(wrist.anchor, q) > 10) { wrist.anchor = q; wrist.stableSince = t; }
+      if (performance.now() - wrist.startT > 700 && t - wrist.stableSince > 600) wrist.q0 = q;
+      return;
+    }
+    wrist.ang = qangle(wrist.q0, q);                 // how far the stretched-out hand has wandered
+  }
+  function startWrist() {
+    if (!wrist.available || wrist.sensor || !S.wrist) return;
+    try {
+      const s = new window.RelativeOrientationSensor({ sensorId: "emg-wrist", frequency: 30 });
+      s.onreading = () => wristReading(s.quaternion, s.timestamp);
+      s.onerror = () => { stopWrist(); };
+      s.start(); wrist.sensor = s; wrist.sensorAt = performance.now(); wristRecenter();
+    } catch { wrist.sensor = null; }
+  }
+  function stopWrist() { if (!wrist.sensor) return; try { wrist.sensor.onreading = null; wrist.sensor.stop(); } catch {} wrist.sensor = null; }
+  const handLive = () => !!(wrist.sensor && wrist.q0 && performance.now() - wrist.at < 1500);
+
+  /* ---------------- game state ---------------- */
+  let screen = "MENU", mode = S.mode, clock = 0, t0 = 0, flashMsg = "", flashUntil = 0;
+  let calib = 0, steadyT = 0, run = null, result = null, last = store.get("drunk.last", null);
+  const flash = (m, s = 1.8) => { flashMsg = m; flashUntil = clock + s; };
+
+  function newRun() {
+    const h = head();
+    run = { t: 0, mp: h.p, mr: h.r, lp: h.p, lr: h.r, sway: 0, tilt: 0, drift: 0, speed: 0, hand: 0, handT: 0, peak: 0, wob: 0,
+            trail: [], est: 0, live: h.live, hands: false,
+            // egg
+            x: 0, y: 0, vx: 0, vy: 0, wp: 0, wr: 0, roll: 0, sumPos: 0, close: 0, fell: false, fallT: 0, fvx: 0, fvy: 0 };
+    demo.amp = 0.6 + Math.random() * 1.6;
+  }
+  function go(s) { screen = s; t0 = clock; }
+  function startTest() {
+    motion.enable();
+    startWrist();
+    motion.zero(); wristRecenter();
+    steadyT = 0; calib = 0;
+    go("CALIB");
+  }
+
+  function levelOf(I) { const d = DIFFS[S.diff]; return clamp(Math.round((I - d.base) / d.step), 0, 10); }
+  function finish() {
+    const r = run, T = Math.max(0.5, r.t);
+    let lvl, entry;
+    if (mode === "walk") {
+      const sway = r.sway / T, tilt = r.tilt / T, drift = r.drift / T, speed = r.speed / T, hand = r.handT > 1 ? r.hand / r.handT : null;
+      const I = sway + tilt * 0.35 + (S.straight ? drift * 0.15 : 0) + speed * 0.04 + (hand !== null ? hand * 0.4 : 0);
+      lvl = levelOf(I);
+      entry = { mode: "walk", level: lvl, label: LEVELS[lvl], secs: Math.round(T * 10) / 10, sway: +sway.toFixed(2), tilt: +tilt.toFixed(2),
+                drift: +drift.toFixed(1), hands: hand === null ? -1 : +hand.toFixed(2), diff: DIFFS[S.diff].n, demo: !r.live };
+    } else {
+      const spoon = SPOONS[S.spoon], f = clamp(r.t / S.secs, 0, 1), m = r.sumPos / T / spoon.rim;
+      const I = 10 * (0.55 * Math.min(1, m * 1.7) + 0.45 * (1 - f));
+      lvl = clamp(Math.round(I), 0, 10);
+      entry = { mode: "egg", level: lvl, label: LEVELS[lvl], secs: Math.round(r.t * 10) / 10, goal: S.secs, fell: r.fell, wobble: +m.toFixed(2),
+                close: r.close, egg: EGGS[S.egg].n, spoon: spoon.n, diff: DIFFS[S.diff].n, demo: !r.live };
+    }
+    result = entry; last = entry; store.set("drunk.last", entry);
+    report(entry);
+    DM.sfx(lvl <= 2 ? "on" : "off");
+    say("Drunk level " + lvl + ". " + LEVELS[lvl].toLowerCase().replace("!", ""));
+    stopWrist();
+    go("RESULT");
+  }
+
+  /* ---------------- update ---------------- */
+  function update(dt) {
+    motion.update(dt);
+    if (!motion.live && !fake) stepDemo(dt);
+    if (screen === "CALIB") {
+      const h = head(), sp = Math.hypot(h.p - (calib.p ?? h.p), h.r - (calib.r ?? h.r)) / dt;
+      calib = { p: h.p, r: h.r };
+      steadyT = sp < 30 || !h.live ? steadyT + dt : 0;
+      if (clock - t0 > 0.4 && steadyT < 0.1) motion.zero();
+      if (steadyT > 1.5) { motion.zero(); newRun(); go("COUNT"); DM.sfx("tick"); say("Three"); }
+      return;
+    }
+    if (screen === "COUNT") {
+      const n = 3 - Math.floor(clock - t0);
+      if (n !== (update.lastN || 4)) { update.lastN = n; if (n > 0 && n < 3) { DM.sfx("tick"); say(n === 2 ? "Two" : "One"); } }
+      if (clock - t0 >= 3) { update.lastN = 4; newRun(); DM.sfx("open"); say(mode === "walk" ? "Walk!" : "Go!"); go("RUN"); }
+      return;
+    }
+    if (screen === "RUN") { (mode === "walk" ? runWalk : runEgg)(dt); return; }
+    if (screen === "FALL" && clock - t0 > 1.8) finish();
+  }
+
+  function runWalk(dt) {
+    const r = run, h = head();
+    r.t += dt;
+    const k = 1 - Math.exp(-dt / 1.5);
+    r.mp += (h.p - r.mp) * k; r.mr += (h.r - r.mr) * k;
+    const sway = Math.hypot(h.p - r.mp, h.r - r.mr), tilt = Math.max(0, Math.hypot(h.p, h.r) - 2), drift = Math.max(0, Math.abs(h.y) - 8);
+    const speed = Math.min(200, Math.hypot(h.p - r.lp, h.r - r.lr) / dt);
+    r.lp = h.p; r.lr = h.r;
+    r.sway += sway * dt; r.tilt += tilt * dt; r.drift += drift * dt; r.speed += speed * dt;
+    if (S.wrist && handLive()) { const hv = 0.7 * Math.max(0, wrist.ang - 4) + 0.3 * wrist.speed / 10; r.hand += hv * dt; r.handT += dt; r.hands = true; }
+    const inst = sway + tilt * 0.35 + (S.straight ? drift * 0.15 : 0) + speed * 0.04;
+    r.wob += (inst - r.wob) * (1 - Math.exp(-dt * 3));
+    r.est = levelOf(r.wob);
+    r.trail.push([h.r, -h.p]); if (r.trail.length > 36) r.trail.shift();
+    if (r.t >= S.secs) finish();
+  }
+
+  function runEgg(dt) {
+    const r = run, h = head(), egg = EGGS[S.egg], spoon = SPOONS[S.spoon], d = DIFFS[S.diff];
+    r.t += dt;
+    const Gv = 6, edge = spoon.rim - egg.r * 0.5;
+    const kk = Gv * Math.sin(Math.min(60, spoon.fall * d.fall) * D2R) / edge;
+    const wp = (h.p - r.lp) / dt, wr = (h.r - r.lr) / dt;                  // head turn speed (deg/s)
+    r.lp = h.p; r.lr = h.r;
+    const sh = 0.0045 * egg.shake * d.shake;
+    r.vx -= (wr - r.wr) * sh; r.vy -= (wp - r.wp) * sh;                     // a quick move shakes the spoon under the egg
+    r.wp = wp; r.wr = wr;
+    const ax = Gv * Math.sin(h.r * D2R) - kk * r.x - egg.damp * r.vx;
+    const ay = Gv * Math.sin(h.p * D2R) - kk * r.y - egg.damp * r.vy;
+    r.vx += ax * dt; r.vy += ay * dt;
+    r.x += r.vx * dt; r.y += r.vy * dt;
+    r.roll += Math.hypot(r.vx, r.vy) * dt / Math.max(0.05, egg.r);
+    const dist = Math.hypot(r.x, r.y);
+    r.sumPos += dist * dt;
+    if (dist > edge * 0.8) { if (!r.near) { r.close++; r.near = true; DM.sfx("row"); } } else if (dist < edge * 0.6) r.near = false;
+    r.wob = dist / edge;
+    if (dist > edge) {                                                     // over the rim: it falls
+      r.fell = true; r.fvx = r.vx; r.fvy = r.vy; r.fallX = r.x; r.fallY = r.y;
+      DM.sfx("back"); say("Oh no! Splat.");
+      go("FALL"); return;
+    }
+    if (r.t >= S.secs) { DM.sfx("on"); say("The egg survived!"); finish(); }
+  }
+
+  /* ---------------- drawing ---------------- */
+  function drawTop(title) {
+    lo.fillStyle = "#000"; lo.fillRect(0, 0, G, 17);
+    text("C:\\DRUNK>" + (title || ""), 4, 2, MID);
+    const n = mode === "walk" ? "WALK" : "EGG";
+    text(n, G - 4 - textW(n), 2, DIM);
+    line(0, 17, G, 17, DIM);
+  }
+  // little icons for the mode cards
+  function iconWalk(x, y, s, c) {
+    ell(x, y - 26 * s, 6 * s, 6 * s, c, false);                           // head
+    line(x, y - 20 * s, x, y + 6 * s, c);                                  // body
+    line(x, y - 12 * s, x + 20 * s, y - 13 * s, c); line(x, y - 10 * s, x + 20 * s, y - 9 * s, c);   // arms straight out
+    const ph = Math.sin(clock * 5) * 6 * s;
+    line(x, y + 6 * s, x - 6 * s + ph, y + 24 * s, c); line(x, y + 6 * s, x + 6 * s - ph, y + 24 * s, c);
+    for (let i = -3; i <= 3; i++) line(x - 40 * s + i * 12 * s, y + 28 * s, x - 34 * s + i * 12 * s, y + 28 * s, DIM);   // the line
+  }
+  function iconEgg(x, y, s, c) {
+    const w = Math.sin(clock * 2.2) * 0.12;
+    lo.save(); lo.translate(x, y); lo.rotate(w);
+    ell(0, 6 * s, 26 * s, 9 * s, c, false);                               // bowl
+    line(-4 * s, 14 * s, -2 * s, 30 * s, c); line(4 * s, 14 * s, 2 * s, 30 * s, c);   // handle
+    ell(Math.sin(clock * 3) * 6 * s, -4 * s, 12 * s, 9 * s, BRIGHT, true, 0.9);       // egg
+    lo.restore();
+  }
+
+  function drawMenu() {
+    drawTop("_");
+    textC("DRUNK-O-METER", 26, BRIGHT, 1, 2);
+    textC("HOW STEADY ARE YOU?", 56, MID);
+    const isW = mode === "walk";
+    lo.strokeStyle = GREEN; lo.strokeRect(40.5, 76.5, 220, 112);
+    lo.strokeRect(42.5, 78.5, 216, 108);
+    text("<", 24, 124, GREEN); text(">", 268, 124, GREEN);
+    if (isW) iconWalk(150, 126, 1, GREEN); else iconEgg(150, 120, 1.2, GREEN);
+    lo.fillStyle = "#000"; lo.fillRect(70, 166, 160, 16);
+    textC(isW ? "WALK THE LINE" : "EGG & SPOON", 168, BRIGHT);
+    const d1 = isW ? "ARMS OUT, HEAD STRAIGHT," : "SPOON IN YOUR MOUTH, EGG", d2 = isW ? "WALK A STRAIGHT LINE" : "ON IT: DON'T DROP IT!";
+    textC(d1, 196, GREEN); textC(d2, 210, GREEN);
+    const info = S.secs + " S  " + DIFFS[S.diff].n + (isW ? "" : "  " + SPOONS[S.spoon].n);
+    textC(info, 230, MID);
+    if (last) textC("LAST: LEVEL " + last.level + " " + last.label, 246, DIM);
+    lo.fillStyle = DIM; lo.fillRect(0, 264, G, 1);
+    text("PINCH START  <> MODE", 8, 270, Math.floor(clock * 2) % 2 ? BRIGHT : GREEN);
+    text("JUST A GAME", G - 8 - textW("JUST A GAME"), 270, DIM);
+    text("SETTINGS: ERROR.BLUE/HUD", 8, 284, DIM);
+  }
+
+  function drawHowto() {
+    drawTop("HOWTO");
+    const isW = mode === "walk";
+    textC(isW ? "WALK THE LINE" : "EGG & SPOON", 26, BRIGHT, 1, 2);
+    const L = isW
+      ? ["1 STAND UP, FEET TOGETHER", "2 STRETCH BOTH ARMS OUT", "  IN FRONT OF YOU", "3 LOOK STRAIGHT AHEAD", "4 WALK SLOWLY, IN A", "  STRAIGHT LINE, " + S.secs + " S"]
+      : ["1 A SPOON IN YOUR MOUTH,", "  AN EGG ON THE SPOON", "2 TILT YOUR HEAD AND THE", "  EGG ROLLS. KEEP IT LEVEL", "3 WALK FOR " + S.secs + " S WITHOUT", "  DROPPING THE EGG"];
+    L.forEach((l, i) => text(l, 34, 66 + i * 18, l.startsWith(" ") ? MID : GREEN));
+    if (isW) text("HANDS: " + (!S.wrist ? "OFF" : wrist.available ? "NEURAL BAND" : "NO BAND"), 34, 182, DIM);
+    else text(EGGS[S.egg].n + " ON A " + SPOONS[S.spoon].n, 34, 182, DIM);
+    textC(Math.floor(clock * 2) % 2 ? "PINCH WHEN READY" : "", 230, BRIGHT);
+    text("BACK = MENU", 8, 280, DIM);
+  }
+
+  function drawCalib() {
+    drawTop("CALIBRATE");
+    textC("HOLD STILL", 90, BRIGHT, 1, 2);
+    textC(mode === "walk" ? "ARMS OUT, HEAD STRAIGHT" : "HEAD LEVEL, LIKE THE SPOON", 130, GREEN);
+    const f = clamp(steadyT / 1.5, 0, 1);
+    lo.strokeStyle = GREEN; lo.strokeRect(60.5, 160.5, 180, 12);
+    lo.fillStyle = GREEN; lo.fillRect(62, 162, Math.round(176 * f), 9);
+    if (!head().live) textC("NO HEAD SENSOR: DEMO WOBBLE", 200, DIM);
+  }
+
+  function drawCount() {
+    drawTop("READY");
+    const n = 3 - Math.floor(clock - t0), ph = (clock - t0) % 1;
+    textC(String(Math.max(1, n)), 100, BRIGHT, 1 - ph * 0.6, 6);
+    textC(mode === "walk" ? "GET READY TO WALK" : "THE EGG IS ON THE SPOON", 210, GREEN);
+  }
+
+  function drawWalk() {
+    const r = run, h = head();
+    drawTop("WALK");
+    const left = Math.max(0, S.secs - r.t);
+    text(left.toFixed(1) + " S", G - 10 - textW(left.toFixed(1) + " S"), 22, BRIGHT);
+    text("WALK THE LINE", 8, 22, GREEN);
+    lo.fillStyle = DIM; lo.fillRect(8, 38, G - 16, 2); lo.fillStyle = GREEN; lo.fillRect(8, 38, Math.round((G - 16) * clamp(r.t / S.secs, 0, 1)), 2);
+    // floor line in perspective, moving toward you; it slides sideways when you wander off it
+    const off = S.straight ? clamp(-h.y * 3, -120, 120) : 0, hy = 190, ph = (clock * 2.2) % 1;
+    for (let i = 0; i < 9; i++) {
+      const u0 = (i + ph) / 9, u1 = (i + ph + 0.5) / 9, y0 = hy + u0 * u0 * 110, y1 = hy + u1 * u1 * 110;
+      lo.strokeStyle = GREEN; lo.globalAlpha = 0.25 + u0 * 0.75; lo.lineWidth = 1 + u0 * 3;
+      lo.beginPath(); lo.moveTo(CX + off * u0, y0); lo.lineTo(CX + off * u1, y1); lo.stroke();
+    }
+    lo.globalAlpha = 1; lo.lineWidth = 1;
+    // head level reticle: the dot is your head (tilt left/right, nod up/down)
+    const cy = 112, R = 46, px = 4.5;
+    ell(CX, cy, R, R, DIM, false); ell(CX, cy, R * 0.45, R * 0.45, DIM, false);
+    line(CX - R - 8, cy, CX - R + 6, cy, GREEN); line(CX + R - 6, cy, CX + R + 8, cy, GREEN);
+    line(CX, cy - R - 8, CX, cy - R + 6, GREEN); line(CX, cy + R - 6, CX, cy + R + 8, GREEN);
+    r.trail.forEach(([x, y], i) => { const a = i / r.trail.length; lo.fillStyle = MID; lo.globalAlpha = a * 0.7; lo.fillRect(Math.round(CX + clamp(x * px, -R - 10, R + 10)), Math.round(cy + clamp(y * px, -R - 10, R + 10)), 2, 2); });
+    lo.globalAlpha = 1;
+    const dx = clamp(h.r * px, -R - 10, R + 10), dy = clamp(-h.p * px, -R - 10, R + 10), out = Math.hypot(dx, dy) > R * 0.45;
+    lo.fillStyle = out ? BRIGHT : GREEN; lo.fillRect(Math.round(CX + dx) - 3, Math.round(cy + dy) - 3, 7, 7);
+    text("HEAD", CX - R - 40, cy - 6, DIM);
+    // hands (Neural Band)
+    const hl = S.wrist && handLive();
+    text("HANDS " + (!S.wrist ? "OFF" : hl ? Math.round(wrist.ang) + " DEG" : wrist.available ? "..." : "NO BAND"), 8, 166, hl ? GREEN : DIM);
+    if (S.straight) text("LINE " + (Math.abs(h.y) < 8 ? "OK" : (h.y > 0 ? "RIGHT " : "LEFT ") + Math.round(Math.abs(h.y))), G - 8 - textW("LINE RIGHT 99"), 166, Math.abs(h.y) < 8 ? GREEN : BRIGHT);
+    // wobble meter
+    if (S.meter) {
+      lo.fillStyle = "#000"; lo.fillRect(0, 270, G, 30);
+      text("WOBBLE", 8, 276, MID);
+      const f = clamp(r.wob / 10, 0, 1);
+      lo.strokeStyle = DIM; lo.strokeRect(64.5, 277.5, 150, 10);
+      lo.fillStyle = f > 0.6 ? BRIGHT : GREEN; lo.fillRect(66, 279, Math.round(146 * f), 7);
+      text("LVL " + r.est, G - 8 - textW("LVL 10"), 276, BRIGHT);
+    }
+    if (!r.live) text("DEMO", 8, 22 + 22, DIM);
+  }
+
+  function eggScene(x, y, rollAng, alpha, scale) {
+    const egg = EGGS[S.egg], spoon = SPOONS[S.spoon];
+    const bx = CX, by = 168, rx = 120 * spoon.rim, ry = rx * 0.5;
+    const ex = egg.r / spoon.rim * rx * scale, ey = ex * 0.72;
+    const sx = bx + x / spoon.rim * rx, sy = by + y / spoon.rim * ry;
+    ell(sx + 3, sy + ey * 0.6, ex * 0.9, ey * 0.45, DIM, true, 0.6 * alpha);       // shadow
+    ell(sx, sy - ey * 0.5, ex, ey, BRIGHT, true, alpha);                        // the egg
+    ell(sx + ex * 0.15, sy - ey * 0.25, ex * 0.85, ey * 0.55, MID, true, 0.55 * alpha);
+    ell(sx - ex * 0.35, sy - ey * 0.85, ex * 0.22, ey * 0.18, "#ffffff", true, 0.9 * alpha);   // shine
+    const c = Math.cos(rollAng), s = Math.sin(rollAng);                         // a speckle that turns as it rolls
+    ell(sx + c * ex * 0.55, sy - ey * 0.5 + s * ey * 0.45, 1.6, 1.2, DIM, true, alpha * (0.5 + 0.5 * Math.max(0, s)));
+    return { bx, by, rx, ry };
+  }
+  function drawSpoon(danger) {
+    const spoon = SPOONS[S.spoon], rx = 120 * spoon.rim, ry = rx * 0.5, bx = CX, by = 168;
+    lo.fillStyle = "#000"; lo.beginPath(); lo.ellipse(bx, by, rx, ry, 0, 0, Math.PI * 2); lo.fill();
+    for (const f of [0.75, 0.5, 0.25]) ell(bx, by + (1 - f) * 4, rx * f, ry * f, DIM, false, 0.8);   // the dip of the bowl
+    ell(bx, by, rx, ry, danger ? BRIGHT : GREEN, false);
+    ell(bx, by, rx + 1.5, ry + 1.5, danger ? BRIGHT : GREEN, false, 0.6);
+    // handle, toward your mouth
+    lo.strokeStyle = GREEN; lo.beginPath(); lo.moveTo(bx - 10, by + ry - 2); lo.lineTo(bx - 16, G); lo.moveTo(bx + 10, by + ry - 2); lo.lineTo(bx + 16, G); lo.stroke();
+    return { bx, by, rx, ry };
+  }
+  function drawEgg() {
+    const r = run, h = head(), spoon = SPOONS[S.spoon], egg = EGGS[S.egg];
+    drawTop("EGG");
+    // the world: a horizon that tilts with your head (the spoon stays with you)
+    lo.save(); lo.translate(CX, 70 + clamp(h.p * 3, -60, 60)); lo.rotate(-h.r * D2R);
+    lo.strokeStyle = DIM; lo.setLineDash([6, 5]); lo.beginPath(); lo.moveTo(-220, 0); lo.lineTo(220, 0); lo.stroke(); lo.setLineDash([]);
+    lo.restore();
+    const danger = r.wob > 0.8 && Math.floor(clock * 8) % 2 === 0;
+    drawSpoon(danger);
+    eggScene(r.x, r.y, r.roll, 1, 1);
+    // HUD
+    lo.fillStyle = "#000"; lo.fillRect(0, 18, G, 30);
+    text("EGG SAFE " + r.t.toFixed(1) + " / " + S.secs + " S", 8, 22, BRIGHT);
+    lo.fillStyle = DIM; lo.fillRect(8, 40, G - 16, 2); lo.fillStyle = GREEN; lo.fillRect(8, 40, Math.round((G - 16) * clamp(r.t / S.secs, 0, 1)), 2);
+    if (S.meter) {
+      text("TILT " + (Math.abs(h.r) < 1 && Math.abs(h.p) < 1 ? "LEVEL" : (h.r > 0 ? "R" : "L") + Math.round(Math.abs(h.r)) + " " + (h.p > 0 ? "UP" : "DN") + Math.round(Math.abs(h.p))), 8, 50, MID);
+      const f = clamp(r.wob, 0, 1);
+      text("EDGE", G - 98, 50, MID);
+      lo.strokeStyle = DIM; lo.strokeRect(G - 62.5, 51.5, 54, 9);
+      lo.fillStyle = f > 0.8 ? BRIGHT : GREEN; lo.fillRect(G - 61, 53, Math.round(51 * f), 6);
+    }
+    if (danger) textC("CAREFUL!", 236, BRIGHT, 1, 2);
+    if (!r.live) text("DEMO", 8, 64, DIM);
+    text(egg.n, 8, 284, DIM); text(spoon.n, G - 8 - textW(spoon.n), 284, DIM);
+  }
+  function drawFall() {
+    const r = run, ft = clock - t0;
+    drawTop("OOPS");
+    drawSpoon(false);
+    const L = Math.hypot(r.fvx, r.fvy) || 1, ux = r.fvx / L, uy = r.fvy / L;
+    if (ft < 0.9) {
+      const k = ft / 0.9, x = r.fallX + ux * k * 0.6, y = r.fallY + uy * k * 0.6;
+      eggScene(x, y + k * k * 2.2, r.roll + ft * 12, 1 - k * 0.2, 1 + k * 0.4);
+    } else {
+      const k = clamp((ft - 0.9) / 0.4, 0, 1), sx = CX + ux * 90, sy = 262;
+      for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; line(sx, sy, sx + Math.cos(a) * 26 * k, sy + Math.sin(a) * 9 * k, BRIGHT); }
+      ell(sx, sy, 16 * k, 6 * k, "#ffe066", true, 0.9);                       // the yolk
+      textC("SPLAT!", 70, BRIGHT, 1, 3);
+    }
+  }
+
+  function drawResult() {
+    const r = result;
+    drawTop("RESULT");
+    text(r.mode === "walk" ? "WALK THE LINE" : "EGG & SPOON", 8, 22, MID);
+    if (r.demo) text("DEMO", G - 40, 22, DIM);
+    const lv = String(r.level);
+    text("DRUNK LEVEL", 8, 44, GREEN);
+    text(lv, 8, 58, BRIGHT, 1, 4);
+    text("/10", 8 + textW(lv, 4) + 4, 86, GREEN, 1, 2);
+    const lb = r.label;
+    text(lb, G - 8 - textW(lb, lb.length > 12 ? 1 : 2), lb.length > 12 ? 92 : 80, BRIGHT, 1, lb.length > 12 ? 1 : 2);
+    // scale 0..10
+    const x0 = 12, w = G - 24, y = 124;
+    for (let i = 0; i <= 10; i++) { const x = x0 + w * i / 10; line(x, y, x, y + (i % 5 ? 4 : 8), i <= r.level ? GREEN : DIM); }
+    lo.fillStyle = DIM; lo.fillRect(x0, y + 10, w, 2);
+    lo.fillStyle = BRIGHT; lo.fillRect(x0, y + 10, Math.round(w * r.level / 10), 2);
+    text("SOBER", x0, y + 16, DIM); text("TAXI!", x0 + w - textW("TAXI!"), y + 16, DIM);
+    const L = r.mode === "walk"
+      ? [["HEAD SWAY", r.sway.toFixed(1) + " DEG"], ["HEAD TILT", r.tilt.toFixed(1) + " DEG"], ["OFF THE LINE", S.straight ? r.drift.toFixed(1) + " DEG" : "OFF"],
+         ["HANDS", r.hands < 0 ? "NOT MEASURED" : r.hands.toFixed(1)], ["TIME", r.secs + " S"]]
+      : [["EGG", r.fell ? "DROPPED AT " + r.secs + " S" : "SURVIVED " + r.secs + " S"], ["WOBBLE", Math.round(r.wobble * 100) + " %"],
+         ["CLOSE CALLS", String(r.close)], ["SPOON", r.spoon], ["EGG TYPE", r.egg]];
+    L.forEach(([k, v], i) => { text(k, 12, 158 + i * 16, MID); text(v, G - 12 - textW(v), 158 + i * 16, GREEN); });
+    textC("A GAME. NEVER DRIVE AFTER DRINKING.", 244, DIM);
+    lo.fillStyle = DIM; lo.fillRect(0, 262, G, 1);
+    text("PINCH AGAIN  <> MODE", 8, 270, Math.floor(clock * 2) % 2 ? BRIGHT : GREEN);
+    text("BACK MENU", G - 8 - textW("BACK MENU"), 270, DIM);
+    text("SENT TO ERROR.BLUE/HUD", 8, 284, DIM);
+  }
+
+  function draw() {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    if (screen === "MENU") drawMenu();
+    else if (screen === "HOWTO") drawHowto();
+    else if (screen === "CALIB") drawCalib();
+    else if (screen === "COUNT") drawCount();
+    else if (screen === "RUN") (mode === "walk" ? drawWalk : drawEgg)();
+    else if (screen === "FALL") drawFall();
+    else if (screen === "RESULT") drawResult();
+    if (clock < flashUntil) {
+      const w = textW(flashMsg) + 16, x = (G - w) / 2, y = 120;
+      lo.fillStyle = "#000"; lo.fillRect(x, y, w, 22);
+      lo.strokeStyle = BRIGHT; lo.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      text(flashMsg, x + 8, y + 4, BRIGHT);
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.22; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- input ---------------- */
+  function primary() {
+    motion.enable();
+    if (screen === "MENU") { DM.sfx("open"); go("HOWTO"); }
+    else if (screen === "HOWTO") { DM.sfx("open"); startTest(); }
+    else if (screen === "RESULT") { DM.sfx("open"); startTest(); }
+  }
+  function side(d) {
+    if (screen === "MENU" || screen === "RESULT" || screen === "HOWTO") {
+      mode = mode === "walk" ? "egg" : "walk"; DM.sfx("tick");
+      if (screen !== "MENU") go("MENU");
+    }
+  }
+  function back() {
+    if (screen === "MENU") { DM.sfx("back"); history.back(); return; }
+    stopWrist(); try { speechSynthesis.cancel(); } catch {}
+    DM.sfx("back"); go("MENU");
+  }
+  // a pinch sends Enter AND a pointer press: the pointer press is the select
+  let lastPointerAt = -1e9, lastAct = -1e9;
+  const act = (fn) => { const n = performance.now(); if (n - lastAct < 350) return; lastAct = n; fn(); };
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); back(); return; }
+    if (k === "ArrowLeft" || k === "ArrowRight") { e.preventDefault(); side(k === "ArrowLeft" ? -1 : 1); return; }
+    if (k === "ArrowUp" || k === "ArrowDown") { e.preventDefault(); return; }
+    if (k === "Enter" && !e.repeat) {
+      e.preventDefault();
+      const at = performance.now();
+      setTimeout(() => { if (Math.abs(lastPointerAt - at) < 450) return; act(primary); }, 200);
+    }
+  });
+  cv.addEventListener("pointerdown", () => { lastPointerAt = performance.now(); });
+  cv.addEventListener("pointerup", () => { lastPointerAt = performance.now(); act(primary); });
+  let touch = null;
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x; touch = null;
+    if (Math.abs(dx) > 40) { lastAct = performance.now(); side(dx < 0 ? 1 : -1); }
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { stopWrist(); if (screen === "RUN" || screen === "COUNT" || screen === "CALIB") go("MENU"); } });
+
+  /* ---------------- loop (30 Hz) ---------------- */
+  let lastT = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - lastT;
+    if (ms < 30) return;
+    lastT = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    update(dt);
+    draw();
+  }
+  requestAnimationFrame(frame);
+  pullSettings(false);
+
+  window.__drunk = {
+    get screen() { return screen; }, get mode() { return mode; }, set mode(m) { mode = m; }, get S() { return S; }, get run() { return run; },
+    get result() { return result; }, set fake(v) { fake = v; }, get fake() { return fake; }, primary, side, back, startTest, finish,
+  };
+})();
+</script>
+</body>
+</html>

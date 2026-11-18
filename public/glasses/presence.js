@@ -13,7 +13,7 @@
   "use strict";
   const listeners = [], handlers = {};
   if (window.top !== window) {
-    window.GlassesPresence = { code: () => null, setApp() {}, focus() {}, onSettings(fn) { listeners.push(fn); }, on() {}, sendSettings() {}, live: () => false };
+    window.GlassesPresence = { code: () => null, setApp() {}, focus() {}, onSettings(fn) { listeners.push(fn); }, on() {}, send() { return false; }, sendSettings() {}, live: () => false };
     return;
   }
   const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -104,6 +104,7 @@
     onSettings(fn) { listeners.push(fn); },        // fn(newSettings, oldSettings) when the panel changes something
     on(type, fn) { (handlers[type] = handlers[type] || []).push(fn); },   // other live messages from the panel
     sendSettings(settings, updated) { say({ t: "settings", settings, updated }); },   // changed on the glasses (SETUP.EXE)
+    send(type, data) { return say(Object.assign({}, data, { t: type, app })); },      // app news for the panel, e.g. a DRUNK.EXE result
   };
   start();
   connect();

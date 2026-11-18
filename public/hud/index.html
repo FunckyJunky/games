@@ -30,7 +30,7 @@
   /* ---------- the picture tube ---------- */
   #tube { position: relative; max-width: 1060px; margin: 0 auto; min-height: 100vh; min-height: 100dvh;
     background: radial-gradient(ellipse 130% 60% at 50% 0%, color-mix(in srgb, var(--k) 78%, var(--d)) 0%, var(--k) 70%);
-    text-shadow: 0 0 5px var(--g); padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+    text-shadow: 0 0 5px var(--g); padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
   #tube.on { animation: poweron .55s cubic-bezier(.2,.8,.3,1); }
   @keyframes poweron { 0% { transform: scale(1, .004); filter: brightness(5); } 45% { transform: scale(1, .01); filter: brightness(3); } 100% { transform: none; filter: none; } }
   @media (min-width: 1100px) {
@@ -267,16 +267,49 @@
   .small { font-size: 18px; }
 
   /* ---------- bottom key bar (Norton Commander style) ---------- */
-  #keys { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr);
-    background: #000; border-top: 2px solid var(--d); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); gap: 4px; }
-  #keys a { display: flex; align-items: stretch; text-decoration: none; min-height: 44px; font-size: 20px; }
-  #keys a .k { color: var(--b); padding: 0 3px 0 2px; display: flex; align-items: center; }
-  #keys a .n { flex: 1; background: var(--d); color: var(--k); text-shadow: none; display: flex; align-items: center; justify-content: center; padding: 0 2px; overflow: hidden; white-space: nowrap; }
-  #keys a .n.uk { font-family: "VGA", monospace; font-size: 15px; }
-  #keys a.on .n { background: var(--c); box-shadow: 0 0 10px var(--g); }
-  @media (max-width: 480px) { #keys a .k { display: none; } #keys a { font-size: 18px; } #keys .full { display: none; } }
-  @media (min-width: 481px) { #keys .short { display: none; } }
-  #keys a.dot .n::after { content: ""; width: 7px; height: 7px; margin-left: 4px; background: var(--k); animation: pulse 1.2s infinite; flex: none; }
+  /* ---------- DRUNK ---------- */
+  .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .mode { flex-direction: column; align-items: stretch; white-space: normal; text-align: left; padding: 8px; border-color: var(--d); gap: 4px; }
+  .mode svg { width: 100%; height: 96px; display: block; background: #000; border: 1px solid var(--d); }
+  .mode b { font-weight: normal; color: var(--b); font-size: 22px; }
+  .mode small { font-size: 17px; color: var(--m); }
+  .mode[aria-pressed="true"] { border-color: var(--b); box-shadow: 0 0 12px var(--g); background: transparent; color: var(--c); }
+  .mode[aria-pressed="true"] b::after { content: "  ◄ STARTS HERE"; font-size: 15px; color: var(--c); }
+  .mode:hover, .mode:focus-visible { background: transparent; color: var(--c); border-color: var(--c); }
+  #dkPreview { width: 100%; height: 150px; display: block; background: #000; border: 1px solid var(--d); margin-top: 8px; }
+  #dkChart { width: 100%; height: 120px; display: block; background: #000; border: 1px solid var(--d); }
+  .dlog { margin-top: 10px; display: grid; gap: 6px; }
+  .dlog .e { border: 1px solid var(--d); padding: 6px 8px; display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: center; }
+  .dlog .e.new { border-color: var(--b); box-shadow: 0 0 12px var(--g); }
+  .dlog .lv { font-size: 40px; line-height: 1; color: var(--b); min-width: 2ch; text-align: right; grid-row: span 2; }
+  .dlog .tt { color: var(--b); }
+  .dlog .dd { color: var(--m); font-size: 17px; }
+  .warn { border: 1px dashed var(--c); padding: 6px 10px; margin-top: 10px; color: var(--b); }
+
+  /* bottom: a horizontal rail of 3D keycaps (cover-flow); swipe it sideways, tap a key */
+  #keys { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-width: 1060px; margin: 0 auto;
+    background: linear-gradient(to bottom, rgba(0,0,0,.6), #000 22%); border-top: 2px solid var(--d); padding-bottom: env(safe-area-inset-bottom); }
+  #keyrail { position: relative; display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+    padding: 10px calc(50% - 46px) 14px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  #keyrail::-webkit-scrollbar { display: none; }
+  .key { flex: 0 0 92px; scroll-snap-align: center; text-decoration: none; position: relative; will-change: transform; transform-origin: 50% 60%; }
+  .kcap { position: relative; height: 66px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: var(--c); border: 2px solid var(--c); border-radius: 7px; background: linear-gradient(to bottom, color-mix(in srgb, var(--k) 60%, var(--d)), #000 85%);
+    box-shadow: 0 1px 0 var(--m), 0 2px 0 var(--d), 0 3px 0 var(--d), 0 4px 0 var(--d), 0 5px 0 var(--d), 0 6px 0 #062a12, 0 10px 14px rgba(0,0,0,.9), inset 0 0 12px var(--g);
+    transition: transform .12s, box-shadow .12s; }
+  .kcap svg { width: 30px; height: 24px; overflow: visible; }
+  .kcap .n { font-size: 17px; line-height: 1; white-space: nowrap; }
+  .kcap .n.uk { font-family: "VGA", monospace; font-size: 13px; }
+  .kcap .k { position: absolute; top: 2px; left: 5px; font-size: 14px; color: var(--m); text-shadow: none; }
+  .key.on .kcap { background: var(--c); color: var(--k); text-shadow: none; transform: translateY(4px);
+    box-shadow: 0 1px 0 var(--b), 0 2px 0 var(--d), 0 0 18px var(--g), 0 0 4px var(--g); }
+  .key.on .kcap .k { color: var(--k); }
+  .key:active .kcap { transform: translateY(5px); box-shadow: 0 1px 0 var(--d), 0 0 10px var(--g); }
+  .key.dot .kcap::after { content: ""; position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; background: var(--b); box-shadow: 0 0 6px var(--b); animation: pulse 1.2s infinite; }
+  .key.on.dot .kcap::after { background: var(--k); }
+  #keys .edge { position: absolute; top: 0; bottom: 0; width: 34px; pointer-events: none; z-index: 2; }
+  #keys .edge.l { left: 0; background: linear-gradient(to right, #000, transparent); }
+  #keys .edge.r { right: 0; background: linear-gradient(to left, #000, transparent); }
 </style>
 </head>
 <body>
@@ -524,7 +557,87 @@
     </div>
   </section>
 
-  <!-- ================= 5 СВЯТИЙ МИКОЛАЙЧИК ================= -->
+  <!-- ================= 5 DRUNK ================= -->
+  <section id="tab-drunk" aria-label="Drunk-o-meter">
+    <div class="path">C:\HUD\DRUNK&gt;<span class="cur">_</span></div>
+    <div class="logo">DRUNK-O-METER</div>
+    <div class="lede">A GAME FOR THE GLASSES: HOW STEADY ARE YOU? WALK THE LINE WITH YOUR ARMS OUT, OR WALK WITH AN EGG ON A SPOON IN YOUR MOUTH. IT GIVES A DRUNK LEVEL FROM 0 TO 10.</div>
+    <div class="warn">JUST FOR FUN. NOT A REAL SOBRIETY TEST: NEVER USE IT TO DECIDE IF YOU CAN DRIVE. DON'T DRINK AND DRIVE.</div>
+    <div class="box">
+      <span class="t">DRUNK.EXE</span>
+      <div class="dl"><span class="l">ON THE GLASSES</span><span class="f"></span><span class="v" id="dkUse">-</span></div>
+      <div class="dl"><span class="l">LAST RESULT</span><span class="f"></span><span class="v" id="dkLast">-</span></div>
+      <div class="row" style="margin-top:8px"><a class="btn" href="/glasses/drunk/" target="_blank" rel="noopener">GLASSES APP ↗</a><span class="mid small">ON THE GLASSES: SWIPE = MODE, PINCH = START</span></div>
+      <div class="err" id="dkNote"></div>
+    </div>
+    <div id="dkBody">
+      <div class="saved" id="dkSaved"></div>
+      <div class="box">
+        <span class="t">MODES <span class="dim">· TAP THE ONE THE GLASSES START IN</span></span>
+        <div class="modes">
+          <button class="mode" data-mode="walk" aria-pressed="false">
+            <svg viewBox="0 0 160 96" aria-hidden="true">
+              <g stroke="var(--c)" stroke-width="2" fill="none">
+                <circle cx="60" cy="18" r="7"/><path d="M60 25v30M60 34h34M60 39h34M60 55l-9 26M60 55l9 26"/>
+              </g>
+              <g stroke="var(--d)" stroke-width="2" stroke-dasharray="6 6"><path d="M10 90h140"/></g>
+              <text x="98" y="40" fill="var(--m)" font-size="12" font-family="VT323, monospace">ARMS OUT</text>
+              <text x="74" y="16" fill="var(--m)" font-size="12" font-family="VT323, monospace">HEAD STRAIGHT</text>
+            </svg>
+            <b>WALK THE LINE</b><small>ARMS STRETCHED OUT, HEAD STRAIGHT, WALK A STRAIGHT LINE. MEASURES HEAD SWAY, TILT, DRIFT OFF THE LINE AND (WITH THE NEURAL BAND) HAND STEADINESS.</small>
+          </button>
+          <button class="mode" data-mode="egg" aria-pressed="false">
+            <svg viewBox="0 0 160 96" aria-hidden="true">
+              <g><animateTransform attributeName="transform" type="rotate" values="-7 80 60;7 80 60;-7 80 60" dur="2.4s" repeatCount="indefinite"/>
+                <ellipse cx="80" cy="60" rx="46" ry="16" fill="#000" stroke="var(--c)" stroke-width="2"/>
+                <ellipse cx="80" cy="62" rx="30" ry="9" fill="none" stroke="var(--d)"/>
+                <path d="M74 75L70 96M86 75L90 96" stroke="var(--c)" stroke-width="2"/>
+                <ellipse cx="80" cy="48" rx="18" ry="13" fill="var(--b)"><animate attributeName="cx" values="70;90;70" dur="2.4s" repeatCount="indefinite"/></ellipse>
+              </g>
+              <text x="6" y="16" fill="var(--m)" font-size="12" font-family="VT323, monospace">DON'T DROP IT</text>
+            </svg>
+            <b>EGG &amp; SPOON</b><small>A SPOON IN YOUR MOUTH WITH AN EGG ON IT. TILTING YOUR HEAD TIPS THE SPOON, QUICK MOVES SHAKE IT. SURVIVE THE TEST TIME.</small>
+          </button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="box">
+            <span class="t">TEST</span>
+            <div class="opt"><div><div class="lbl">TEST LENGTH</div><div class="sub">HOW LONG YOU WALK</div></div><span></span><div class="seg full" id="dkSecs"></div></div>
+            <div class="opt"><div><div class="lbl">DIFFICULTY</div><div class="sub">HOW STRICT THE SCORE IS (AND HOW EASILY THE EGG FALLS)</div></div><span></span><div class="seg full" id="dkDiff"></div></div>
+            <div class="opt"><div><div class="lbl">WOBBLE METER</div><div class="sub">SHOW THE LIVE WOBBLE AND TILT ON THE GLASSES WHILE YOU WALK</div></div>
+              <button class="sw" data-d="meter" aria-pressed="false" aria-label="Wobble meter"><span class="n">OFF</span><span class="y">ON</span></button></div>
+            <div class="opt"><div><div class="lbl">VOICE</div><div class="sub">COUNTDOWN AND RESULT SPOKEN (IF THE GLASSES CAN SPEAK)</div></div>
+              <button class="sw" data-d="voice" aria-pressed="false" aria-label="Voice"><span class="n">OFF</span><span class="y">ON</span></button></div>
+          </div>
+          <div class="box">
+            <span class="t">WALK THE LINE</span>
+            <div class="opt"><div><div class="lbl">HANDS (NEURAL BAND)</div><div class="sub">THE BAND CHECKS HOW STEADY YOUR STRETCHED-OUT HAND IS</div></div>
+              <button class="sw" data-d="wrist" aria-pressed="false" aria-label="Measure the hands"><span class="n">OFF</span><span class="y">ON</span></button></div>
+            <div class="opt"><div><div class="lbl">STRAIGHT LINE</div><div class="sub">WANDERING OFF YOUR STARTING DIRECTION COUNTS TOO</div></div>
+              <button class="sw" data-d="straight" aria-pressed="false" aria-label="Straight line check"><span class="n">OFF</span><span class="y">ON</span></button></div>
+          </div>
+        </div>
+        <div>
+          <div class="box">
+            <span class="t">EGG &amp; SPOON</span>
+            <div class="opt"><div><div class="lbl">EGG</div><div class="sub">SMALL EGGS ROLL FAST; BIG ONES ARE SLOW BUT CLOSE TO THE EDGE</div></div><span></span><div class="seg full" id="dkEgg"></div></div>
+            <div class="opt"><div><div class="lbl">SPOON</div><div class="sub">A BIGGER, DEEPER SPOON IS EASIER</div></div><span></span><div class="seg full" id="dkSpoon"></div></div>
+            <svg id="dkPreview" viewBox="0 0 300 150" aria-label="How the egg sits on the spoon"></svg>
+            <div class="hint" id="dkFall"></div>
+          </div>
+        </div>
+      </div>
+      <div class="box">
+        <span class="t">DRUNK.LOG <span class="dim">· RESULTS FROM THE GLASSES, LIVE</span></span>
+        <svg id="dkChart" viewBox="0 0 300 120" aria-label="Drunk levels over the last tests"></svg>
+        <div class="dlog" id="dkLog"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 6 СВЯТИЙ МИКОЛАЙЧИК ================= -->
   <section id="tab-mykolai" aria-label="Святий Миколайчик">
     <div class="path">C:\HUD\MYKOLAI&gt;<span class="cur">_</span></div>
     <div class="logo uk">СВЯТИЙ МИКОЛАЙЧИК</div>
@@ -553,7 +666,7 @@
     </div>
   </section>
 
-  <!-- ================= 6 YARO-VISSION ================= -->
+  <!-- ================= 7 YARO-VISSION ================= -->
   <section id="tab-yaro" aria-label="Yaro-Vission">
     <div class="path">C:\HUD\YARO&gt;<span class="cur">_</span></div>
     <div class="logo">YARO-VISSION</div>
@@ -590,16 +703,20 @@
     </div>
   </div>
 
-  <footer>ERROR.BLUE · HUD.EXE · SETTINGS LIVE ON THE SERVER UNDER YOUR GLASSES CODE · KEYS 1-6 SWITCH SCREENS</footer>
+  <footer>ERROR.BLUE · HUD.EXE · SETTINGS LIVE ON THE SERVER UNDER YOUR GLASSES CODE · KEYS 1-7 SWITCH SCREENS · SWIPE THE KEYS SIDEWAYS</footer>
   </main>
 
   <nav id="keys" aria-label="Screens">
-    <a href="#status"><span class="k">1</span><span class="n">STATUS</span></a>
-    <a href="#apps"><span class="k">2</span><span class="n">APPS</span></a>
-    <a href="#setup"><span class="k">3</span><span class="n">SETUP</span></a>
-    <a href="#geolock"><span class="k">4</span><span class="n"><span class="full">GEOLOCK</span><span class="short">GEO</span></span></a>
-    <a href="#mykolai"><span class="k">5</span><span class="n uk">МИКОЛАЙ</span></a>
-    <a href="#yaro"><span class="k">6</span><span class="n">YARO</span></a>
+    <span class="edge l"></span><span class="edge r"></span>
+    <div id="keyrail">
+      <a class="key" href="#status"><span class="kcap"><span class="k">1</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="11" height="9" rx="2"/><rect x="17" y="7" width="11" height="9" rx="2"/><path d="M13 10h4M2 9H0M28 9h2"/></svg><span class="n">STATUS</span></span></a>
+      <a class="key" href="#apps"><span class="kcap"><span class="k">2</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="10" y="3" width="10" height="17"/><path d="M2 6l5 2v10l-5 2zM28 6l-5 2v10l5 2z"/></svg><span class="n">APPS</span></span></a>
+      <a class="key" href="#setup"><span class="kcap"><span class="k">3</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h24M3 12h24M3 19h24"/><rect x="8" y="2" width="5" height="6" fill="currentColor"/><rect x="18" y="9" width="5" height="6" fill="currentColor"/><rect x="11" y="16" width="5" height="6" fill="currentColor"/></svg><span class="n">SETUP</span></span></a>
+      <a class="key" href="#geolock"><span class="kcap"><span class="k">4</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2l7 10h-4v6h-6v-6H8z" fill="currentColor"/><ellipse cx="15" cy="21" rx="11" ry="2.5"/></svg><span class="n">GEOLOCK</span></span></a>
+      <a class="key" href="#drunk"><span class="kcap"><span class="k">5</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h20L15 13z"/><path d="M15 13v7M9 22h12"/><circle cx="20" cy="6" r="1.8" fill="currentColor"/><path d="M22 1l-2 5"/></svg><span class="n">DRUNK</span></span></a>
+      <a class="key" href="#mykolai"><span class="kcap"><span class="k">6</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="9" width="20" height="13"/><path d="M3 9h24M15 9v13"/><path d="M15 9c-3-6-8-5-6-1M15 9c3-6 8-5 6-1"/></svg><span class="n uk">МИКОЛАЙ</span></span></a>
+      <a class="key" href="#yaro"><span class="kcap"><span class="k">7</span><svg viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12c4-7 22-7 26 0c-4 7-22 7-26 0z"/><circle cx="15" cy="12" r="4" fill="currentColor"/></svg><span class="n">YARO</span></span></a>
+    </div>
   </nav>
 </div>
 <div class="fx" id="scan"></div><div class="fx" id="roll"></div><div class="fx" id="vig"></div>
@@ -738,6 +855,13 @@
     if (d.t === "hello" || d.t === "state") {
       live = { app: d.app, focus: d.focus, state: d.state === "hidden" ? "hidden" : "active", at: Date.now(), from };
       if (d.t === "hello" && d.updated < updated && updated) wsSay({ t: "settings", settings: profile, updated });   // the glasses missed a change
+    } else if (d.t === "ack" && d.kind === "drunk") {
+      if (d.updated === dkSentAt) { dkMsg("✓ " + dkLastMsg + " · APPLIED ON THE GLASSES IN " + ((Date.now() - dkSentAt) / 1000).toFixed(1) + " S"); log("GLASSES APPLIED: DRUNK " + dkLastMsg); }
+    } else if (d.t === "drunk-result" && d.entry) {
+      const e = Object.assign({}, d.entry, { at: Date.now() });
+      dk.log = [e].concat(dk.log).slice(0, 30); dkNewAt = Date.now();
+      log("DRUNK.EXE: LEVEL " + e.level + " " + (e.label || "") + (e.mode === "egg" ? " (EGG)" : " (WALK)"));
+      renderDrunk();
     } else if (d.t === "ack" && d.kind === "geo") {
       if (d.updated === geoSentAt) { geoMsg("✓ " + geoLastMsg + " · APPLIED ON THE GLASSES IN " + ((Date.now() - geoSentAt) / 1000).toFixed(1) + " S"); log("GLASSES APPLIED: " + geoLastMsg); }
     } else if (d.t === "ack") {
@@ -765,7 +889,7 @@
     $("linkErr").textContent = "";
     if (!CODE_RE.test(c)) { $("linkErr").textContent = "6 LETTERS AND DIGITS, AS IN SETUP.EXE (NO 0, 1, I OR O)"; return; }
     if (c === code) return;
-    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS); presence = null; lastConn = null; geoForget();
+    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS); presence = null; lastConn = null; geoForget(); dkForget();
     renderLink(); log("LINKED TO CODE " + c); connectLive();
     await pull();
     reloadPreview();
@@ -820,6 +944,8 @@
     $("smUse").textContent = inUse === "mykolai" ? "● NOW" : "-";
     $("yaroUse").textContent = inUse === "yaro" ? "● RUNNING NOW" : "NOT RUNNING";
     $("geoInUse").textContent = inUse === "geolock" ? "● RUNNING NOW" : "NOT RUNNING";
+    $("dkUse").textContent = inUse === "drunk" ? "● RUNNING NOW" : "NOT RUNNING";
+    document.querySelector('#keys a[href="#drunk"]').classList.toggle("dot", inUse === "drunk");
     document.querySelector('#keys a[href="#geolock"]').classList.toggle("dot", inUse === "geolock");
     document.querySelector('#keys a[href="#mykolai"]').classList.toggle("dot", inUse === "mykolai");
     document.querySelector('#keys a[href="#yaro"]').classList.toggle("dot", inUse === "yaro");
@@ -1075,7 +1201,7 @@
     try { await navigator.clipboard.writeText(u); $("setSaved").textContent = "✓ COPIED: " + u; } catch { $("setSaved").textContent = u; }
   };
   $("unlinkBtn").onclick = () => {
-    code = null; ls.set("hud.panel.code", ""); presence = null; lastConn = null; geoForget(); connectLive(); renderLink(); renderStatus(); log("UNLINKED");
+    code = null; ls.set("hud.panel.code", ""); presence = null; lastConn = null; geoForget(); dkForget(); connectLive(); renderLink(); renderStatus(); log("UNLINKED");
     location.hash = "#status"; setTimeout(() => $("codeIn").focus(), 50);
   };
 
@@ -1366,6 +1492,101 @@
     };
   })();
 
+  /* ---------- DRUNK.EXE: settings + results (/api/hud/<CODE>/app/drunk) ---------- */
+  const DK_DEF = { mode: "walk", secs: 20, diff: 1, wrist: true, straight: true, meter: true, egg: 1, spoon: 1, voice: true };
+  const DK_SECS = [10, 20, 30, 60], DK_DIFF = ["EASY", "NORMAL", "HARD"], DK_DIFF_F = [1.35, 1, 0.75];
+  const DK_EGG = [["QUAIL", 0.15], ["HEN", 0.22], ["OSTRICH", 0.3]], DK_SPOON = [["TEASPOON", 0.55, 8], ["SOUP SPOON", 0.75, 12], ["LADLE", 1.0, 18]];
+  const DK_LABEL = { meter: "WOBBLE METER", voice: "VOICE", wrist: "HANDS (NEURAL BAND)", straight: "STRAIGHT LINE" };
+  let dk = { s: Object.assign({}, DK_DEF), u: 0, log: [], loaded: false }, dkTimer = 0, dkPending = 0, dkSentAt = 0, dkLastMsg = "", dkNewAt = 0;
+  const dkApi = () => "/api/hud/" + code + "/app/drunk";
+  const dkMsg = (t) => { $("dkSaved").textContent = t; };
+  function dkForget() { dk = { s: Object.assign({}, DK_DEF), u: 0, log: [], loaded: false }; renderDrunk(); }
+  async function dkPull() {
+    if (!code) { renderDrunk(); return; }
+    const asked = code;
+    try {
+      const j = await (await fetch(dkApi(), { cache: "no-store" })).json();
+      if (asked !== code) return;
+      let changed = !dk.loaded;
+      if (j.settings && j.updated > dk.u && !dkPending) { dk.s = Object.assign({}, DK_DEF, j.settings); dk.u = j.updated; changed = true; }
+      if (JSON.stringify(j.log || []) !== JSON.stringify(dk.log)) { dk.log = j.log || []; changed = true; }
+      dk.loaded = true; $("dkNote").textContent = "";
+      if (changed) renderDrunk();
+    } catch { if (!dk.loaded) $("dkNote").textContent = "COULD NOT REACH ERROR.BLUE - TRYING AGAIN"; }
+  }
+  function dkSave(msg) {                                   // newest wins; live to the glasses straight away
+    dk.u = Date.now(); renderDrunk();
+    dkLastMsg = msg; dkSentAt = dk.u;
+    dkMsg(wsSay({ t: "drunk", settings: dk.s, updated: dk.u }) && glassesIn.size ? "» " + msg + " · SENT LIVE TO THE GLASSES..." : "SAVING " + msg + "...");
+    clearTimeout(dkTimer); dkPending = 1;
+    dkTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(dkApi(), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: dk.s, updated: dk.u }) });
+        const j = await r.json();
+        if (!j.ok) dkMsg("COULD NOT SAVE: " + (j.error || r.status));
+        else if (!/APPLIED/.test($("dkSaved").textContent)) dkMsg("✓ " + msg + " · SAVED" + (glassesIn.size ? "" : " · THE GLASSES GET IT WHEN THEY OPEN DRUNK.EXE"));
+        log("SAVED: DRUNK " + msg);
+      } catch { dkMsg("COULD NOT SAVE (NO CONNECTION?)"); }
+      dkPending = 0;
+    }, 300);
+  }
+  function dkSeg(id, labels, cur, onPick) {
+    const box = $(id); box.innerHTML = "";
+    labels.forEach((l, i) => { const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", cur === i); b.onclick = () => onPick(i, l); box.appendChild(b); });
+  }
+  const dkWhen = (ms) => { const d = new Date(ms), t = d.toTimeString().slice(0, 5); return new Date().toDateString() === d.toDateString() ? t : pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + " " + t; };
+  function dkDetails(e) {
+    return e.mode === "walk"
+      ? `SWAY ${e.sway}° · TILT ${e.tilt}° · OFF LINE ${e.drift}° · HANDS ${e.hands < 0 ? "-" : e.hands} · ${e.secs} S · ${e.diff}`
+      : `${e.fell ? "DROPPED AT " + e.secs + " S" : "SURVIVED " + e.secs + " S"} · WOBBLE ${Math.round((e.wobble || 0) * 100)}% · CLOSE CALLS ${e.close} · ${e.egg} ON ${e.spoon}`;
+  }
+  function renderDkPreview() {
+    const svg = $("dkPreview"), sp = DK_SPOON[dk.s.spoon] || DK_SPOON[1], eg = DK_EGG[dk.s.egg] || DK_EGG[1];
+    const rx = 120 * sp[1], ry = rx * 0.42, cx = 150, cy = 92, ex = eg[1] / sp[1] * rx, ey = ex * 0.72;
+    const edge = sp[1] - eg[1] * 0.5, fall = Math.min(60, sp[2] * DK_DIFF_F[dk.s.diff]);
+    svg.innerHTML = `<g><animateTransform attributeName="transform" type="rotate" values="-${fall * 0.6} 150 92;${fall * 0.6} 150 92;-${fall * 0.6} 150 92" dur="3s" repeatCount="indefinite"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#000" stroke="${pal.c}" stroke-width="2"/>
+      <ellipse cx="${cx}" cy="${cy + 2}" rx="${rx * 0.6}" ry="${ry * 0.6}" fill="none" stroke="${pal.d}"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${edge / sp[1] * rx}" ry="${edge / sp[1] * ry}" fill="none" stroke="${pal.d}" stroke-dasharray="3 4"/>
+      <path d="M${cx - 8} ${cy + ry - 1}L${cx - 13} 150M${cx + 8} ${cy + ry - 1}L${cx + 13} 150" stroke="${pal.c}" stroke-width="2"/>
+      <ellipse cx="${cx}" cy="${cy - ey * 0.5}" rx="${ex}" ry="${ey}" fill="${pal.b}"><animate attributeName="cx" values="${cx - rx * 0.35};${cx + rx * 0.35};${cx - rx * 0.35}" dur="3s" repeatCount="indefinite"/></ellipse></g>
+      <text x="8" y="18" fill="${pal.m}" font-size="15" font-family="VT323, monospace">${eg[0]} EGG ON A ${sp[0]}</text>`;
+    $("dkFall").textContent = `STANDING STILL, THE EGG ROLLS OFF AT ABOUT ${Math.round(fall)}° OF TILT (${DK_DIFF[dk.s.diff]}). QUICK HEAD MOVES AND WALKING MAKE IT LESS. DASHED RING = THE EDGE.`;
+  }
+  function renderDkChart() {
+    const svg = $("dkChart"), L = dk.log.slice(0, 20).reverse();
+    let h = "";
+    for (const y of [0, 5, 10]) h += `<line x1="26" x2="296" y1="${110 - y * 9.5}" y2="${110 - y * 9.5}" stroke="${pal.d}" stroke-dasharray="${y ? "3 4" : "none"}"/><text x="4" y="${114 - y * 9.5}" fill="${pal.d}" font-size="12" font-family="VT323, monospace">${y}</text>`;
+    if (!L.length) h += `<text x="160" y="64" text-anchor="middle" fill="${pal.d}" font-size="16" font-family="VT323, monospace">NO TESTS YET</text>`;
+    const bw = 270 / 20;
+    L.forEach((e, i) => {
+      const x = 28 + i * bw, hgt = Math.max(2, (e.level || 0) * 9.5), isEgg = e.mode === "egg";
+      h += `<rect x="${x}" y="${110 - hgt}" width="${bw - 3}" height="${hgt}" fill="${isEgg ? "none" : pal.c}" stroke="${pal.c}" stroke-width="${isEgg ? 1.5 : 0}"><title>${esc(e.label || "")}</title></rect>`;
+    });
+    h += `<rect x="200" y="4" width="9" height="9" fill="${pal.c}"/><text x="212" y="13" fill="${pal.m}" font-size="12" font-family="VT323, monospace">WALK</text>
+          <rect x="246" y="4" width="9" height="9" fill="none" stroke="${pal.c}"/><text x="258" y="13" fill="${pal.m}" font-size="12" font-family="VT323, monospace">EGG</text>`;
+    svg.innerHTML = h;
+  }
+  function renderDrunk() {
+    $("dkBody").hidden = !code;
+    if (!code) { $("dkNote").textContent = "LINK THE GLASSES FIRST (1 STATUS): SETTINGS AND RESULTS ARE KEPT UNDER THE GLASSES CODE."; $("dkLast").textContent = "-"; return; }
+    const s = dk.s;
+    document.querySelectorAll(".mode[data-mode]").forEach((b) => b.setAttribute("aria-pressed", s.mode === b.dataset.mode));
+    dkSeg("dkSecs", DK_SECS.map((x) => x + " S"), DK_SECS.indexOf(+s.secs), (i, l) => { s.secs = DK_SECS[i]; dkSave("TEST LENGTH " + l); });
+    dkSeg("dkDiff", DK_DIFF, s.diff, (i, l) => { s.diff = i; dkSave("DIFFICULTY " + l); });
+    dkSeg("dkEgg", DK_EGG.map((e) => e[0]), s.egg, (i, l) => { s.egg = i; dkSave(l + " EGG"); });
+    dkSeg("dkSpoon", DK_SPOON.map((e) => e[0]), s.spoon, (i, l) => { s.spoon = i; dkSave(l); });
+    document.querySelectorAll(".sw[data-d]").forEach((el) => el.setAttribute("aria-pressed", !!s[el.dataset.d]));
+    renderDkPreview(); renderDkChart();
+    const e0 = dk.log[0];
+    $("dkLast").textContent = e0 ? `LEVEL ${e0.level} · ${e0.label}` : dk.loaded ? "NO TESTS YET" : "...";
+    $("dkLog").innerHTML = dk.log.length ? dk.log.slice(0, 12).map((e, i) =>
+      `<div class="e${i === 0 && Date.now() - dkNewAt < 8000 ? " new" : ""}"><span class="lv">${e.level}</span><span class="tt">${esc(e.label || "")} <span class="mid">· ${e.mode === "egg" ? "EGG & SPOON" : "WALK THE LINE"}${e.demo ? " · DEMO" : ""}</span> <span class="dim">${e.at ? dkWhen(e.at) : ""}</span></span><span class="dd">${esc(dkDetails(e))}</span></div>`).join("")
+      : `<p class="mid">${dk.loaded ? "NO TESTS YET. OPEN DRUNK.EXE ON THE GLASSES AND PINCH TO START." : "LOADING..."}</p>`;
+  }
+  document.querySelectorAll(".mode[data-mode]").forEach((b) => b.onclick = () => { dk.s.mode = b.dataset.mode; dkSave("STARTS IN " + (b.dataset.mode === "egg" ? "EGG & SPOON" : "WALK THE LINE")); });
+  document.querySelectorAll(".sw[data-d]").forEach((el) => el.onclick = () => { const k = el.dataset.d; dk.s[k] = !dk.s[k]; dkSave(DK_LABEL[k] + (dk.s[k] ? " ON" : " OFF")); });
+
   /* ---------- Святий Миколайчик ---------- */
   async function smStats() {
     try {
@@ -1377,7 +1598,27 @@
   }
 
   /* ---------- screens ---------- */
-  const TABS = ["status", "apps", "setup", "geolock", "mykolai", "yaro"];
+  const TABS = ["status", "apps", "setup", "geolock", "drunk", "mykolai", "yaro"];
+  // the key rail: each keycap turns toward the middle like the glasses' cover-flow
+  const rail = $("keyrail");
+  function rail3d() {
+    const mid = rail.scrollLeft + rail.clientWidth / 2, wide = Math.min(1, 520 / Math.max(1, rail.clientWidth - 140));   // gentler on wide screens
+    for (const a of rail.children) {
+      const w = a.offsetWidth + 6, u = Math.max(-4, Math.min(4, (a.offsetLeft + a.offsetWidth / 2 - mid) / w)), au = Math.abs(u), k = Math.max(0.45, wide);
+      a.style.transform = `perspective(380px) translateZ(${(-au * 34 * k).toFixed(1)}px) rotateY(${(-u * 30 * k).toFixed(1)}deg) translateY(${(au * au * 1.6 * k).toFixed(1)}px)`;
+      a.style.opacity = (1 - Math.min(au, 4) * 0.12 * k).toFixed(2);
+      a.style.zIndex = String(20 - Math.round(au * 2));
+    }
+  }
+  let railRaf = 0;
+  rail.addEventListener("scroll", () => { cancelAnimationFrame(railRaf); railRaf = requestAnimationFrame(rail3d); }, { passive: true });
+  window.addEventListener("resize", () => { centerKey(false); rail3d(); });
+  function centerKey(smooth) {
+    const a = rail.querySelector(".key.on"); if (!a) return;
+    const left = a.offsetLeft + a.offsetWidth / 2 - rail.clientWidth / 2;
+    if (Math.abs(rail.scrollLeft - left) > 2) rail.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
+    rail3d();
+  }
   let tab = null;
   function route() {
     const id = (location.hash || "#status").slice(1);
@@ -1385,17 +1626,19 @@
     const changed = next !== tab; tab = next;
     document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + tab));
     document.querySelectorAll("#keys a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + tab));
+    centerKey(changed);
     for (const f of document.querySelectorAll("iframe[data-src]")) if (f.closest("section").id === "tab-" + tab && !f.src.includes(f.dataset.src)) f.src = f.dataset.src;
     if (tab === "apps") { if (pv.getAttribute("src") === "about:blank" || pv.dataset.stale) { pv.dataset.stale = ""; reloadPreview(); } setTimeout(fitPreview, 0); }
     else if (pv.getAttribute("src") !== "about:blank") { pv.src = "about:blank"; pvFocus = null; }    // no 3D running in the background
     if (tab === "mykolai") smStats();
     if (tab === "geolock") { renderGeo(); geoPull(); }
+    if (tab === "drunk") { renderDrunk(); dkPull(); }
     if (changed) scrollTo(0, 0);
   }
   window.addEventListener("hashchange", route);
   document.addEventListener("keydown", (e) => {
     if (e.target.closest("input, textarea")) return;
-    if (/^[1-6]$/.test(e.key)) { location.hash = "#" + TABS[+e.key - 1]; return; }
+    if (/^[1-7]$/.test(e.key)) { location.hash = "#" + TABS[+e.key - 1]; return; }
     if (tab === "apps" && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", "Escape"].includes(e.key) && !e.target.closest("button, a")) { e.preventDefault(); key(e.key); }
   });
   $("chip").onclick = () => { location.hash = "#status"; };
@@ -1516,6 +1759,7 @@
   setInterval(() => { if (!document.hidden) pull(); }, 5000);
   setInterval(() => { if (!document.hidden && tab === "mykolai") smStats(); }, 20000);
   setInterval(() => { if (!document.hidden && tab === "geolock") geoPull(); }, 5000);
+  setInterval(() => { if (!document.hidden && tab === "drunk") dkPull(); }, 6000);
   requestAnimationFrame(spinArrows);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
   setTimeout(() => $("tube").classList.remove("on"), 700);
@@ -1527,7 +1771,7 @@
   loadCatalog();
   pull();
   connectLive();
-  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, get sel() { return sel; }, get tab() { return tab; }, get live() { return { open: !!(ws && ws.readyState === 1), glasses: glassesIn.size, live }; }, get geo() { return geo; }, link, pull, select, geoPull };
+  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, get sel() { return sel; }, get tab() { return tab; }, get live() { return { open: !!(ws && ws.readyState === 1), glasses: glassesIn.size, live }; }, get geo() { return geo; }, get dk() { return dk; }, link, pull, select, geoPull, dkPull };
 })();
 </script>
 </body>

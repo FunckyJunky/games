@@ -355,6 +355,7 @@ const DM = (() => {
       { id: "snake",  file: "SNAKE.EXE",  desc: "CLASSIC SNAKE",        url: "/glasses/mini/?app=snake" },
       { id: "yaro",   file: "YARO.EXE",   desc: "YARO-VISSION: TAKE ORDERS", url: "/glasses/yaro/" },
       { id: "mykolai", file: "MYKOLAI.EXE", desc: "FIND GIFTS LEFT FOR YARO", url: "/glasses/mykolai/" },
+      { id: "drunk",   file: "DRUNK.EXE",   desc: "HOW DRUNK? WALK + EGG TEST", url: "/glasses/drunk/" },
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
@@ -569,6 +570,33 @@ const DM = (() => {
     return m;
   }
 
+  // DRUNK: an egg wobbling on a spoon that tips back and forth
+  function drunkMesh(t) {
+    const m = mesh(), tip = Math.sin(t * 1.7) * 0.22, ex = Math.sin(t * 1.7 - 0.9) * 0.28;
+    const T = (x, y, z) => [x * Math.cos(tip) - y * Math.sin(tip), x * Math.sin(tip) + y * Math.cos(tip), z];
+    const N = 14, b = m.v.length;                                      // the bowl: a flat disc
+    for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2; m.v.push(T(Math.cos(a) * 0.82, -0.32, Math.sin(a) * 0.56)); }
+    for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2; m.v.push(T(Math.cos(a) * 0.82, -0.42, Math.sin(a) * 0.56)); }
+    const bc = T(0, -0.37, 0);
+    m.f.push({ i: [...Array(N).keys()].map((k) => b + k), c: bc, k: "solid" });
+    m.f.push({ i: [...Array(N).keys()].map((k) => b + N + N - 1 - k), c: bc, k: "solid" });
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N; m.f.push({ i: [b + i, b + N + i, b + N + j, b + j], c: bc, k: "solid" }); }
+    const h0 = m.v.length;                                             // the handle, toward you
+    for (const [x, z] of [[-0.09, 0.5], [0.09, 0.5], [0.06, 1.45], [-0.06, 1.45]]) m.v.push(T(x, -0.37, z));
+    m.l.push([h0, h0 + 3, "ring"], [h0 + 1, h0 + 2, "ring"], [h0 + 2, h0 + 3, "ring"]);
+    const R = 7, L = 10, e0 = m.v.length, ec = T(ex, 0.02, 0);         // the egg, lying on its side
+    for (let r = 0; r <= R; r++) {
+      const la = -Math.PI / 2 + ((r + 0.5) / (R + 1)) * Math.PI;          // rings stop short of the tips (no zero-size faces)
+      for (let l = 0; l < L; l++) { const lo2 = (l / L) * Math.PI * 2; m.v.push(T(ex + Math.sin(la) * 0.44, 0.02 + Math.cos(la) * Math.cos(lo2) * 0.31, Math.cos(la) * Math.sin(lo2) * 0.31)); }
+    }
+    for (let r = 0; r < R; r++) for (let l = 0; l < L; l++) {
+      const a = e0 + r * L + l, bb = e0 + r * L + ((l + 1) % L);
+      m.f.push({ i: [a, bb, bb + L, a + L], c: ec, k: "on" });
+    }
+    m.f.push({ i: [...Array(L).keys()].map((l) => e0 + l), c: ec, k: "on" }, { i: [...Array(L).keys()].map((l) => e0 + R * L + l), c: ec, k: "on" });
+    return m;
+  }
+
   // GEOLOCK: a 3D arrow hovering over a target ring, swinging round to point
   function geolockMesh(t) {
     const m = mesh();
@@ -681,6 +709,7 @@ const DM = (() => {
       case "synth":   return [synthMesh(t), mul(rx(0.38), ry(Math.sin(t * 0.6) * 0.6)), 0.37];
       case "crumbs":  return [crumbsMesh(t), mul(rx(0.55), ry(t * 0.35)), 0.36];
       case "geolock": return [geolockMesh(t), rx(-0.6), 0.36];
+      case "drunk":   return [drunkMesh(t), mul(rx(0.55), ry(Math.sin(t * 0.5) * 0.5)), 0.4];
       case "yaro":    return [eyeMesh(t), ry(Math.sin(t * 0.3) * 0.3), 0.4];
       case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
       case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];
