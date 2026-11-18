@@ -230,7 +230,7 @@ const DM = (() => {
   }
 
   /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
-  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, full: false, hidden: [] };
   // The same settings live on the server under the glasses' pairing code, so the control
   // panel at error.blue/hud can change them; the newest change wins.
   const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -244,7 +244,7 @@ const DM = (() => {
     }
     return c;
   }
-  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "hidden"];
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "full", "hidden"];
   const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
   function push(v) {
     try {
@@ -332,9 +332,11 @@ const DM = (() => {
    Every app icon is a small live 3D model. */
 (() => {
   "use strict";
-  const G = 300, CX = 150, CY = 122, F = 330;
+  const G = 300, CX = 150, F = 330;
+  let CY = 122;                                                         // 150 in FULL SCREEN HUD (no bars)
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   let S = DM.settings.get();                                          // written by the Settings app
+  CY = S.full ? 150 : 122;
   const PAL = DM.dosPalette(S.color);
   const GREEN = PAL.c, BRIGHT = PAL.b, MID = PAL.m, DIM = PAL.d, DARK = PAL.k;
   const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16));
@@ -838,6 +840,9 @@ const DM = (() => {
     if (focus < 0.5 && a > 0.25 && ps.sameRow) {                         // small name tag under side cards
       const tag = frameQuad(M, P, 0, 0.66)[2];
       textC(app.id.toUpperCase(), tag[0], tag[1], MID, a * 0.8);
+    } else if (S.full && focus > 0.5) {                                    // full screen: the name under the card in view
+      const tag = frameQuad(M, P, 0, 0.7)[2];
+      textC(app.file, tag[0], tag[1], BRIGHT, a);
     }
   }
 
@@ -916,18 +921,20 @@ const DM = (() => {
   }
 
   /* ---------------- background + chrome ---------------- */
-  const bg = document.createElement("canvas"); bg.width = bg.height = G;
-  (() => {
-    const g = bg.getContext("2d");
-    g.fillStyle = DIM;
-    for (let y = 26; y < 226; y += 12) for (let x = 6; x < G; x += 12) { g.globalAlpha = 0.35; g.fillRect(x, y, 1, 1); }
-  })();
+  const dots = (y0, y1) => {
+    const c = document.createElement("canvas"); c.width = c.height = G;
+    const g = c.getContext("2d"); g.fillStyle = DIM;
+    for (let y = y0; y < y1; y += 12) for (let x = 6; x < G; x += 12) { g.globalAlpha = 0.35; g.fillRect(x, y, 1, 1); }
+    return c;
+  };
+  const bg = dots(26, 226), bgFull = dots(6, G);                       // FULL SCREEN HUD: dots all the way
 
   const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
   const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   const pad = (n) => String(n).padStart(2, "0");
 
   function drawChrome(t, now) {
+    if (S.full) return;                                                 // FULL SCREEN HUD: only the 3D grid, clock and compass
     // top bar: DOS prompt + small clock
     lo.fillStyle = "#000"; lo.fillRect(0, 0, G, 19);
     const cur = Math.floor(t * 2) % 2 ? "_" : " ";
@@ -969,7 +976,8 @@ const DM = (() => {
     const now = new Date();
     lo.setTransform(1, 0, 0, 1, 0, 0);
     lo.clearRect(0, 0, G, G);
-    lo.drawImage(bg, 0, 0);
+    CY += ((S.full ? 150 : 122) - CY) * 0.25;                            // glides when the setting changes
+    lo.drawImage(S.full ? bgFull : bg, 0, 0);
     const items = [];
     for (let r = -1; r < ROWS.length; r++) {
       const dr = r - rowA;

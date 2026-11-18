@@ -176,6 +176,13 @@
   @keyframes tape { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .comp.off .tape, .comp.off .needle { opacity: 0; }
   .comp.off::after { content: "NO COMPASS"; position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; color: var(--d); font-size: 17px; }
+  .fsill svg { width: 100%; height: auto; display: block; background: #000; border: 1px solid var(--d); }
+  .fsill .bars { transition: opacity .3s; }
+  .fsill .grid { transition: transform .4s; }
+  .fsill .tag { opacity: 0; transition: opacity .3s; }
+  .fsill.on .bars { opacity: 0; }
+  .fsill.on .grid { transform: translateY(12px); }
+  .fsill.on .tag { opacity: 1; }
   .head svg { position: absolute; left: 12px; top: 6px; width: 52px; height: 52px; }
   .head .hd { transform-origin: 26px 28px; animation: turn var(--spd, 1.8s) ease-in-out infinite alternate; }
   @keyframes turn { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
@@ -434,6 +441,24 @@
           <div class="opt">
             <div><div class="lbl">HUD COLOUR</div><div class="sub">THE COLOUR OF EVERY PIXEL ON THE GLASSES (AND THIS PANEL)</div></div><span></span>
             <div class="swatches full" id="colorSeg"></div>
+          </div>
+          <div class="opt">
+            <div><div class="lbl">FULL SCREEN HUD</div><div class="sub">ONLY THE 3D GRID OF APPS, THE CLOCK AND THE COMPASS: NO TOP BAR, NO INFO PANEL. THE APP IN VIEW KEEPS A SMALL NAME TAG</div></div>
+            <button class="sw" data-b="full" aria-pressed="false" aria-label="Full screen HUD"><span class="n">OFF</span><span class="y">ON</span></button>
+            <div class="full fsill" id="illFull">
+              <svg viewBox="0 0 260 120" aria-hidden="true" font-family="VT323, VGA, monospace">
+                <g class="bars"><rect x="0" y="0" width="260" height="13" fill="#000"/><text x="5" y="10" font-size="11" fill="var(--c)">C:\GLASSES\APPS&gt;_</text><text x="224" y="10" font-size="11" fill="var(--m)">02:32</text>
+                  <line x1="0" y1="13.5" x2="260" y2="13.5" stroke="var(--d)"/>
+                  <rect x="0" y="92" width="260" height="28" fill="#000"/><line x1="0" y1="92.5" x2="260" y2="92.5" stroke="var(--d)"/>
+                  <text x="6" y="104" font-size="11" fill="var(--b)">&gt; FLIGHT.EXE</text><text x="6" y="116" font-size="10" fill="var(--m)">PINCH RUN  &lt;&gt; SLIDE  ^V ROW</text></g>
+                <g class="grid">
+                  <path d="M40 34l34 6v40l-34 6z" fill="#000" stroke="var(--m)"/><path d="M220 34l-34 6v40l34 6z" fill="#000" stroke="var(--m)"/>
+                  <rect x="94" y="28" width="72" height="62" fill="#000" stroke="var(--c)" stroke-width="1.5"/>
+                  <path d="M104 72l26-22 6 8 18-6-20 18-6-4z" fill="none" stroke="var(--b)" stroke-width="1.5"/>
+                  <text class="tag" x="130" y="104" text-anchor="middle" font-size="11" fill="var(--b)">FLIGHT.EXE</text>
+                </g>
+              </svg>
+            </div>
           </div>
           <div class="opt">
             <div><div class="lbl">COMPASS UNDER THE CLOCK</div><div class="sub">ROTATING LINES WITH N · E · S · W</div></div>
@@ -734,8 +759,8 @@
     { name: "RED",   c: "#ff4d4d", b: "#ffd2d2", m: "#c23636", d: "#7a1f1f", k: "#120303", g: "rgba(255,77,77,.5)" },
     { name: "WHITE", c: "#e8e8e8", b: "#ffffff", m: "#a8a8a8", d: "#5c5c5c", k: "#0b0b0b", g: "rgba(232,232,232,.4)" },
   ];
-  const DEFAULTS = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
-  const LABELS = { compass: "COMPASS", head: "HEAD MOTION", invert: "INVERT", sounds: "SOUNDS" };
+  const DEFAULTS = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, full: false, hidden: [] };
+  const LABELS = { compass: "COMPASS", head: "HEAD MOTION", invert: "INVERT", sounds: "SOUNDS", full: "FULL SCREEN HUD" };
   const SPEEDS = [["SLOW", "26°", "2.6s"], ["MEDIUM", "18°", "1.8s"], ["FAST", "12°", "1.1s"]];
   const ls = {
     get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
@@ -1176,6 +1201,7 @@
       $("colorSeg").appendChild(b);
     });
     $("illComp").classList.toggle("off", !profile.compass);
+    $("illFull").classList.toggle("on", !!profile.full);
     const hd = $("illHead"); hd.classList.toggle("off", !profile.head); hd.classList.toggle("inv", !!profile.invert);
     hd.style.setProperty("--spd", (SPEEDS[profile.speed] || SPEEDS[1])[2]);
     $("illHeadLbl").textContent = profile.head ? (profile.invert ? "INVERTED" : "TOP VIEW") : "HEAD MOTION OFF";
@@ -1192,6 +1218,7 @@
       row("APPS ON HOME", total ? `${Math.max(0, total - hidden)} OF ${total}` : "-", "#apps") +
       row("HUD COLOUR", (PALETTES[profile.color] || PALETTES[0]).name, "#setup") +
       row("HEAD MOTION", profile.head ? (SPEEDS[profile.speed] || SPEEDS[1])[0] + (profile.invert ? " · INV" : "") : "OFF", "#setup") +
+      row("FULL SCREEN", profile.full ? "ON" : "OFF", "#setup") +
       row("COMPASS", profile.compass ? "ON" : "OFF", "#setup") +
       row("SOUNDS", profile.sounds ? "ON" : "OFF", "#setup");
   }

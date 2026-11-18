@@ -35,7 +35,7 @@ public/                 the website
                         /api/hud/<CODE>/app/drunk, set on error.blue/hud (DRUNK screen). Just a game, not a sobriety test
   glasses/devil/        DEVIL.EXE: run from the devil. He rises 200 m away (real GPS spot) and walks at you at 4 km/h;
                         world-locked 3D view from the head sensors, steps from the accelerometer
-  glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
+  glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, full screen HUD, apps on home,
                         and the 6-letter CODE that links the glasses to the control panel
   glasses/presence.js   tells the control panel the glasses are on and which app is open (every glasses app loads it)
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page

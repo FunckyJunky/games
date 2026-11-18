@@ -223,7 +223,7 @@ function hudDb(env) {
 }
 function hudSettings(v) {                       // keep only known settings, with sane values
   const o = {}, b = v && typeof v === "object" ? v : {};
-  for (const k of ["compass", "head", "invert", "sounds"]) if (k in b) o[k] = !!b[k];
+  for (const k of ["compass", "head", "invert", "sounds", "full"]) if (k in b) o[k] = !!b[k];
   if ("speed" in b) o.speed = Math.max(0, Math.min(2, Number(b.speed) | 0));
   if ("color" in b) o.color = Math.max(0, Math.min(9, Number(b.color) | 0));
   if (Array.isArray(b.hidden)) o.hidden = [...new Set(b.hidden.filter((x) => typeof x === "string" && HUD_APP_RE.test(x)))].slice(0, 40);

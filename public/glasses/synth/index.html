@@ -234,7 +234,7 @@ const DM = (() => {
   }
 
   /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
-  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, full: false, hidden: [] };
   // The same settings live on the server under the glasses' pairing code, so the control
   // panel at error.blue/hud can change them; the newest change wins.
   const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -248,7 +248,7 @@ const DM = (() => {
     }
     return c;
   }
-  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "hidden"];
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "full", "hidden"];
   const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
   function push(v) {
     try {
