@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="DEVIL.EXE: the devil rises 200 m away and walks toward you at 4 km/h. Keep moving.">
+<title>DEVIL.EXE</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+<script src="/glasses/presence.js" data-app="devil"></script>
+</head>
+<body>
+<canvas id="screen" aria-label="DEVIL.EXE"></canvas>
+<script>
+/* DEVIL.EXE: run from the devil.
+   He rises 200 m from you (a real GPS spot) and walks straight at you at 4 km/h, day and night, until he
+   takes you. Walk faster than him and you live. Get 400 m away and he loses your trail... for a while.
+   The view is world-locked like VR: the black of the display is see-through, so all you see is him,
+   standing where he really is, at his real size (REAL SIZE view; VR WIDE squeezes 40 degrees in).
+   Sensors: location from the paired phone (navigator.geolocation); head turn/tilt from the glasses'
+   gyroscope + accelerometer (deviceorientation); steps from the accelerometer and head-turn speed from
+   the gyroscope (devicemotion), used to learn which way is north while you walk when there's no compass.
+   TITLE  pinch = start, swipe right = menu (TEST RUN works without GPS)
+   PLAY   pinch = where is he?  swipe left = HUD full/min/off  swipe up/down = REAL SIZE / VR WIDE
+          swipe right or back = menu (give up)
+   A run survives the display going off or the page reloading: he keeps walking meanwhile. */
+(() => {
+  "use strict";
+  const G = 300, CX = 150, CY = 150;
+  const RED = "#ff3322", HOT = "#ffae3b", BRIGHT = "#ffe8d2", MID = "#c42a17", DIM = "#6e150b", YEL = "#fff27a", GREEN = "#7dff8a";
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+  const pad = (n, l = 2) => String(n).padStart(l, "0");
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+  const EYE = 1.62, CATCH_M = 2, STRIDE = 0.68, RISE_S = 3.2, LOST_S = 12, NEAR = 0.06;
+  const VIEWS = [{ name: "REAL SIZE", fov: 14.3 }, { name: "VR WIDE", fov: 40 }];   // the lens shows about 14 x 14 degrees
+  const SPEEDS = [3, 4, 5, 6], DISTS = [100, 200, 300, 500], HUDS = ["FULL", "MIN", "OFF"];
+  const glassesSounds = store.get("glasses.settings", {}).sounds !== false;
+  const cfg = Object.assign({ sound: glassesSounds, voice: true, hud: "MIN", view: 0, speed: 4, dist: 200 }, store.get("devil.cfg", {}));
+  const saveCfg = () => store.set("devil.cfg", cfg);
+  const hfov = () => VIEWS[cfg.view % VIEWS.length].fov;
+  const focal = () => CX / Math.tan((hfov() / 2) * D2R);
+
+  /* ---------------- head motion + compass (same as the other glasses apps) ---------------- */
+  function createMotion() {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      live = true;
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          if ((await DeviceOrientationEvent.requestPermission()) !== "granted") return "denied";
+        }
+        if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") await DeviceMotionEvent.requestPermission();
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 26);              // quick: the devil has to stay put while you turn
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+    return {
+      get live() { return live; },
+      get pending() { return needZero; },
+      get axisName() { return AXES[axis].name; },
+      get yaw() { return angDiff(att.h, zh); },
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update,
+      zero() { needZero = true; },
+      nextAxis(d) { axis = (axis + d + AXES.length) % AXES.length; store.set("glasses.axis", axis); needZero = true; return AXES[axis].name; },
+    };
+  }
+  const motion = createMotion();
+
+  /* ---------------- accelerometer (steps) + gyroscope (head-turn speed) ---------------- */
+  const imu = { seen: false, gyro: false, g: 9.81, s: 0, armed: true, steps: 0, lastStep: -99, times: [], turn: 0 };
+  function onDeviceMotion(e) {
+    const now = performance.now() / 1000;
+    let dt = e.interval || 16;
+    dt = clamp(dt > 1 ? dt / 1000 : dt, 0.004, 0.1);           // ms in Chrome, seconds in old Safari
+    const a = e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null ? e.accelerationIncludingGravity
+            : e.acceleration && e.acceleration.x != null ? e.acceleration : null;
+    if (a) {
+      const m = Math.hypot(a.x || 0, a.y || 0, a.z || 0);
+      if (!imu.seen) { imu.g = m; imu.seen = true; }
+      imu.g += (m - imu.g) * (1 - Math.exp(-dt / 1.2));          // gravity (or zero) baseline
+      imu.s += (m - imu.g - imu.s) * (1 - Math.exp(-dt / 0.06));  // the bounce of each step
+      if (imu.armed && imu.s > 1.15 && now - imu.lastStep > 0.27) {
+        imu.armed = false; imu.steps++; imu.lastStep = now; imu.times.push(now);
+        while (imu.times.length && imu.times[0] < now - 4) imu.times.shift();
+      } else if (!imu.armed && imu.s < 0.2) imu.armed = true;
+    }
+    const r = e.rotationRate;
+    if (r && (r.alpha != null || r.beta != null || r.gamma != null)) {
+      imu.gyro = true;
+      const w = Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0);   // degrees per second
+      imu.turn += (w - imu.turn) * (1 - Math.exp(-dt / 0.15));
+    }
+  }
+  window.addEventListener("devicemotion", onDeviceMotion);
+  const stepping = () => performance.now() / 1000 - imu.lastStep < 1.4;
+  const cadence = () => { const now = performance.now() / 1000; return imu.times.filter((t) => t > now - 4).length * 15; };
+
+  /* ---------------- canvas + VGA 8x14 font ---------------- */
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = G;
+  const lo = loC.getContext("2d");
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 2 * K;
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.32)"; slg.fillRect(0, K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+  const FONT_HEX = "00000000000000000000000000000000080808080808080008080000222222220000000000000000000000001212127e24247e48484800000000083e4948380e09493e0800000000314a4a34080816292946000000001c22221418294542463900000808080800000000000000000000000408081010101010100808040000201010080808080808101020000000000008492a1c2a4908000000000000000808087f0808080000000000000000000000000018080810000000000000003c000000000000000000000000000000001818000000000202040808101020404000000000182442464a5262422418000000000818280808080808083e000000003c4242020c102040407e000000003c4242021c020242423c00000000040c142444447e040404000000007e4040407c020202423c000000001c2040407c424242423c000000007e020204040408080808000000003c4242423c424242423c000000003c4242423e0202020438000000000000181800000018180000000000000018180000001808081000000000020408102010080402000000000000007e0000007e00000000000000402010080408102040000000003c424202040808000808000000001c224a565252524e201e0000000018242442427e42424242000000007c4242427c424242427c000000003c42424040404042423c0000000078444242424242424478000000007e4040407c404040407e000000007e4040407c4040404040000000003c424240404e4242463a00000000424242427e4242424242000000003e08080808080808083e000000001f0404040404044444380000000042444850606050484442000000004040404040404040407e00000000424266665a5a424242420000000042626252524a4a464642000000003c42424242424242423c000000007c4242427c4040404040000000003c4242424242425a663c030000007c4242427c4844444242000000003c424240300c0242423c000000007f080808080808080808000000004242424242424242423c000000004141412222221414080800000000424242425a5a6666424200000000424224241818242442420000000041412222140808080808000000007e02020408102040407e0000000e080808080808080808080e000000404020101008080402020000007010101010101010101010700018244200000000000000000000000000000000000000000000007f001008000000000000000000000000000000003c42023e4242463a0000004040405c6242424242625c0000000000003c4240404040423c0000000202023a4642424242463a0000000000003c42427e4040423c0000000c1010107c1010101010100000000000023a44444438203c42423c004040405c62424242424242000000080800180808080808083e0000000404000c040404040404044830004040404448506050484442000000180808080808080808083e00000000000076494949494949490000000000005c624242424242420000000000003c4242424242423c0000000000005c6242424242625c4040000000003a4642424242463a0202000000005c624240404040400000000000003c4240300c02423c000000001010107c10101010100c000000000000424242424242463a0000000000004242422424241818000000000000414949494949493600000000000042422418182442420000000000004242424242261a02023c000000007e0204081020407e0000000c10100808102010080810100c080808080808080808080808080800300808101008040810100808300031494600000000000000000000";
+  const atlases = {};
+  function atlas(color) {
+    if (atlases[color]) return atlases[color];
+    const a = document.createElement("canvas"); a.width = 95 * 8; a.height = 14;
+    const g = a.getContext("2d"); g.fillStyle = color;
+    for (let i = 0; i < 95; i++) for (let r = 0; r < 14; r++) {
+      const bits = parseInt(FONT_HEX.substr((i * 14 + r) * 2, 2), 16);
+      for (let x = 0; x < 8; x++) if (bits & (128 >> x)) g.fillRect(i * 8 + x, r, 1, 1);
+    }
+    return (atlases[color] = a);
+  }
+  function text(s, x, y, color = RED, a = 1, scale = 1) {
+    const at = atlas(color);
+    lo.globalAlpha = a;
+    s = String(s).toUpperCase();
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i) - 32;
+      if (c > 0 && c < 95) lo.drawImage(at, c * 8, 0, 8, 14, Math.round(x + i * 8 * scale), Math.round(y), 8 * scale, 14 * scale);
+    }
+    lo.globalAlpha = 1;
+  }
+  const textW = (s, scale = 1) => String(s).length * 8 * scale;
+  const textC = (s, cx, y, color, a, scale = 1) => text(s, cx - textW(s, scale) / 2, y, color, a, scale);
+  const textR = (s, rx, y, color, a, scale = 1) => text(s, rx - textW(s, scale), y, color, a, scale);
+  function band(y, h, a = 0.72) { lo.fillStyle = "#000"; lo.globalAlpha = a; lo.fillRect(0, y, G, h); lo.globalAlpha = 1; }
+  function tri(x, y, ang, size, color, a = 1) {                 // ang: 0 = up, clockwise degrees
+    const r = ang * D2R, c = Math.cos(r), s = Math.sin(r);
+    const P = [[0, -1], [0.75, 0.75], [0, 0.3], [-0.75, 0.75]].map(([u, v]) => [x + (u * c - v * s) * size, y + (u * s + v * c) * size]);
+    lo.globalAlpha = a; lo.fillStyle = color; lo.beginPath();
+    P.forEach((p, i) => (i ? lo.lineTo(p[0], p[1]) : lo.moveTo(p[0], p[1])));
+    lo.closePath(); lo.fill(); lo.globalAlpha = 1;
+  }
+  function glow(x, y, r, rgb, a) {
+    if (!(r > 0.3) || !(a > 0.004)) return;
+    const g = lo.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(0.35, `rgba(${rgb},${a * 0.45})`); g.addColorStop(1, `rgba(${rgb},0)`);
+    lo.fillStyle = g; lo.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const fmtTime = (s) => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + pad(m) : pad(m)) + ":" + pad(s % 60); };
+  function fmtDist(m) {
+    if (m < 10) return m.toFixed(1) + " M";
+    if (m < 1000) return Math.round(m) + " M";
+    return (m / 1000).toFixed(2) + " KM";
+  }
+
+  /* ---------------- 3D math ---------------- */
+  const rx = (a) => { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+  const ry = (a) => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+  const rz = (a) => { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; };
+  const mul = (A, B) => {
+    const R = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) R[i * 3 + j] = A[i * 3] * B[j] + A[i * 3 + 1] * B[3 + j] + A[i * 3 + 2] * B[6 + j];
+    return R;
+  };
+  const ap = (M, v) => [M[0] * v[0] + M[1] * v[1] + M[2] * v[2], M[3] * v[0] + M[4] * v[1] + M[5] * v[2], M[6] * v[0] + M[7] * v[1] + M[8] * v[2]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const ID = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  // joints: [rotation, translation]; at(parent, x, y, z, R) = a child joint at (x, y, z) in the parent, turned by R
+  const xmul = (A, B) => [mul(A[0], B[0]), add3(ap(A[0], B[1]), A[1])];
+  const xap = (A, v) => add3(ap(A[0], v), A[1]);
+  const at = (A, x, y, z, R) => xmul(A, [R || ID, [x, y, z]]);
+
+  // the camera: you, at the eye, turned by your head
+  let cam = null;
+  function setCam(me, H, P, R, F) {
+    cam = { me, F, sh: Math.sin(H * D2R), ch: Math.cos(H * D2R), sp: Math.sin(P * D2R), cp: Math.cos(P * D2R), sr: Math.sin(R * D2R), cr: Math.cos(R * D2R) };
+  }
+  function camDir(e, n, u) {                                     // a world direction (east, north, up) in camera space
+    const x = e * cam.ch - n * cam.sh, z = e * cam.sh + n * cam.ch;
+    return [x, u * cam.cp - z * cam.sp, u * cam.sp + z * cam.cp];
+  }
+  const toCam = (e, n, u) => camDir(e - cam.me[0], n - cam.me[1], u - EYE);
+  function proj(c) {                                             // camera space -> screen (head roll turns the picture)
+    const ix = c[0] / c[2], iy = c[1] / c[2];
+    return [CX + (ix * cam.cr - iy * cam.sr) * cam.F, CY - (ix * cam.sr + iy * cam.cr) * cam.F, c[2]];
+  }
+
+  /* ---------------- the devil: a jointed low-poly model (y up, z = the way he faces, x = his right) ---------------- */
+  const QUADS = [[0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0]];
+  function seg(m, X, y0, y1, sx, sz, k, taper = 1, dx = 0, dz = 0) {    // a (tapered) block from y0 to y1 along the joint
+    const b = m.v.length;
+    for (const [yy, s] of [[y0, 1], [y1, taper]]) for (const [ux, uz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) m.v.push(xap(X, [dx + ux * sx * 0.5 * s, yy, dz + uz * sz * 0.5 * s]));
+    const c = xap(X, [dx, (y0 + y1) / 2, dz]);
+    for (const q of QUADS) m.f.push({ i: [b + q[0], b + q[1], b + q[2], b + q[3]], c, k });
+    return b;
+  }
+  function flat(m, X, pts, k) {                                    // a thin two-sided shape (wings, tail tip)
+    const b = m.v.length;
+    for (const p of pts) m.v.push(xap(X, p));
+    for (let i = 1; i < pts.length - 1; i++) m.f.push({ i: [b, b + i, b + i + 1], c: null, k, two: true });
+  }
+  function buildDevil(ph, t) {
+    const m = { v: [], f: [], hoof: [], eyes: [], feet: [] };
+    const sw = Math.sin(ph), cw = Math.cos(ph);
+    const hip = at([ID, [0, 0, 0]], 0, 1.0, 0, mul(ry(sw * 0.1), rz(sw * 0.04)));
+    seg(m, hip, -0.12, 0.1, 0.38, 0.24, "skin", 1.05);
+    for (const side of [1, -1]) {                                  // goat legs: thigh forward, shin back, hoof
+      const s = side * sw, lift = Math.max(0, side * cw);
+      const th = at(hip, side * 0.12, -0.04, 0, rx(-0.28 - s * 0.42 - lift * 0.25));
+      seg(m, th, -0.46, 0, 0.12, 0.14, "skin", 1.45);
+      const sh = at(th, 0, -0.46, 0, rx(0.62 + lift * 0.55));
+      seg(m, sh, -0.42, 0, 0.085, 0.1, "skin", 1.3);
+      const pa = at(sh, 0, -0.42, 0, rx(-0.5 - lift * 0.35));
+      seg(m, pa, -0.15, 0, 0.065, 0.07, "dark", 1.1);
+      const ho = at(pa, 0, -0.15, 0.01, rx(0.16 + s * 0.42 + lift * 0.05));
+      const hb = seg(m, ho, -0.07, 0, 0.11, 0.15, "dark", 0.85, 0, 0.02);
+      for (let k = 0; k < 4; k++) m.hoof.push(hb + k);
+      m.feet.push(m.v.length); m.v.push(xap(ho, [0, -0.07, 0.02]));
+    }
+    const sp = at(hip, 0, 0.08, 0, mul(rx(0.14 + 0.025 * Math.sin(t * 1.7)), ry(-sw * 0.16)));   // hunched chest
+    seg(m, sp, 0, 0.6, 0.34, 0.22, "skin", 1.8);
+    seg(m, at(sp, 0, 0.06, 0.125, rx(0.15)), 0, 0.3, 0.2, 0.03, "dark", 1.25);                    // belly
+    const nk = at(sp, 0, 0.6, 0.03, rx(-0.2 + 0.04 * Math.sin(t * 0.9)));
+    seg(m, nk, 0, 0.09, 0.13, 0.13, "skin");
+    const hd = at(nk, 0, 0.08, 0.01, mul(ry(0.1 * Math.sin(t * 0.7)), rz(0.07 * Math.sin(t * 0.5))));
+    seg(m, hd, 0.07, 0.33, 0.21, 0.24, "skin", 1.12);              // skull
+    seg(m, hd, -0.07, 0.07, 0.11, 0.13, "skin", 1.7, 0, 0.03);    // jaw down to a pointed chin
+    seg(m, hd, -0.22, -0.07, 0.015, 0.025, "dark", 2.8, 0, 0.065); // goatee
+    seg(m, hd, 0.012, 0.036, 0.12, 0.028, "mouth", 1, 0, 0.112);  // the grin, fire inside
+    for (const side of [1, -1]) {
+      seg(m, hd, -0.022, 0.012, 0.002, 0.002, "nail", 7, side * 0.035, 0.122);   // fangs
+      const ey = at(hd, side * 0.056, 0.2, 0.128, rz(side * 0.32));
+      seg(m, ey, -0.014, 0.014, 0.07, 0.022, "eye");
+      m.eyes.push(m.v.length); m.v.push(xap(ey, [0, 0, 0.02]));
+      seg(m, at(hd, side * 0.06, 0.236, 0.124, rz(side * 0.42)), -0.012, 0.014, 0.11, 0.04, "dark");   // brow
+      seg(m, at(hd, side * 0.1, 0.2, -0.02, mul(rz(-side * 1.25), rx(-0.3))), 0, 0.13, 0.07, 0.025, "skin", 0.1);   // ear
+      let hn = at(hd, side * 0.08, 0.31, 0, mul(rz(-side * 0.7), rx(-0.25)));    // horns: out, up, then forward
+      seg(m, hn, 0, 0.12, 0.07, 0.07, "horn", 0.78);
+      hn = at(hn, 0, 0.115, 0, mul(rz(side * 0.5), rx(-0.15)));
+      seg(m, hn, 0, 0.12, 0.055, 0.055, "horn", 0.68);
+      hn = at(hn, 0, 0.115, 0, mul(rz(side * 0.55), rx(0.35)));
+      seg(m, hn, 0, 0.12, 0.037, 0.037, "horn", 0.12);
+      // arms: the right one holds the pitchfork, the left one swings its claws
+      const fork = side === 1;
+      const shd = at(sp, side * 0.31, 0.55, 0, mul(rz(side * 0.22), rx(fork ? -0.2 + sw * 0.06 : -sw * 0.38)));
+      seg(m, shd, -0.3, 0.02, 0.09, 0.1, "skin", 1.35);
+      const el = at(shd, 0, -0.3, 0, rx(fork ? -1.05 : -0.45 - Math.max(0, sw) * 0.3));
+      seg(m, el, -0.27, 0, 0.07, 0.08, "skin", 1.25);
+      const hnd = at(el, 0, -0.27, 0, rx(fork ? 0 : -0.2));
+      seg(m, hnd, -0.08, 0, 0.085, 0.045, "skin", 1.1);
+      if (fork) m.forkHand = xap(hnd, [0, -0.05, 0]);
+      else for (let i = -1; i <= 1; i++) seg(m, at(hnd, i * 0.026, -0.075, 0.01, rx(-0.6)), -0.08, 0, 0.004, 0.004, "nail", 5);
+      const wg = at(sp, side * 0.1, 0.48, -0.12, ry(side * (0.5 + 0.12 * Math.sin(t * 1.6))));   // bat wings
+      flat(m, wg, [[0, 0, 0], [side * 0.5, 0.42, -0.22], [side * 0.82, 0.18, -0.3], [side * 0.7, -0.1, -0.26], [side * 0.45, -0.28, -0.18], [side * 0.18, -0.2, -0.08]], "wing");
+    }
+    const fk = [mul(rz(-0.1), rx(0.12)), m.forkHand];               // the pitchfork
+    seg(m, fk, -0.95, 1.1, 0.032, 0.032, "fork");
+    seg(m, fk, 1.1, 1.15, 0.3, 0.035, "fork");
+    for (let i = -1; i <= 1; i++) seg(m, fk, 1.15, i ? 1.4 : 1.47, 0.03, 0.03, "fork", 0.15, i * 0.135, 0);
+    let tl = at(hip, 0, -0.02, -0.12, rx(-2.0));                    // the tail, swaying, with an arrow tip
+    for (let i = 0; i < 9; i++) {
+      const w = 0.032 * (1 - i * 0.075);
+      seg(m, tl, 0, 0.12, w, w, "skin", 0.92);
+      tl = at(tl, 0, 0.115, 0, mul(rx(0.2), rz(Math.sin(t * 2.3 - i * 0.55) * 0.22)));
+    }
+    flat(m, tl, [[0, 0, 0], [0.06, 0.07, 0], [0, 0.17, 0], [-0.06, 0.07, 0]], "horn");
+    let minY = Infinity;                                             // stand on the lower hoof
+    for (const k of m.hoof) minY = Math.min(minY, m.v[k][1]);
+    for (const v of m.v) v[1] -= minY;
+    return m;
+  }
+
+  const PAL = { skin: [[26, 1, 0], [240, 40, 22]], dark: [[8, 0, 0], [110, 22, 12]], horn: [[24, 8, 2], [215, 135, 80]],
+                fork: [[18, 10, 6], [200, 160, 120]], wing: [[16, 0, 0], [150, 16, 10]], nail: [[60, 50, 30], [255, 240, 200]] };
+  function faceColor(k, s, fire) {
+    if (k === "eye") return "rgb(255,246,150)";
+    if (k === "mouth") { const f = 0.7 + 0.3 * Math.sin(clock * 23 + Math.sin(clock * 7)); return `rgb(255,${Math.round(110 + 80 * f)},${Math.round(25 * f)})`; }
+    const [a, b] = PAL[k] || PAL.skin, u = 0.1 + 0.9 * s;
+    return `rgb(${Math.min(255, Math.round(a[0] + (b[0] - a[0]) * u + 90 * fire))},${Math.min(255, Math.round(a[1] + (b[1] - a[1]) * u + 26 * fire))},${Math.round(a[2] + (b[2] - a[2]) * u)})`;
+  }
+  // draw the model standing at world (e, n, u) facing yaw (radians, clockwise from north). Returns its screen box, or null.
+  function drawModel(m, e, n, u, yaw, alpha, flick = 0) {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const world = (v) => [e + v[0] * c + v[2] * s, n - v[0] * s + v[2] * c, u + v[1]];
+    const vs = m.v.map((v) => { const w = world(v); return toCam(w[0], w[1], w[2]); });
+    const up = camDir(0, 0, 1), L = norm([0.3 + up[0] * 0.6, up[1] * 0.6, up[2] * 0.6 - 0.75]);
+    const faces = [];
+    for (const f of m.f) {
+      const pts = f.i.map((k) => vs[k]);
+      let minz = Infinity, top = -Infinity;
+      for (let q = 0; q < pts.length; q++) { minz = Math.min(minz, pts[q][2]); top = Math.max(top, m.v[f.i[q]][1] + u); }
+      if (minz < NEAR || top < -0.02) continue;                     // behind the eye, or still under the ground
+      let nv = cross(sub(pts[1], pts[0]), sub(pts[2], pts[0]));
+      const fc = [0, 0, 0];
+      for (const p of pts) { fc[0] += p[0] / pts.length; fc[1] += p[1] / pts.length; fc[2] += p[2] / pts.length; }
+      if (f.c) { const w = world(f.c), pc = toCam(w[0], w[1], w[2]); if (dot(nv, sub(fc, pc)) < 0) nv = [-nv[0], -nv[1], -nv[2]]; }
+      const facing = dot(nv, fc) < 0;
+      if (!facing) { if (!f.two) continue; nv = [-nv[0], -nv[1], -nv[2]]; }
+      const nn = norm(nv);
+      faces.push({ k: f.k, pts, z: fc[2], s: Math.max(0, dot(nn, L)), fire: Math.max(0, -dot(nn, up)) * (0.75 + 0.25 * flick) });
+    }
+    faces.sort((a, b) => b.z - a.z);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    lo.lineWidth = 0.6; lo.lineJoin = "round";
+    for (const F of faces) {
+      const pp = F.pts.map(proj), col = faceColor(F.k, F.s, F.fire);
+      lo.globalAlpha = alpha; lo.fillStyle = col; lo.strokeStyle = col;
+      lo.beginPath();
+      pp.forEach((p, i) => { if (i) lo.lineTo(p[0], p[1]); else lo.moveTo(p[0], p[1]); x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+      lo.closePath(); lo.fill(); lo.stroke();
+    }
+    lo.globalAlpha = 1; lo.lineWidth = 1;
+    for (const k of m.eyes) {                                         // the eyes burn
+      const p = vs[k];
+      if (p[2] < NEAR) continue;
+      const q = proj(p), r = clamp((cam.F * 0.09) / p[2], 1.4, 70);
+      glow(q[0], q[1], r, "255,236,120", alpha * 0.85);
+      lo.fillStyle = YEL; lo.globalAlpha = alpha; lo.fillRect(Math.round(q[0]) - 0.5, Math.round(q[1]) - 0.5, 1, 1); lo.globalAlpha = 1;
+    }
+    if (!faces.length) return null;
+    return { x0, y0, x1, y1, feet: m.feet.map((k) => world(m.v[k])) };
+  }
+
+  /* ---------------- location ---------------- */
+  let gps = "OFF", watchId = null, origin = null, fix = null, fixes = 0, gpsAcc = 99, gpsSpeed = 0;
+  let vel = [0, 0], me = [0, 0], odo = null, lastCoursePos = null;
+  const toLocal = (lat, lng) => [(lng - origin.lng) * origin.kx, (lat - origin.lat) * origin.ky];
+  const toLatLng = (e, n) => [origin.lat + n / origin.ky, origin.lng + e / origin.kx];
+  function startGps() {
+    if (watchId !== null) return;
+    if (!("geolocation" in navigator)) { gps = "N/A"; return; }
+    if (gps !== "OK" && gps !== "WEAK") gps = "WAIT";
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (p) => onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, p.coords.speed, p.coords.heading),
+        (err) => { if (err.code === 1) { gps = "DENIED"; flash("LOCATION NOT ALLOWED", 3, RED); } },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+    } catch { gps = "N/A"; }
+  }
+  function onFix(lat, lng, acc, speed, hdg) {
+    if (!origin) origin = { lat, lng, kx: 111320 * Math.cos(lat * D2R), ky: 110540 };
+    const [e, n] = toLocal(lat, lng);
+    gpsAcc = acc; gps = acc <= 20 ? "OK" : "WEAK"; fixes++;
+    if (!fix) { fix = { e, n, P: acc * acc, t: clock }; if (!run || !run.test) me = [e, n]; vel = [0, 0]; }
+    else {
+      const dt = clamp(clock - fix.t, 0.1, 30), P = fix.P + 9 * dt, jump = Math.hypot(e - fix.e, n - fix.n);
+      if (jump > 80 && jump > 4 * Math.sqrt(P + acc * acc)) { fix = { e, n, P: acc * acc, t: clock }; vel = [0, 0]; if (!run || !run.test) me = [e, n]; odo = null; }
+      else {                                                          // a small Kalman filter against the GPS wobble
+        const k = P / (P + acc * acc), pe = fix.e, pn = fix.n;
+        fix.e += k * (e - fix.e); fix.n += k * (n - fix.n); fix.P = (1 - k) * P; fix.t = clock;
+        const kv = 1 - Math.exp(-dt / 2.5);
+        vel[0] += ((fix.e - pe) / dt - vel[0]) * kv; vel[1] += ((fix.n - pn) / dt - vel[1]) * kv;
+      }
+    }
+    const goodSpeed = Number.isFinite(speed) && speed !== null;
+    if (goodSpeed && Number.isFinite(hdg) && hdg !== null && speed > 0.3) {   // the phone's own velocity is better
+      vel[0] += (Math.sin(hdg * D2R) * speed - vel[0]) * 0.5; vel[1] += (Math.cos(hdg * D2R) * speed - vel[1]) * 0.5;
+    }
+    gpsSpeed = goodSpeed ? speed : Math.hypot(vel[0], vel[1]);
+    // how far you went (only real moves, not the wobble)
+    if (!odo) odo = [fix.e, fix.n];
+    else { const d = Math.hypot(fix.e - odo[0], fix.n - odo[1]); if (d > Math.max(4, acc * 0.5)) { if (run && screen === "PLAY" && !run.test) run.moved += d; odo = [fix.e, fix.n]; } }
+    // which way you walk -> which way is north (when there's no compass)
+    if (goodSpeed && Number.isFinite(hdg) && hdg !== null && speed >= 0.9) walkCalib(hdg);
+    else if (lastCoursePos) {
+      const dx = fix.e - lastCoursePos[0], dy = fix.n - lastCoursePos[1], dd = Math.hypot(dx, dy);
+      if (dd > Math.max(5, acc * 0.6)) { walkCalib(wrap360(Math.atan2(dx, dy) / D2R)); lastCoursePos = [fix.e, fix.n]; }
+    } else lastCoursePos = [fix.e, fix.n];
+  }
+  function updateMe(dt) {
+    if (!fix || (run && run.test)) return;
+    const age = gpsSpeed > 0.4 ? clamp(clock - fix.t, 0, 2) : 0;
+    const k = 1 - Math.exp(-dt / 0.45);
+    me[0] += (fix.e + vel[0] * age - me[0]) * k; me[1] += (fix.n + vel[1] * age - me[1]) * k;
+  }
+
+  /* ---------------- which way you look (true heading = head yaw + offset) ---------------- */
+  let off = null, offSrc = "NONE", offProv = 0, calib = [], calibMiss = 0, recentreH = null;
+  const viewHeading = () => wrap360((motion.live ? motion.yaw : 0) + (off !== null ? off : offProv));
+  function headingTick(dt) {
+    const c = motion.compass;
+    if (c === null || !motion.live) return;
+    const tgt = wrap360(c - motion.yaw);
+    if (offSrc !== "COMPASS") { off = tgt; offSrc = "COMPASS"; }
+    else off = wrap360(off + angDiff(tgt, off) * (1 - Math.exp(-dt / 1.2)));
+  }
+  function walkCalib(course) {
+    if (offSrc === "COMPASS" || !motion.live || (run && run.test)) return;
+    if (imu.seen && !stepping()) return;                 // not walking: the GPS course is just noise
+    if (imu.gyro && imu.turn > 45) return;               // turning your head right now
+    const s = wrap360(course - motion.yaw);
+    const mean = (a) => wrap360(Math.atan2(a.reduce((q, x) => q + Math.sin(x * D2R), 0), a.reduce((q, x) => q + Math.cos(x * D2R), 0)) / D2R);
+    if (off === null) {
+      calib.push(s); if (calib.length > 3) calib.shift();
+      const mm = mean(calib);
+      if (calib.length === 3 && calib.every((x) => Math.abs(angDiff(x, mm)) < 35)) {
+        off = mm; offSrc = "WALK"; calibMiss = 0;
+        if (screen === "PLAY") flash("NORTH FOUND FROM YOUR WALK", 2, HOT);
+      }
+    } else {
+      const d = angDiff(s, off);
+      if (Math.abs(d) < 50) { off = wrap360(off + d * 0.2); calibMiss = 0; }
+      else if (++calibMiss >= 8) { offProv = off; off = null; offSrc = "NONE"; calib = []; calibMiss = 0; }   // looking around a lot, or it drifted
+    }
+  }
+  function recentre() { recentreH = viewHeading(); motion.zero(); }
+
+  /* ---------------- sound ---------------- */
+  let ac = null, out = null, noiseBuf = null, drone = null;
+  function audio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination); } catch { ac = null; } }
+    if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    return ac;
+  }
+  const live = () => cfg.sound && ac && ac.state === "running";
+  function panner(pan) {
+    if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); return p; }
+    return ac.createGain();
+  }
+  function env(g, t, att, peak, dur) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+  function tone(f, t0, dur, type = "sine", vol = 0.1, f2, pan = 0) {
+    if (!live()) return;
+    const t = ac.currentTime + t0, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    env(g, t, Math.min(0.012, dur * 0.3), vol, dur);
+    o.connect(g).connect(panner(pan)).connect(out);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(t0, dur, vol, type, freq, q = 1, pan = 0, f2) {
+    if (!live()) return;
+    if (!noiseBuf) { noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const t = ac.currentTime + t0, src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = noiseBuf; src.loop = true;
+    fl.type = type; fl.frequency.setValueAtTime(freq, t); if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur); fl.Q.value = q;
+    env(g, t, Math.min(0.015, dur * 0.2), vol, dur);
+    src.connect(fl).connect(g).connect(panner(pan)).connect(out);
+    src.start(t, Math.random()); src.stop(t + dur + 0.05);
+  }
+  const heartbeat = (v) => { tone(62, 0, 0.17, "sine", v, 36); tone(55, 0.19, 0.21, "sine", v * 0.75, 32); };
+  function hoof(v, pan, muffled) { noise(0, 0.08, v * 0.55, muffled ? "lowpass" : "bandpass", muffled ? 500 : 1400, muffled ? 0.7 : 1.4, pan); tone(105, 0, 0.13, "sine", v, 50, pan); }
+  function sting() { for (const st of [0, 1, 6, 11]) tone(110 * 2 ** (st / 12), 0, 1.4, "sawtooth", 0.03, 103 * 2 ** (st / 12)); noise(0, 1.3, 0.1, "bandpass", 300, 0.7, 0, 2600); }
+  function scream() { noise(0, 1.7, 0.55, "bandpass", 3000, 1.4, 0, 320); tone(440, 0, 1.5, "sawtooth", 0.16, 70); tone(466, 0.02, 1.5, "square", 0.07, 58); tone(42, 0, 2, "sine", 0.5, 24); }
+  function riseSound() { noise(0, 2.8, 0.2, "lowpass", 110, 0.8, 0, 1500); tone(33, 0, 3, "sawtooth", 0.09, 66); }
+  const chime = () => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, i * 0.11, 0.7, "triangle", 0.06));
+  const click = () => tone(1300, 0, 0.04, "square", 0.03);
+  function droneOn() {
+    if (!live() || drone) return;
+    const g = ac.createGain(), f = ac.createBiquadFilter();
+    g.gain.value = 0.0001; f.type = "lowpass"; f.frequency.value = 140; f.Q.value = 5;
+    const os = [49, 49.6, 73.4].map((fr, i) => { const o = ac.createOscillator(); o.type = i === 2 ? "triangle" : "sawtooth"; o.frequency.value = fr; o.connect(f); o.start(); return o; });
+    f.connect(g).connect(out);
+    drone = { g, f, os };
+  }
+  function droneSet(x) {
+    if (!drone) return;
+    const t = ac.currentTime;
+    drone.g.gain.setTargetAtTime(cfg.sound ? 0.0002 + 0.1 * x : 0.0001, t, 0.3);
+    drone.f.frequency.setTargetAtTime(110 + 1000 * x * x, t, 0.4);
+  }
+  function droneOff() { if (!drone || !ac) return; const d = drone, t = ac.currentTime; drone = null; d.g.gain.setTargetAtTime(0.0001, t, 0.15); d.os.forEach((o) => { try { o.stop(t + 0.8); } catch {} }); }
+  function say(s, devilish) {
+    try {
+      if (!cfg.sound || !("speechSynthesis" in window)) return;
+      if (devilish && !cfg.voice) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(s); u.lang = "en-GB";
+      if (devilish) { u.pitch = 0.05; u.rate = 0.72; } else { u.pitch = 1; u.rate = 1.05; }
+      speechSynthesis.speak(u);
+    } catch {}
+  }
+
+  /* ---------------- the game ---------------- */
+  let clock = 0, screen = "TITLE", menu = null, flashMsg = "", flashUntil = 0, flashCol = BRIGHT;
+  let run = null, devil = null, lostAt = 0, introAt = 0, takenAt = 0, waitSince = 0;
+  let pendingCatch = 0, catchFixes = 0, catchWaitUntil = 0, saveAt = 0;
+  let seen = false, lastSeen = -99, beatAt = -9, nextBeat = 0, lines = {}, embers = [], prints = [];
+  let best = store.get("devil.best", 0), saved = store.get("devil.run", null);
+  if (saved && (!saved.startedAt || Date.now() - saved.savedAt > 30 * 60000)) { saved = null; store.del("devil.run"); }
+  let wake = null;
+  const flash = (m, d = 2.2, c = BRIGHT) => { flashMsg = String(m).toUpperCase(); flashUntil = clock + d; flashCol = c; };
+  const devDist = () => (devil ? Math.hypot(devil.e - me[0], devil.n - me[1]) : Infinity);
+  const devBearing = () => wrap360(Math.atan2(devil.e - me[0], devil.n - me[1]) / D2R);
+  const survived = () => (run ? (Date.now() - run.startedAt) / 1000 : 0);
+  async function wakeOn() { try { if ("wakeLock" in navigator && !wake) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => { wake = null; }); } } catch {} }
+  function wakeOff() { try { if (wake) wake.release(); } catch {} wake = null; }
+
+  function begin(test) {
+    audio(); motion.enable(); wakeOn();
+    menu = null;
+    if (!test && saved) { resume(); return; }
+    run = { test, startedAt: 0, escapes: 0, moved: 0, closest: Infinity, speed: cfg.speed, dist: test ? 30 : cfg.dist, steps0: imu.steps, resumed: false };
+    devil = null; embers = []; prints = []; lines = {};
+    if (test) { me = [0, 0]; offProv = 0; }
+    if (!test && !fix) { screen = "WAIT"; waitSince = clock; return; }
+    screen = "INTRO"; introAt = clock; click();
+  }
+  function resume() {
+    const sv = saved; saved = null;
+    run = { test: false, startedAt: sv.startedAt, escapes: sv.escapes | 0, moved: sv.moved || 0, closest: sv.closest || Infinity, speed: sv.speed || 4, dist: sv.dist || 200, steps0: imu.steps - (sv.steps || 0), resumed: true, pendingDevil: sv.devil, pendingAt: sv.savedAt, lost: !!sv.lost };
+    devil = null; embers = []; prints = []; lines = {};
+    screen = fix ? "PLAY" : "WAIT"; waitSince = clock;
+    if (fix) placeResumed();
+  }
+  function placeResumed() {                         // put him back where he was, then let him walk the time you were away
+    const p = run.pendingDevil; run.pendingDevil = null;
+    if (p && origin) {
+      const [e, n] = toLocal(p[0], p[1]);
+      devil = newDevil(e, n, true);
+      pendingCatch = Math.max(0, (Date.now() - run.pendingAt) / 1000); catchFixes = fixes; catchWaitUntil = clock + 5;
+    } else { devil = null; lostAt = clock - LOST_S + 3; }
+    droneOn();
+  }
+  function newDevil(e, n, risen) {
+    return { e, n, yaw: Math.atan2(me[0] - e, me[1] - n), ph: 0, step: 0, walked: 0, rise: risen ? 1 : 0, born: clock };
+  }
+  function spawn(first) {
+    const rel = first ? (Math.random() * 2 - 1) * 120 : (Math.random() * 2 - 1) * 180;
+    const b = wrap360(viewHeading() + rel) * D2R, d = run.dist;
+    devil = newDevil(me[0] + Math.sin(b) * d, me[1] + Math.cos(b) * d, false);
+    if (!run.startedAt) run.startedAt = Date.now();
+    lines = {}; seen = false; lastSeen = -99;
+    riseSound(); droneOn();
+    setTimeout(() => { if (screen === "PLAY" && devil) say(first ? "I am coming for you." : "I found you.", true); }, 2600);
+  }
+  function endRun(how) {
+    screen = "TAKEN"; takenAt = clock; menu = null;
+    run.how = how; run.final = survived();
+    run.steps = imu.steps - run.steps0;
+    if (!run.test && run.final > best && how === "TAKEN") { best = run.final; store.set("devil.best", best); run.newBest = true; }
+    if (!run.test) store.del("devil.run");
+    saved = null; droneOff(); wakeOff();
+    if (how === "TAKEN") { scream(); setTimeout(() => say("Mine.", true), 900); }
+  }
+  function saveRun() {
+    if (!run || run.test || screen !== "PLAY" || !origin || run.pendingDevil) return;
+    store.set("devil.run", { v: 1, startedAt: run.startedAt, devil: devil ? toLatLng(devil.e, devil.n) : null, lost: !devil,
+      escapes: run.escapes, moved: run.moved, closest: run.closest, speed: run.speed, dist: run.dist, steps: imu.steps - run.steps0, savedAt: Date.now() });
+  }
+  function onDevilStep(d, rel, feet) {
+    if (d < 100) hoof(clamp(14 / d, 0.04, 0.7), Math.sin(rel * D2R), Math.abs(rel) > 100);
+    if (feet && d < 60) {
+      const f = feet[devil.step & 1];
+      prints.push({ e: f[0], n: f[1], t: clock, yaw: devil.yaw });
+      if (prints.length > 50) prints.shift();
+      for (let i = 0; i < 4; i++) embers.push({ e: f[0], n: f[1], u: 0.05, ve: (Math.random() - 0.5) * 0.5, vn: (Math.random() - 0.5) * 0.5, vu: 0.5 + Math.random() * 0.8, life: 1 + Math.random(), age: 0 });
+    }
+  }
+  function walkDevil(dt) {
+    if (!devil) return;
+    if (devil.rise < 1) { devil.rise = Math.min(1, devil.rise + dt / RISE_S); return; }
+    const dx = me[0] - devil.e, dy = me[1] - devil.n, d = Math.hypot(dx, dy);
+    const mv = Math.min((run.speed / 3.6) * dt, d);
+    if (d > 1e-6) { devil.e += (dx / d) * mv; devil.n += (dy / d) * mv; }
+    if (d > 0.3) devil.yaw = Math.atan2(dx, dy);
+    devil.walked += mv; devil.ph += (mv / STRIDE) * Math.PI;
+  }
+  function catchUp() {                              // he walked on while the display was off
+    let left = Math.min(pendingCatch, 6 * 3600);
+    pendingCatch = 0;
+    if (!devil || left < 1) return;
+    const t0 = left;
+    while (left > 0 && devil) { const s = Math.min(1, left); walkDevil(s); left -= s; if (devDist() <= CATCH_M) break; }
+    if (devil && devDist() > CATCH_M) flash("HE KEPT WALKING (" + fmtTime(t0) + ")", 2.6, HOT);
+  }
+  function sayWhere() {
+    if (!devil) { say("He lost your trail. For now."); return; }
+    const d = devDist(), rel = angDiff(devBearing(), viewHeading()), a = Math.abs(rel), side = rel < 0 ? "left" : "right";
+    const where = a < 12 ? "straight ahead" : a < 60 ? "ahead, to the " + side : a < 120 ? "to your " + side : "behind you";
+    say("The devil is " + (d < 1000 ? Math.round(d) + " metres" : (d / 1000).toFixed(1) + " kilometres") + " away, " + where + ".");
+  }
+  function devilLines(d, rel) {
+    const L = [[150, "I can see you."], [100, "You cannot run forever."], [50, "Run."], [25, Math.abs(rel) > 100 ? "I am right behind you." : "Look at me."], [9, "Almost."]];
+    for (const [m] of L) if (d > m * 1.6) lines[m] = false;
+    let i = -1;
+    L.forEach(([m], j) => { if (d < m) i = j; });          // the closest line he has earned
+    if (i >= 0 && !lines[L[i][0]]) { for (let j = 0; j <= i; j++) lines[L[j][0]] = true; say(L[i][1], true); }
+  }
+
+  /* ---------------- drawing ---------------- */
+  let devilVis = false, lastBox = null;
+  function drawEmbers(dt) {
+    for (const p of embers) { p.age += dt; p.e += p.ve * dt; p.n += p.vn * dt; p.u += p.vu * dt; p.vu *= 1 - dt * 0.4; }
+    embers = embers.filter((p) => p.age < p.life);
+    if (embers.length > 90) embers.splice(0, embers.length - 90);
+    for (const p of embers) {
+      const c = toCam(p.e, p.n, p.u);
+      if (c[2] < NEAR) continue;
+      const q = proj(c), k = p.age / p.life, sz = clamp(cam.F * 0.03 / c[2], 1, 4);
+      lo.globalAlpha = (1 - k) * 0.95; lo.fillStyle = k < 0.35 ? YEL : k < 0.7 ? HOT : RED;
+      lo.fillRect(q[0] - sz / 2, q[1] - sz / 2, sz, sz);
+    }
+    lo.globalAlpha = 1;
+  }
+  function drawPrints() {                            // burning hoof prints he leaves behind (fade in 25 s)
+    for (const p of prints) {
+      const age = clock - p.t;
+      if (age > 25) continue;
+      const a = (1 - age / 25) * (age < 2 ? 1 : 0.6), c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+      const pts = [];
+      for (let i = 0; i < 8; i++) {
+        const t = (i / 8) * Math.PI * 2, x = Math.cos(t) * 0.07, z = Math.sin(t) * 0.11;
+        const cc = toCam(p.e + x * c + z * s, p.n - x * s + z * c, 0.01);
+        if (cc[2] < NEAR) { pts.length = 0; break; }
+        pts.push(proj(cc));
+      }
+      if (!pts.length) continue;
+      lo.globalAlpha = a; lo.fillStyle = age < 3 ? HOT : MID; lo.beginPath();
+      pts.forEach((q, i) => (i ? lo.lineTo(q[0], q[1]) : lo.moveTo(q[0], q[1])));
+      lo.closePath(); lo.fill();
+    }
+    lo.globalAlpha = 1;
+  }
+  function drawDevil(alpha) {
+    devilVis = false; lastBox = null;
+    if (!devil) return;
+    const rise = devil.rise < 1 ? 1 - Math.pow(1 - devil.rise, 2) : 1;
+    const u = -1.4 * (1 - rise), a = alpha * clamp(rise * 1.6, 0, 1);
+    const chest = toCam(devil.e, devil.n, 1.3 + u);
+    if (chest[2] < NEAR) return;
+    const d = chest[2], hpx = (cam.F * 2.3) / d, beat = Math.exp(-(clock - beatAt) * 5);
+    const cq = proj(chest);
+    glow(cq[0], cq[1], clamp(hpx * 0.75, 7, 240), "255,40,14", a * (0.16 + 0.12 * beat));    // his red aura
+    if (devil.rise < 1) glow(proj(toCam(devil.e, devil.n, 0))[0], proj(toCam(devil.e, devil.n, 0))[1], clamp(hpx * 0.6, 6, 200), "255,140,30", (1 - devil.rise) * 0.6);
+    if (hpx < 9) {                                                   // far away: a little burning figure
+      const f = proj(toCam(devil.e, devil.n, u)), h = proj(toCam(devil.e, devil.n, 2.05 + u));
+      lo.strokeStyle = RED; lo.globalAlpha = a; lo.lineWidth = Math.max(1, hpx * 0.2);
+      lo.beginPath(); lo.moveTo(f[0], f[1]); lo.lineTo(h[0], h[1]); lo.stroke(); lo.lineWidth = 1;
+      const ex = h[0] + (f[0] - h[0]) * 0.1, ey = h[1] + (f[1] - h[1]) * 0.1;
+      lo.fillStyle = YEL; lo.fillRect(Math.round(ex) - 1, Math.round(ey), 1, 1); lo.fillRect(Math.round(ex) + 1, Math.round(ey), 1, 1);
+      lo.fillStyle = HOT; lo.fillRect(Math.round(h[0]) - 2, Math.round(h[1]) - 1, 1, 1); lo.fillRect(Math.round(h[0]) + 2, Math.round(h[1]) - 1, 1, 1);
+      lo.globalAlpha = 1;
+      lastBox = { x0: Math.min(f[0], h[0]) - 2, x1: Math.max(f[0], h[0]) + 2, y0: Math.min(f[1], h[1]) - 2, y1: Math.max(f[1], h[1]) + 2 };
+    } else {
+      const m = buildDevil(devil.ph, clock);
+      lastBox = drawModel(m, devil.e, devil.n, u, devil.yaw, a, Math.sin(clock * 13));
+      devil.feet = lastBox && lastBox.feet;
+    }
+    if (lastBox) devilVis = lastBox.x1 > 0 && lastBox.x0 < G && lastBox.y1 > 0 && lastBox.y0 < G;
+  }
+  function drawVignette(x) {
+    if (x <= 0.01) return;
+    const beat = Math.exp(-(clock - beatAt) * 5), a = x * (0.18 + 0.32 * beat), w = 40 + 50 * x;
+    for (const [x0, y0, x1, y1, rx0, ry0, rw, rh] of [[0, 0, w, 0, 0, 0, w, G], [G, 0, G - w, 0, G - w, 0, w, G], [0, 0, 0, w, 0, 0, G, w], [0, G, 0, G - w, 0, G - w, G, w]]) {
+      const g = lo.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, `rgba(255,20,8,${a})`); g.addColorStop(1, "rgba(255,20,8,0)");
+      lo.fillStyle = g; lo.fillRect(rx0, ry0, rw, rh);
+    }
+  }
+  function drawPointer(rel) {                        // which way to look, when he's not in view
+    const pulse = 0.55 + 0.45 * Math.exp(-(clock - beatAt) * 4);
+    const a = Math.abs(rel);
+    if (a < hfov() * 0.6) {                          // in front, just above or below the view
+      const up = lastBox && lastBox.y1 < 0;
+      tri(CX, up ? 14 : G - 34, up ? 0 : 180, 9, RED, pulse);
+      return;
+    }
+    const left = rel < 0, x = left ? 14 : G - 14;
+    tri(x, CY, left ? -90 : 90, 10, RED, pulse);
+    tri(x + (left ? 13 : -13), CY, left ? -90 : 90, 7, RED, pulse * 0.55);
+    if (a > 120) textC("BEHIND YOU", CX, CY + 22, RED, pulse);
+  }
+  function drawPlay(dt) {
+    const H = viewHeading();
+    setCam(me, H, motion.live ? motion.pitch : 0, motion.live ? motion.roll : 0, focal());
+    drawPrints();
+    drawDevil(1);
+    drawEmbers(dt);
+    const d = devDist(), rel = devil ? angDiff(devBearing(), H) : 0;
+    drawVignette(devil ? clamp(1 - d / 30, 0, 1) : 0);
+    if (cfg.hud === "OFF") return;
+    if (devil && !devilVis && devil.rise > 0.3) drawPointer(rel);
+    const col = d < 15 ? RED : d < 60 ? HOT : MID;
+    if (!devil) {
+      textC("HE LOST YOUR TRAIL", CX, 130, HOT, 0.8 + 0.2 * Math.sin(clock * 3));
+      textC("...FOR NOW", CX, 148, MID);
+    }
+    if (cfg.hud === "FULL") {
+      text("DEVIL.EXE", 4, 3, DIM); textR(fmtTime(survived()), G - 4, 3, MID);
+      if (devil) textC(fmtDist(d), CX, 252, col, 1, 2);
+      const kmh = (run.test ? 0 : gpsSpeed * 3.6).toFixed(1);
+      const hd = offSrc === "NONE" && !run.test ? "NORTH ?" : offSrc === "COMPASS" ? "COMPASS" : run.test ? "TEST" : "WALK-N";
+      textC("YOU " + kmh + " KM/H  GPS " + (run.test ? "--" : Math.round(gpsAcc) + "M") + "  " + hd, CX, 284, DIM);
+      if (stepping()) text("STEPS " + cadence(), 4, 18, DIM);
+      if (run.escapes) textR("ESCAPES " + run.escapes, G - 4, 18, DIM);
+    } else if (devil) textC(fmtDist(d), CX, 282, col);
+    if (!run.test && fix && clock - fix.t > 20) textC("GPS LOST - HE STILL COMES", CX, 34, RED, 0.7 + 0.3 * Math.sin(clock * 6));
+    if (run.test) text("TEST", 4, 3, HOT);
+  }
+
+  // TITLE: he stands in front of you, breathing
+  function drawTitle(dt) {
+    setCam([0, 0], 0, 0, 0, 255);
+    const m = buildDevil(Math.sin(clock * 0.6) * 0.5, clock);
+    glow(CX, 150, 120, "255,30,10", 0.12 + 0.05 * Math.sin(clock * 2));
+    drawModel(m, 0, 4.3, 0, Math.PI + Math.sin(clock * 0.35) * 0.35, 1, Math.sin(clock * 11));
+    if (Math.random() < dt * 12) embers.push({ e: (Math.random() - 0.5) * 1.2, n: 4.3 + (Math.random() - 0.5) * 0.8, u: 0, ve: 0, vn: 0, vu: 0.4 + Math.random() * 0.7, life: 1.5 + Math.random(), age: 0 });
+    drawEmbers(dt);
+    const fl = Math.random() < 0.04 ? 0.5 : 1;
+    textC("DEVIL.EXE", CX, 6, RED, fl, 3);
+    if (best) textC("BEST " + fmtTime(best), CX, 50, DIM);
+    band(226, 74);
+    if (saved) {
+      textC("THE DEVIL IS STILL COMING", CX, 230, HOT);
+      textC("YOU HAVE SURVIVED " + fmtTime((Date.now() - saved.startedAt) / 1000), CX, 246, MID);
+    } else {
+      textC("HE RISES " + cfg.dist + " M AWAY. HE WALKS " + cfg.speed + " KM/H.", CX, 230, BRIGHT);
+      textC("HE NEVER STOPS. KEEP MOVING.", CX, 246, MID);
+    }
+    const st = ["GPS:" + (gps === "OK" || gps === "WEAK" ? Math.round(gpsAcc) + "M" : gps), "HEAD:" + (motion.live ? "OK" : "--"),
+                "STEPS:" + (imu.seen ? "OK" : "--"), "COMPASS:" + (motion.compass !== null ? "OK" : "NO")];
+    textC(st.join(" "), CX, 264, DIM);
+    textC(saved ? "PINCH: CONTINUE   SWIPE >: MENU" : "PINCH: START   SWIPE >: MENU", CX, 282, Math.floor(clock * 1.6) % 2 ? MID : RED);
+  }
+  function drawWait() {
+    setCam([0, 0], 0, 0, 0, 255);
+    glow(CX, 140, 90, "255,30,10", 0.08 + 0.05 * Math.sin(clock * 3));
+    textC("WAITING FOR GPS" + ".".repeat(Math.floor(clock * 2) % 4), CX, 112, BRIGHT);
+    textC(gps === "DENIED" ? "LOCATION IS NOT ALLOWED" : "LOCATION COMES FROM YOUR PHONE", CX, 134, gps === "DENIED" ? RED : MID);
+    textC("GO OUTSIDE, UNDER THE SKY", CX, 150, DIM);
+    textC("SWIPE >: MENU (TEST RUN, NO GPS)", CX, 250, DIM);
+    textC("< BACK", CX, 270, DIM);
+  }
+  function drawIntro() {
+    const t = clock - introAt, n = 3 - Math.floor(t / 0.8);
+    textC("LOOK STRAIGHT AHEAD", CX, 96, BRIGHT);
+    textC("HOLD YOUR HEAD LEVEL", CX, 114, MID);
+    if (n > 0) textC(String(n), CX, 140, RED, 1, 4);
+    textC("SOMEWHERE AROUND YOU", CX, 216, DIM);
+    textC("HE IS RISING...", CX, 232, MID);
+  }
+  function drawTaken(dt) {
+    const t = clock - takenAt;
+    if (run.how === "TAKEN" && t < 1.5) {                            // he lunges at you
+      const k = clamp(t / 1.15, 0, 1), dist = 1.5 - 1.2 * k * k;
+      const sh = (1 - k) * 4 + 2;
+      lo.setTransform(1, 0, 0, 1, (Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
+      setCam([0, 0], 0, 0, 0, focal() * 0.55);
+      const m = buildDevil(0, clock * 3);
+      const eyeY = m.v[m.eyes[0]][1];
+      drawModel(m, 0, dist, EYE - eyeY, Math.PI, 1, 1);
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      if (t < 0.12 || (t > 0.5 && t < 0.58)) { lo.fillStyle = t < 0.12 ? "#fff" : "#ff2010"; lo.globalAlpha = 0.85; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }
+      glow(CX, CY, 260, "255,20,5", 0.4 * k);
+      return;
+    }
+    if (run.how === "TAKEN") {
+      setCam([0, 0], 0, 0, 0, focal() * 0.55);
+      const m = buildDevil(0, clock);
+      drawModel(m, 0, 0.3, EYE - m.v[m.eyes[0]][1], Math.PI, 0.22, Math.sin(clock * 9));
+    }
+    band(40, 222, 0.6);
+    const blink = Math.floor(clock * 2.2) % 2 === 0;
+    if (run.how === "TAKEN") textC("YOU WERE TAKEN", CX, 50, blink ? RED : HOT, 1, 2);
+    else textC("YOU GAVE UP", CX, 50, MID, 1, 2);
+    textC((run.how === "TAKEN" ? "SURVIVED " : "RAN FOR ") + fmtTime(run.final), CX, 92, BRIGHT, 1, 2);
+    const rows = [];
+    if (!run.test) rows.push("YOU MOVED " + fmtDist(run.moved));
+    if (run.escapes) rows.push("ESCAPED HIM " + run.escapes + (run.escapes > 1 ? " TIMES" : " TIME"));
+    if (run.steps > 0) rows.push("STEPS " + run.steps);
+    if (run.test) rows.push("TEST RUN - NOT SCORED");
+    else if (run.newBest) rows.push("NEW BEST TIME!");
+    else if (best) rows.push("BEST " + fmtTime(best));
+    rows.forEach((r, i) => textC(r, CX, 134 + i * 18, r.startsWith("NEW") ? YEL : MID));
+    textC("PINCH: RUN AGAIN   < BACK", CX, 240, Math.floor(clock * 1.6) % 2 ? MID : RED);
+  }
+  function drawMenu() {
+    if (!menu) return;
+    const w = 252, h = 26 + menu.items.length * 17, x = (G - w) / 2, y = (G - h) / 2;
+    lo.fillStyle = "#000"; lo.globalAlpha = 0.92; lo.fillRect(x, y, w, h); lo.globalAlpha = 1;
+    lo.strokeStyle = RED; lo.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    textC("MENU", CX, y + 4, MID);
+    menu.items.forEach((it, i) => {
+      const yy = y + 22 + i * 17, on = i === menu.sel;
+      if (on) { lo.fillStyle = RED; lo.fillRect(x + 5, yy - 2, w - 10, 16); }
+      text((on ? "> " : "  ") + it.label(), x + 9, yy, on ? "#000" : RED);
+    });
+  }
+  function draw(dt) {
+    lo.setTransform(1, 0, 0, 1, 0, 0);
+    lo.clearRect(0, 0, G, G);
+    if (screen === "PLAY") drawPlay(dt);
+    else if (screen === "INTRO") drawIntro();
+    else if (screen === "WAIT") drawWait();
+    else if (screen === "TAKEN") drawTaken(dt);
+    else drawTitle(dt);
+    if (clock < flashUntil) {
+      const w = Math.min(G - 8, textW(flashMsg) + 16), x = (G - w) / 2, y = 200;
+      lo.fillStyle = "#000"; lo.fillRect(x, y, w, 22);
+      lo.strokeStyle = flashCol; lo.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      textC(flashMsg, CX, y + 4, flashCol);
+    }
+    drawMenu();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, W, W);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.25; ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* ---------------- game tick ---------------- */
+  function tick(dt, simDt) {
+    headingTick(dt);
+    if (recentreH !== null && !motion.pending) {                    // keep north where it was after re-zeroing the head
+      const o = wrap360(recentreH - (motion.live ? motion.yaw : 0));
+      if (off !== null) off = o; else offProv = o;
+      recentreH = null;
+    }
+    updateMe(dt);
+    if (screen === "WAIT" && fix && run) {
+      if (run.resumed) { screen = "PLAY"; placeResumed(); }
+      else { screen = "INTRO"; introAt = clock; }
+    }
+    if (screen === "INTRO" && clock - introAt > 2.4) { recentre(); screen = "PLAY"; spawnAt = clock + 0.15; }
+    if (screen !== "PLAY") { droneSet(0); return; }
+    if (spawnAt && clock >= spawnAt) { spawnAt = 0; spawn(true); }
+    if (pendingCatch > 0 && (fixes > catchFixes || clock > catchWaitUntil || run.test)) catchUp();
+    if (!devil) {
+      if (!spawnAt && clock - lostAt > LOST_S) { spawn(false); sting(); }
+      droneSet(0.05);
+    } else {
+      const before = Math.floor(devil.ph / Math.PI);
+      if (pendingCatch <= 0) walkDevil(simDt);
+      const d = devDist(), rel = angDiff(devBearing(), viewHeading());
+      if (Math.floor(devil.ph / Math.PI) !== before) { devil.step++; onDevilStep(d, rel, devil.feet); }
+      if (devil.rise >= 1) {
+        run.closest = Math.min(run.closest, d);
+        if (d <= CATCH_M) { endRun("TAKEN"); return; }
+        if (d >= run.dist * 2) {
+          run.escapes++; devil = null; lostAt = clock; chime(); flash("YOU ESCAPED HIM!", 3, GREEN);
+          setTimeout(() => say("You got away. For now.", true), 700);
+          return;
+        }
+        devilLines(d, rel);
+      }
+      // seeing him again after a while: a sting
+      if (devilVis && !seen && devil.rise > 0.5) {
+        if (lastSeen < 0) { sting(); flash("THERE HE IS", 1.6, RED); }
+        else if (clock - lastSeen > 6 && d < 160) sting();
+        seen = true;
+      }
+      if (devilVis) lastSeen = clock; else if (clock - lastSeen > 1) seen = false;
+      // heartbeat: faster and louder as he comes
+      const x = clamp(1 - d / 160, 0, 1);
+      if (d < 160 && clock >= nextBeat) {
+        heartbeat(0.06 + 0.42 * x); beatAt = clock;
+        nextBeat = clock + 60 / (58 + 100 * Math.pow(x, 1.3));
+      }
+      droneSet(clamp(1 - d / 260, 0, 1));
+      if (d < 40 && Math.random() < simDt * 6) embers.push({ e: devil.e + (Math.random() - 0.5) * 0.6, n: devil.n + (Math.random() - 0.5) * 0.6, u: Math.random() * 1.8, ve: 0, vn: 0, vu: 0.3 + Math.random() * 0.5, life: 1 + Math.random(), age: 0 });
+    }
+    if (clock >= saveAt) { saveAt = clock + 2; saveRun(); }
+  }
+  let spawnAt = 0;
+
+  /* ---------------- input ---------------- */
+  function cycle(list, v) { const i = list.indexOf(v); return list[(i + 1) % list.length]; }
+  function openMenu() {
+    const items = [];
+    if (screen === "PLAY" || screen === "INTRO") {
+      items.push({ label: () => "KEEP RUNNING", run: () => {} });
+    } else {
+      items.push({ label: () => (saved ? "CONTINUE THE RUN" : "START RUN"), run: () => begin(false) });
+      if (saved) items.push({ label: () => "NEW RUN (FORGET THE OLD ONE)", run: () => { saved = null; store.del("devil.run"); begin(false); } });
+      items.push({ label: () => "TEST RUN (NO GPS, 30 M)", run: () => begin(true) });
+      items.push({ label: () => "DEVIL SPEED: " + cfg.speed + " KM/H", run: () => { cfg.speed = cycle(SPEEDS, cfg.speed); saveCfg(); }, stay: true });
+      items.push({ label: () => "HE RISES: " + cfg.dist + " M AWAY", run: () => { cfg.dist = cycle(DISTS, cfg.dist); saveCfg(); }, stay: true });
+    }
+    items.push({ label: () => "VIEW: " + VIEWS[cfg.view].name, run: () => { cfg.view = (cfg.view + 1) % VIEWS.length; saveCfg(); }, stay: true });
+    items.push({ label: () => "HUD: " + cfg.hud, run: () => { cfg.hud = cycle(HUDS, cfg.hud); saveCfg(); }, stay: true });
+    items.push({ label: () => "SOUND: " + (cfg.sound ? "ON" : "OFF"), run: () => { cfg.sound = !cfg.sound; saveCfg(); if (cfg.sound) { audio(); click(); if (screen === "PLAY") droneOn(); } else droneSet(0); }, stay: true });
+    items.push({ label: () => "DEVIL VOICE: " + (cfg.voice ? "ON" : "OFF"), run: () => { cfg.voice = !cfg.voice; saveCfg(); if (cfg.voice) say("I hear you.", true); }, stay: true });
+    if (screen === "PLAY") items.push({ label: () => "LEVEL MY HEAD AGAIN", run: () => { recentre(); flash("HEAD LEVELLED", 1.2); } });
+    items.push({ label: () => "HEAD SENSOR: " + motion.axisName, run: () => { recentreH = viewHeading(); motion.nextAxis(1); }, stay: true });
+    if (screen === "PLAY" || screen === "INTRO") items.push({ label: () => "GIVE UP", run: () => endRun("GIVE UP") });
+    else items.push({ label: () => "CLOSE", run: () => {} });
+    menu = { items, sel: 0 };
+  }
+  function primary() {
+    if (screen === "TITLE") begin(false);
+    else if (screen === "PLAY") sayWhere();
+    else if (screen === "TAKEN" && (run.how !== "TAKEN" || clock - takenAt > 1.6)) begin(run.test);
+  }
+  function back() {
+    if (screen === "TITLE") { history.back(); return; }
+    if (screen === "PLAY" || screen === "INTRO") { openMenu(); return; }
+    if (screen === "TAKEN" && run.how === "TAKEN" && clock - takenAt < 1.6) return;
+    screen = "TITLE"; wakeOff();
+  }
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) return;
+    e.preventDefault();
+    audio(); motion.enable();
+    if (menu) {
+      if (k === "ArrowUp") menu.sel = (menu.sel + menu.items.length - 1) % menu.items.length;
+      else if (k === "ArrowDown") menu.sel = (menu.sel + 1) % menu.items.length;
+      else if ((k === "Enter" || k === " ") && !e.repeat) { const it = menu.items[menu.sel]; if (!it.stay) menu = null; it.run(); }
+      else menu = null;
+      click();
+      return;
+    }
+    if (k === "Escape") { back(); return; }
+    if (k === "Enter" || k === " ") { if (!e.repeat) primary(); return; }
+    if (k === "ArrowRight") { openMenu(); click(); return; }
+    if (screen !== "PLAY") { if (k === "ArrowLeft" && screen !== "TITLE") back(); return; }
+    if (k === "ArrowLeft") { cfg.hud = cycle(HUDS, cfg.hud); saveCfg(); flash("HUD: " + cfg.hud, 1); click(); return; }
+    if (run && run.test) {                                          // TEST RUN: swipe up/down walks you 4 m
+      const H = viewHeading() * D2R, s = k === "ArrowUp" ? 4 : -4;
+      me = [me[0] + Math.sin(H) * s, me[1] + Math.cos(H) * s];
+      flash(s > 0 ? "4 M FORWARD" : "4 M BACK", 0.8); click();
+      return;
+    }
+    cfg.view = (cfg.view + 1) % VIEWS.length; saveCfg(); flash("VIEW: " + VIEWS[cfg.view].name, 1.2); click();
+  });
+  let touch = null;
+  const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", { key: k, cancelable: true }));
+  cv.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; touch = { x: t.clientX, y: t.clientY }; }, { passive: true });
+  cv.addEventListener("touchend", (e) => {
+    if (!touch) return;
+    const t = e.changedTouches[0], dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null; e.preventDefault();
+    if (Math.hypot(dx, dy) < 20) key("Enter");
+    else if (Math.abs(dx) > Math.abs(dy)) key(dx > 0 ? "ArrowRight" : "ArrowLeft");
+    else key(dy < 0 ? "ArrowUp" : "ArrowDown");
+  });
+  cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { saveRun(); if (ac && ac.state === "running") ac.suspend().catch(() => {}); }
+    else { startGps(); if (ac) ac.resume().catch(() => {}); if (screen === "PLAY" || screen === "INTRO") wakeOn(); }
+  });
+  window.addEventListener("pagehide", saveRun);
+
+  /* ---------------- loop ---------------- */
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - last;
+    if (ms < 18) return;
+    last = now;
+    const real = ms / 1000, dt = Math.min(0.1, real);
+    clock += dt;
+    motion.update(dt);
+    if (real > 1.5 && screen === "PLAY" && devil && !run.test) { pendingCatch += real; catchFixes = fixes; catchWaitUntil = clock + 5; }
+    tick(dt, real > 1.5 ? 0 : real);
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+  startGps();
+
+  window.__devil = {
+    get screen() { return screen; }, get devil() { return devil; }, get me() { return me; }, get run() { return run; },
+    get off() { return off; }, get offSrc() { return offSrc; }, get imu() { return imu; }, get vis() { return devilVis; },
+    get heading() { return viewHeading(); }, dist: devDist, onFix, begin, cfg,
+    place(dist, rel) { if (!devil) return; const b = (viewHeading() + rel) * D2R; devil.e = me[0] + Math.sin(b) * dist; devil.n = me[1] + Math.cos(b) * dist; devil.rise = 1; },
+  };
+})();
+</script>
+</body>
+</html>

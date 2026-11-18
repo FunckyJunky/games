@@ -356,6 +356,7 @@ const DM = (() => {
       { id: "yaro",   file: "YARO.EXE",   desc: "YARO-VISSION: TAKE ORDERS", url: "/glasses/yaro/" },
       { id: "mykolai", file: "MYKOLAI.EXE", desc: "FIND GIFTS LEFT FOR YARO", url: "/glasses/mykolai/" },
       { id: "drunk",   file: "DRUNK.EXE",   desc: "HOW DRUNK? WALK + EGG TEST", url: "/glasses/drunk/" },
+      { id: "devil",   file: "DEVIL.EXE",   desc: "RUN! THE DEVIL WALKS TO YOU", url: "/glasses/devil/" },
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
@@ -698,6 +699,34 @@ const DM = (() => {
     return m;
   }
 
+  // DEVIL: a horned head with burning slanted eyes and a grin, a pitchfork behind it
+  function devilMesh(t) {
+    const m = mesh();
+    const rbox = (R, cx, cy, cz, sx, sy, sz, k) => {                 // a box turned by R (every part stays convex)
+      const start = m.v.length, fs = box(m, 0, 0, 0, sx, sy, sz, k);
+      for (let i = start; i < m.v.length; i++) { const w = ap(R, m.v[i]); m.v[i] = [w[0] + cx, w[1] + cy, w[2] + cz]; }
+      for (const f of fs) f.c = [cx, cy, cz];
+    };
+    const decal = (pts) => { const b = m.v.length; m.v.push(...pts); return [b, b + 1, b + 2, b + 3]; };
+    const skull = box(m, 0, 0.12, 0, 0.86, 0.8, 0.76);
+    const jaw = box(m, 0, -0.42, -0.08, 0.5, 0.34, 0.56);
+    box(m, 0, -0.74, -0.2, 0.16, 0.32, 0.16, "on");                    // goatee
+    if ((t % 4.2) < 4.05) skull[4].dec = [-1, 1].map((sd) =>          // slanted eyes, outer ends up (they blink)
+      decal([[sd * 0.07, 0.12, -0.385], [sd * 0.34, 0.25, -0.385], [sd * 0.34, 0.14, -0.385], [sd * 0.07, 0.03, -0.385]]));
+    if (Math.sin(t * 9) > -0.6) jaw[4].dec = [decal([[-0.21, -0.27, -0.365], [0.21, -0.27, -0.365], [0.13, -0.36, -0.365], [-0.13, -0.36, -0.365]])];   // grin
+    for (const sd of [-1, 1]) {
+      rbox(rz(-sd * 0.75), sd * 0.4, 0.62, 0, 0.22, 0.3, 0.22, "solid");                    // horns: out, up, in
+      rbox(rz(-sd * 0.25), sd * 0.56, 0.88, 0, 0.16, 0.28, 0.16, "solid");
+      rbox(rz(sd * 0.3), sd * 0.58, 1.12, 0, 0.1, 0.24, 0.1, "on");
+      rbox(rz(-sd * 1.2), sd * 0.5, 0.18, 0.05, 0.12, 0.3, 0.06, "solid");                 // pointed ears
+    }
+    const fx = 0.78, fz = 0.45;                                        // the pitchfork behind
+    box(m, fx, -0.1, fz, 0.07, 1.9, 0.07, "solid");
+    box(m, fx, 0.85, fz, 0.5, 0.07, 0.07, "solid");
+    for (const dx of [-0.21, 0, 0.21]) box(m, fx + dx, 1.04, fz, 0.06, dx ? 0.32 : 0.42, 0.06, "on");
+    return m;
+  }
+
   function iconFor(id, t, now) {
     switch (id) {
       case "dice":    return [diceMesh, mul(ry(t * 0.9), mul(rx(t * 0.6), rz(t * 0.3))), 0.33];
@@ -714,6 +743,7 @@ const DM = (() => {
       case "spectrum": return [spectrumMesh(t), mul(rx(0.45), ry(Math.sin(t * 0.5) * 0.6)), 0.34];
       case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];
       case "mykolai": return [mykolaiMesh(t), mul(rx(0.2), ry(Math.sin(t * 0.7) * 0.7)), 0.4];
+      case "devil":   return [devilMesh(t), mul(ry(Math.sin(t * 0.6) * 0.32), rx(0.1 + Math.sin(t * 0.9) * 0.06)), 0.37];
     }
   }
 

@@ -33,6 +33,8 @@ public/                 the website
   glasses/drunk/        DRUNK.EXE (Drunk-o-meter): walking stability game - WALK THE LINE (head sway/tilt, straight line,
                         Neural Band hand steadiness) and EGG & SPOON (keep a virtual egg on a spoon). Settings + results:
                         /api/hud/<CODE>/app/drunk, set on error.blue/hud (DRUNK screen). Just a game, not a sobriety test
+  glasses/devil/        DEVIL.EXE: run from the devil. He rises 200 m away (real GPS spot) and walks at you at 4 km/h;
+                        world-locked 3D view from the head sensors, steps from the accelerometer
   glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
                         and the 6-letter CODE that links the glasses to the control panel
   glasses/presence.js   tells the control panel the glasses are on and which app is open (every glasses app loads it)
@@ -201,6 +203,33 @@ Anyone can play Saint Nicholas and leave a little gift for Yaro on a GPS spot; Y
 - server: `/api/sm/gifts` in `src/index.js`, D1 table `sm_gifts`. Picking up checks that the glasses are
   within 20 m of the gift. 12 gifts per hour per network, 200 waiting at most; found gifts are listed for
   30 days.
+
+## DEVIL.EXE (error.blue/glasses/devil)
+
+A GPS chase game for the glasses: DEVIL.EXE on the home screen (APPS row) and Devil in Mini Hub.
+
+- Pinch to start. Look straight ahead for the 3-2-1 (that sets "level"), then he rises out of the ground
+  200 m away in a random direction and walks straight at you at 4 km/h, without stopping. Within 2 m he
+  takes you: he lunges, screams, and the run ends with the time you survived (best time is kept).
+  Walking faster than 4 km/h keeps you alive. Get 400 m (twice the start distance) away and he loses your
+  trail; 12 s later he rises again, 200 m away, somewhere else. Speed (3-6 km/h) and start distance
+  (100-500 m) are in the menu.
+- The view is world-locked, like VR: black is see-through on the display, so all you see is him, standing
+  where he is. REAL SIZE matches the lens (about 14 degrees across, 1:1 with the world: a 2 m devil at 200 m
+  is a few pixels, at 5 m he fills the view). VR WIDE squeezes 40 degrees in. Swipe up/down switches.
+  Head turn, nod and tilt (roll) come from `deviceorientation` (the glasses' gyroscope + accelerometer).
+  When he's out of view, red chevrons show which way to turn ("BEHIND YOU").
+- Which way is north: the compass when the device gives one; otherwise learned while you walk (GPS course
+  vs. head turn, only while the accelerometer counts steps and the gyroscope says you're not turning your
+  head). Until then he's placed relative to where you looked at the start. HUD shows COMPASS / WALK-N / NORTH ?.
+- Location: the phone's GPS, smoothed with a small Kalman filter plus the phone's speed.
+- Sound: heartbeat getting faster, a low drone that opens up, his hoof steps panned left/right (muffled
+  behind you), a deep devil voice (speech synthesis, menu: DEVIL VOICE), a sting when you spot him.
+  Pinch during a run says how far and which way he is.
+- A run survives the display going off or a reload (localStorage `devil.run`, kept 30 min): he keeps
+  walking meanwhile, and on wake he has walked those minutes toward you.
+- TEST RUN (menu) works without GPS: he rises 30 m away and swipe up/down walks you 4 m.
+- Settings: localStorage `devil.cfg`; best time `devil.best`. `window.__devil` is a debug handle.
 
 ## Web app
 
