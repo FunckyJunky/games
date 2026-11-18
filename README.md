@@ -41,6 +41,10 @@ public/                 the website
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
+  glasses/room404/      ROOM404.EXE (Room 404): a small 3D room you look round with head motion, like VR. Pinch = walk/stop,
+                        hold pinch = walk, pinch twice = take or put down (table, chairs, shelf, sill, floor, on the dice).
+                        Neural Band wrist twist spins what you hold. Lamp switches, the door doesn't open. Own z-buffered
+                        renderer; the room's state is kept in localStorage "room404.state"
   glasses/SM/           Святий Миколайчик gift page for phones: leave a gift on the spot where you stand (error.blue/glasses/SM)
   hud/                  Glasses HUD control panel for phones (error.blue/hud), ERROR-DOS look, installable web app:
                         connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and

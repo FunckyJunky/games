@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<meta name="description" content="Room 404: a tiny 3D room you look around with your head, walk in and tidy up">
+<title>Room 404</title>
+<link rel="icon" type="image/png" sizes="96x96" href="data:image/png;base64,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">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* touch-action: none opts into the Neural Band pinch-and-move stream (pointerdown / pointermove / pointerup) */
+  html, body { background: #000; touch-action: none; }
+  body { width: 600px; height: 600px; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; width: 600px; height: 600px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Room 404, a small 3D room"></canvas>
+<script src="/glasses/presence.js" data-app="room404"></script>
+<script>
+/* ===== Shared: dot-matrix display, 3x5 pixel font, head-motion sensors ===== */
+const DM = (() => {
+  "use strict";
+  const G = 120;                 // the display is G x G dots
+  const CX = 60, CY = 60;
+  const PITCH = 600 / G;         // 5 px per dot on the 600 x 600 lens
+  const D2R = Math.PI / 180;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrap360 = (a) => ((a % 360) + 360) % 360;
+  const angDiff = (a, b) => ((((a - b) % 360) + 540) % 360) - 180;
+
+  const THEMES = [
+    { name: "GREEN", c: "#36ff6b" },
+    { name: "RED",   c: "#ff2b2b" },
+    { name: "AMBER", c: "#ffae1a" },
+  ];
+
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* 3x5 font: five rows, each a digit 0-7 whose bits are the three columns (left = 4). */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711",
+    "5": "74717", "6": "74757", "7": "71122", "8": "75757", "9": "75717",
+    A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555",
+    O: "25552", P: "65644", Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557",
+    V: "55522", W: "55775", X: "55255", Y: "55222", Z: "71247",
+    " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244",
+    "%": "51245", "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575",
+    "=": "07070", "_": "00007", "!": "22202", "?": "71202", "*": "05250", "^": "25000", "'": "22000",
+  };
+
+  /* ---------- display: draw on a tiny canvas, show it as glowing dots ---------- */
+  function createDisplay(canvas) {
+    const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const W = 600 * K;
+    canvas.width = canvas.height = W;
+    const ctx = canvas.getContext("2d");
+    const loC = document.createElement("canvas");
+    loC.width = loC.height = G;
+    const lo = loC.getContext("2d");
+
+    // one soft round LED, repeated across the screen
+    const T = PITCH * K;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = T;
+    const tg = tile.getContext("2d");
+    const grad = tg.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.85, "rgba(0,0,0,.35)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    tg.fillStyle = grad;
+    tg.fillRect(0, 0, T, T);
+    const mask = ctx.createPattern(tile, "repeat");
+
+    function begin(color, dim = 0.07) {
+      lo.setTransform(1, 0, 0, 1, 0, 0);
+      lo.globalAlpha = 1;
+      lo.setLineDash([]);
+      lo.clearRect(0, 0, G, G);
+      lo.fillStyle = color;
+      lo.strokeStyle = color;
+      lo.lineWidth = 1;
+      if (dim > 0) { lo.globalAlpha = dim; lo.fillRect(0, 0, G, G); lo.globalAlpha = 1; }   // unlit LEDs
+    }
+
+    function present(bloom = 0.14) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, W, W);                       // transparent = see-through on the lens
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(loC, 0, 0, W, W);
+      ctx.globalCompositeOperation = "destination-in"; // keep only the round dots
+      ctx.fillStyle = mask;
+      ctx.fillRect(0, 0, W, W);
+      if (bloom > 0) {                                 // soft glow around lit dots
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = bloom;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(loC, 0, 0, W, W);
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+
+    const tw = (s) => Math.max(0, String(s).length * 4 - 1);
+    function text(str, x, y, a = 1) {
+      const prev = lo.globalAlpha;
+      lo.globalAlpha = a;
+      x = Math.round(x); y = Math.round(y);
+      for (const ch of String(str).toUpperCase()) {
+        const g = FONT[ch];
+        if (g) for (let r = 0; r < 5; r++) {
+          const bits = g.charCodeAt(r) - 48;
+          for (let c = 0; c < 3; c++) if (bits & (4 >> c)) lo.fillRect(x + c, y + r, 1, 1);
+        }
+        x += 4;
+      }
+      lo.globalAlpha = prev;
+    }
+    const textC = (s, cx, y, a) => text(s, Math.round(cx - tw(s) / 2), y, a);
+    const textR = (s, rx, y, a) => text(s, rx - tw(s) + 1, y, a);
+
+    return { lo, begin, present, text, textC, textR, tw };
+  }
+
+  /* ---------- head motion: DeviceOrientationEvent -> heading / pitch / roll ----------
+     The glasses' sensor frame isn't documented, so three mappings are offered
+     (swipe up/down in the apps). "A" treats the display like a phone held up
+     in front of your eyes. The choice is shared by all the glasses apps. */
+  function createMotion(onLive) {
+    const AXES = [
+      { name: "A", f: [0, 0, -1], u: [0, 1, 0] },
+      { name: "B", f: [0, 1, 0],  u: [0, 0, 1] },
+      { name: "C", f: [0, 0, 1],  u: [0, 1, 0] },
+    ];
+    let axis = (store.get("glasses.axis", 0) | 0) % AXES.length;
+    let live = false, raw = null, needZero = true, zp = 0, zr = 0, zh = 0, listening = false;
+    const att = { h: 0, p: 0, r: 0 };
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+    function attitude(al, be, ga) {
+      const cA = Math.cos(al * D2R), sA = Math.sin(al * D2R);
+      const cB = Math.cos(be * D2R), sB = Math.sin(be * D2R);
+      const cG = Math.cos(ga * D2R), sG = Math.sin(ga * D2R);
+      const R = [                                   // W3C: R = Rz(alpha) Rx(beta) Ry(gamma)
+        [cA * cG - sA * sB * sG, -sA * cB, cA * sG + sA * sB * cG],
+        [sA * cG + cA * sB * sG,  cA * cB, sA * sG - cA * sB * cG],
+        [-cB * sG,                sB,      cB * cG],
+      ];
+      const mul = (v) => R.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+      const ax = AXES[axis];
+      const f = mul(ax.f), u = mul(ax.u), r = mul(cross(ax.f, ax.u));   // world: x east, y north, z up
+      return {
+        heading: wrap360(Math.atan2(f[0], f[1]) / D2R),
+        pitch: Math.asin(clamp(f[2], -1, 1)) / D2R,   // + = looking up
+        roll: Math.atan2(-r[2], u[2]) / D2R,          // + = head tilted right
+      };
+    }
+
+    function onOrient(e) {
+      if (e.alpha == null && e.beta == null && e.gamma == null) return;
+      raw = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      if (!live) { live = true; if (onLive) onLive(); }
+    }
+    let compass = null, compassAt = 0;
+    function onAbsolute(e) {
+      let h = null;
+      if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;      // iOS
+      else if ((e.type === "deviceorientationabsolute" || e.absolute) && e.alpha != null) h = attitude(e.alpha, e.beta || 0, e.gamma || 0).heading;
+      if (h === null) return;
+      compass = compass === null ? h : wrap360(compass + angDiff(h, compass) * 0.25);
+      compassAt = performance.now();
+    }
+    function listen() {
+      if (listening) return;
+      listening = true;
+      window.addEventListener("deviceorientation", onOrient);
+      window.addEventListener("deviceorientation", onAbsolute);
+      window.addEventListener("deviceorientationabsolute", onAbsolute);
+    }
+    async function enable() {   // call from a pinch / tap
+      try {
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== "granted") return "denied";
+        }
+      } catch (err) { return "error"; }
+      listen();
+      return "ok";
+    }
+    listen();   // works right away where no permission is needed
+
+    function update(dt) {
+      if (!live || !raw) return false;
+      const a = attitude(raw[0], raw[1], raw[2]);
+      if (needZero) {   // "level" = how you hold your head right now
+        zp = a.pitch; zr = a.roll; zh = a.heading;
+        att.h = a.heading; att.p = a.pitch; att.r = a.roll;
+        needZero = false;
+      }
+      const k = 1 - Math.exp(-dt * 12);
+      att.h = wrap360(att.h + angDiff(a.heading, att.h) * k);
+      att.p += (a.pitch - att.p) * k;
+      att.r = angDiff(att.r + angDiff(a.roll, att.r) * k, 0);
+      return true;
+    }
+
+    return {
+      get live() { return live; },
+      get axisName() { return AXES[axis].name; },
+      get heading() { return att.h; },
+      get yaw() { return angDiff(att.h, zh); },     // look left (-) / right (+) since the last zero
+      get compass() { return performance.now() - compassAt < 3000 ? compass : null; },   // true heading, if the device has one
+      get pitch() { return att.p - zp; },
+      get roll() { return angDiff(att.r, zr); },
+      enable, update, attitude,
+      zero() { needZero = true; },
+      nextAxis(d) {
+        axis = (axis + d + AXES.length) % AXES.length;
+        store.set("glasses.axis", axis);
+        needZero = true;
+        return AXES[axis].name;
+      },
+    };
+  }
+
+  /* ---------- settings shared by the glasses apps (Settings app writes them) ---------- */
+  const SETTINGS_DEFAULT = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, full: false, hidden: [] };
+  // The same settings live on the server under the glasses' pairing code, so the control
+  // panel at error.blue/hud can change them; the newest change wins.
+  const CODE_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function hudCode() {
+    let c = store.get("glasses.code", null);
+    if (typeof c !== "string" || !/^[A-HJ-NP-Z2-9]{6}$/.test(c)) {
+      const b = new Uint8Array(6);
+      crypto.getRandomValues(b);
+      c = Array.from(b, (x) => CODE_ALPHA[x % CODE_ALPHA.length]).join("");
+      store.set("glasses.code", c);
+    }
+    return c;
+  }
+  const SYNC_KEYS = ["compass", "head", "speed", "invert", "color", "sounds", "full", "hidden"];
+  const pick = (v) => { const o = {}; for (const k of SYNC_KEYS) if (k in v) o[k] = v[k]; return o; };
+  function push(v) {
+    try {
+      fetch("/api/hud/" + hudCode(), { method: "PUT", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: pick(v), updated: v.updatedAt || Date.now() }) }).catch(() => {});
+    } catch {}
+  }
+  const settings = {
+    get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
+    set(v) {
+      v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v);
+      if (window.GlassesPresence) GlassesPresence.sendSettings(pick(v), v.updatedAt);   // live to error.blue/hud
+    },
+    code: hudCode,
+    async sync() {                               // -> true when the server had newer settings
+      try {
+        const r = await fetch("/api/hud/" + hudCode(), { cache: "no-store" });
+        if (!r.ok) return false;
+        const j = await r.json(), local = settings.get(), lt = local.updatedAt || 0;
+        if (j.settings && j.updated > lt) {
+          store.set("glasses.settings", Object.assign({}, local, j.settings, { updatedAt: j.updated }));
+          return true;
+        }
+        if (lt > (j.updated || 0)) push(local);
+      } catch {}
+      return false;
+    },
+  };
+  // DOS phosphor colours: main, bright, mid, dim, dark
+  const DOS_PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  const dosPalette = (i) => {
+    const n = DOS_PALETTES.length, k = i === undefined ? settings.get().color : i;
+    return DOS_PALETTES[(((k | 0) % n) + n) % n];
+  };
+
+  /* ---------- tiny UI sounds (only when Settings > SOUNDS is on) ---------- */
+  let sfxCtx = null;
+  const SFX = {                 // [from Hz, to Hz, seconds, wave, volume]
+    tick: [1500, 1500, 0.02, "square", 0.04], row: [650, 950, 0.05, "square", 0.045],
+    open: [420, 1700, 0.17, "sawtooth", 0.05], on: [880, 1320, 0.07, "square", 0.045],
+    off: [1320, 660, 0.07, "square", 0.045], back: [900, 380, 0.09, "square", 0.04],
+  };
+  function sfx(kind) {
+    if (!settings.get().sounds) return;
+    try {
+      if (!sfxCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; sfxCtx = new AC(); }
+      if (sfxCtx.state === "suspended") sfxCtx.resume();
+      const P = SFX[kind] || SFX.tick, t = sfxCtx.currentTime + 0.005;
+      const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+      o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+      g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0001, t + P[2] + 0.03);
+      o.connect(g); g.connect(sfxCtx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+    } catch {}
+  }
+
+  /* ---------- 30 fps loop ---------- */
+  function loop(fn) {
+    let last = performance.now();
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const ms = now - last;
+      if (ms < 30) return;
+      last = now;
+      fn(Math.min(0.1, ms / 1000), now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  return { G, CX, CY, D2R, clamp, wrap360, angDiff, THEMES, store, createDisplay, createMotion, loop,
+           settings, DOS_PALETTES, dosPalette, sfx };
+})();
+
+</script>
+<script>
+/* ROOM404.EXE ("Room 404"): a tiny 3D room for Meta Ray-Ban Display, like a little VR room.
+
+   Look around       move your head (the glasses' motion sensors, 1:1 like VR)
+   Pinch             walk / stop. You walk where you look; bumping into something stops you.
+   Pinch and hold    walk while you hold the pinch
+   Pinch twice       take what's in the crosshair, or put it down where you look
+                     (a table, chair, shelf, the window sill, the floor, or on the dice;
+                     look anywhere else and it just drops from your hand)
+   Neural Band       twist your wrist to spin what you hold (when the glasses expose the wrist sensor)
+   Swipe left/right  snap turn 45 degrees
+   Swipe up          re-centre: straight ahead and level = how you hold your head now
+   Swipe down        sensor axis A / B / C (shared with the other glasses apps) if looking feels wrong
+   Back              exit
+   Start screen      pinch = enter, swipe down twice = put everything back where it was
+
+   Pinch twice at the lamp to switch the light. The door is worth a try too.
+   The room remembers where you left things (localStorage "room404.state").
+
+   Preview on a phone or computer: drag = look, tap = pinch, double-tap = pinch twice,
+   press and hold = walk. Keys: Enter = pinch, W = walk while held, E or Space = pinch twice,
+   arrows = swipes, Esc = back.
+
+   Drawing: a small z-buffered software renderer, 200 x 200, each pixel 3 x 3 on the lens.
+   Black is see-through on the glasses, so the window shows the real world behind the moon. */
+(() => {
+  "use strict";
+  const { clamp, D2R, store } = DM;
+  let S = DM.settings.get();
+  let PAL = DM.dosPalette(S.color);
+  const onGlasses = /\bwv\b/.test(navigator.userAgent) && /Android/.test(navigator.userAgent);
+  const TAU = Math.PI * 2;
+
+  /* ============================== SCREEN ============================== */
+  const R = 200, HALF = R / 2, FOCAL = 150, NEAR = 0.05;
+  const FR = HALF / FOCAL + 0.01, FRN = Math.sqrt(1 + FR * FR);
+  const cv = document.getElementById("screen");
+  const K = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+  const W = 600 * K;
+  cv.width = cv.height = W;
+  const ctx = cv.getContext("2d");
+  const loC = document.createElement("canvas"); loC.width = loC.height = R;
+  const lo = loC.getContext("2d");
+  const img = lo.createImageData(R, R);
+  const pix = new Uint32Array(img.data.buffer);
+  const depth = new Float32Array(R * R);
+  const BLACK = 0xff000000;
+  const sl = document.createElement("canvas"); sl.width = 1; sl.height = 3 * K;          // scanlines
+  const slg = sl.getContext("2d"); slg.fillStyle = "rgba(0,0,0,.4)"; slg.fillRect(0, 2 * K, 1, K);
+  const scan = ctx.createPattern(sl, "repeat");
+
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const pack = (r, g, b) => (0xff000000 | (clamp(Math.round(b), 0, 255) << 16) | (clamp(Math.round(g), 0, 255) << 8) | clamp(Math.round(r), 0, 255)) >>> 0;
+  const packK = (c, k) => pack(c[0] * k, c[1] * k, c[2] * k);
+
+  /* ============================== 3D MATH ============================== */
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const ry = (a) => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+  const mmul = (A, B) => {
+    const M = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) M[i * 3 + j] = A[i * 3] * B[j] + A[i * 3 + 1] * B[3 + j] + A[i * 3 + 2] * B[6 + j];
+    return M;
+  };
+  const mv = (M, v) => [M[0] * v[0] + M[1] * v[1] + M[2] * v[2], M[3] * v[0] + M[4] * v[1] + M[5] * v[2], M[6] * v[0] + M[7] * v[1] + M[8] * v[2]];
+  function rotAxis(a, th) {                                            // Rodrigues
+    const c = Math.cos(th), s = Math.sin(th), t = 1 - c, x = a[0], y = a[1], z = a[2];
+    return [t * x * x + c, t * x * y - s * z, t * x * z + s * y,
+            t * x * y + s * z, t * y * y + c, t * y * z - s * x,
+            t * x * z - s * y, t * y * z + s * x, t * z * z + c];
+  }
+  function orthonormal(M) {                                            // Gram-Schmidt on the columns
+    const c0 = norm([M[0], M[3], M[6]]);
+    let c1 = [M[1], M[4], M[7]];
+    const d = dot(c0, c1);
+    c1 = norm([c1[0] - c0[0] * d, c1[1] - c0[1] * d, c1[2] - c0[2] * d]);
+    const c2 = cross(c0, c1);
+    return [c0[0], c1[0], c2[0], c0[1], c1[1], c2[1], c0[2], c1[2], c2[2]];
+  }
+  function snapMatrix(M) {                                             // nearest "lying flat" orientation
+    const cols = [[M[0], M[3], M[6]], [M[1], M[4], M[7]]], out = [], used = [];
+    for (const c of cols) {
+      let best = -1, bv = -1;
+      for (let a = 0; a < 3; a++) if (!used.includes(a) && Math.abs(c[a]) > bv) { bv = Math.abs(c[a]); best = a; }
+      used.push(best);
+      const v = [0, 0, 0]; v[best] = Math.sign(c[best]) || 1; out.push(v);
+    }
+    const c2 = cross(out[0], out[1]);
+    return [out[0][0], out[1][0], c2[0], out[0][1], out[1][1], c2[1], out[0][2], out[1][2], c2[2]];
+  }
+
+  /* ============================== 3x5 FONT ============================== */
+  const FONT = {
+    "0": "75557", "1": "26227", "2": "71747", "3": "71317", "4": "55711", "5": "74717", "6": "74757", "7": "71122",
+    "8": "75757", "9": "75717", A: "25755", B: "65656", C: "34443", D: "65556", E: "74647", F: "74644", G: "34553",
+    H: "55755", I: "72227", J: "11152", K: "55655", L: "44447", M: "57755", N: "65555", O: "25552", P: "65644",
+    Q: "25563", R: "65655", S: "34216", T: "72222", U: "55557", V: "55522", W: "55775", X: "55255", Y: "55222",
+    Z: "71247", " ": "00000", "-": "00700", "+": "02720", ".": "00002", ":": "02020", "/": "11244", "%": "51245",
+    "<": "12421", ">": "42124", "[": "64446", "]": "31113", "#": "57575", "=": "07070", "_": "00007", "!": "22202",
+    "?": "71202", "*": "05250", "^": "25000", "'": "22000", "|": "22222", ",": "00024",
+  };
+
+  /* ============================== SCENE ==============================
+     World: metres. x = east (right as you enter), y = up, z = north (toward the window).
+     The room is 6 x 5 m and 2.6 m high, with the table in the middle under the lamp. */
+  const RX = 3, RZ = 2.5, RH = 2.6;
+  const TBL = { x0: -0.7, x1: 0.7, z0: 0, z1: 0.8, y: 0.76 };
+  const LAMP = [0, 2.0, 0.4];
+  const SF = [];          // static faces
+  const SOLIDS = [];      // boxes: { x0..z1, coll (blocks you and things), sup (name if you can put things on top), name }
+  const SUPPORTS = [];    // tops you can put things on: { x0, z0, x1, z1, y, name }
+  const SLINES = [];      // static lines: [a, b, colour]
+  let OUT = SF;
+
+  function face(p, n, col, o) {
+    const c = [0, 0, 0];
+    for (const v of p) { c[0] += v[0] / p.length; c[1] += v[1] / p.length; c[2] += v[2] / p.length; }
+    OUT.push({ p, n, c, base: typeof col === "string" ? hex(col) : col, edge: o && o.edge, two: !!(o && o.two),
+               glow: !!(o && o.glow), lamp: !!(o && o.lamp) });
+  }
+  const quadY = (x0, z0, x1, z1, y) => [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]];
+  const quadZ = (x0, y0, x1, y1, z) => [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]];
+  const quadX = (z0, y0, z1, y1, x) => [[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]];
+
+  // box: faces W(-x) E(+x) D(-y) U(+y) S(-z) N(+z); o.skip leaves faces out
+  function box(x0, y0, z0, x1, y1, z1, col, o = {}) {
+    const sk = o.skip || "";
+    if (!sk.includes("W")) face(quadX(z0, y0, z1, y1, x0), [-1, 0, 0], col, o);
+    if (!sk.includes("E")) face(quadX(z0, y0, z1, y1, x1), [1, 0, 0], col, o);
+    if (!sk.includes("D")) face(quadY(x0, z0, x1, z1, y0), [0, -1, 0], col, o);
+    if (!sk.includes("U")) face(quadY(x0, z0, x1, z1, y1), [0, 1, 0], o.top || col, o);
+    if (!sk.includes("S")) face(quadZ(x0, y0, x1, y1, z0), [0, 0, -1], col, o);
+    if (!sk.includes("N")) face(quadZ(x0, y0, x1, y1, z1), [0, 0, 1], col, o);
+    if (o.coll || o.support || o.name) SOLIDS.push({ x0, y0, z0, x1, y1, z1, coll: !!o.coll, sup: o.support || null, name: o.name || null });
+    if (o.support) SUPPORTS.push({ x0, z0, x1, z1, y: y1, name: o.support });
+  }
+  // upright cylinder; only the top rim gets an outline
+  function cylinder(cx, y0, cz, r, h, n, col, o = {}) {
+    const ring = (y) => Array.from({ length: n }, (_, i) => { const a = (i / n) * TAU; return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r]; });
+    const b = ring(y0), t = ring(y0 + h), side = Object.assign({}, o, { edge: o.sideEdge });
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, am = ((i + 0.5) / n) * TAU;
+      face([b[i], b[j], t[j], t[i]], [Math.cos(am), 0, Math.sin(am)], col, side);
+    }
+    face(t, [0, 1, 0], o.top || col, o);
+    if (o.bottom) face(b.slice().reverse(), [0, -1, 0], col, side);
+  }
+  // ellipsoid made of lat/long patches; colFn(i, j) picks each patch's colour
+  function sphere(cx, cy, cz, rx, ryy, rz, lat, lon, colFn, o = {}) {
+    const P = (i, j) => { const th = (i / lat) * Math.PI, ph = (j / lon) * TAU; return [cx + Math.sin(th) * Math.cos(ph) * rx, cy + Math.cos(th) * ryy, cz + Math.sin(th) * Math.sin(ph) * rz]; };
+    for (let i = 0; i < lat; i++) for (let j = 0; j < lon; j++) {
+      const pts = i === 0 ? [P(0, 0), P(1, j + 1), P(1, j)]
+                : i === lat - 1 ? [P(i, j), P(i, j + 1), P(lat, 0)]
+                : [P(i, j), P(i, j + 1), P(i + 1, j + 1), P(i + 1, j)];
+      const th = ((i + 0.5) / lat) * Math.PI, ph = ((j + 0.5) / lon) * TAU;
+      face(pts, norm([Math.sin(th) * Math.cos(ph) / rx, Math.cos(th) / ryy, Math.sin(th) * Math.sin(ph) / rz]), colFn(i, j), o);
+    }
+  }
+  // a pixel-font sign facing +z (top-left corner at x0, y0)
+  function glyphsZ(str, x0, y0, z, ps, col) {
+    let x = x0;
+    for (const ch of str) {
+      const g = FONT[ch];
+      for (let r = 0; r < 5; r++) {
+        const bits = g.charCodeAt(r) - 48;
+        for (let c = 0; c < 3; c++) if (bits & (4 >> c)) {
+          const xa = x + c * ps, ya = y0 - r * ps;
+          face(quadZ(xa, ya - ps, xa + ps, ya, z), [0, 0, 1], col, { glow: true });
+        }
+      }
+      x += 4 * ps;
+    }
+  }
+  // wall made of panels (for a soft light falloff); skip(i, j) leaves holes
+  function wallPanels(axis, at, nrm, us, vs, col, skip) {
+    for (let i = 0; i < us.length - 1; i++) for (let j = 0; j < vs.length - 1; j++) {
+      if (skip && skip(i, j)) continue;
+      const u0 = us[i], u1 = us[i + 1], v0 = vs[j], v1 = vs[j + 1];
+      face(axis === "z" ? quadZ(u0, v0, u1, v1, at) : quadX(u0, v0, u1, v1, at), nrm, col);
+    }
+  }
+
+  function buildRoom() {
+    OUT = SF;
+    /* floor: checker tiles, plus a rug under the table */
+    for (let i = 0; i < 12; i++) for (let k = 0; k < 10; k++) {
+      const x0 = -RX + i * 0.5, z0 = -RZ + k * 0.5;
+      face(quadY(x0, z0, x0 + 0.5, z0 + 0.5, 0), [0, 1, 0], (i + k) % 2 ? "#4c3c6c" : "#2c2444");
+    }
+    SUPPORTS.push({ x0: -RX, z0: -RZ, x1: RX, z1: RZ, y: 0, name: "FLOOR" });
+    face(quadY(-1.45, -0.45, 1.45, 1.25, 0.004), [0, 1, 0], "#d4a020");
+    face(quadY(-1.36, -0.36, 1.36, 1.16, 0.007), [0, 1, 0], "#9c2650", { edge: "#ff86b0" });
+
+    /* walls (panels so the lamp light falls off) and ceiling */
+    const WALL = "#2f6684", WALL2 = "#3a7898";
+    const VS = [0, 0.95, 1.5, 2.05, RH], XS = [-3, -2, -1, 0, 1, 2, 3], ZS = [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5];
+    wallPanels("z", -RZ, [0, 0, 1], XS, VS, WALL);                                   // south (door)
+    wallPanels("z", RZ, [0, 0, -1], XS, VS, WALL, (i, j) => (i === 2 || i === 3) && (j === 1 || j === 2));   // north, window hole
+    wallPanels("x", -RX, [1, 0, 0], ZS, VS, WALL2);                                  // west (poster)
+    wallPanels("x", RX, [-1, 0, 0], ZS, VS, WALL2);                                  // east (shelf, clock)
+    for (let i = 0; i < 6; i++) for (let k = 0; k < 5; k++) face(quadY(-RX + i, -RZ + k, -RX + i + 1, -RZ + k + 1, RH), [0, -1, 0], "#1e3248");
+    const EC = "#5ab4d8";                                                            // room corners
+    for (const [x, z] of [[-RX, -RZ], [RX, -RZ], [RX, RZ], [-RX, RZ]]) SLINES.push([[x, 0, z], [x, RH, z], EC]);
+    for (const y of [0, RH]) {
+      SLINES.push([[-RX, y, -RZ], [RX, y, -RZ], EC], [[RX, y, -RZ], [RX, y, RZ], EC], [[RX, y, RZ], [-RX, y, RZ], EC], [[-RX, y, RZ], [-RX, y, -RZ], EC]);
+    }
+    const BB = "#80bcd4";                                                            // skirting boards
+    box(-RX, 0, -RZ, -RX + 0.02, 0.1, RZ, BB, { edge: 1, skip: "WD" });
+    box(RX - 0.02, 0, -RZ, RX, 0.1, RZ, BB, { edge: 1, skip: "ED" });
+    box(-RX, 0, RZ - 0.02, RX, 0.1, RZ, BB, { edge: 1, skip: "ND" });
+    box(-RX, 0, -RZ, -0.56, 0.1, -RZ + 0.02, BB, { edge: 1, skip: "SD" });
+    box(0.56, 0, -RZ, RX, 0.1, -RZ + 0.02, BB, { edge: 1, skip: "SD" });
+
+    /* window (north): see-through panes, frame, sill, curtains; a moon outside */
+    const WX0 = -1, WX1 = 1, WY0 = 0.95, WY1 = 2.05, D = 0.18;
+    face([[WX0, WY0, RZ], [WX1, WY0, RZ], [WX1, WY0, RZ + D], [WX0, WY0, RZ + D]], [0, 1, 0], WALL2);
+    face([[WX0, WY1, RZ], [WX1, WY1, RZ], [WX1, WY1, RZ + D], [WX0, WY1, RZ + D]], [0, -1, 0], WALL2);
+    face([[WX0, WY0, RZ], [WX0, WY1, RZ], [WX0, WY1, RZ + D], [WX0, WY0, RZ + D]], [1, 0, 0], WALL2);
+    face([[WX1, WY0, RZ], [WX1, WY1, RZ], [WX1, WY1, RZ + D], [WX1, WY0, RZ + D]], [-1, 0, 0], WALL2);
+    const FRM = "#e4ecf4", fz0 = RZ + 0.07, fz1 = RZ + 0.12;
+    box(WX0, WY0, fz0, WX0 + 0.06, WY1, fz1, FRM, { edge: 1 });
+    box(WX1 - 0.06, WY0, fz0, WX1, WY1, fz1, FRM, { edge: 1 });
+    box(WX0 + 0.06, WY0, fz0, WX1 - 0.06, WY0 + 0.06, fz1, FRM, { edge: 1 });
+    box(WX0 + 0.06, WY1 - 0.06, fz0, WX1 - 0.06, WY1, fz1, FRM, { edge: 1 });
+    box(-0.025, WY0 + 0.06, fz0, 0.025, WY1 - 0.06, fz1, FRM, { edge: 1 });
+    box(WX0 + 0.06, 1.475, fz0, -0.025, 1.525, fz1, FRM, { edge: 1 });
+    box(0.025, 1.475, fz0, WX1 - 0.06, 1.525, fz1, FRM, { edge: 1 });
+    box(-1.1, 0.9, RZ - 0.15, 1.1, 0.96, RZ + 0.06, "#e8e0d0", { edge: 1, coll: true, support: "SILL" });
+    const disc = (cx, cy, z, r, n, col, o) => face(Array.from({ length: n }, (_, i) => { const a = -(i / n) * TAU; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, z]; }), [0, 0, -1], col, o);
+    disc(0.5, 1.78, 6, 0.32, 14, "#fff0a0", { glow: true });
+    disc(0.64, 1.86, 5.98, 0.3, 14, "#000000", { glow: true });                     // its shadow makes a crescent
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 16; i++) {
+      const x = -2.2 + rnd() * 4.4, y = 0.6 + rnd() * 2.6, s = 0.015 + rnd() * 0.02;
+      if (Math.hypot(x - 0.5, y - 1.78) < 0.5) continue;
+      face(quadZ(x - s, y - s, x + s, y + s, 7.5), [0, 0, -1], rnd() < 0.3 ? "#a0d8ff" : "#ffffff", { glow: true });
+    }
+    const curtain = (xa, xb) => {
+      const n = 6;
+      for (let i = 0; i < n; i++) {
+        const xA = xa + ((xb - xa) * i) / n, xB = xa + ((xb - xa) * (i + 1)) / n;
+        const zA = RZ - (i % 2 ? 0.1 : 0.04), zB = RZ - (i % 2 ? 0.04 : 0.1);
+        face([[xA, 0.8, zA], [xB, 0.8, zB], [xB, 2.2, zB], [xA, 2.2, zA]], norm([-(zB - zA), 0, -Math.abs(xB - xA)]), i % 2 ? "#c8429a" : "#a83480", { two: true });
+      }
+    };
+    curtain(-1.42, -1.0); curtain(1.0, 1.42);
+    box(-1.55, 2.22, RZ - 0.09, 1.55, 2.26, RZ - 0.05, "#c0c8d4", { edge: 1 });
+
+    /* door (south) with a ROOM 404 sign. It does not open. */
+    const DZ = -RZ, JAMB = "#e6d4a8";
+    box(-0.56, 0, DZ, -0.48, 2.14, DZ + 0.05, JAMB, { edge: 1, skip: "S" });
+    box(0.48, 0, DZ, 0.56, 2.14, DZ + 0.05, JAMB, { edge: 1, skip: "S" });
+    box(-0.48, 2.06, DZ, 0.48, 2.14, DZ + 0.05, JAMB, { edge: 1, skip: "S" });
+    box(-0.48, 0, DZ, 0.48, 2.06, DZ + 0.03, "#b0602c", { edge: 1, skip: "SD", name: "DOOR" });
+    face(quadZ(-0.36, 1.15, 0.36, 1.9, DZ + 0.032), [0, 0, 1], "#c87840", { edge: 1 });
+    face(quadZ(-0.36, 0.2, 0.36, 0.98, DZ + 0.032), [0, 0, 1], "#c87840", { edge: 1 });
+    box(0.32, 0.98, DZ + 0.03, 0.39, 1.05, DZ + 0.085, "#ffd040", { edge: 1 });
+    box(-0.22, 2.19, DZ, 0.22, 2.41, DZ + 0.02, "#202048", { edge: "#ffd040", skip: "S" });
+    glyphsZ("404", -0.154, 2.37, DZ + 0.022, 0.028, "#ffd040");
+
+    /* poster (west): a synthwave sunset */
+    box(-RX, 1.02, -0.72, -RX + 0.03, 1.98, 0.72, "#d8a428", { edge: 1, skip: "W" });
+    const PX = -RX + 0.034;
+    const pq = (z0, y0, z1, y1, col, dx = 0, o) => face(quadX(z0, y0, z1, y1, PX + dx), [1, 0, 0], col, o);
+    pq(-0.66, 1.62, 0.66, 1.94, "#3c1c78");
+    pq(-0.66, 1.42, 0.66, 1.62, "#7a2088");
+    pq(-0.66, 1.3, 0.66, 1.42, "#c02c70");
+    const sc = 1.44, sr = 0.27, half = (y) => Math.sqrt(Math.max(0, sr * sr - (y - sc) * (y - sc)));
+    const slice = (ya, yb, col) => {
+      const pts = [];
+      for (let i = 0; i <= 5; i++) { const y = ya + ((yb - ya) * i) / 5; pts.push([PX + 0.002, y, -half(y)]); }
+      for (let i = 5; i >= 0; i--) { const y = ya + ((yb - ya) * i) / 5; pts.push([PX + 0.002, y, half(y)]); }
+      face(pts, [1, 0, 0], col);
+    };
+    slice(1.3, 1.33, "#ff5a30"); slice(1.36, 1.4, "#ff8030"); slice(1.43, 1.48, "#ffb040"); slice(1.51, 1.71, "#ffe050");
+    face([[PX + 0.004, 1.3, -0.66], [PX + 0.004, 1.56, -0.32], [PX + 0.004, 1.3, 0.02]], [1, 0, 0], "#2a2460", { edge: "#50e0ff" });
+    face([[PX + 0.004, 1.3, -0.12], [PX + 0.004, 1.5, 0.3], [PX + 0.004, 1.3, 0.66]], [1, 0, 0], "#2a2460", { edge: "#50e0ff" });
+    pq(-0.66, 1.06, 0.66, 1.3, "#160a34", 0.003);
+    const GX = PX + 0.006, GC = "#ff50e0";
+    for (const y of [1.28, 1.24, 1.18, 1.09]) SLINES.push([[GX, y, -0.66], [GX, y, 0.66], GC]);
+    for (const z of [-0.6, -0.36, -0.12, 0.12, 0.36, 0.6]) SLINES.push([[GX, 1.06, z], [GX, 1.3, z * 0.3], GC]);
+
+    /* shelf (east) with books; three boards you can put things on */
+    const SZ0 = -1.7, SZ1 = -0.5, SX0 = 2.62, WOOD = "#8a5a32";
+    box(SX0, 0, SZ0, RX, 1.8, SZ0 + 0.04, WOOD, { edge: 1, coll: true });
+    box(SX0, 0, SZ1 - 0.04, RX, 1.8, SZ1, WOOD, { edge: 1, coll: true });
+    box(RX - 0.03, 0.08, SZ0 + 0.04, RX, 1.77, SZ1 - 0.04, "#5a3a20", { skip: "E" });
+    for (const [y0, y1] of [[0, 0.08], [0.6, 0.63], [1.2, 1.23], [1.77, 1.8]]) {
+      box(SX0, y0, SZ0 + 0.04, RX - 0.03, y1, SZ1 - 0.04, WOOD, { edge: 1, coll: true, support: "SHELF" });
+    }
+    const BOOK = ["#ff5555", "#55ff55", "#5577ff", "#ffff55", "#55ffff", "#ff55ff", "#ffffff", "#ff9933"];
+    const books = (yb, z, list) => {
+      for (const [w, h, d, ci] of list) { box(RX - 0.03 - d, yb, z, RX - 0.03, yb + h, z + w, BOOK[ci], { edge: 1, coll: true }); z += w + 0.004; }
+    };
+    books(0.08, SZ0 + 0.045, [[0.05, 0.36, 0.26, 0], [0.04, 0.4, 0.27, 2], [0.06, 0.33, 0.25, 3], [0.045, 0.42, 0.28, 5], [0.05, 0.38, 0.26, 1], [0.04, 0.3, 0.24, 7]]);
+    books(0.63, SZ0 + 0.045, [[0.045, 0.3, 0.24, 4], [0.05, 0.34, 0.26, 6], [0.04, 0.28, 0.23, 0]]);
+    box(RX - 0.31, 1.23, -0.95, RX - 0.05, 1.27, -0.6, BOOK[2], { edge: 1, coll: true });
+    box(RX - 0.29, 1.27, -0.92, RX - 0.07, 1.3, -0.63, BOOK[3], { edge: 1, coll: true });
+
+    /* wall clock (east), showing the real time */
+    const CKX = RX - 0.035, CKY = 1.72, CKZ = 0.75, CKR = 0.2, N = 16;
+    const ring = (x, r) => Array.from({ length: N }, (_, i) => { const a = (i / N) * TAU; return [x, CKY + Math.cos(a) * r, CKZ + Math.sin(a) * r]; });
+    const back = ring(RX, CKR), front = ring(CKX, CKR);
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N, a = ((i + 0.5) / N) * TAU; face([back[i], back[j], front[j], front[i]], [0, Math.cos(a), Math.sin(a)], "#3060d0"); }
+    face(front, [-1, 0, 0], "#f4f0e0", { edge: "#80b0ff" });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU, r0 = i % 3 ? 0.16 : 0.14;
+      SLINES.push([[CKX - 0.002, CKY + Math.cos(a) * r0, CKZ + Math.sin(a) * r0], [CKX - 0.002, CKY + Math.cos(a) * 0.18, CKZ + Math.sin(a) * 0.18], "#283880"]);
+    }
+
+    /* plant (north-west corner) */
+    const PCX = -2.6, PCZ = 2.1;
+    cylinder(PCX, 0, PCZ, 0.17, 0.32, 10, "#c8643c", { top: "#3a2410", edge: "#ff9a6a" });
+    SOLIDS.push({ x0: PCX - 0.17, y0: 0, z0: PCZ - 0.17, x1: PCX + 0.17, y1: 0.32, z1: PCZ + 0.17, coll: true, sup: null, name: null });
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2.4 + 0.3, L = 0.3 + (i % 3) * 0.12, H = 0.35 + (i % 4) * 0.13;
+      const dx = Math.cos(a), dz = Math.sin(a), sx = -dz * 0.055, sz = dx * 0.055;
+      const b = [PCX, 0.3, PCZ], tip = [PCX + dx * L, 0.3 + H, PCZ + dz * L];
+      const m = [PCX + dx * L * 0.45, 0.3 + H * 0.72, PCZ + dz * L * 0.45];
+      face([b, [m[0] + sx, m[1], m[2] + sz], tip, [m[0] - sx, m[1], m[2] - sz]], norm([dx * 0.4, 1, dz * 0.4]), i % 2 ? "#3ad04a" : "#28a83c", { two: true, edge: "#8cff8c" });
+    }
+
+    /* lamp over the table: pinch twice at it to switch the light */
+    SLINES.push([[0, RH, 0.4], [0, 2.26, 0.4], "#9098a0"]);
+    {
+      const n = 12, rt = 0.07, rb = 0.24, yt = 2.26, yb = 2.06, top = [], bot = [];
+      for (let i = 0; i < n; i++) { const a = (i / n) * TAU; top.push([Math.cos(a) * rt, yt, 0.4 + Math.sin(a) * rt]); bot.push([Math.cos(a) * rb, yb, 0.4 + Math.sin(a) * rb]); }
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n, a = ((i + 0.5) / n) * TAU;
+        face([top[i], top[j], bot[j], bot[i]], norm([Math.cos(a), 0.8, Math.sin(a)]), "#ffd040", { two: true, lamp: true });
+        SLINES.push([bot[i], bot[j], "#fff4b0"]);
+      }
+      box(-0.035, 2.07, 0.365, 0.035, 2.14, 0.435, "#ffffff", { lamp: true });
+      SOLIDS.push({ x0: -0.25, y0: 2.03, z0: 0.15, x1: 0.25, y1: 2.28, z1: 0.65, coll: false, sup: null, name: "LAMP" });
+    }
+
+    /* table and two chairs */
+    box(TBL.x0, 0.71, TBL.z0, TBL.x1, TBL.y, TBL.z1, "#c98a4b", { edge: 1, coll: true, support: "TABLE", top: "#dc9c5c" });
+    for (const x of [TBL.x0 + 0.08, TBL.x1 - 0.08]) for (const z of [TBL.z0 + 0.08, TBL.z1 - 0.08]) {
+      box(x - 0.035, 0, z - 0.035, x + 0.035, 0.71, z + 0.035, "#a8703a", { edge: 1, coll: true, skip: "UD" });
+    }
+    const chair = (cx, cz, side) => {
+      const C = "#3f97c4", s = 0.22;
+      box(cx - s, 0.42, cz - s, cx + s, 0.46, cz + s, C, { edge: 1, coll: true, support: "CHAIR", top: "#4fa8d4" });
+      for (const dx of [-1, 1]) for (const dz of [-1, 1]) {
+        const x = cx + dx * (s - 0.03), z = cz + dz * (s - 0.03);
+        box(x - 0.02, 0, z - 0.02, x + 0.02, 0.42, z + 0.02, C, { coll: true, skip: "UD" });
+      }
+      const bx = cx + side * (s - 0.02);
+      for (const dz of [-1, 1]) box(bx - 0.02, 0.46, cz + dz * (s - 0.03) - 0.02, bx + 0.02, 1.0, cz + dz * (s - 0.03) + 0.02, C, { edge: 1, coll: true, skip: "D" });
+      box(bx - 0.02, 0.72, cz - s + 0.03, bx + 0.02, 0.96, cz + s - 0.03, "#5ab4e0", { edge: 1, coll: true });
+    };
+    chair(-1.05, 0.4, -1);
+    chair(1.05, 0.4, 1);
+  }
+  buildRoom();
+
+  /* ---------- lighting: one lamp over the table (or moonlight when it's off) ---------- */
+  let lightOn = true;
+  function lightK(n, c, two, on) {
+    if (on) {
+      const lx = LAMP[0] - c[0], ly = LAMP[1] - c[1], lz = LAMP[2] - c[2], dl = Math.hypot(lx, ly, lz) || 1;
+      let d = (n[0] * lx + n[1] * ly + n[2] * lz) / dl;
+      d = two ? Math.abs(d) : Math.max(0, d);
+      const s = 0.3 + (1.05 * d) / (1 + 0.1 * dl * dl) + 0.1 * Math.max(0, n[2]) + 0.05 * Math.max(0, n[1]);
+      return Math.round(clamp(s, 0, 1.3) * 8) / 8;                    // a few steps, like old DOS shading
+    }
+    const s = 0.1 + 0.3 * Math.max(0, n[2]) * (c[2] < RZ ? 1 : 0) + 0.06 * Math.max(0, n[1]);
+    return Math.round(clamp(s, 0, 1) * 8) / 8;
+  }
+  function objLight(n, c, two) {                                       // things you can take stand out a bit
+    if (!lightOn) return Math.round(clamp(0.22 + 0.3 * Math.max(0, n[2]) + 0.1 * Math.max(0, n[1]), 0, 1) * 8) / 8;
+    const lx = LAMP[0] - c[0], ly = LAMP[1] - c[1], lz = LAMP[2] - c[2], dl = Math.hypot(lx, ly, lz) || 1;
+    let d = (n[0] * lx + n[1] * ly + n[2] * lz) / dl;
+    d = two ? Math.abs(d) : Math.max(0, d);
+    return Math.round(clamp(0.58 + (0.7 * d) / (1 + 0.08 * dl * dl) + 0.08 * Math.max(0, n[1]), 0, 1.3) * 8) / 8;
+  }
+  function faceColour(f, n, c, on) {
+    if (f.glow) return pack(f.base[0], f.base[1], f.base[2]);
+    if (f.lamp) return packK(f.base, on ? 1 : 0.2);
+    return packK(f.base, lightK(n, c, f.two, on));
+  }
+  const edgeRGB = (f) => (!f.edge ? null : typeof f.edge === "string" ? hex(f.edge) : f.base.map((v) => Math.min(255, v * 1.3 + 50)));
+  for (const f of SF) {
+    f.col = [faceColour(f, f.n, f.c, true), faceColour(f, f.n, f.c, false)];
+    const e = edgeRGB(f);
+    f.ecol = e ? [pack(e[0], e[1], e[2]), packK(e, 0.55)] : [0, 0];
+    f.rad = Math.max(...f.p.map((p) => Math.hypot(p[0] - f.c[0], p[1] - f.c[1], p[2] - f.c[2])));
+  }
+  for (const L of SLINES) { const c = hex(L[2]); L.push(pack(c[0], c[1], c[2]), packK(c, 0.55)); }
+
+  /* ============================== THINGS YOU CAN TAKE ============================== */
+  function meshOf(fn) {
+    const m = [];
+    OUT = m; fn(); OUT = SF;
+    for (const f of m) { f.erg = edgeRGB(f); }
+    return m;
+  }
+  const DICE_FACES = [   // [normal, u, v, value]: opposite faces add up to 7
+    [[0, 1, 0], [1, 0, 0], [0, 0, 1], 1], [[0, -1, 0], [1, 0, 0], [0, 0, 1], 6],
+    [[1, 0, 0], [0, 1, 0], [0, 0, 1], 3], [[-1, 0, 0], [0, 1, 0], [0, 0, 1], 4],
+    [[0, 0, 1], [1, 0, 0], [0, 1, 0], 2], [[0, 0, -1], [1, 0, 0], [0, 1, 0], 5],
+  ];
+  const DEFS = {
+    mug: { name: "MUG", h: 0.115, r: 0.06, cy: 0.057, fric: 7, say: "HOT COCOA", snd: "clink",
+      mesh: meshOf(() => {
+        const C = "#2ec8f0", E = "#b8f3ff";
+        cylinder(0, 0, 0, 0.052, 0.115, 12, C, { top: "#6b3a1a", edge: E, bottom: true });
+        box(0.05, 0.028, -0.011, 0.07, 0.04, 0.011, C, { edge: E });
+        box(0.05, 0.083, -0.011, 0.07, 0.095, 0.011, C, { edge: E });
+        box(0.07, 0.028, -0.011, 0.084, 0.095, 0.011, C, { edge: E });
+      }) },
+    apple: { name: "APPLE", h: 0.105, r: 0.058, cy: 0.052, fric: 1.6, roll: true, bounce: 0.25, say: "CRUNCHY APPLE",
+      mesh: meshOf(() => {
+        sphere(0, 0.052, 0, 0.058, 0.052, 0.058, 4, 8, (i, j) => (i === 0 ? "#ff6a5a" : j % 2 ? "#ff2a2a" : "#e41c1c"));
+        box(-0.004, 0.098, -0.004, 0.004, 0.124, 0.004, "#7b4a22");
+        face([[0.004, 0.114, 0], [0.028, 0.128, 0.008], [0.046, 0.122, 0], [0.022, 0.11, -0.006]], [0, 1, 0], "#3ccf3c", { two: true });
+      }) },
+    duck: { name: "DUCK", h: 0.148, r: 0.07, cy: 0.07, fric: 6, say: "QUACK!", snd: "quack",
+      mesh: meshOf(() => {
+        const Y = "#ffd21a", Y2 = "#ffe45a";
+        sphere(0, 0.048, -0.005, 0.058, 0.046, 0.075, 4, 8, (i) => (i === 0 ? Y2 : Y));
+        sphere(0, 0.112, 0.042, 0.037, 0.036, 0.037, 4, 8, () => Y2);
+        box(-0.016, 0.098, 0.072, 0.016, 0.112, 0.104, "#ff8a1a", { edge: "#ffc080" });
+        box(-0.036, 0.118, 0.05, -0.029, 0.127, 0.059, "#20204a");
+        box(0.029, 0.118, 0.05, 0.036, 0.127, 0.059, "#20204a");
+        face([[-0.022, 0.058, -0.072], [0.022, 0.058, -0.072], [0, 0.104, -0.098]], norm([0, 0.5, -1]), Y, { two: true, edge: "#fff0a0" });
+        for (const s of [-1, 1]) face([[s * 0.058, 0.05, 0.02], [s * 0.062, 0.07, -0.01], [s * 0.058, 0.055, -0.055], [s * 0.054, 0.035, -0.02]], [s, 0.3, 0], "#ffbf00", { two: true });
+      }) },
+    ball: { name: "BALL", h: 0.24, r: 0.12, cy: 0.12, fric: 0.45, roll: true, bounce: 0.62, say: "BOING!", snd: "bounce",
+      mesh: meshOf(() => {
+        const C = ["#ff40c0", "#ffffff", "#40d0ff", "#ffffff"];
+        sphere(0, 0.12, 0, 0.12, 0.12, 0.12, 6, 8, (i, j) => (i === 0 || i === 5 ? "#ffd21a" : C[j % 4]));
+      }) },
+    dice: { name: "DICE", h: 0.09, r: 0.05, cy: 0.045, fric: 8, flat: true, dice: true, say: "ROLL ME",
+      mesh: meshOf(() => {
+        const s = 0.045;
+        box(-s, 0, -s, s, 2 * s, s, "#f2f2f2", { edge: "#ffffff" });
+        const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+                       5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
+        for (const [n, u, v, val] of DICE_FACES) {
+          for (const [a, b] of PIPS[val]) {
+            const c = [n[0] * (s + 0.0015) + (u[0] * a + v[0] * b) * 0.022, s + n[1] * (s + 0.0015) + (u[1] * a + v[1] * b) * 0.022, n[2] * (s + 0.0015) + (u[2] * a + v[2] * b) * 0.022];
+            const q = 0.0075, P = (du, dv) => [c[0] + (u[0] * du + v[0] * dv) * q, c[1] + (u[1] * du + v[1] * dv) * q, c[2] + (u[2] * du + v[2] * dv) * q];
+            face([P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)], n, "#1c1c70");
+          }
+        }
+      }) },
+  };
+  const TOY = 1.35;                                                    // everything you can take is toy-sized
+  for (const d of Object.values(DEFS)) {
+    for (const f of d.mesh) { f.p = f.p.map((v) => v.map((x) => x * TOY)); f.c = f.c.map((x) => x * TOY); }
+    d.h *= TOY; d.r *= TOY; d.cy *= TOY;
+  }
+  function diceValue(M) {
+    let best = 0, bv = -9;
+    for (const [n, , , val] of DICE_FACES) { const y = M[3] * n[0] + M[4] * n[1] + M[5] * n[2]; if (y > bv) { bv = y; best = val; } }
+    return best;
+  }
+  const START = [
+    { id: "mug", x: -0.4, z: 0.3, yaw: 0.7 },
+    { id: "apple", x: 0.06, z: 0.56, yaw: 0 },
+    { id: "duck", x: 0.4, z: 0.32, yaw: 2.7 },
+    { id: "dice", x: -0.08, z: 0.2, yaw: 0.35 },
+    { id: "ball", x: -1.75, z: -0.75, yaw: 0 },
+  ];
+
+  /* ============================== STATE ============================== */
+  const EYE = 1.6, PR = 0.25, SPEED = 1.15, REACH = 1.9, PLACE_REACH = 2.6;
+  const player = { x: 0, z: -1.5, vx: 0, vz: 0 };
+  let objs = [];
+  let bodyYaw = 0, bodyYawT = 0, dragYaw = 0, dragPitch = 0;
+  let mode = "start", clock = 0, enteredAt = -9;
+  let walkToggle = false, holdWalk = false, keyWalk = false, blockedT = 0;
+  let held = null, target = null, farTarget = null, interact = null, place = null, dropAt = null;
+  let stepPhase = 0, lastStep = 0, bob = 0, dirty = false, savedAt = 0;
+  let flashMsg = "", flashUntil = 0, resetAskAt = -99;
+  const flash = (m, s = 1.6) => { flashMsg = m; flashUntil = clock + s; };
+
+  function newObj(s) {
+    const d = DEFS[s.id];
+    return { id: s.id, d, x: s.x, y: 0, z: s.z, M: ry(s.yaw || 0), vx: 0, vy: 0, vz: 0, held: false, air: false,
+             anim: null, spin: null, snap: null, M0: null, takeYaw: 0, kickAt: -9 };
+  }
+  function settleAll() { for (const o of objs) if (!o.held) o.y = supportBelow(o.x, o.z, o.y + 2, o).y; }
+  function resetRoom() {
+    objs = START.map(newObj);
+    for (const o of objs) o.y = 3;
+    settleAll();
+    held = null; player.x = 0; player.z = -1.5; player.vx = player.vz = 0;
+    bodyYaw = bodyYawT = 0; dragYaw = dragPitch = 0; lightOn = true;
+    save();
+  }
+  const KEY = "room404.state";
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  function save() {
+    store.set(KEY, { v: 1, light: lightOn,
+      objs: objs.map((o) => ({ id: o.id, x: r3(o.x), y: r3(o.y), z: r3(o.z), M: o.M.map(r3), held: o.held })),
+      p: { x: r3(player.x), z: r3(player.z), yaw: r3((((bodyYaw + headYaw() + dragYaw) % TAU) + TAU) % TAU) } });
+    dirty = false; savedAt = clock;
+  }
+  function load() {
+    const s = store.get(KEY, null);
+    const ok = (v, a, b) => typeof v === "number" && Number.isFinite(v) && v >= a && v <= b;
+    if (!s || s.v !== 1 || !Array.isArray(s.objs)) return false;
+    const list = [];
+    for (const id of Object.keys(DEFS)) {
+      const q = s.objs.find((o) => o && o.id === id);
+      const o = newObj(START.find((t) => t.id === id));
+      if (q && ok(q.x, -RX, RX) && ok(q.z, -RZ, RZ) && ok(q.y, 0, RH) && Array.isArray(q.M) && q.M.length === 9 && q.M.every((v) => ok(v, -1.01, 1.01))) {
+        o.x = q.x; o.y = q.y; o.z = q.z; o.M = orthonormal(q.M); o.held = !!q.held;
+      } else o.y = 3;
+      list.push(o);
+    }
+    objs = list;
+    let h = objs.filter((o) => o.held);
+    for (const o of h.slice(1)) o.held = false;
+    held = h[0] || null;
+    if (held) { held.M0 = held.M.slice(); held.takeYaw = s.p && ok(s.p.yaw, -10, 10) ? s.p.yaw : 0; }
+    for (const o of objs) if (!o.held) o.y = supportBelow(o.x, o.z, o.y + 0.03, o).y;
+    if (s.p && ok(s.p.x, -RX, RX) && ok(s.p.z, -RZ, RZ)) { player.x = s.p.x; player.z = s.p.z; }
+    if (s.p && ok(s.p.yaw, -10, 10)) bodyYaw = bodyYawT = s.p.yaw;
+    lightOn = s.light !== false;
+    return true;
+  }
+
+  /* ============================== SENSORS ============================== */
+  const motion = DM.createMotion();
+  const headYaw = () => (motion.live ? motion.yaw * D2R : 0);
+
+  /* Neural Band wrist: RelativeOrientationSensor({ sensorId: 'emg-wrist' }) on the glasses
+     (detected by the runtime marker __imuQuatWrapped; readings arrive w-first [w, x, y, z]).
+     Twisting about the forearm spins what you hold. Same handling as SYNTH.EXE. */
+  const wrist = { status: "...", available: false, sensor: null, q0: null, prev: null, prevT: 0, startT: 0,
+                  anchor: null, stableSince: 0, rx: 0, ry: 0, retries: 0, sensorAt: 0 };
+  const hasWrist = () => typeof window.RelativeOrientationSensor === "function" && window.RelativeOrientationSensor.__imuQuatWrapped === true;
+  (async () => {
+    const until = performance.now() + 5000;
+    while (performance.now() < until && !hasWrist()) await new Promise((r) => setTimeout(r, 250));
+    wrist.available = hasWrist();
+    wrist.status = wrist.available ? "READY" : "N/A";
+  })();
+  const qmul = (a, b) => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+  const qconj = (q) => [-q[0], -q[1], -q[2], q[3]];
+  const qangle = (a, b) => (2 * Math.acos(clamp(Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]), 0, 1)) * 180) / Math.PI;
+  function toW3C(raw) {
+    if (!raw || raw.length < 4) return null;
+    let q = [raw[1], raw[2], raw[3], raw[0]];
+    if (!q.every(Number.isFinite)) return null;
+    const len = Math.hypot(...q);
+    if (len < 1e-6) return null;
+    q = q.map((v) => v / len);
+    return q[3] < 0 ? q.map((v) => -v) : q;
+  }
+  function wristRecenter() { wrist.q0 = null; wrist.anchor = null; wrist.rx = wrist.ry = 0; wrist.startT = performance.now(); if (wrist.sensor) wrist.status = "HOLD"; }
+  function wristReading(raw, ts) {
+    const t = Number.isFinite(ts) && ts > 0 ? ts : performance.now(), q = toW3C(raw);
+    if (!q) return;
+    if (wrist.prev) {
+      const ang = qangle(wrist.prev, q), dt = Math.max(1, t - wrist.prevT) / 1000;
+      if (performance.now() - wrist.sensorAt < 6000 && ang > 35 && ang / dt > 1500) wristRecenter();   // frame flips early on
+    }
+    wrist.prev = q; wrist.prevT = t;
+    if (!wrist.q0) {                                                   // settle: 0.4 s warm-up, then 0.3 s steady
+      if (!wrist.anchor || qangle(wrist.anchor, q) > 10) { wrist.anchor = q; wrist.stableSince = t; }
+      if (performance.now() - wrist.startT > 400 && t - wrist.stableSince > 300) { wrist.q0 = q; wrist.status = "ON"; }
+      return;
+    }
+    let r = qmul(qconj(wrist.q0), q);
+    if (r[3] < 0) r = r.map((v) => -v);
+    const ang = 2 * Math.acos(clamp(r[3], -1, 1)), s = Math.sqrt(Math.max(1e-9, 1 - r[3] * r[3]));
+    const k = (ang * 180) / Math.PI / s;
+    wrist.rx = r[0] * k;                                               // hand up / down (degrees)
+    wrist.ry = r[1] * k;                                               // twist about the forearm (degrees)
+  }
+  function startWrist() {
+    if (!wrist.available || wrist.sensor) return;
+    try {
+      const s = new window.RelativeOrientationSensor({ sensorId: "emg-wrist", frequency: 30 });
+      s.onreading = () => wristReading(s.quaternion, s.timestamp);
+      s.onerror = (e) => {
+        const name = (e && e.error && e.error.name) || "Error";
+        stopWrist();
+        if (name === "NotAllowedError") { wrist.status = "DENY"; return; }
+        wrist.status = "RETRY";
+        if (wrist.retries < 3) setTimeout(startWrist, 2000 * 2 ** wrist.retries++);
+        else wrist.status = "N/A";
+      };
+      s.start();
+      wrist.sensor = s; wrist.sensorAt = performance.now();
+      wristRecenter();
+    } catch (err) { wrist.status = "N/A"; }
+  }
+  function stopWrist() {
+    if (!wrist.sensor) return;
+    try { wrist.sensor.onreading = null; wrist.sensor.onerror = null; wrist.sensor.stop(); } catch {}
+    wrist.sensor = null;
+  }
+  const wristSpin = () => (wrist.q0 ? -clamp(wrist.ry, -120, 120) * D2R * 1.6 : 0);
+
+  /* ============================== SOUND ============================== */
+  let ac = null, master = null, noiseBuf = null;
+  function audio() {
+    if (!S.sounds) return null;
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC(); master = ac.createGain(); master.gain.value = 0.6; master.connect(ac.destination);
+      }
+      if (ac.state === "suspended") ac.resume();
+    } catch { return null; }
+    return ac;
+  }
+  function blip(f0, f1, dur, type = "square", vol = 0.05, delay = 0) {
+    const a = audio(); if (!a) return;
+    const t = a.currentTime + 0.005 + delay, o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.03);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(dur, vol, freq = 1200, delay = 0) {
+    const a = audio(); if (!a) return;
+    if (!noiseBuf) {
+      noiseBuf = a.createBuffer(1, Math.floor(a.sampleRate * 0.3), a.sampleRate);
+      const ch = noiseBuf.getChannelData(0);
+      for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    }
+    const t = a.currentTime + 0.005 + delay, s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    s.buffer = noiseBuf; f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 1.2;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
+  }
+  const SND = {
+    step: () => noise(0.05, 0.1, 380),
+    take: () => { blip(380, 760, 0.07, "square", 0.04); blip(760, 1140, 0.06, "square", 0.035, 0.07); },
+    put: () => blip(900, 420, 0.09, "square", 0.04),
+    land: () => noise(0.05, 0.14, 900),
+    quack: () => { blip(1250, 1700, 0.07, "sawtooth", 0.035); blip(1500, 1050, 0.09, "sawtooth", 0.035, 0.08); },
+    clink: () => { blip(2600, 2500, 0.15, "sine", 0.05); blip(3900, 3800, 0.1, "sine", 0.025, 0.01); },
+    bounce: (v = 1) => blip(230, 90, 0.12, "sine", 0.13 * clamp(v, 0.2, 1)),
+    kick: () => { noise(0.04, 0.2, 700); blip(260, 120, 0.1, "sine", 0.1); },
+    nudge: () => noise(0.05, 0.1, 600),
+    dice: () => { for (let i = 0; i < 4; i++) noise(0.025, 0.16, 2400, i * 0.06 + Math.random() * 0.02); },
+    bump: () => blip(140, 70, 0.12, "square", 0.05),
+    turn: () => blip(1300, 1300, 0.02, "square", 0.03),
+    nope: () => { blip(300, 300, 0.06, "square", 0.04); blip(220, 220, 0.08, "square", 0.04, 0.08); },
+    click: () => { noise(0.02, 0.2, 3000); blip(1800, 1800, 0.015, "square", 0.03); },
+    knock: () => { for (let i = 0; i < 3; i++) { noise(0.05, 0.25, 260, i * 0.17); blip(160, 90, 0.07, "sine", 0.12, i * 0.17); } },
+    walk: () => blip(600, 900, 0.05, "square", 0.03),
+    stop: () => blip(900, 600, 0.05, "square", 0.03),
+  };
+  const sound = (k, v) => { try { if (SND[k]) SND[k](v); } catch {} };
+
+  /* ============================== COLLISION + RAYS ============================== */
+  function supportBelow(x, z, yRef, self) {
+    let y = -1, name = "FLOOR";
+    for (const s of SUPPORTS) if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.y <= yRef + 0.02 && s.y > y) { y = s.y; name = s.name; }
+    for (const o of objs) {
+      if (o === self || o.held || o.anim || !o.d.flat) continue;
+      if (Math.abs(x - o.x) < o.d.r * 0.95 && Math.abs(z - o.z) < o.d.r * 0.95) {
+        const top = o.y + o.d.h;
+        if (top <= yRef + 0.02 && top > y) { y = top; name = o.d.name; }
+      }
+    }
+    return { y: Math.max(0, y), name };
+  }
+  // push a circle (centre b.x/b.z, radius r) out of a box's footprint; bounce its velocity
+  function pushOut(b, box, r, e) {
+    const cx = clamp(b.x, box.x0, box.x1), cz = clamp(b.z, box.z0, box.z1);
+    const dx = b.x - cx, dz = b.z - cz, d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) return false;
+    let nx, nz;
+    if (d2 > 1e-12) { const d = Math.sqrt(d2); nx = dx / d; nz = dz / d; b.x = cx + nx * r; b.z = cz + nz * r; }
+    else {
+      const l = b.x - box.x0, rr = box.x1 - b.x, f = b.z - box.z0, k = box.z1 - b.z, m = Math.min(l, rr, f, k);
+      if (m === l) { nx = -1; nz = 0; b.x = box.x0 - r; } else if (m === rr) { nx = 1; nz = 0; b.x = box.x1 + r; }
+      else if (m === f) { nx = 0; nz = -1; b.z = box.z0 - r; } else { nx = 0; nz = 1; b.z = box.z1 + r; }
+    }
+    if (e !== undefined && b.vx !== undefined) {
+      const vn = b.vx * nx + b.vz * nz;
+      if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vz -= (1 + e) * vn * nz; }
+    }
+    return true;
+  }
+  function rayBox(o, d, b) {
+    let tmin = -Infinity, tmax = Infinity, axis = -1, sign = 0;
+    const lo3 = [b.x0, b.y0, b.z0], hi3 = [b.x1, b.y1, b.z1];
+    for (let a = 0; a < 3; a++) {
+      if (Math.abs(d[a]) < 1e-9) { if (o[a] < lo3[a] || o[a] > hi3[a]) return null; continue; }
+      let t1 = (lo3[a] - o[a]) / d[a], t2 = (hi3[a] - o[a]) / d[a], s = -1;
+      if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; s = 1; }
+      if (t1 > tmin) { tmin = t1; axis = a; sign = s; }
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return null;
+    }
+    if (tmin < 0) return null;                                         // behind us, or we're inside
+    return { t: tmin, axis, sign };
+  }
+  const objBox = (ob) => ({ x0: ob.x - ob.d.r, x1: ob.x + ob.d.r, y0: ob.y, y1: ob.y + ob.d.h, z0: ob.z - ob.d.r, z1: ob.z + ob.d.r });
+  // first thing a ray hits: { t, kind: "sup" | "wall" | "obj", name, y, rect, obj }
+  function castRay(o, d, maxT, skip, staticOnly) {
+    let best = { t: maxT, kind: null };
+    const cand = (h) => { if (h.t < best.t) best = h; };
+    if (d[1] < 0) cand({ t: -o[1] / d[1], kind: "sup", name: "FLOOR", y: 0, rect: SUPPORTS[0] });
+    if (d[1] > 0) cand({ t: (RH - o[1]) / d[1], kind: "wall", name: "CEILING" });
+    if (d[0] > 0) cand({ t: (RX - o[0]) / d[0], kind: "wall" }); else if (d[0] < 0) cand({ t: (-RX - o[0]) / d[0], kind: "wall" });
+    if (d[2] > 0) cand({ t: (RZ - o[2]) / d[2], kind: "wall" }); else if (d[2] < 0) cand({ t: (-RZ - o[2]) / d[2], kind: "wall" });
+    for (const b of SOLIDS) {
+      const h = rayBox(o, d, b);
+      if (!h || h.t >= best.t) continue;
+      if (h.axis === 1 && h.sign > 0 && b.sup) best = { t: h.t, kind: "sup", name: b.sup, y: b.y1, rect: b };
+      else best = { t: h.t, kind: "wall", name: b.name };
+    }
+    if (!staticOnly) for (const ob of objs) {
+      if (ob === skip || ob.held) continue;
+      const b = objBox(ob), h = rayBox(o, d, b);
+      if (!h || h.t >= best.t) continue;
+      if (h.axis === 1 && h.sign > 0 && ob.d.flat) best = { t: h.t, kind: "sup", name: ob.d.name, y: b.y1, obj: ob };
+      else best = { t: h.t, kind: "obj", obj: ob };
+    }
+    return best;
+  }
+
+  /* ============================== CAMERA ============================== */
+  const cam = { x: 0, y: EYE, z: 0, yaw: 0, pitch: 0, roll: 0, r: [1, 0, 0], u: [0, 1, 0], f: [0, 0, 1] };
+  function setCam(x, y, z, yaw, pitch, roll) {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+    const r0 = [cy, 0, -sy], f0 = [sy, 0, cy];
+    const u1 = [-f0[0] * sp, cp, -f0[2] * sp];
+    cam.x = x; cam.y = y; cam.z = z; cam.yaw = yaw; cam.pitch = pitch; cam.roll = roll;
+    cam.f = [f0[0] * cp, sp, f0[2] * cp];
+    cam.r = [r0[0] * cr - u1[0] * sr, -u1[1] * sr, r0[2] * cr - u1[2] * sr];
+    cam.u = [u1[0] * cr + r0[0] * sr, u1[1] * cr, u1[2] * cr + r0[2] * sr];
+  }
+  function camPt(p) {
+    const dx = p[0] - cam.x, dy = p[1] - cam.y, dz = p[2] - cam.z, r = cam.r, u = cam.u, f = cam.f;
+    return [dx * r[0] + dy * r[1] + dz * r[2], dx * u[0] + dy * u[1] + dz * u[2], dx * f[0] + dy * f[1] + dz * f[2]];
+  }
+  function sphereOut(c, rad) {                                         // whole sphere outside the view?
+    const q = camPt(c);
+    if (q[2] < NEAR - rad) return true;
+    if (q[0] - q[2] * FR > rad * FRN || -q[0] - q[2] * FR > rad * FRN) return true;
+    if (q[1] - q[2] * FR > rad * FRN || -q[1] - q[2] * FR > rad * FRN) return true;
+    return false;
+  }
+
+  /* ============================== RASTERISER ============================== */
+  const SX = new Float64Array(64), SY = new Float64Array(64), SZ = new Float64Array(64);
+  const EDG = new Float64Array(7 * 6000);
+  let nE = 0;
+  function tri(x0, y0, z0, x1, y1, z1, x2, y2, z2, col) {
+    let area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if (area > -1e-9 && area < 1e-9) return;
+    if (area < 0) { let t = x1; x1 = x2; x2 = t; t = y1; y1 = y2; y2 = t; t = z1; z1 = z2; z2 = t; area = -area; }
+    const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(R - 1, Math.ceil(Math.max(x0, x1, x2)));
+    const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(R - 1, Math.ceil(Math.max(y0, y1, y2)));
+    if (minX > maxX || minY > maxY) return;
+    const inv = 1 / area, d0 = -(y2 - y1), d1 = -(y0 - y2), d2 = -(y1 - y0);
+    for (let y = minY; y <= maxY; y++) {
+      const py = y + 0.5, px = minX + 0.5;
+      let w0 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
+      let w1 = (x0 - x2) * (py - y2) - (y0 - y2) * (px - x2);
+      let w2 = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0);
+      let idx = y * R + minX;
+      for (let x = minX; x <= maxX; x++, idx++, w0 += d0, w1 += d1, w2 += d2) {
+        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+        const iz = (w0 * z0 + w1 * z1 + w2 * z2) * inv;
+        if (iz > depth[idx]) { depth[idx] = iz; pix[idx] = col; }
+      }
+    }
+  }
+  function clipNear(cs) {
+    const out = [];
+    for (let i = 0; i < cs.length; i++) {
+      const a = cs[i], b = cs[(i + 1) % cs.length], ain = a[2] >= NEAR, bin = b[2] >= NEAR;
+      if (ain) out.push(a);
+      if (ain !== bin) { const t = (NEAR - a[2]) / (b[2] - a[2]); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, NEAR]); }
+    }
+    return out;
+  }
+  function addEdge(a, b, col) {
+    if (nE >= 6000) return;
+    const k = nE++ * 7;
+    EDG[k] = a[0]; EDG[k + 1] = a[1]; EDG[k + 2] = a[2]; EDG[k + 3] = b[0]; EDG[k + 4] = b[1]; EDG[k + 5] = b[2]; EDG[k + 6] = col;
+  }
+  function renderFace(pts, n, c, col, ecol, two) {
+    if (!two && (cam.x - c[0]) * n[0] + (cam.y - c[1]) * n[1] + (cam.z - c[2]) * n[2] <= 0) return;
+    const m = pts.length;
+    let cs = new Array(m), near = false;
+    for (let i = 0; i < m; i++) { const q = camPt(pts[i]); cs[i] = q; if (q[2] < NEAR) near = true; }
+    if (ecol) for (let i = 0; i < m; i++) addEdge(cs[i], cs[(i + 1) % m], ecol);
+    if (near) { cs = clipNear(cs); if (cs.length < 3) return; }
+    let r = true, l = true, u = true, dn = true;
+    for (const q of cs) {
+      const lim = q[2] * FR;
+      if (q[0] <= lim) r = false; if (q[0] >= -lim) l = false; if (q[1] <= lim) u = false; if (q[1] >= -lim) dn = false;
+    }
+    if (r || l || u || dn) return;
+    const k = cs.length;
+    for (let i = 0; i < k; i++) { const iz = 1 / cs[i][2]; SX[i] = HALF + FOCAL * cs[i][0] * iz; SY[i] = HALF - FOCAL * cs[i][1] * iz; SZ[i] = iz; }
+    for (let i = 1; i < k - 1; i++) tri(SX[0], SY[0], SZ[0], SX[i], SY[i], SZ[i], SX[i + 1], SY[i + 1], SZ[i + 1], col);
+  }
+  // a depth-tested line (camera space in, clipped to the near plane and the screen)
+  function line3(ax, ay, az, bx, by, bz, col) {
+    if (az < NEAR && bz < NEAR) return;
+    if (az < NEAR) { const t = (NEAR - az) / (bz - az); ax += (bx - ax) * t; ay += (by - ay) * t; az = NEAR; }
+    else if (bz < NEAR) { const t = (NEAR - bz) / (az - bz); bx += (ax - bx) * t; by += (ay - by) * t; bz = NEAR; }
+    const i0 = 1 / az, i1 = 1 / bz;
+    const x0 = HALF + FOCAL * ax * i0, y0 = HALF - FOCAL * ay * i0, x1 = HALF + FOCAL * bx * i1, y1 = HALF - FOCAL * by * i1;
+    const dx = x1 - x0, dy = y1 - y0;
+    let t0 = 0, t1 = 1;
+    const edges = [[-dx, x0], [dx, R - 0.001 - x0], [-dy, y0], [dy, R - 0.001 - y0]];
+    for (const [p, q] of edges) {
+      if (p === 0) { if (q < 0) return; continue; }
+      const rr = q / p;
+      if (p < 0) { if (rr > t1) return; if (rr > t0) t0 = rr; } else { if (rr < t0) return; if (rr < t1) t1 = rr; }
+    }
+    const sx = x0 + dx * t0, sy = y0 + dy * t0, sz = i0 + (i1 - i0) * t0;
+    const ex = x0 + dx * t1, ey = y0 + dy * t1, ez = i0 + (i1 - i0) * t1;
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(ex - sx), Math.abs(ey - sy))));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, x = Math.floor(sx + (ex - sx) * t), y = Math.floor(sy + (ey - sy) * t);
+      if (x < 0 || y < 0 || x >= R || y >= R) continue;
+      const idx = y * R + x, iz = sz + (ez - sz) * t;
+      if (iz * 1.02 >= depth[idx]) pix[idx] = col;
+    }
+  }
+  const worldLine = (a, b, col) => addEdge(camPt(a), camPt(b), col);
+
+  function renderObj(o, hi) {
+    const d = o.d, M = o.M, cy = d.cy, L = lightOn ? 1 : 0;
+    if (sphereOut([o.x, o.y + d.h / 2, o.z], Math.max(d.h, 2 * d.r))) return;
+    const hiC = hex(PAL.b);
+    for (const f of d.mesh) {
+      const pts = f.p.map((v) => { const w = mv(M, [v[0], v[1] - cy, v[2]]); return [o.x + w[0], o.y + cy + w[1], o.z + w[2]]; });
+      const n = mv(M, f.n), cl = mv(M, [f.c[0], f.c[1] - cy, f.c[2]]), c = [o.x + cl[0], o.y + cy + cl[1], o.z + cl[2]];
+      let k = f.glow ? 1 : objLight(n, c, f.two);
+      if (hi) k = Math.min(1.5, k * 1.2 + 0.15);
+      const col = packK(f.base, k);
+      const ecol = hi ? pack(hiC[0], hiC[1], hiC[2]) : f.erg ? packK(f.erg, L ? 1 : 0.55) : 0;
+      renderFace(pts, n, c, col, ecol, f.two);
+    }
+  }
+  function ringLines(x, y, z, r, col, dashed) {
+    const n = 18;
+    for (let i = 0; i < n; i++) {
+      if (dashed && i % 2) continue;
+      const a = (i / n) * TAU, b = ((i + 1) / n) * TAU;
+      worldLine([x + Math.cos(a) * r, y, z + Math.sin(a) * r], [x + Math.cos(b) * r, y, z + Math.sin(b) * r], col);
+    }
+  }
+  function renderScene() {
+    pix.fill(BLACK); depth.fill(0); nE = 0;
+    const L = lightOn ? 0 : 1;
+    for (const f of SF) {
+      if (sphereOut(f.c, f.rad)) continue;
+      renderFace(f.p, f.n, f.c, f.col[L], f.ecol[L], f.two);
+    }
+    for (const o of objs) renderObj(o, o === target && mode === "room");
+    for (const ln of SLINES) worldLine(ln[0], ln[1], ln[3 + L]);
+    // clock hands (real time)
+    const now = new Date(), sec = now.getSeconds() + now.getMilliseconds() / 1000, mi = now.getMinutes() + sec / 60, hr = (now.getHours() % 12) + mi / 60;
+    const hand = (frac, len, col) => { const a = frac * TAU; worldLine([RX - 0.038, 1.72, 0.75], [RX - 0.038, 1.72 + Math.cos(a) * len, 0.75 + Math.sin(a) * len], col); };
+    const HC = lightOn ? 0xff401810 : 0xff200c08;
+    hand(hr / 12, 0.1, HC); hand(mi / 60, 0.15, HC); hand(sec / 60, 0.16, lightOn ? 0xff3030ff : 0xff181880);
+    // where the thing in your hand will go
+    if (held && mode === "room") {
+      const hc = hex(PAL.b), mc = hex(PAL.m);
+      if (place) {
+        ringLines(place.x, place.y + 0.004, place.z, held.d.r + 0.02, pack(hc[0], hc[1], hc[2]), false);
+        worldLine([place.x - 0.03, place.y + 0.004, place.z], [place.x + 0.03, place.y + 0.004, place.z], pack(hc[0], hc[1], hc[2]));
+        worldLine([place.x, place.y + 0.004, place.z - 0.03], [place.x, place.y + 0.004, place.z + 0.03], pack(hc[0], hc[1], hc[2]));
+      } else if (dropAt) ringLines(dropAt.x, dropAt.y + 0.004, dropAt.z, held.d.r, pack(mc[0], mc[1], mc[2]), true);
+    }
+    for (let i = 0; i < nE; i++) { const k = i * 7; line3(EDG[k], EDG[k + 1], EDG[k + 2], EDG[k + 3], EDG[k + 4], EDG[k + 5], EDG[k + 6]); }
+    lo.putImageData(img, 0, 0);
+  }
+
+  /* ============================== HUD ============================== */
+  function text(str, x, y, col, sc = 1, a = 1) {
+    lo.fillStyle = col; lo.globalAlpha = a;
+    x = Math.round(x); y = Math.round(y);
+    for (const ch of String(str).toUpperCase()) {
+      const g = FONT[ch];
+      if (g) for (let r = 0; r < 5; r++) {
+        const b = g.charCodeAt(r) - 48;
+        for (let c = 0; c < 3; c++) if (b & (4 >> c)) lo.fillRect(x + c * sc, y + r * sc, sc, sc);
+      }
+      x += 4 * sc;
+    }
+    lo.globalAlpha = 1;
+  }
+  const tw = (s, sc = 1) => Math.max(0, String(s).length * 4 * sc - sc);
+  const textC = (s, cx, y, col, sc = 1, a = 1) => text(s, Math.round(cx - tw(s, sc) / 2), y, col, sc, a);
+  const textR = (s, rx, y, col, sc = 1, a = 1) => text(s, rx - tw(s, sc), y, col, sc, a);
+  function shade(x, y, w, h, a = 0.6) { lo.globalAlpha = a; lo.fillStyle = "#000"; lo.fillRect(x, y, w, h); lo.globalAlpha = 1; }
+  function textBox(s, cx, y, col, sc = 1) { const w = tw(s, sc); shade(Math.round(cx - w / 2) - 3, y - 2, w + 6, 5 * sc + 4, 0.7); textC(s, cx, y, col, sc); }
+  const big = (s) => (tw(s, 2) <= R - 8 ? 2 : 1);                      // double size whenever it fits
+  function message(m, y, col) {                                       // "\n" splits lines
+    const lines = m.split("\n");
+    lines.forEach((ln, i) => textBox(ln, HALF, y + i * 14, col, big(ln)));
+  }
+
+  function screenBox(o) {
+    const b = objBox(o);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, any = false;
+    for (const x of [b.x0, b.x1]) for (const y of [b.y0, b.y1]) for (const z of [b.z0, b.z1]) {
+      const q = camPt([x, y, z]);
+      if (q[2] < NEAR) continue;
+      any = true;
+      const sx = HALF + (FOCAL * q[0]) / q[2], sy = HALF - (FOCAL * q[1]) / q[2];
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    }
+    return any ? { x0: Math.round(x0) - 2, y0: Math.round(y0) - 2, x1: Math.round(x1) + 2, y1: Math.round(y1) + 2 } : null;
+  }
+  function brackets(b, col) {
+    lo.fillStyle = col;
+    const L = 4, w = b.x1 - b.x0, h = b.y1 - b.y0;
+    if (w > 190 || h > 190) return;
+    for (const [x, y, sx, sy] of [[b.x0, b.y0, 1, 1], [b.x1, b.y0, -1, 1], [b.x0, b.y1, 1, -1], [b.x1, b.y1, -1, -1]]) {
+      lo.fillRect(sx > 0 ? x : x - L + 1, y, L, 1);
+      lo.fillRect(x, sy > 0 ? y : y - L + 1, 1, L);
+    }
+  }
+  const OBJ_DOT = { mug: "#2ec8f0", apple: "#ff3030", duck: "#ffd21a", ball: "#ff40c0", dice: "#ffffff" };
+  function miniMap() {
+    const ox = 3, oy = 150, s = 5;
+    const mx = (x) => ox + (x + RX) * s, mz = (z) => oy + (RZ - z) * s;
+    shade(ox - 1, oy - 1, RX * 2 * s + 2, RZ * 2 * s + 2, 0.55);
+    lo.fillStyle = PAL.d; lo.strokeStyle = PAL.d; lo.lineWidth = 1;
+    lo.strokeRect(ox + 0.5, oy + 0.5, RX * 2 * s - 1, RZ * 2 * s - 1);
+    lo.fillStyle = PAL.b; lo.fillRect(mx(-1), oy, 2 * s, 1);                         // window
+    lo.fillStyle = "#000"; lo.fillRect(mx(-0.5), oy + RZ * 2 * s - 1, s, 1);            // door
+    lo.fillStyle = PAL.m;
+    lo.fillRect(Math.round(mx(TBL.x0)), Math.round(mz(TBL.z1)), Math.round((TBL.x1 - TBL.x0) * s), Math.round((TBL.z1 - TBL.z0) * s));
+    lo.fillRect(Math.round(mx(2.62)), Math.round(mz(-0.5)), 2, Math.round(1.2 * s));    // shelf
+    lo.fillStyle = PAL.d;
+    lo.fillRect(Math.round(mx(-1.27)), Math.round(mz(0.62)), 3, 3); lo.fillRect(Math.round(mx(0.83)), Math.round(mz(0.62)), 3, 3);
+    for (const o of objs) {
+      if (o.held) continue;
+      lo.fillStyle = OBJ_DOT[o.id]; lo.fillRect(Math.round(mx(o.x)), Math.round(mz(o.z)), 1, 1);
+    }
+    const px = mx(player.x), pz = mz(player.z);
+    lo.fillStyle = PAL.b;
+    lo.fillRect(Math.round(px) - 1, Math.round(pz) - 1, 2, 2);
+    lo.fillRect(Math.round(px + Math.sin(cam.yaw) * 3.5), Math.round(pz - Math.cos(cam.yaw) * 3.5), 1, 1);
+  }
+  const walking = () => walkToggle || holdWalk || keyWalk;
+  function hud() {
+    const C = PAL.c, B = PAL.b, M = PAL.m;
+    shade(0, 0, R, 9, 0.5);
+    text("ROOM 404", 3, 2, M);
+    let right = held ? "HAND: " + held.d.name : "";
+    if (walking()) right = (Math.floor(clock * 4) % 2 ? ">> " : " > ") + "WALK" + (held ? "  " + held.d.name : "");
+    textR(right, R - 3, 2, walking() ? B : C);
+    // crosshair, or brackets round what you can take
+    if (target) {
+      const b = screenBox(target);
+      if (b) {
+        const pulse = Math.floor(clock * 3) % 2 ? B : C;
+        brackets(b, pulse);
+        const ly = b.y0 - 13 < 11 ? b.y1 + 4 : b.y0 - 13;
+        textBox(target.d.name, clamp((b.x0 + b.x1) / 2, 30, R - 30), ly, B, 2);
+      }
+    } else {
+      lo.fillStyle = interact ? B : held ? M : C;
+      lo.globalAlpha = 0.9;
+      lo.fillRect(HALF - 4, HALF, 3, 1); lo.fillRect(HALF + 2, HALF, 3, 1);
+      lo.fillRect(HALF, HALF - 4, 1, 3); lo.fillRect(HALF, HALF + 2, 1, 3);
+      lo.globalAlpha = 1;
+      if (interact) textBox(interact === "LAMP" ? "LAMP" : "DOOR 404", HALF, HALF + 9, B, 2);
+    }
+    // what a pinch does right now
+    let hint;
+    if (held) hint = place ? "2X PINCH: PUT ON " + place.name : "2X PINCH: DROP IT";
+    else if (target) hint = "2X PINCH: TAKE " + target.d.name;
+    else if (interact === "LAMP") hint = "2X PINCH: LIGHT " + (lightOn ? "OFF" : "ON");
+    else if (interact === "DOOR") hint = "2X PINCH: OPEN THE DOOR";
+    else if (farTarget) hint = "WALK CLOSER TO THE " + farTarget.d.name;
+    else hint = walking() ? "PINCH: STOP" : "PINCH: WALK";
+    shade(0, R - 15, R, 15, 0.6);
+    textC(hint, HALF, R - 12, held || target || interact ? B : C, big(hint));
+    miniMap();
+    if (held && wrist.q0) textR("TWIST: SPIN", R - 3, 11, M);
+    if (!motion.live && clock - enteredAt > 1.5) textR(onGlasses ? "NO HEAD SENSOR: SWIPE" : "DRAG TO LOOK", R - 3, 11, M);
+    if (flashMsg && clock < flashUntil) message(flashMsg, 24, B);
+  }
+  function drawStart() {
+    const B = PAL.b, C = PAL.c, M = PAL.m;
+    shade(6, 10, 188, 182, 0.7);
+    textC("ROOM 404", HALF, 17, B, 3);
+    textC("A TINY 3D ROOM. COME IN.", HALF, 38, M);
+    const rows = ["LOOK: MOVE YOUR HEAD", "PINCH: WALK / STOP", "HOLD PINCH: WALK", "2X PINCH: TAKE / PUT", "TWIST WRIST: SPIN IT", "SWIPE < >: TURN"];
+    rows.forEach((r, i) => { const k = r.indexOf(":") + 1; const x = HALF - tw(r, 2) / 2; text(r.slice(0, k), x, 50 + i * 15, C, 2); text(r.slice(k), x + 8 * k, 50 + i * 15, M, 2); });
+    textC("SWIPE ^: RECENTER   SWIPE V: SENSOR AXIS " + motion.axisName, HALF, 142, M);
+    if (Math.floor(clock * 2) % 2 === 0) textC("PINCH TO ENTER", HALF, 154, B, 2);
+    textC("SWIPE DOWN TWICE: TIDY UP THE ROOM", HALF, 172, M, 1, 0.8);
+    if (flashMsg && clock < flashUntil) textBox(flashMsg, HALF, 182, B);
+  }
+  function present() {
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(loC, 0, 0, W, W);
+    ctx.fillStyle = scan; ctx.fillRect(0, 0, W, W);
+  }
+
+  /* ============================== ACTIONS ============================== */
+  function viewYaw() { return bodyYaw + headYaw() + dragYaw; }
+  function enterRoom() {
+    mode = "room"; enteredAt = clock;
+    motion.enable();
+    motion.zero(); dragPitch = 0;
+    startWrist(); audio();
+    flash("LOOK AROUND", 1.8);
+  }
+  function take(o) {
+    held = o; o.held = true; o.anim = null; o.snap = null; o.spin = null; o.vx = o.vy = o.vz = 0; o.air = false;
+    o.takeYaw = cam.yaw; o.M0 = o.M.slice();
+    wristRecenter();
+    flash(o.d.say, 1.4);
+    sound(o.d.snd || "take");
+    save();
+  }
+  function putDown() {
+    const o = held; held = null; o.held = false;
+    if (place) {
+      o.anim = { t: 0, dur: 0.3, from: [o.x, o.y, o.z], to: [place.x, place.y, place.z] };
+      sound("put");
+    } else {
+      o.vx = player.vx * 0.8; o.vz = player.vz * 0.8; o.vy = 0; o.air = true;
+      sound("put");
+    }
+    if (o.d.dice) o.spin = { a: norm([Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5]), w: 14 + Math.random() * 8 };
+    dirty = true;
+  }
+  function takeOrPut() {
+    if (mode !== "room") return;
+    if (held) { putDown(); return; }
+    if (target) { take(target); return; }
+    if (interact === "LAMP") { lightOn = !lightOn; sound("click"); flash(lightOn ? "LIGHT ON" : "LIGHT OFF", 1.2); save(); return; }
+    if (interact === "DOOR") { sound("knock"); flash("ERROR 404\nEXIT NOT FOUND", 2.4); return; }
+    if (farTarget) { sound("nope"); flash("TOO FAR. WALK CLOSER", 1.4); return; }
+    sound("nope"); flash("NOTHING TO TAKE HERE", 1.2);
+  }
+  function recenter() {
+    bodyYaw = bodyYawT = viewYaw(); dragYaw = 0; dragPitch = 0;
+    motion.zero();
+  }
+
+  /* ---------- pinch counting: 1 pinch = walk / stop, 2 quick pinches = take / put ---------- */
+  const DOUBLE_MS = 420;
+  let tapN = 0, tapTimer = 0, undoWalk = null;
+  function cancelPendingTap() { clearTimeout(tapTimer); tapN = 0; undoWalk = null; }
+  function tap() {
+    if (mode === "start") { enterRoom(); return; }
+    if (clock - enteredAt < 0.45) return;                             // the double-tap that opened the room
+    tapN++;
+    if (tapN === 1) {
+      undoWalk = walkToggle;
+      if (walkToggle) { walkToggle = false; }                          // stopping happens at once
+      tapTimer = setTimeout(() => {
+        tapN = 0;
+        if (!undoWalk) { walkToggle = true; sound("walk"); }            // starting waits for a possible 2nd pinch
+        else sound("stop");
+        undoWalk = null;
+      }, DOUBLE_MS);
+    } else {
+      clearTimeout(tapTimer); tapN = 0;
+      if (undoWalk) walkToggle = true;                                 // that was a double pinch, keep walking
+      undoWalk = null;
+      takeOrPut();
+    }
+  }
+  function swipe(k) {
+    if (mode === "start") {
+      if (k === "ArrowDown") {
+        if (clock - resetAskAt < 2.5) { resetAskAt = -99; resetRoom(); sound("put"); flash("ROOM TIDIED UP", 1.8); }
+        else { resetAskAt = clock; flash("SWIPE DOWN AGAIN TO TIDY UP", 2.5); }
+      }
+      return;
+    }
+    if (k === "ArrowLeft" || k === "ArrowRight") { bodyYawT += ((k === "ArrowRight" ? 1 : -1) * Math.PI) / 4; sound("turn"); }
+    else if (k === "ArrowUp") { recenter(); sound("turn"); flash("RECENTERED", 1); }
+    else { const v = viewYaw(); const a = motion.nextAxis(1); bodyYaw = bodyYawT = v; dragYaw = 0; sound("turn"); flash("SENSOR AXIS " + a, 1.4); }
+  }
+
+  /* ---------- input ---------- */
+  let ptr = null, lastPointerAt = -1e9, holdTimer = 0;
+  const TAP_MOVE = onGlasses ? 40 : 10, HOLD_MS = 320, DRAG_K = 0.0045;
+  cv.addEventListener("pointerdown", (e) => {
+    lastPointerAt = performance.now();
+    audio();
+    if (!motion.live) motion.enable();                                 // sensor permission comes from a gesture
+    ptr = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, hold: false };
+    try { cv.setPointerCapture(e.pointerId); } catch {}
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      if (!ptr || ptr.moved >= TAP_MOVE || mode !== "room") return;
+      ptr.hold = true; holdWalk = true; cancelPendingTap(); sound("walk");
+    }, HOLD_MS);
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!ptr) return;
+    lastPointerAt = performance.now();
+    let dx = e.movementX, dy = e.movementY;
+    if (typeof dx !== "number" || (dx === 0 && dy === 0)) { dx = e.clientX - ptr.x; dy = e.clientY - ptr.y; }
+    if (Math.abs(dx) > 150 && Math.abs(e.clientX - 300) < 3) dx = 0;  // the EMG pointer can snap back to the centre
+    if (Math.abs(dy) > 150 && Math.abs(e.clientY - 300) < 3) dy = 0;
+    ptr.x = e.clientX; ptr.y = e.clientY; ptr.moved += Math.abs(dx) + Math.abs(dy);
+    if (!onGlasses || !motion.live) { dragYaw -= dx * DRAG_K; dragPitch = clamp(dragPitch + dy * DRAG_K, -1.4, 1.4); }
+  });
+  function endPointer(cancel) {
+    if (!ptr) return;
+    lastPointerAt = performance.now();
+    clearTimeout(holdTimer);
+    const p = ptr; ptr = null;
+    if (p.hold) { holdWalk = false; walkToggle = false; sound("stop"); return; }
+    if (!cancel && p.moved < TAP_MOVE) tap();
+  }
+  cv.addEventListener("pointerup", () => endPointer(false));
+  cv.addEventListener("pointercancel", () => endPointer(true));
+  // On the glasses a pinch sends Enter AND (touch-action: none) a pointer press; the pointer
+  // press counts, an Enter that comes with one is ignored.
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); save(); stopWrist(); history.back(); return; }
+    if (k === "Enter") {
+      e.preventDefault();
+      if (e.repeat) return;
+      const at = performance.now();
+      audio();
+      if (!motion.live) motion.enable();
+      setTimeout(() => { if (ptr || Math.abs(lastPointerAt - at) < 450) return; tap(); }, 200);
+      return;
+    }
+    if (k.startsWith("Arrow")) { e.preventDefault(); audio(); swipe(k); return; }
+    if (k === "w" || k === "W") { keyWalk = mode === "room"; return; }
+    if (k === "e" || k === "E" || k === " ") { e.preventDefault(); audio(); if (mode === "start") enterRoom(); else takeOrPut(); }
+  });
+  document.addEventListener("keyup", (e) => { if (e.key === "w" || e.key === "W") keyWalk = false; });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { walkToggle = holdWalk = keyWalk = false; save(); stopWrist(); if (ac && ac.suspend) ac.suspend(); }
+  });
+  if (window.GlassesPresence) GlassesPresence.onSettings(() => { S = DM.settings.get(); PAL = DM.dosPalette(S.color); });
+
+  /* ============================== SIMULATION ============================== */
+  function movePlayer(dt) {
+    const want = mode === "room" && walking();
+    const tx = want ? Math.sin(cam.yaw) * SPEED : 0, tz = want ? Math.cos(cam.yaw) * SPEED : 0;
+    const k = 1 - Math.exp(-dt * (want ? 5 : 9));
+    player.vx += (tx - player.vx) * k; player.vz += (tz - player.vz) * k;
+    const ox = player.x, oz = player.z, wantD = want ? SPEED * dt : 0;
+    player.x += player.vx * dt; player.z += player.vz * dt;
+    for (let it = 0; it < 2; it++) {
+      player.x = clamp(player.x, -RX + PR, RX - PR); player.z = clamp(player.z, -RZ + PR, RZ - PR);
+      for (const b of SOLIDS) if (b.coll && b.y1 > 0.12 && b.y0 < 1.8) pushOut(player, b, PR);
+    }
+    const moved = Math.hypot(player.x - ox, player.z - oz);
+    player.vx = (player.x - ox) / dt; player.vz = (player.z - oz) / dt;
+    if (want && wantD > 0.01 && moved < wantD * 0.3) {
+      blockedT += dt;
+      if (blockedT > 0.35) {
+        blockedT = -0.6;
+        sound("bump");
+        if (walkToggle) { walkToggle = false; flash("BUMP!", 0.9); }
+      }
+    } else if (blockedT > 0) blockedT = 0; else blockedT = Math.min(0, blockedT + dt);
+    const spd = Math.hypot(player.vx, player.vz);
+    stepPhase += ((spd * dt) / 0.65) * Math.PI;
+    const st = Math.floor(stepPhase / Math.PI);
+    if (st !== lastStep) { lastStep = st; if (spd > 0.4) sound("step"); }
+    bob = (Math.abs(Math.sin(stepPhase)) - 0.5) * 0.022 * clamp(spd / SPEED, 0, 1);
+    if (spd > 0.05) dirty = true;
+  }
+  function look() {
+    const o = [cam.x, cam.y, cam.z], d = cam.f;
+    target = null; farTarget = null; interact = null; place = null; dropAt = null;
+    if (held) {
+      const h = castRay(o, d, PLACE_REACH, held, false);
+      if (h.kind === "sup") {
+        let x = o[0] + d[0] * h.t, z = o[2] + d[2] * h.t;
+        const r = held.d.r;
+        if (h.obj) { x = h.obj.x; z = h.obj.z; }
+        else if (h.rect) {
+          const s = h.rect;
+          x = s.x1 - s.x0 > 2 * r ? clamp(x, s.x0 + r, s.x1 - r) : (s.x0 + s.x1) / 2;
+          z = s.z1 - s.z0 > 2 * r ? clamp(z, s.z0 + r, s.z1 - r) : (s.z0 + s.z1) / 2;
+        }
+        x = clamp(x, -RX + r, RX - r); z = clamp(z, -RZ + r, RZ - r);   // things stay inside the room
+        if (h.name === "FLOOR") {                                      // not on your own feet
+          const dx = x - player.x, dz = z - player.z, dd = Math.hypot(dx, dz), m = PR + r + 0.03;
+          if (dd < m) { const a = dd > 1e-3 ? Math.atan2(dx, dz) : cam.yaw; x = player.x + Math.sin(a) * m; z = player.z + Math.cos(a) * m; }
+        }
+        place = { x, y: h.y, z, name: h.name };
+      } else dropAt = { x: held.x, z: held.z, y: supportBelow(held.x, held.z, held.y, held).y };
+      return;
+    }
+    const wall = castRay(o, d, 8, null, true);
+    let bestT = 1e9;
+    for (const ob of objs) {
+      if (ob.held) continue;
+      const c = [ob.x, ob.y + ob.d.h / 2, ob.z], rho = Math.max(ob.d.r, ob.d.h / 2) * 1.3 + 0.03;
+      const oc = sub(c, o), dist = Math.hypot(oc[0], oc[1], oc[2]), tca = dot(oc, d);
+      if (tca <= 0) continue;
+      const d2 = dist * dist - tca * tca, ang = Math.acos(clamp(tca / dist, -1, 1));
+      if (d2 > rho * rho && ang > 6 * D2R) continue;
+      if (dist - rho > wall.t + 0.02) continue;                        // hidden behind something
+      const t = d2 <= rho * rho ? tca - Math.sqrt(rho * rho - d2) : tca;
+      if (dist <= REACH) { if (t < bestT) { bestT = t; target = ob; } }
+      else if (!farTarget || dist < farTarget.dist) farTarget = { d: ob.d, dist };
+    }
+    if (target) farTarget = null;
+    else if ((wall.name === "LAMP" || wall.name === "DOOR") && wall.t < REACH + 0.3) interact = wall.name;
+  }
+  function updateHeld(dt) {
+    const o = held;
+    if (!o) return;
+    const ahead = castRay([cam.x, cam.y, cam.z], cam.f, 0.9, o, true);
+    const dist = clamp(ahead.t - 0.14, 0.26, 0.52);
+    const DN = 0.15, RT = 0.07;                                        // a bit low and to the right, like in your hand
+    const hx = cam.x + cam.f[0] * dist - cam.u[0] * DN + cam.r[0] * RT, hz = cam.z + cam.f[2] * dist - cam.u[2] * DN + cam.r[2] * RT;
+    let hy = cam.y + cam.f[1] * dist - cam.u[1] * DN + cam.r[1] * RT - o.d.h / 2;   // bottom of the thing
+    for (const b of SOLIDS) if (b.coll && hx > b.x0 - o.d.r && hx < b.x1 + o.d.r && hz > b.z0 - o.d.r && hz < b.z1 + o.d.r && hy < b.y1 && hy + o.d.h > b.y0) hy = b.y1;
+    hy = Math.max(0, hy);
+    const k = 1 - Math.exp(-dt * 22);
+    o.x += (hx - o.x) * k; o.y += (hy - o.y) * k; o.z += (hz - o.z) * k;
+    o.M = mmul(ry(cam.yaw - o.takeYaw + wristSpin()), o.M0);
+  }
+  function landed(o) {
+    if (!o.air && !o.spin) return;
+    o.air = false;
+    if (o.d.dice) {
+      o.spin = null;
+      o.snap = { from: o.M.slice(), to: snapMatrix(o.M), t: 0 };
+      sound("dice");
+    } else sound("land");
+  }
+  function physics(dt) {
+    for (const o of objs) {
+      if (o.held) continue;
+      const d = o.d;
+      if (o.spin) o.M = mmul(rotAxis(o.spin.a, o.spin.w * dt), o.M);
+      if (o.snap) {
+        o.snap.t += dt / 0.14;
+        if (o.snap.t >= 1) { o.M = o.snap.to; o.snap = null; flash("YOU ROLLED A " + diceValue(o.M) + "!", 1.6); dirty = true; }
+        else o.M = orthonormal(o.snap.from.map((v, i) => v + (o.snap.to[i] - v) * o.snap.t));
+      }
+      if (o.anim) {                                                    // gliding to where you put it
+        const a = o.anim;
+        a.t += dt / a.dur;
+        const e = a.t >= 1 ? 1 : a.t < 0.5 ? 2 * a.t * a.t : 1 - 2 * (1 - a.t) * (1 - a.t);
+        o.x = a.from[0] + (a.to[0] - a.from[0]) * e;
+        o.z = a.from[2] + (a.to[2] - a.from[2]) * e;
+        o.y = a.from[1] + (a.to[1] - a.from[1]) * e + Math.sin(Math.PI * Math.min(1, a.t)) * 0.08;
+        if (a.t >= 1) { o.anim = null; o.y = a.to[1]; o.vx = o.vy = o.vz = 0; o.air = true; landed(o); dirty = true; }
+        continue;
+      }
+      o.x += o.vx * dt; o.z += o.vz * dt;
+      const e = d.bounce || 0.3;
+      if (o.x < -RX + d.r) { o.x = -RX + d.r; o.vx = Math.abs(o.vx) * e; }
+      if (o.x > RX - d.r) { o.x = RX - d.r; o.vx = -Math.abs(o.vx) * e; }
+      if (o.z < -RZ + d.r) { o.z = -RZ + d.r; o.vz = Math.abs(o.vz) * e; }
+      if (o.z > RZ - d.r) { o.z = RZ - d.r; o.vz = -Math.abs(o.vz) * e; }
+      for (const b of SOLIDS) if (b.coll && b.y1 > o.y + 0.012 && b.y0 < o.y + d.h) pushOut(o, b, d.r, e);
+      const sup = supportBelow(o.x, o.z, o.y, o);
+      if (o.y > sup.y + 0.0005 || o.vy > 0) {
+        o.air = true;
+        o.vy -= 9.8 * dt; o.y += o.vy * dt;
+        if (o.y <= sup.y) {
+          o.y = sup.y;
+          if (d.bounce && o.vy < -0.9) { sound("bounce", -o.vy / 3); o.vy = -o.vy * d.bounce; }
+          else { o.vy = 0; landed(o); }
+        }
+      } else {
+        o.y = sup.y; o.vy = 0;
+        const f = Math.exp(-d.fric * dt);
+        o.vx *= f; o.vz *= f;
+        if (Math.hypot(o.vx, o.vz) < 0.02) o.vx = o.vz = 0;
+      }
+      const sp = Math.hypot(o.vx, o.vz);
+      if (d.roll && sp > 0.01 && !o.air) o.M = mmul(rotAxis([o.vz / sp, 0, -o.vx / sp], (sp * dt) / d.r), o.M);
+      if (sp > 0.01 || o.air) dirty = true;
+    }
+    // things resting side by side shove each other apart
+    for (let i = 0; i < objs.length; i++) for (let j = i + 1; j < objs.length; j++) {
+      const a = objs[i], b = objs[j];
+      if (a.held || b.held || a.anim || b.anim || Math.abs(a.y - b.y) > 0.05) continue;
+      let dx = b.x - a.x, dz = b.z - a.z, dd = Math.hypot(dx, dz);
+      const m = a.d.r + b.d.r;
+      if (dd >= m) continue;
+      if (dd < 1e-6) { dx = 1; dz = 0; dd = 1e-6; }
+      const nx = dx / dd, nz = dz / dd, push = (m - dd) / 2;
+      a.x -= nx * push; a.z -= nz * push; b.x += nx * push; b.z += nz * push;
+      const rv = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+      if (rv < 0) { a.vx += nx * rv * 0.5; a.vz += nz * rv * 0.5; b.vx -= nx * rv * 0.5; b.vz -= nz * rv * 0.5; }
+    }
+    // walking into things on the floor kicks them
+    for (const o of objs) {
+      if (o.held || o.anim || o.y > 0.3) continue;
+      const dx = o.x - player.x, dz = o.z - player.z, dd = Math.hypot(dx, dz), m = PR + o.d.r;
+      if (dd >= m) continue;
+      const nx = dd > 1e-6 ? dx / dd : Math.sin(cam.yaw), nz = dd > 1e-6 ? dz / dd : Math.cos(cam.yaw);
+      o.x = player.x + nx * m; o.z = player.z + nz * m;
+      const vn = player.vx * nx + player.vz * nz;
+      if (vn > 0.05) {
+        const want = vn * (o.d.roll ? 1.7 : 1.05), vo = o.vx * nx + o.vz * nz;
+        if (vo < want) { o.vx += nx * (want - vo); o.vz += nz * (want - vo); }
+        if (o.id === "ball" && want > 0.7 && o.vy <= 0 && !o.air) o.vy = 0.5 * want;
+        if (clock - o.kickAt > 0.4) { sound(o.id === "ball" ? "kick" : "nudge"); o.kickAt = clock; }
+      }
+    }
+  }
+
+  /* ============================== LOOP ============================== */
+  const perf = { ms: 0, n: 0 };
+  function step(dt) {
+    motion.update(dt);
+    bodyYaw += (bodyYawT - bodyYaw) * (1 - Math.exp(-dt * 18));
+    if (mode === "start") {
+      const a = clock * 0.22, px = Math.sin(a) * 2.2, pz = 0.4 + Math.cos(a) * 1.85, py = 2.05;
+      const dx = -px, dz = 0.4 - pz, dy = 0.8 - py;
+      setCam(px, py, pz, Math.atan2(dx, dz), Math.atan2(dy, Math.hypot(dx, dz)), 0);
+      physics(dt);
+      return;
+    }
+    const pitch = clamp((motion.live ? motion.pitch * D2R : 0) + dragPitch, -1.45, 1.45);
+    const roll = motion.live ? clamp(motion.roll * D2R, -0.8, 0.8) : 0;
+    const yaw = viewYaw();
+    cam.yaw = yaw;
+    movePlayer(dt);
+    setCam(player.x, EYE + bob, player.z, yaw, pitch, roll);
+    look();
+    updateHeld(dt);
+    physics(dt);
+    if (dirty && clock - savedAt > 3) save();
+  }
+  function draw() {
+    const t0 = performance.now();
+    renderScene();
+    if (mode === "start") drawStart(); else hud();
+    present();
+    perf.ms += (performance.now() - t0 - perf.ms) * 0.1; perf.n++;
+  }
+
+  if (!load()) resetRoom();
+
+  let lastT = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const ms = now - lastT;
+    if (ms < 30) return;                                               // 30 Hz, like the other glasses apps
+    lastT = now;
+    const dt = Math.min(0.1, ms / 1000);
+    clock += dt;
+    step(dt);
+    draw();
+  }
+  requestAnimationFrame(frame);
+
+  // test hooks
+  window.__room = {
+    get mode() { return mode; }, get held() { return held; }, get target() { return target; }, get place() { return place; },
+    get interact() { return interact; }, get walking() { return walking(); }, get lightOn() { return lightOn; },
+    get flash() { return clock < flashUntil ? flashMsg : ""; }, get wrist() { return wrist; },
+    player, cam, motion, perf, get objs() { return objs; }, tap, takeOrPut, swipe, enterRoom, resetRoom, save, diceValue,
+    set dragYaw(v) { dragYaw = v; }, get dragYaw() { return dragYaw; }, set dragPitch(v) { dragPitch = v; }, get dragPitch() { return dragPitch; },
+    set bodyYaw(v) { bodyYaw = bodyYawT = v; }, set walk(v) { walkToggle = v; }, set hold(v) { holdWalk = v; },
+    step(dt, n = 1) { for (let i = 0; i < n; i++) { clock += dt; step(dt); } draw(); },
+  };
+})();
+</script>
+</body>
+</html>

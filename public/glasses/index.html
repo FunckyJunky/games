@@ -359,6 +359,7 @@ const DM = (() => {
       { id: "mykolai", file: "MYKOLAI.EXE", desc: "FIND GIFTS LEFT FOR YARO", url: "/glasses/mykolai/" },
       { id: "drunk",   file: "DRUNK.EXE",   desc: "HOW DRUNK? WALK + EGG TEST", url: "/glasses/drunk/" },
       { id: "devil",   file: "DEVIL.EXE",   desc: "RUN! THE DEVIL WALKS TO YOU", url: "/glasses/devil/" },
+      { id: "room404", file: "ROOM404.EXE", desc: "3D ROOM: LOOK, WALK, GRAB", url: "/glasses/room404/" },
     ] },
     { name: "TOOLS", apps: [
       { id: "crumbs",  file: "CRUMBS.EXE",  desc: "BREADCRUMB TRAIL MAP", url: "/glasses/crumbs/" },
@@ -729,6 +730,21 @@ const DM = (() => {
     return m;
   }
 
+  // ROOM404: a little room seen from above: low walls, a door, a table and a cube being carried
+  function roomMesh(t) {
+    const m = mesh();
+    box(m, 0, -0.62, 0, 2.0, 0.08, 2.0, "off");                      // floor
+    box(m, 0, -0.18, 0.97, 2.0, 0.8, 0.06, "solid");                 // back wall
+    box(m, -0.97, -0.18, 0.03, 0.06, 0.8, 1.94, "solid");            // left wall
+    box(m, 0.1, -0.06, 0.93, 0.7, 0.36, 0.02, "off");                // window
+    box(m, -0.93, -0.3, -0.45, 0.02, 0.56, 0.36, "on");              // door
+    box(m, 0.15, -0.3, 0.05, 0.95, 0.06, 0.6, "solid");              // table top
+    for (const x of [-0.25, 0.55]) for (const z of [-0.17, 0.27]) box(m, x, -0.46, z, 0.06, 0.26, 0.06, "solid");
+    const hop = Math.abs(Math.sin(t * 1.8)) * 0.42;                  // the cube hops off the table and back
+    box(m, 0.32, -0.15 + hop, 0.02, 0.22, 0.22, 0.22, "on");
+    return m;
+  }
+
   function iconFor(id, t, now) {
     switch (id) {
       case "dice":    return [diceMesh, mul(ry(t * 0.9), mul(rx(t * 0.6), rz(t * 0.3))), 0.33];
@@ -746,6 +762,7 @@ const DM = (() => {
       case "settings": return [GEAR, mul(rx(0.5 + Math.sin(t * 0.6) * 0.2), mul(ry(Math.sin(t * 0.4) * 0.5), rz(t * 0.8))), 0.42];
       case "mykolai": return [mykolaiMesh(t), mul(rx(0.2), ry(Math.sin(t * 0.7) * 0.7)), 0.4];
       case "devil":   return [devilMesh(t), mul(ry(Math.sin(t * 0.6) * 0.32), rx(0.1 + Math.sin(t * 0.9) * 0.06)), 0.37];
+      case "room404": return [roomMesh(t), mul(rx(-0.5), ry(0.62 + Math.sin(t * 0.5) * 0.3)), 0.36];
     }
   }
 
