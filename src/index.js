@@ -243,6 +243,7 @@ const GEO_MAX = 99;
 const GEO_VIEWS = ["arrow", "compass", "360"];
 const GEO_ARROWS = ["arrow", "chevron", "dart", "needle", "wire", "flat", "outline", "chevrons"];
 const GEO_COLORS = 8, GEO_SIZES = 5;
+const GEO_VTRIG = ["turn", "dist", "wrong", "near", "arrive", "pinch", "spot"];   // what makes the voice speak
 let geoReady = null;
 function geoDb(env) {
   if (!geoReady) {
@@ -264,8 +265,10 @@ const geoInt = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Numbe
 function geoSettings(v) {                       // keep only known settings, with sane values
   const o = {}, b = v && typeof v === "object" ? v : {};
   if (GEO_VIEWS.includes(b.view)) o.view = b.view;
-  for (const k of ["radar", "dist"]) if (k in b) o[k] = !!b[k];
+  for (const k of ["radar", "dist", "voice", "vOnly"]) if (k in b) o[k] = !!b[k];
   if ("radarM" in b) o.radarM = geoInt(b.radarM, 5, 100, 20);
+  if ("vEvery" in b) o.vEvery = geoInt(b.vEvery, 0, 300, 30);   // seconds; 0 = no regular repeats
+  if (Array.isArray(b.vTrig)) o.vTrig = GEO_VTRIG.filter((k) => b.vTrig.includes(k));
   if (GEO_ARROWS.includes(b.arrow)) o.arrow = b.arrow;
   if ("active" in b) o.active = GEO_ID.test(String(b.active)) ? b.active : null;
   if (Array.isArray(b.show)) o.show = [...new Set(b.show.filter((x) => typeof x === "string" && GEO_ID.test(x)))].slice(0, 30);

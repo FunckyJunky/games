@@ -258,6 +258,7 @@
   .place.picked { border-left: 6px solid var(--c); }
   .pname { font: inherit; font-size: 24px; color: var(--b); background: #000; border: 2px solid var(--d); padding: 2px 8px; width: min(12em, calc(100% - 34px)); max-width: 100%; text-transform: uppercase; }
   .pname:focus { outline: none; border-color: var(--c); box-shadow: 0 0 10px var(--g); }
+  .dimmed { opacity: .5; }
   .pdot { display: inline-block; width: 20px; height: 20px; border: 2px solid #000; outline: 1px solid var(--d); flex: none; }
   .csw { width: 34px; min-width: 0; height: 30px; min-height: 0; padding: 0; border: 2px solid #000; outline: 1px solid var(--d); }
   .csw[aria-pressed="true"] { outline: 3px solid var(--b); }
@@ -490,6 +491,27 @@
               <button class="sw" data-g="radar" aria-pressed="false" aria-label="Radar when close"><span class="n">OFF</span><span class="y">ON</span></button></div>
             <div class="opt"><div><div class="lbl">TRIGGER DISTANCE</div><div class="sub">CLOSER THAN THIS = RADAR</div></div><span class="val" id="geoRadarMv">-</span>
               <input class="full" type="range" id="geoRadarM" min="5" max="100" step="1" aria-label="Radar trigger distance in metres"></div>
+          </div>
+        </div>
+      </div>
+      <div class="box">
+        <span class="t">VOICE DIRECTIONS <span class="dim">· THE GLASSES TELL YOU WHERE TO GO</span></span>
+        <div class="grid2">
+          <div>
+            <div class="opt"><div><div class="lbl">VOICE DIRECTIONS</div><div class="sub">SPOKEN DIRECTIONS TO THE SPOT YOU NAVIGATE TO</div></div>
+              <button class="sw" data-g="voice" aria-pressed="false" aria-label="Voice directions"><span class="n">OFF</span><span class="y">ON</span></button></div>
+            <div id="geoVoiceOpts">
+              <div class="opt"><div><div class="lbl">SCREEN OFF: VOICE ONLY</div><div class="sub">THE GLASSES DISPLAY SHOWS NOTHING AT ALL; YOU ONLY HEAR THE DIRECTIONS</div></div>
+                <button class="sw" data-g="vOnly" aria-pressed="false" aria-label="Screen off, voice only"><span class="n">OFF</span><span class="y">ON</span></button></div>
+              <div class="opt"><div><div class="lbl">REPEAT EVERY</div><div class="sub">DISTANCE + DIRECTION AGAIN WHEN NOTHING ELSE WAS SAID. ALL THE WAY LEFT = OFF: ONLY THE TRIGGERS</div></div><span class="val" id="geoVEveryv">-</span>
+                <input class="full" type="range" id="geoVEvery" min="0" max="300" step="5" aria-label="Repeat the directions every so many seconds"></div>
+              <div class="row" style="margin-top:10px"><button id="geoHear">▶ HEAR AN EXAMPLE</button><span class="mid small" id="geoHearNote">ON THIS PHONE</span></div>
+              <div class="hint">QUIET WHILE YOU WALK AWAY FROM A SPOT YOU JUST LOCKED; IT STARTS ONCE YOU HEAD BACK (OR SWIPE TO A SPOT). AT MOST ONE MESSAGE EVERY 5 S. IF THE GLASSES HAVE NO VOICE, GEOLOCK SHOWS THE SCREEN AGAIN AND SAYS SO.</div>
+            </div>
+          </div>
+          <div id="geoVoiceTrig">
+            <div class="lbl" style="margin-top:10px">WHAT TRIGGERS THEM</div>
+            <div id="geoTrig"></div>
           </div>
         </div>
       </div>
@@ -1061,13 +1083,24 @@
   const GEO_COLORS = ["#33ff66", "#33e6ff", "#ffb000", "#ff4848", "#ff55ff", "#fff04d", "#5b8cff", "#e6e6e6"];
   const GEO_COLOR_NAMES = ["GREEN", "CYAN", "AMBER", "RED", "PINK", "YELLOW", "BLUE", "WHITE"];
   const GEO_SIZES = ["S", "M", "L", "XL", "XXL"];
-  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [] };
+  const GEO_TRIGS = [
+    ["turn", "DIRECTION CHANGES", "STRAIGHT AHEAD, SLIGHTLY LEFT/RIGHT, TURN LEFT/RIGHT, TURN AROUND. WAITS 2-3 S, SO A GLANCE AROUND DOESN'T SET IT OFF"],
+    ["dist", "DISTANCE MILESTONES", "5 KM, 2 KM, 1 KM, 500, 200, 100, 50, 20 AND 10 M TO GO"],
+    ["wrong", "WRONG WAY", "THE SPOT GETS MORE THAN 15 M FURTHER AWAY THAN YOU'VE BEEN"],
+    ["near", "GETTING CLOSE", "YOU COME WITHIN THE RADAR TRIGGER DISTANCE"],
+    ["arrive", "ARRIVED", "YOU REACH THE SPOT"],
+    ["pinch", "PINCH", "PINCH ON THE GLASSES TO HEAR DISTANCE AND DIRECTION"],
+    ["spot", "LOCK + SWITCH SPOTS", "READY, LOCKING A SPOT, SWIPING TO ANOTHER SPOT"],
+  ];
+  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [],
+                        voice: false, vOnly: false, vEvery: 30, vTrig: GEO_TRIGS.map((x) => x[0]) };
   const GEO_VIEWS = [
     ["arrow", "ARROW", "ONLY AN ARROW ON BLACK, POINTING AT THE SPOT YOU NAVIGATE TO."],
     ["compass", "COMPASS", "A COMPASS SCALE THAT TURNS WITH YOUR HEAD. EVERY PICKED SPOT IS A LINE."],
     ["360", "360° VIEW", "EVERY PICKED SPOT FLOATS AROUND YOU AS AN OVAL WITH ITS DISTANCE. TURN YOUR HEAD LIKE IN VR."],
   ];
-  const GEO_LABELS = { radar: "RADAR WHEN CLOSE", dist: "DISTANCE UNDER THE ARROW" };
+  const GEO_LABELS = { radar: "RADAR WHEN CLOSE", dist: "DISTANCE UNDER THE ARROW", voice: "VOICE DIRECTIONS", vOnly: "SCREEN OFF: VOICE ONLY" };
+  const secs = (n) => (!n ? "OFF" : n < 60 ? n + " S" : Math.floor(n / 60) + " MIN" + (n % 60 ? " " + (n % 60) + " S" : ""));
   const ARROW_TYPES = (window.GeoArrows && GeoArrows.TYPES) || [
     { id: "arrow", name: "3D ARROW" }, { id: "chevron", name: "3D CHEVRON" }, { id: "dart", name: "3D DART" }, { id: "needle", name: "3D NEEDLE" },
     { id: "wire", name: "3D WIREFRAME" }, { id: "flat", name: "2D ARROW" }, { id: "outline", name: "2D OUTLINE" }, { id: "chevrons", name: "2D CHEVRONS" }];
@@ -1224,6 +1257,27 @@
     if (!geoDragging && document.activeElement !== sl) sl.value = s.radarM;
     $("geoRadarMv").textContent = sl.value + " M";
     sl.disabled = !s.radar;
+    // voice directions
+    const ve = $("geoVEvery");
+    if (!geoDragging && document.activeElement !== ve) ve.value = s.vEvery;
+    $("geoVEveryv").textContent = secs(+ve.value);
+    $("geoVoiceOpts").classList.toggle("dimmed", !s.voice);
+    $("geoVoiceTrig").classList.toggle("dimmed", !s.voice);
+    const tb = $("geoTrig");
+    if (!tb.childElementCount) for (const [id, name, desc] of GEO_TRIGS) {
+      const row = document.createElement("div"); row.className = "opt";
+      row.innerHTML = `<div><div class="lbl">${name}</div><div class="sub">${desc}</div></div>
+        <button class="sw" data-t="${id}" aria-pressed="false" aria-label="Voice on ${name.toLowerCase()}"><span class="n">OFF</span><span class="y">ON</span></button>`;
+      row.querySelector("button").onclick = () => {
+        const on = new Set(Array.isArray(geo.s.vTrig) ? geo.s.vTrig : []);
+        on.has(id) ? on.delete(id) : on.add(id);
+        geo.s.vTrig = GEO_TRIGS.map((x) => x[0]).filter((k) => on.has(k));
+        geoSave("VOICE ON " + name + (on.has(id) ? " ON" : " OFF"));
+      };
+      tb.appendChild(row);
+    }
+    const onT = new Set(Array.isArray(s.vTrig) ? s.vTrig : []);
+    tb.querySelectorAll(".sw[data-t]").forEach((el) => el.setAttribute("aria-pressed", onT.has(el.dataset.t)));
     // the map + who's picked
     const show = new Set(s.show || []), picked = geo.places.filter((p) => show.has(p.id));
     $("geoPicked").textContent = geo.places.length ? (picked.length ? `SHOWN ON THE GLASSES: ${picked.length} OF ${geo.places.length}` : `NONE PICKED: THE GLASSES SHOW ONLY ${String((geoActive() || {}).name || "-").toUpperCase()}`) : "-";
@@ -1297,6 +1351,19 @@
     window.addEventListener("pointerup", () => { geoDragging = false; });
     sl.oninput = () => { $("geoRadarMv").textContent = sl.value + " M"; };
     sl.onchange = () => { geo.s.radarM = +sl.value; geoSave("RADAR AT " + sl.value + " M"); };
+    const ve = $("geoVEvery");
+    ve.addEventListener("pointerdown", () => { geoDragging = true; });
+    ve.oninput = () => { $("geoVEveryv").textContent = secs(+ve.value); };
+    ve.onchange = () => { geo.s.vEvery = +ve.value; geoSave(+ve.value ? "VOICE REPEATS EVERY " + secs(+ve.value) : "NO REGULAR VOICE REPEATS"); };
+    // what the glasses would say, spoken on this phone
+    $("geoHear").onclick = () => {
+      if (!("speechSynthesis" in window)) { $("geoHearNote").textContent = "THIS PHONE HAS NO VOICE"; return; }
+      const a = geoActive(), name = a ? a.name : "Spot 1";
+      speechSynthesis.cancel();
+      [name + ". 120 metres, slightly left.", "Turn right. 80 metres.", "50 metres to go.", "Close. 15 metres, straight ahead.", "You have arrived at " + name + "."]
+        .forEach((t) => { const u = new SpeechSynthesisUtterance(t); u.lang = "en-GB"; speechSynthesis.speak(u); });
+      $("geoHearNote").textContent = "PLAYING ON THIS PHONE";
+    };
   })();
 
   /* ---------- Святий Миколайчик ---------- */

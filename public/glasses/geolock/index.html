@@ -26,6 +26,8 @@
            360 VIEW: the spots float in the world as ovals with their distance; turn your head to find them.
            Swipe left/right = other saved spot.  Swipe up/down = next view.  Pinch = name and distance
            (and in 360 view: "level" = how you hold your head now).  Back = READY.
+   VOICE   Optional spoken directions (turns, milestones, wrong way, getting close, arrived, pinch, spots,
+           and a regular repeat), and optionally a blank display: only the voice. Set at error.blue/hud.
    Spots and settings live on error.blue under the glasses code (see /api/hud/<CODE>/geo); the GEOLOCK
    tab at error.blue/hud renames and deletes spots and picks the view, arrow, radar, colours and sizes.
    Location comes from the paired phone; heading from the compass, or from walking. */
@@ -52,7 +54,9 @@
   const RED = "#ff4848", OK = "#33ff66", WARN = "#ffb000";
   const hud = () => Object.assign({ color: 0, sounds: true }, store.get("glasses.settings", {}));
   const pal = () => DOS_PALETTES[(((hud().color | 0) % 5) + 5) % 5];
-  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [] };
+  const VTRIG = ["turn", "dist", "wrong", "near", "arrive", "pinch", "spot"];
+  const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [],
+                        voice: false, vOnly: false, vEvery: 30, vTrig: VTRIG.slice() };
   const VIEWS = ["arrow", "compass", "360"];
   const VIEW_NAME = { arrow: "ARROW", compass: "COMPASS", "360": "360 VIEW" };
   const EYE = 1.6;                                       // metres: how high your eyes are over the spot
@@ -296,6 +300,100 @@
   const sndNear = () => { tone(1200, 0, 0.08, "sine", 0.08); tone(1600, 0.1, 0.12, "sine", 0.08); };
   const sndPing = (d) => tone(clamp(1300 - d * 25, 500, 1300), 0, 0.25, "sine", 0.05, 400);
 
+  /* ---------------- voice directions ---------------- */
+  const hasSpeech = "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+  const MILESTONES = [5000, 2000, 1000, 500, 200, 100, 50, 20, 10];     // "... to go"
+  const FULL = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+  const BAND_WORDS = { A: "straight ahead", SL: "slightly left", SR: "slightly right", TL: "turn left", TR: "turn right", B: "turn around" };
+  // works: null = not known yet, true = we heard it start, false = these glasses can't speak (the screen comes back)
+  // leaving: just locked and walking away -> stay quiet until you head back (the spot gets 15 m closer)
+  const V = { last: -99, rep: -99, band: null, cand: null, candAt: 0, lvl: null, minD: null, maxD: null, arrived: null, near: null, leaving: false,
+              works: hasSpeech ? null : false, check: 0, gesture: false, said: "" };
+  const trig = (k) => (Array.isArray(geo.s.vTrig) ? geo.s.vTrig : VTRIG).includes(k);
+  const blind = () => !!(geo.s.voice && geo.s.vOnly && V.works !== false);   // voice only: the display shows nothing
+  const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  function spokenDist(m) {
+    if (m < 1.5) return "1 metre";
+    if (m < 20) return Math.round(m) + " metres";
+    if (m < 100) return Math.round(m / 5) * 5 + " metres";
+    if (m < 995) return Math.round(m / 10) * 10 + " metres";
+    const km = m < 9950 ? +(m / 1000).toFixed(1) : Math.round(m / 1000);
+    return km + (km === 1 ? " kilometre" : " kilometres");
+  }
+  function rawBand(rel) { const a = Math.abs(rel), sd = rel < 0 ? "L" : "R"; return a < 20 ? "A" : a < 50 ? "S" + sd : a < 140 ? "T" + sd : "B"; }
+  function bandOf(rel, prev) {                           // 8 degrees of slack at the edges, so it doesn't flip-flop
+    const b = rawBand(rel);
+    return prev && b !== prev && (rawBand(rel + 8) === prev || rawBand(rel - 8) === prev) ? prev : b;
+  }
+  function dirWords(w, hd) {                             // and remember it, so "turn" doesn't repeat what we just said
+    if (!hd) return "towards the " + FULL[Math.round(wrap360(w.b) / 45) % 8];
+    const b = bandOf(angDiff(w.b, hd.h), V.band);
+    V.band = V.cand = b; V.candAt = clock;
+    return BAND_WORDS[b];
+  }
+  const update = (w, hd) => spokenDist(w.d) + ", " + dirWords(w, hd) + ".";
+  function say(t, force) {
+    if (!geo.s.voice || !hasSpeech || V.works === false) return false;
+    if (!force && (clock - V.last < 5 || speechSynthesis.speaking)) return false;   // one at a time, with a breath between
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = "en-GB"; u.rate = 1; u.volume = 1;
+      u.onstart = () => { V.works = true; };
+      speechSynthesis.speak(u);
+    } catch { return false; }
+    V.last = V.rep = clock; V.said = t;
+    if (V.works === null && V.gesture && !V.check) V.check = clock + 5;
+    return true;
+  }
+  function vReset() { V.band = V.cand = null; V.lvl = V.minD = V.maxD = V.arrived = V.near = null; V.leaving = false; V.rep = clock; }
+  const lvl = (d) => MILESTONES.filter((m) => d < m).length;
+  function voiceTick(w, hd, t) {
+    if (!geo.s.voice || V.works === false) return;
+    const d = w.d, acc = pos.acc || 0, hereR = Math.max(4, Math.min(acc, 8)), R = geo.s.radarM;
+    if (V.arrived === null) { V.arrived = d < hereR; V.near = d < R; V.lvl = lvl(d); V.minD = V.maxD = d; }   // a fresh start says nothing
+    // arrived
+    if (V.arrived) { if (d > hereR + 12) { V.arrived = false; V.minD = d; } else return; }
+    else if (d < hereR) { if (!trig("arrive") || say("You have arrived at " + t.name + ".", true)) V.arrived = true; return; }
+    // walking away from a spot you just locked (or after a wrong-way warning): quiet until you head back
+    if (V.leaving) {
+      V.maxD = Math.max(V.maxD, d);
+      if (d > R * 1.15 + 2) V.near = false;
+      if (V.lvl > 0 && d > MILESTONES[V.lvl - 1] * 1.15) V.lvl = lvl(d);
+      if (d < V.maxD - Math.max(15, acc)) { V.leaving = false; V.minD = d; V.band = V.cand = null; } else return;
+    }
+    // getting close: inside the radar distance
+    if (V.near) { if (d > R * 1.15 + 2) V.near = false; }
+    else if (d < R) { if (!trig("near") || say("Close. " + update(w, hd))) { V.near = true; V.lvl = Math.max(V.lvl, lvl(d)); } return; }
+    // distance milestones
+    const L = lvl(d);
+    if (L > V.lvl) {                                       // "100 metres to go" (or the real distance if we're well past it)
+      const M = MILESTONES[L - 1];
+      if (!trig("dist") || say(spokenDist(d >= M * 0.85 ? M : d) + " to go.")) V.lvl = L;
+      return;
+    }
+    if (V.lvl > 0 && d > MILESTONES[V.lvl - 1] * 1.15) V.lvl = L;
+    // wrong way: the spot keeps getting further away
+    if (d < V.minD) V.minD = d;
+    else if (d > V.minD + Math.max(15, acc)) {               // one warning, then quiet until you head back again
+      if (!trig("wrong") || say("Wrong way. " + update(w, hd))) { V.leaving = true; V.maxD = d; }
+      return;
+    }
+    // the way to go changed (and stayed changed for a moment, so a glance around doesn't set it off)
+    if (hd) {
+      const b = bandOf(angDiff(w.b, hd.h), V.cand || V.band);
+      if (b !== V.cand) { V.cand = b; V.candAt = clock; }
+      if (V.band === null) V.band = b;
+      else if (b !== V.band && clock - V.candAt > 2.5) {
+        if (!trig("turn")) V.band = b;
+        else if (say(cap(BAND_WORDS[b]) + ". " + spokenDist(d) + ".")) V.band = b;
+        return;
+      }
+    }
+    // regular repeat
+    if (geo.s.vEvery > 0 && clock - V.rep >= geo.s.vEvery) say(update(w, hd));
+  }
+
   /* ---------------- location ---------------- */
   function startGps() {
     if (watchId !== null) return;
@@ -303,7 +401,7 @@
     gps = "WAIT";
     watchId = navigator.geolocation.watchPosition(
       (p) => onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, p.coords.speed, p.coords.heading, Date.now()),
-      (err) => { if (err.code === 1) { gps = "DENIED"; flash("LOCATION NOT ALLOWED", 3, RED); } },
+      (err) => { if (err.code === 1) { gps = "DENIED"; flash("LOCATION NOT ALLOWED", 3, RED); say("Location is not allowed.", true); } },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
   function stopGps() { if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } gps = "OFF"; }
@@ -408,9 +506,10 @@
 
   /* ---------------- actions ---------------- */
   function lockHere() {
-    if (geo.places.length >= 99) { flash("MEMORY FULL: DELETE SPOTS AT ERROR.BLUE/HUD", 4, RED); return; }
+    if (geo.places.length >= 99) { flash("MEMORY FULL: DELETE SPOTS AT ERROR.BLUE/HUD", 4, RED); say("Memory full. Delete some spots at error dot blue slash hud.", true); return; }
     startGps();
     screen = "LOCKING"; lockStart = clock; best = null;
+    if (trig("spot")) say(pos ? "Locking." : "Locking. Waiting for GPS.", true);
     if (pos && Date.now() - pos.t < 15000) { best = { lat: pos.lat, lng: pos.lng, acc: pos.acc }; if (best.acc <= 15) lockAt(best); }
   }
   function lockAt(fix) {
@@ -424,18 +523,23 @@
     setS({ active: p.id });
     upload(p);
     screen = "NAV"; near = false; dispRel = null; lockedAt = clock; best = null;
+    vReset();
+    V.leaving = true;
+    if (trig("spot")) say("Locked. " + p.name + ".", true);
     sndLock();
   }
   function go(p) {
     if (!p) return;
     if (geo.s.active !== p.id) setS({ active: p.id });
     screen = "NAV"; near = false; dispRel = null;
+    vReset();
     const w = where(p);
     flash(p.name + (w ? "  " + fmtDist(w.d) : ""), 1.8, colorOf(p));
+    if (trig("spot")) say(p.name + ". " + (w ? update(w, heading()) : "Waiting for GPS."), true);
   }
   function step(d) {
     const list = placesNewest();
-    if (!list.length) { flash("NO SAVED SPOTS YET", 1.8); return; }
+    if (!list.length) { flash("NO SAVED SPOTS YET", 1.8); say("No saved spots yet.", true); return; }
     const i = list.findIndex((p) => p.id === (target() || {}).id);
     go(list[(i + d + list.length) % list.length]);
     sndTick();
@@ -445,6 +549,7 @@
     setS({ view: v });
     near = false; dispRel = null;
     flash(VIEW_NAME[v], 1.4);
+    say(v === "360" ? "360 view." : cap(v) + " view.", true);
     sndTick();
   }
 
@@ -468,6 +573,7 @@
     textC("PINCH TO LOCK THIS SPOT", CX, 380, P.m, 1, 2);
     const n = geo.places.length;
     if (n) textC("< SWIPE: SAVED SPOTS (" + n + ") >", CX, 416, P.d, 1, 2);
+    if (geo.s.voice && V.works !== false) textC("VOICE DIRECTIONS ON", CX, 452, P.d, 1, 2);
   }
   function drawLocking() {
     const P = pal(), k = (clock * 1.2) % 1;
@@ -638,20 +744,24 @@
   function drawNav(dt) {
     const t = target();
     if (!t) { screen = "READY"; return; }
-    const col = colorOf(t);
+    const col = colorOf(t), hd = heading(), w = pos ? where(t) : null;
+    if (w) {
+      const R = geo.s.radarM;
+      if (geo.s.radar && geo.s.view !== "360") {
+        if (!near && w.d < R) { near = true; sndNear(); }
+        else if (near && w.d > R * 1.15 + 2) { near = false; dispRel = null; }
+      } else near = false;
+      voiceTick(w, hd, t);
+    }
+    if (blind()) return;                                  // voice only: nothing on the display
     if (clock - lockedAt < 1.4) { drawLocked(t, col); return; }
     if (geo.s.view === "360") { draw360(); drawInfo(t); return; }
-    if (!pos) {
+    if (!w) {
       tri(CX, 270, 0, 70, col, 0.25 + 0.15 * Math.sin(clock * 4));
       textC("WAITING FOR GPS" + ".".repeat(1 + (Math.floor(clock * 2) % 3)), CX, 420, col, 1, 2);
       drawInfo(t);
       return;
     }
-    const w = where(t), hd = heading(), R = geo.s.radarM;
-    if (geo.s.radar) {
-      if (!near && w.d < R) { near = true; sndNear(); }
-      else if (near && w.d > R * 1.15 + 2) { near = false; dispRel = null; }
-    } else near = false;
     if (near) drawRadar(dt, w, hd, col);
     else if (geo.s.view === "compass") drawCompass(w, hd, col);
     else drawArrow(dt, w, hd, col);
@@ -661,6 +771,7 @@
   function draw(dt) {
     ctx.setTransform(K, 0, 0, K, 0, 0);
     ctx.globalAlpha = 1; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, S, S);
+    if (blind()) { if (screen === "NAV") drawNav(dt); return; }                // voice only: keep navigating, show nothing
     if (screen === "READY") drawReady();
     else if (screen === "LOCKING") drawLocking();
     else drawNav(dt);
@@ -673,13 +784,15 @@
     else if (screen === "NAV") {
       info = clock;
       if (geo.s.view === "360") { motion.zero(); flash("LEVEL SET", 1.2); }
+      if (trig("pinch")) { const t = target(), w = where(t); say(t.name + ". " + (w ? update(w, heading()) : "Waiting for GPS."), true); }
       sndTick();
     }
   }
   function back() {
     sndBack();
-    if (screen !== "READY") { screen = "READY"; near = false; return; }
+    if (screen !== "READY") { screen = "READY"; near = false; if (trig("spot")) say("Ready.", true); return; }
     stopGps();
+    if (hasSpeech) speechSynthesis.cancel();
     if (history.length > 1) history.back(); else location.href = "/glasses/";
   }
   document.addEventListener("keydown", (e) => {
@@ -687,6 +800,7 @@
     if (!["Enter", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Backspace"].includes(k)) return;
     e.preventDefault();
     audio(); motion.enable();
+    V.gesture = true;
     if (k === "Escape" || k === "Backspace") { back(); return; }
     if (k === "Enter" || k === " ") { if (!e.repeat) primary(); return; }
     if (screen === "LOCKING") return;
@@ -710,7 +824,7 @@
   });
   cv.addEventListener("click", (e) => { if (e.detail) key("Enter"); });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopGps();
+    if (document.hidden) { stopGps(); if (hasSpeech) speechSynthesis.cancel(); }
     else { startGps(); pull(); }
   });
 
@@ -725,17 +839,22 @@
     clock += dt;
     motion.update(dt);
     if (screen === "LOCKING" && clock - lockStart > 8 && (best || pos)) lockAt(best || pos);   // weak GPS: take the best we got
+    if (V.check && V.works === null && clock > V.check) {   // we spoke but nothing started: no voice here, bring the screen back
+      V.works = false;
+      flash("NO VOICE ON THESE GLASSES - SHOWING THE SCREEN", 4, WARN);
+    }
     if (clock - lastPull > 10 && !document.hidden) { lastPull = clock; pull(); }
     draw(dt);
   }
   requestAnimationFrame(frame);
   startGps();
   if (window.GlassesPresence && GlassesPresence.on) GlassesPresence.on("geo", () => { lastPull = clock; pull(); });   // live from error.blue/hud
+  if (trig("spot")) setTimeout(() => say("GeoLock ready. Pinch to lock this spot.", true), 600);
 
   window.__geo = {
     onFix, heading, where, pull, lockHere, go, nextView, setS, target,
     get geo() { return geo; }, get screen() { return screen; }, get near() { return near; }, get pos() { return pos; },
-    set fake(v) { fake = v; }, get fake() { return fake; },
+    set fake(v) { fake = v; }, get fake() { return fake; }, get voice() { return V; }, blind,
     reset() { pos = null; raw = null; course = null; lastCourseFix = null; },
   };
 })();

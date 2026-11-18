@@ -27,7 +27,8 @@ public/                 the website
   glasses/synth/        SYNTH.EXE: synth sequencer + drum machine played with Neural Band hand motion (3D DOS style)
   glasses/crumbs/       CRUMBS.EXE: breadcrumb trail recorder with turn-by-turn navigation back to the start
   glasses/geolock/      GEOLOCK.EXE: pinch to lock a spot, then an arrow (3D or 2D), compass line, radar or 360 view
-                        leads you back. Spots + settings at /api/hud/<CODE>/geo; arrows.js is shared with /hud
+                        leads you back, with optional voice directions (or voice only, screen blank).
+                        Spots + settings at /api/hud/<CODE>/geo; arrows.js is shared with /hud
   glasses/spectrum/     SPECTRUM.EXE: spectrum analyzer (bars, 3D, waterfall) with LP/HP/BP/notch/peak filters
   glasses/settings/     SETUP.EXE: compass under clock, head motion (speed, invert), HUD colour, sounds, apps on home,
                         and the 6-letter CODE that links the glasses to the control panel
