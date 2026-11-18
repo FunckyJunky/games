@@ -399,7 +399,7 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   F fullscreen on the glasses' screen, 3 stereo on/off. Stored in wt.xr and wt.xrmap.
   Fullscreen switch (on the glasses or on this screen); Center view button; "Head only" (the glasses turn
   just your explorer's head, the camera stays behind you; the head pose goes out in presence as `hd`
-  so others see it). VR comfort: immersive view (interface hidden, H shows it), comfort vignette while
+  so others see it). VR comfort: immersive view (interface hidden; Tab turns it on and off, H shows the interface for a moment), comfort vignette while
   walking or turning (strength slider), walk where you look, head tilt on/off (level horizon), eye
   height, steadiness (smoothing), turn speed, interface size
 - Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
