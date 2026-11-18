@@ -387,6 +387,16 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   distance 255%, glow 55%, brightness +4, contrast +33, gamma 1.51. A player's own choices are kept;
   lens and quality saved automatically under the old defaults gave way once (`wt.cfgv` = 2).
   Advanced settings ends with "Copy my settings" (one line of text with everything set right now)
+- XREAL glasses (desktop only, Advanced settings): VR mode for the XREAL One / One Pro. Head tracking
+  comes from the local XREAL bridge (Documents\xreal-vr\Start XREAL VR.bat, ws://localhost:8765/ws,
+  28-byte samples: dt, gyro xyz rad/s, accel xyz m/s^2), fused in the page (gyro + gravity tilt
+  correction, drift tracking; from the XREAL VR page). Your head looks around, the mouse turns your body,
+  W walks where you look; view "Through your eyes" (own explorer hidden) or "Behind you". The camera
+  uses the glasses' field of view (57 deg diagonal by default) and no depth-of-field blur. Stereo 3D:
+  side-by-side, one picture per eye (full SBS on a 32:9 screen, half SBS on 16:9), the interface hidden,
+  messages shown in both eyes. Calibration: 5 steps (still, left, right, up, down) learn the sensor
+  axes; recenter (R), flip up/down, field of view, eye distance, 3D depth, prediction. Keys: R recenter,
+  F fullscreen on the glasses' screen, 3 stereo on/off. Stored in wt.xr and wt.xrmap
 - Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
   occlusion), ray tracing (screen-space reflections on wet ground and water) and map optimization
   (the world is only built as far as the fog lets you see, and far terrain is much simpler; the
