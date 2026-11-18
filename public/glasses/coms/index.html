@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="mrbd-web-app-capable" content="yes">
+<title>COMS</title>
+<style>
+  :root { --c: #33ff66; --b: #d2ffdc; --m: #22b84e; --d: #0e5f27; --k: #031c0b;
+          --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+          --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #000; }
+  body { width: 600px; height: 600px; overflow: hidden; position: relative; color: var(--c); font-family: var(--mono);
+         user-select: none; -webkit-user-select: none; touch-action: none; -webkit-tap-highlight-color: transparent; }
+
+  /* the phone's picture. Black is see-through on the lens, so it gets a small lift to stand out */
+  .pic { position: absolute; display: none; background: #000; object-fit: contain;
+         filter: brightness(1.12) contrast(1.08) saturate(1.08); }
+  body.v-FIT  .pic { left: 0; top: 52px; width: 600px; height: 338px; }
+  body.v-FILL .pic { left: 0; top: 0; width: 600px; height: 600px; object-fit: cover; }
+  body.v-SMALL .pic { left: 282px; top: 56px; width: 304px; height: 171px; outline: 2px solid var(--m); }
+  body.v-FIT.portrait .pic { left: 90px; top: 50px; width: 420px; height: 548px; }
+  body.v-SMALL.portrait .pic { left: 446px; top: 56px; width: 140px; height: 248px; }
+  .pic.on { display: block; }
+
+  #top { position: absolute; left: 0; right: 0; top: 0; height: 48px; padding: 10px 16px 0; display: flex; align-items: flex-start; gap: 14px;
+         font-size: 19px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
+         background: linear-gradient(#000 70%, rgba(0,0,0,0)); z-index: 3; }
+  #top .dot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; background: var(--d); margin-right: 7px; vertical-align: 1px; }
+  #top .dot.live { background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; animation: blink 1s steps(1) infinite; }
+  #top .who { color: var(--b); overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+  #top .sp { flex: 1; }
+  #top .dim { color: var(--m); }
+  #top .off { color: #ff5a5a; }
+  #lvl { display: inline-flex; gap: 3px; align-items: flex-end; height: 18px; vertical-align: -2px; }
+  #lvl i { width: 6px; background: var(--d); }
+  #lvl i.on { background: var(--c); }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* centre card: start screen, waiting, connecting */
+  #card { position: absolute; left: 30px; right: 30px; top: 70px; bottom: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          text-align: center; text-transform: uppercase; gap: 6px; z-index: 2; }
+  #card.hide { display: none; }
+  #card.top { bottom: 300px; top: 56px; gap: 4px; }
+  #card.top .t1 { font-size: 46px; }
+  #card.top .btn { margin-top: 6px; }
+  #card .t1 { font-size: 58px; font-weight: 900; letter-spacing: 6px; color: var(--b); text-shadow: 0 0 14px var(--m); }
+  #card .t2 { font-size: 20px; letter-spacing: 3px; color: var(--m); margin-bottom: 16px; }
+  #card .sm { font-size: 19px; letter-spacing: 2px; color: var(--m); }
+  #card .url { font-size: 34px; font-weight: 800; color: var(--b); letter-spacing: 1px; margin-bottom: 14px; }
+  #card .code { font-size: 66px; font-weight: 900; letter-spacing: 12px; color: var(--c); margin: 0 0 14px 12px; }
+  #card .btn { margin-top: 10px; font-size: 26px; font-weight: 800; padding: 10px 22px; border: 3px solid var(--c); color: var(--b); animation: blink 1.2s steps(1) infinite; }
+  #card .st { margin-top: 14px; font-size: 21px; font-weight: 700; color: var(--c); }
+  #card .keys { position: absolute; bottom: 0; left: 0; right: 0; font-size: 15px; color: var(--m); letter-spacing: 1px; }
+
+  /* sound only: a live wave */
+  #meter { position: absolute; left: 80px; top: 110px; width: 440px; height: 150px; display: none; z-index: 1; }
+  #meter.on { display: block; }
+  #mlabel { position: absolute; left: 0; right: 0; top: 276px; text-align: center; font-size: 22px; font-weight: 800; letter-spacing: 2px; color: var(--b); display: none; text-transform: uppercase; }
+  #mlabel.on { display: block; }
+
+  /* text from the phone */
+  #msg { position: absolute; left: 16px; right: 16px; bottom: 14px; padding: 12px 18px 14px; background: rgba(0,0,0,.86);
+         border-left: 7px solid var(--c); z-index: 4; display: none; }
+  #msg.on { display: block; animation: pop .25s ease-out; }
+  #msg .hd { font-size: 17px; font-weight: 800; letter-spacing: 2px; color: var(--m); text-transform: uppercase; margin-bottom: 4px; display: flex; gap: 12px; }
+  #msg .hd b { color: var(--c); }
+  #msg .hd .sp { flex: 1; }
+  #msg .tx { font-family: var(--sans); font-weight: 700; color: #fff; line-height: 1.18; word-wrap: break-word; overflow-wrap: anywhere;
+             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 7; overflow: hidden; }
+  body.v-OFF #msg, body.nopic #msg { top: 120px; bottom: auto; }
+  body.wave #msg, body.card #msg { top: auto; bottom: 14px; }
+  @keyframes pop { from { transform: translateY(14px); opacity: .2; } }
+
+  #toast { position: absolute; left: 0; right: 0; top: 230px; text-align: center; z-index: 5; pointer-events: none; display: none; }
+  #toast span { display: inline-block; background: #000; border: 3px solid var(--c); color: var(--b); font-size: 30px; font-weight: 900; letter-spacing: 3px; padding: 10px 24px; text-transform: uppercase; }
+  #toast.on { display: block; }
+</style>
+<script src="/glasses/presence.js" data-app="coms"></script>
+</head>
+<body class="v-FIT">
+<video id="vid" class="pic" muted playsinline autoplay></video>
+<img id="jpg" class="pic" alt="">
+<audio id="aud" autoplay></audio>
+<canvas id="meter" width="440" height="150"></canvas>
+<div id="mlabel"></div>
+<div id="top">
+  <span><span class="dot" id="dot"></span>COMS</span>
+  <span class="who" id="who"></span>
+  <span class="sp"></span>
+  <span id="net" class="dim"></span>
+  <span id="snd"></span>
+  <span id="lvl"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+</div>
+<div id="card"></div>
+<div id="msg"><div class="hd"><b id="mFrom"></b><span id="mWhen"></span><span class="sp"></span><span id="mIdx"></span></div><div class="tx" id="mText"></div></div>
+<div id="toast"><span id="toastT"></span></div>
+<script src="/lib/gamelab.js"></script>
+<script src="/glasses/coms/link.js"></script>
+<script>
+/* COMS.EXE (glasses): the phone at error.blue/coms sends its camera (front or back), its
+   microphone and text. Here you see the picture, hear the sound, and text is read out loud.
+
+     Pinch               start (sound and voice need it); then: read the last message again,
+                         pinch again within 6 s for the one before
+     Swipe left / right  picture: FIT, FILL, SMALL (corner), OFF (sound only)
+     Swipe up            phone sound on / off
+     Swipe down          read-aloud voice on / off
+     Back                exit
+
+   The link code is the glasses' own 6-letter CODE (the same as SETUP.EXE and error.blue/hud),
+   so a phone already linked on error.blue/hud connects by itself. */
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const now = () => performance.now() / 1000;
+
+  /* ---------- HUD colour (SETUP.EXE / error.blue/hud) ---------- */
+  const PALETTES = [
+    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
+    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
+    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
+    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+  ];
+  let S = Object.assign({ color: 0, sounds: true }, store.get("glasses.settings", {}));
+  let P = PALETTES[0];
+  function theme() {
+    const n = PALETTES.length;
+    P = PALETTES[((((S.color | 0) % n) + n) % n)];
+    for (const k of ["c", "b", "m", "d", "k"]) document.documentElement.style.setProperty("--" + k, P[k]);
+  }
+  theme();
+  if (window.GlassesPresence) GlassesPresence.onSettings((s) => { S = Object.assign({ color: 0, sounds: true }, s); theme(); });
+
+  /* ---------- state ---------- */
+  const inFrame = window.top !== window;              // the panel's live preview: don't take the phone's stream
+  const code = (window.GlassesPresence && GlassesPresence.code()) || store.get("glasses.code", "") || "";
+  const VIEWS = ["FIT", "FILL", "SMALL", "OFF"];
+  let view = Math.max(0, VIEWS.indexOf(store.get("coms.view", "FIT")));
+  let sound = store.get("coms.sound", true) !== false;
+  let voice = store.get("coms.voice", true) !== false;
+  let started = false, link = null, net = "connecting", src = null, srcPeer = null;
+  let rtc = "idle", rtcBadAt = 0, stream = null, lastJpgAt = 0, lastPcmT = 0, statsT = 0, vst = null, prevBytes = null;
+  const relayFor = new Set();                          // phones that couldn't connect direct
+  const msgs = [], seen = new Set();
+  let shown = null, showUntil = 0, replayIdx = -1, replayAt = -99, speaking = 0, toastUntil = 0, gstT = 0, bat = null;
+  const utter = [];                                    // keeps utterances alive until they end (Chrome)
+
+  const vid = $("vid"), jpg = $("jpg"), aud = $("aud"), meter = $("meter"), mctx = meter.getContext("2d");
+
+  function toast(t, d = 1.4) { $("toastT").textContent = t; $("toast").classList.add("on"); toastUntil = now() + d; }
+
+  /* ---------- sound ---------- */
+  let ac = null, an = null, anSrc = null, pcmGain = null, playAt = 0;
+  const level = { v: 0, buf: null };
+  function ensureAudio() {
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) { ac = new AC(); an = ac.createAnalyser(); an.fftSize = 1024; level.buf = new Uint8Array(an.fftSize); }
+      }
+      if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    } catch { ac = null; }
+  }
+  function beep(f, d = 0.06, v = 0.08, at = 0) {
+    if (!ac || !S.sounds) return;
+    try {
+      const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
+      o.type = "square"; o.frequency.value = f;
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
+    } catch {}
+  }
+  const outVol = () => (sound && started ? (speaking ? 0.22 : 1) : 0);
+  function applyVolume() {
+    const v = outVol();
+    aud.muted = v === 0;
+    try { aud.volume = v || 0; } catch {}
+    if (pcmGain && ac) pcmGain.gain.setTargetAtTime(v, ac.currentTime, 0.06);
+  }
+  function hookAnalyser() {                            // the level meter for the direct sound
+    if (!ac || !an) return;
+    try { anSrc && anSrc.disconnect(); } catch {}
+    anSrc = null;
+    const tr = stream && stream.getAudioTracks()[0];
+    if (!tr) return;
+    try { anSrc = ac.createMediaStreamSource(new MediaStream([tr])); anSrc.connect(an); } catch { anSrc = null; }
+  }
+  function playPcm(f32, rate) {                        // relay sound: 100 ms slices, played back to back
+    if (!ac || !started) return;
+    if (!pcmGain) { pcmGain = ac.createGain(); pcmGain.gain.value = outVol(); pcmGain.connect(ac.destination); if (an) pcmGain.connect(an); }
+    const sr = ac.sampleRate, n = Math.round(f32.length * sr / rate), buf = ac.createBuffer(1, n, sr), out = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) {
+      const x = i * rate / sr, j = Math.floor(x), u = x - j;
+      out[i] = (f32[j] || 0) * (1 - u) + (f32[Math.min(f32.length - 1, j + 1)] || 0) * u;
+    }
+    const t = ac.currentTime;
+    if (playAt < t + 0.03 || playAt > t + 0.9) playAt = t + 0.2;     // start, or catch up after a gap
+    const s = ac.createBufferSource();
+    s.buffer = buf; s.connect(pcmGain); s.start(playAt);
+    playAt += buf.duration;
+  }
+
+  /* ---------- read text out loud ---------- */
+  let voices = [];
+  const loadVoices = () => { try { voices = speechSynthesis.getVoices() || []; } catch { voices = []; } };
+  if (window.speechSynthesis) { loadVoices(); try { speechSynthesis.onvoiceschanged = loadVoices; } catch {} }
+  function pickVoice(lang) {
+    const l = String(lang || "").toLowerCase(), base = l.slice(0, 2);
+    return voices.find((v) => (v.lang || "").toLowerCase().replace("_", "-") === l)
+        || voices.find((v) => (v.lang || "").toLowerCase().slice(0, 2) === base) || null;
+  }
+  function speak(m, onDone) {
+    if (!voice || !started || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
+    try {
+      const u = new SpeechSynthesisUtterance(m.s);
+      u.lang = m.lang || "en-US";
+      const v = pickVoice(u.lang);
+      if (v) u.voice = v;
+      u.rate = 1; u.volume = 1;
+      let done = false;
+      const end = () => {
+        if (done) return;
+        done = true;
+        speaking = Math.max(0, speaking - 1);
+        utter.splice(utter.indexOf(u), 1);
+        applyVolume();
+        if (shown === m) showUntil = Math.max(showUntil, now() + 5);
+        onDone && onDone();
+      };
+      u.onstart = () => { m.spoken = true; speaking++; applyVolume(); };
+      u.onend = end; u.onerror = () => { if (speaking) end(); else { done = true; utter.splice(utter.indexOf(u), 1); } };
+      utter.push(u);
+      speechSynthesis.speak(u);
+      return true;
+    } catch { return false; }
+  }
+
+  /* ---------- messages ---------- */
+  function fmtTime(at) { const d = new Date(at); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function showMsg(m, idxLabel) {
+    shown = m;
+    $("mFrom").textContent = m.name || "PHONE";
+    $("mWhen").textContent = fmtTime(m.at);
+    $("mIdx").textContent = idxLabel || "";
+    const tx = $("mText"), len = m.s.length;
+    tx.style.fontSize = (len <= 40 ? 40 : len <= 90 ? 34 : len <= 170 ? 29 : 24) + "px";
+    tx.textContent = m.s;
+    const el = $("msg");
+    el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
+    showUntil = now() + Math.max(7, 3 + len * 0.09);
+  }
+  function onSay(d, from, peer) {
+    const s = String(d.s || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    const id = String(d.id || "").slice(0, 24);
+    if (!s || !id) return;
+    if (seen.has(id)) { link.sendTo(from, { t: "got", id }); return; }      // a resend: it's here already
+    seen.add(id);
+    const m = { id, s, lang: String(d.lang || "").slice(0, 12), name: String((peer && peer.name) || d.name || "PHONE").slice(0, 16), at: Date.now(), from };
+    msgs.push(m);
+    if (msgs.length > 30) msgs.shift();
+    replayIdx = -1;
+    link.sendTo(from, { t: "got", id, shown: true });
+    showMsg(m);
+    beep(1320, 0.05, 0.07); beep(1760, 0.07, 0.07, 0.07);
+    speak(m, () => link.sendTo(from, { t: "said", id }));
+  }
+  function replay() {
+    if (!msgs.length) { toast("NO MESSAGES YET"); return; }
+    const t = now();
+    replayIdx = t - replayAt < 6 && replayIdx >= 0 ? Math.max(0, replayIdx - 1) : msgs.length - 1;
+    replayAt = t;
+    const m = msgs[replayIdx];
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch {}
+    speaking = 0; applyVolume();
+    showMsg(m, msgs.length > 1 ? (replayIdx + 1) + "/" + msgs.length : "");
+    if (!speak(m) && !voice) toast("VOICE IS OFF (SWIPE DOWN)", 1.6);
+  }
+
+  /* ---------- link ---------- */
+  function connect() {
+    if (inFrame || !code) return;
+    link = ComsLink.join(code, "glasses", {
+      onStatus(s) { net = s; if (s === "open") sendState(); },
+      onPeers() { pickSource(); },
+      onMsg(d, from, peer) {
+        if (d.t === "say") onSay(d, from, peer);
+        else if (d.t === "who") sendState(from);
+        else if (d.t === "ring" && started) { beep(880, 0.08); beep(1175, 0.1, 0.08, 0.12); toast((peer && peer.name || "PHONE") + " CALLING", 1.8); }
+      },
+      onMedia(ms) {
+        stream = ms;
+        if (ms) {
+          vid.srcObject = new MediaStream(ms.getVideoTracks());
+          aud.srcObject = new MediaStream(ms.getAudioTracks());
+          vid.play().catch(() => {});
+          applyVolume();
+          if (started) aud.play().catch(() => {});
+          hookAnalyser();
+        } else {
+          vid.srcObject = null; aud.srcObject = null;
+          try { anSrc && anSrc.disconnect(); } catch {}
+          anSrc = null; vst = null;
+        }
+      },
+      onRtc(state, id) {
+        if (id !== src) return;
+        rtc = state;
+        if (state === "connected") { rtcBadAt = 0; sendState(); }
+        else if (state === "disconnected") rtcBadAt = rtcBadAt || now();
+        else if (state === "failed") {
+          const pref = (srcPeer && srcPeer.link) || "auto";
+          if (pref === "auto") { relayFor.add(id); toast("RELAY MODE", 1.6); pickSource(); }
+          else setTimeout(() => { if (src === id && link.mode() === "rtc" && rtc !== "connected") link.watch(id, "rtc", true); }, 3000);
+          sendState();
+        }
+      },
+      onFrame(url) { lastJpgAt = now(); jpg.src = url; },
+      onPcm(f32, rate) { lastPcmT = now(); if (sound) playPcm(f32, rate); },
+    });
+  }
+  // watch the phone that went live last (or the newest phone); its own setting picks direct or relay
+  function pickSource() {
+    if (!link) return;
+    const ps = link.byRole("phone");
+    const live = ps.filter((p) => p.v || p.a).sort((a, b) => (b.liveAt || 0) - (a.liveAt || 0));
+    const best = live[0] || ps.sort((a, b) => (b.joinedAt || 0) - (a.joinedAt || 0))[0] || null;
+    const was = src;
+    srcPeer = best;
+    src = best ? best.id : null;
+    if (!best) { if (link.watching()) link.unwatch(); rtc = "idle"; if (was) { toast("PHONE LEFT", 1.6); sendState(); } return; }
+    const pref = best.link || "auto";
+    if (pref !== "auto") relayFor.delete(best.id);
+    const mode = pref === "relay" || !window.RTCPeerConnection || (pref === "auto" && relayFor.has(best.id)) ? "relay" : "rtc";
+    if (best.id !== link.watching() || mode !== link.mode()) {
+      rtc = mode === "rtc" ? "connecting" : "relay";
+      lastJpgAt = 0; playAt = 0;
+      link.watch(best.id, mode);
+      if (best.id !== was && started) { beep(1180, 0.06); toast((best.name || "PHONE") + " LINKED", 1.6); }
+      sendState();
+    }
+  }
+  function sendState(to) {
+    if (!link) return;
+    const m = { t: "gst", started, sound, voice, view: VIEWS[view], bat, src, mode: link.mode(), rtc,
+                w: vst ? vst.w : 0, h: vst ? vst.h : 0, fps: vst ? vst.fps : 0, kbps: vst ? vst.kbps : 0 };
+    if (to) link.sendTo(to, m); else link.send(m);
+    gstT = now();
+  }
+
+  /* ---------- start (pinch) ---------- */
+  async function start() {
+    started = true;
+    ensureAudio();
+    hookAnalyser();
+    applyVolume();
+    aud.play().catch(() => {});
+    vid.play().catch(() => {});
+    beep(880, 0.06);
+    if (voice && window.speechSynthesis) {            // a silent word unlocks the voice for later messages
+      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } catch {}
+    }
+    sendState();
+    const last = msgs[msgs.length - 1];                // a message that came in before the pinch
+    if (last && !last.spoken && Date.now() - last.at < 120000) setTimeout(() => { if (!last.spoken) { showMsg(last); speak(last, () => link && link.sendTo(last.from, { t: "said", id: last.id })); } }, 350);
+    try {
+      if (navigator.getBattery) {
+        const b = await navigator.getBattery();
+        const upd = () => { bat = Math.round(b.level * 100); };
+        upd(); b.addEventListener("levelchange", upd);
+      }
+    } catch {}
+  }
+
+  /* ---------- screen ---------- */
+  function setCard(html) {
+    const c = $("card");
+    if (html === null) { c.classList.add("hide"); c.dataset.h = ""; return; }
+    c.classList.remove("hide");
+    c.classList.toggle("top", !!shown);                // a message is up: the card makes room at the top
+    if (c.dataset.h !== html) { c.innerHTML = html; c.dataset.h = html; }
+  }
+  const KEYS = '<div class="keys">PINCH: REPEAT &nbsp;&#8592;&#8594; VIEW &nbsp;&#8593; SOUND &nbsp;&#8595; VOICE</div>';
+  function codeBlock() {
+    return '<div class="sm">ON YOUR PHONE OPEN</div><div class="url">ERROR.BLUE/COMS</div>' +
+           '<div class="sm">CODE</div><div class="code">' + esc(code || "------") + '</div>';
+  }
+  let uiT = 0;
+  function render(t) {
+    const p = srcPeer, hasV = !!(p && p.v), hasA = !!(p && p.a);
+    const relay = link && link.mode() === "relay";
+    const picFresh = relay ? t - lastJpgAt < 2.5 : rtc === "connected";
+    const showPic = started && hasV && VIEWS[view] !== "OFF" && picFresh;
+
+    document.body.className = "v-" + VIEWS[view] + (portrait() ? " portrait" : "") + (showPic ? "" : " nopic") +
+      (meter.classList.contains("on") ? " wave" : "") + ($("card").dataset.h ? " card" : "");
+    vid.classList.toggle("on", showPic && !relay);
+    jpg.classList.toggle("on", showPic && relay);
+
+    // centre card
+    if (inFrame) setCard('<div class="t1">COMS</div><div class="sm">OPEN COMS.EXE ON THE GLASSES</div>');
+    else if (!started) {
+      if (p && net === "open") {                       // linked: no code needed any more
+        const unheard = msgs.length && !msgs[msgs.length - 1].spoken;
+        setCard('<div class="t1">COMS</div><div class="st" style="margin:0 0 6px">' + esc(p.name || "PHONE") + (hasV || hasA ? " IS LIVE" : " LINKED") + '</div>' +
+                '<div class="btn">' + (unheard ? "PINCH TO HEAR IT" : "PINCH TO START") + '</div>');
+      } else {
+        const st = !link || net !== "open" ? "CONNECTING..." : "NO PHONE YET";
+        setCard('<div class="t1">COMS</div><div class="t2">PHONE &#8594; GLASSES</div>' + codeBlock() +
+                '<div class="btn">PINCH TO START</div><div class="st">' + st + '</div>');
+      }
+    } else if (net === "full") setCard('<div class="t1">FULL</div><div class="sm">TOO MANY IN THIS ROOM</div>');
+    else if (!p) setCard('<div class="t2" style="font-size:26px;color:var(--b)">WAITING FOR PHONE</div>' + codeBlock() + (net !== "open" ? '<div class="st">CONNECTING...</div>' : "") + KEYS);
+    else if (!hasV && !hasA) setCard('<div class="t2" style="font-size:30px;color:var(--b);margin:0">' + esc(p.name || "PHONE") + ' LINKED</div><div class="sm">CAMERA AND MIC ARE OFF</div>' + (shown ? "" : '<div class="sm">TEXT STILL COMES THROUGH</div>' + KEYS));
+    else if (hasV && VIEWS[view] !== "OFF" && !picFresh) setCard('<div class="t2" style="font-size:28px;color:var(--b)">' + (relay ? "RELAY" : rtc === "failed" ? "NO DIRECT LINK" : "CONNECTING") + '</div><div class="sm">' + (rtc === "failed" ? "TRYING AGAIN..." : "PICTURE COMING...") + "</div>");
+    else setCard(null);
+
+    // sound only (camera off, or picture OFF): a live wave
+    const waveOn = started && hasA && (!hasV || VIEWS[view] === "OFF") && !$("card").dataset.h;
+    meter.classList.toggle("on", waveOn);
+    $("mlabel").classList.toggle("on", waveOn);
+    if (waveOn) $("mlabel").textContent = (p.talk === false && p.mic === "push" ? "PUSH TO TALK" : (p.name || "PHONE") + " MIC") + (sound ? "" : " (MUTED)");
+
+    // message timeout
+    if (shown && t > showUntil && !speaking) { shown = null; $("msg").classList.remove("on"); }
+    if (toastUntil && t > toastUntil) { toastUntil = 0; $("toast").classList.remove("on"); }
+
+    if (t - uiT < 0.25) return;
+    uiT = t;
+    const live = started && (hasV || hasA) && (rtc === "connected" || (relay && (t - lastJpgAt < 2.5 || t - lastPcmT < 2.5)));
+    $("dot").className = "dot" + (live ? " live" : "");
+    $("who").textContent = p ? (p.name || "PHONE") + (hasV ? " " + (p.cam === "front" ? "FRONT" : "BACK") : "") : "";
+    $("net").textContent = !link ? "" : net !== "open" ? "NET..." : !p ? "" : relay ? "RELAY" : rtc === "connected" ? (vst && vst.h ? "DIRECT " + vst.h + "P" : "DIRECT") : rtc === "failed" ? "NO LINK" : "LINKING";
+    const sn = $("snd");
+    sn.innerHTML = (sound ? "" : '<span class="off">SND OFF</span> ') + (voice ? "" : '<span class="off">VOX OFF</span>') +
+                   (p && hasA && p.mic === "push" && !p.talk ? '<span class="dim">PTT</span>' : "") + (p && !hasA ? '<span class="dim">NO MIC</span>' : "");
+    if (t - gstT > 4) sendState();
+  }
+  function portrait() {
+    if (link && link.mode() === "relay") return jpg.naturalHeight > jpg.naturalWidth * 1.05;
+    return vid.videoHeight > vid.videoWidth * 1.05;
+  }
+  function drawLevel() {
+    let lv = 0;
+    if (an && level.buf && started) {
+      an.getByteTimeDomainData(level.buf);
+      let sum = 0;
+      for (let i = 0; i < level.buf.length; i++) { const x = (level.buf[i] - 128) / 128; sum += x * x; }
+      lv = Math.min(1, Math.sqrt(sum / level.buf.length) * 4);
+    }
+    level.v = Math.max(lv, level.v * 0.85);
+    const bars = $("lvl").children, n = Math.round(level.v * bars.length);
+    for (let i = 0; i < bars.length; i++) { bars[i].className = i < n ? "on" : ""; bars[i].style.height = (6 + i * 2.4) + "px"; }
+    if (!meter.classList.contains("on")) return;
+    const W = meter.width, H = meter.height;
+    mctx.clearRect(0, 0, W, H);
+    mctx.strokeStyle = P.c; mctx.lineWidth = 4; mctx.lineJoin = "round";
+    mctx.shadowColor = P.c; mctx.shadowBlur = 10;
+    mctx.beginPath();
+    const buf = level.buf;
+    for (let x = 0; x <= W; x += 4) {
+      const i = buf ? Math.floor((x / W) * (buf.length - 1)) : 0;
+      const y = H / 2 + (buf && started ? ((buf[i] - 128) / 128) * H * 1.6 : 0);
+      if (x) mctx.lineTo(x, Math.max(3, Math.min(H - 3, y))); else mctx.moveTo(x, y);
+    }
+    mctx.stroke();
+    mctx.shadowBlur = 0;
+  }
+  async function pollStats(t) {
+    if (t - statsT < 2) return;
+    statsT = t;
+    if (!link || link.mode() !== "rtc") { vst = null; return; }
+    const st = await link.stats();
+    if (!st) { vst = null; return; }
+    const kbps = prevBytes && st.at > prevBytes.at ? Math.round(((st.bytes - prevBytes.bytes) * 8) / (st.at - prevBytes.at)) : 0;
+    prevBytes = { bytes: st.bytes, at: st.at };
+    vst = { w: st.w, h: st.h, fps: st.fps, kbps };
+  }
+  function loop() {
+    requestAnimationFrame(loop);
+    const t = now();
+    // a direct link that stays "disconnected" gets a fresh start
+    if (rtcBadAt && t - rtcBadAt > 8 && link && src && link.mode() === "rtc") { rtcBadAt = 0; rtc = "connecting"; link.watch(src, "rtc", true); }
+    if (rtc === "connected" && link && link.rtcState() === "connected") rtcBadAt = 0;
+    pollStats(t);
+    drawLevel();
+    render(t);
+  }
+
+  /* ---------- input: Neural Band / captouch arrive as key events ---------- */
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); history.back(); return; }
+    if (!["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(k)) return;
+    e.preventDefault();
+    ensureAudio();
+    if (k === "Enter") { if (!started) start(); else replay(); return; }
+    if (!started) { start(); }
+    if (k === "ArrowLeft" || k === "ArrowRight") {
+      view = (view + (k === "ArrowRight" ? 1 : -1) + VIEWS.length) % VIEWS.length;
+      store.set("coms.view", VIEWS[view]);
+      toast(VIEWS[view] === "OFF" ? "PICTURE OFF" : VIEWS[view]);
+      beep(990, 0.04);
+    } else if (k === "ArrowUp") {
+      sound = !sound; store.set("coms.sound", sound); applyVolume();
+      if (sound) aud.play().catch(() => {});
+      toast(sound ? "SOUND ON" : "SOUND OFF");
+      beep(sound ? 1320 : 660, 0.06);
+    } else if (k === "ArrowDown") {
+      voice = !voice; store.set("coms.voice", voice);
+      if (!voice) { try { speechSynthesis.cancel(); } catch {} speaking = 0; applyVolume(); }
+      toast(voice ? "VOICE ON" : "VOICE OFF");
+      beep(voice ? 1320 : 660, 0.06);
+    }
+    sendState();
+  });
+  // Touch / mouse, only for trying it on a phone or computer: tap = pinch, swipe = arrow.
+  let p0 = null;
+  document.addEventListener("pointerdown", (e) => { p0 = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener("pointerup", (e) => {
+    if (!p0) return;
+    const dx = e.clientX - p0.x, dy = e.clientY - p0.y;
+    p0 = null;
+    const key = Math.abs(dx) < 30 && Math.abs(dy) < 30 ? "Enter"
+      : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { ensureAudio(); if (started) { aud.play().catch(() => {}); vid.play().catch(() => {}); } sendState(); } });
+
+  window.__coms = {
+    get state() { return { started, code, net, src, mode: link && link.mode(), rtc, view: VIEWS[view], sound, voice, speaking, msgs: msgs.map((m) => m.s), shown: shown && shown.s, vst, level: level.v,
+                           vw: vid.videoWidth, vh: vid.videoHeight, aTracks: aud.srcObject ? aud.srcObject.getAudioTracks().length : 0, jpgAt: lastJpgAt, pcmAt: link ? link.lastPcmAt() : 0 }; },
+    get link() { return link; },
+  };
+
+  connect();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

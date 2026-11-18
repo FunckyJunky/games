@@ -40,6 +40,8 @@ public/                 the website
   glasses/presence.js   tells the control panel the glasses are on and which app is open (every glasses app loads it)
   glasses/yaro/         Yaro-Vission: the wearer gets orders (move, take, jump, hug, dance) from the CON page
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
+  glasses/coms/         COMS.EXE: see the phone's camera, hear its mic and get its text read out loud (link.js = the link)
+  coms/                 COMS phone page (error.blue/coms): send camera (front/back), mic and text to COMS.EXE
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/room404/      ROOM404.EXE (Room 404): a small 3D room you look round with head motion, like VR. Pinch = walk/stop,
                         hold pinch = walk, pinch twice = take or put down (table, chairs, shelf, sill, floor, on the dice).
@@ -182,6 +184,34 @@ character, watching a live first-person view.
   every second while held), `act` {a, id}, `stop`, `got`, `done`, `tel` {h, p, bat}, `ping`/`pong`.
   Video is WebRTC (STUN only, like TUSA), set up through the room; when it can't connect within 12 s,
   CON asks for `jpg`: about 5 small JPEG frames a second through the room (each under 16 KB)
+
+## COMS (error.blue/coms + error.blue/glasses/coms)
+
+A phone sends its camera, microphone and text to the glasses. One way: phone to glasses.
+
+- Linking: the room is the glasses' own 6-letter CODE (the one SETUP.EXE and error.blue/hud use).
+  `public/coms/index.html` takes `?code=`, then the code it used last (`coms.code`), then the one linked on
+  error.blue/hud (`hud.panel.code`), so a phone already linked on the panel connects by itself. Otherwise
+  type the code that COMS.EXE shows.
+- `public/coms/index.html` (phone): GO LIVE (camera + mic with one permission question), CAMERA BACK / FRONT /
+  OFF, MIC ON / PUSH (hold to talk) / OFF, text with quick phrases, BUZZ, the read-out voice (AUTO: Cyrillic is
+  read in Ukrainian, otherwise the phone's language; or EN, UK, NL, DE), FROM name. Each message shows
+  "on the glasses" and "read out loud"; a message sent while the glasses are away goes out when they connect.
+  SETUP: PICTURE LOW / MID / HIGH (640x360, 1280x720, 1920x1080 and the bitrate), SOUND VOICE (echo and noise
+  cleanup) or ROOM / MUSIC (raw), LINK AUTO / DIRECT / RELAY. Settings in `coms.cfg`. Keeps the screen on while live.
+- `public/glasses/coms/index.html` (COMS.EXE on the home screen, Coms in Mini Hub): pinch to start (sound and
+  voice need it); a message that came in before is read then. Picture FIT / FILL / SMALL / OFF (swipe left/right,
+  `coms.view`), swipe up = phone sound on/off, swipe down = read-out voice on/off, pinch = read the last message
+  again (again within 6 s = the one before). With the camera off it shows a live sound wave. The phone's sound
+  is turned down while a message is read. Colours follow the HUD colour. Inside the panel's live preview it
+  doesn't connect.
+- `public/glasses/coms/link.js`: GameLab room `coms/<CODE>` (names `glasses`, `phone`). Messages: `hi`
+  (phone: name, v, a, cam, mic, talk, link, liveAt), `want` {mode rtc|relay|off}, `rtc`, `say` {id, s, lang},
+  `got`/`said` {id}, `ring`, `gst` (glasses state: started, sound, voice, view, bat, src, mode, w, h, fps).
+  DIRECT: WebRTC (STUN only), one connection with a video and an audio slot, so switching camera or turning
+  camera/mic off and on needs no new connection. When it can't connect within 10 s (AUTO), or with RELAY:
+  JPEG frames (~6 a second, cut into parts under 16 KB) and the sound as 16 kHz mu-law in 100 ms slices,
+  both through the room.
 
 ## Святий Миколайчик (error.blue/glasses/SM + error.blue/glasses/mykolai)
 

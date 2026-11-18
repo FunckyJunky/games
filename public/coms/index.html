@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04060a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>COMS</title>
+<style>
+  :root {
+    --cy: #4de8ff; --mg: #ff4fd8; --am: #ffc94d; --gr: #5cff8a; --rd: #ff4d5e;
+    --ink: #e9f6ff; --dim: #8aa4b8; --bg: #04060a; --card: rgba(4, 10, 16, .86); --edge: #23415a;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--mono); }
+  body { -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+  body::before {                        /* synthwave floor */
+    content: ""; position: fixed; left: -50%; right: -50%; bottom: -10%; height: 55%; z-index: -1;
+    background:
+      repeating-linear-gradient(90deg, rgba(77,232,255,.18) 0 2px, transparent 2px 60px),
+      repeating-linear-gradient(0deg, rgba(255,79,216,.18) 0 2px, transparent 2px 60px);
+    transform: perspective(300px) rotateX(62deg); transform-origin: 50% 100%;
+    animation: floor 2.4s linear infinite; pointer-events: none;
+    -webkit-mask-image: linear-gradient(to top, #000 30%, transparent); mask-image: linear-gradient(to top, #000 30%, transparent);
+  }
+  @keyframes floor { to { background-position: 0 60px, 0 60px; } }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { background: none; border: 0; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: calc(18px + var(--st)) 16px calc(28px + var(--sb)); display: flex; flex-direction: column; gap: 12px; }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .head > div:first-child { display: flex; flex-direction: column; gap: 5px; }
+  .logo { font-weight: 800; font-size: 34px; letter-spacing: 3px; line-height: 1; color: var(--cy);
+          text-shadow: 0 0 12px rgba(77,232,255,.7), 3px 0 var(--mg); animation: glitch 4s infinite steps(1); }
+  @keyframes glitch { 0%, 92%, 100% { transform: none; } 93% { transform: translate(2px, -1px) skewX(-8deg); } 95% { transform: translate(-3px, 1px); } 97% { transform: translate(1px, 0) skewX(6deg); } }
+  .head .sub { font-size: 10.5px; letter-spacing: 2px; color: var(--dim); white-space: nowrap; }
+  .head .home { margin-left: auto; white-space: nowrap; font-size: 11px; color: var(--dim); text-decoration: none; letter-spacing: 1px; border: 1px solid var(--edge); padding: 6px 9px; border-radius: 8px; }
+
+  .card { background: var(--card); border: 1px solid #1a2e40; border-radius: 14px; padding: 12px; }
+  .lbl { font-size: 11px; letter-spacing: 2px; color: var(--dim); margin-bottom: 7px; display: flex; align-items: center; gap: 8px; }
+  .lbl .r { margin-left: auto; letter-spacing: 1px; }
+
+  /* link */
+  #codeIn { width: 100%; font: 800 38px var(--mono); letter-spacing: 12px; text-align: center; text-transform: uppercase;
+            color: var(--am); background: #050b11; border: 2px solid var(--edge); border-radius: 12px; padding: 8px 0 8px 12px; outline: none; }
+  #codeIn:focus { border-color: var(--am); }
+  .hint { font-size: 12px; line-height: 1.5; color: var(--dim); margin-top: 8px; }
+  .hint b { color: var(--ink); }
+  .linked { display: flex; align-items: center; gap: 10px; }
+  .linked .cd { font-weight: 800; font-size: 22px; letter-spacing: 5px; color: var(--am); }
+  .linked button { margin-left: auto; font-size: 11px; letter-spacing: 1px; color: var(--dim); border: 1px solid var(--edge); border-radius: 8px; padding: 6px 9px; }
+  .pill { margin-top: 9px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .5px; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: #445; flex: none; }
+  .pill.on i { background: var(--gr); box-shadow: 0 0 8px var(--gr); }
+  .pill.live i { background: var(--rd); box-shadow: 0 0 8px var(--rd); animation: blink 1s steps(1) infinite; }
+  .pill.warn { color: var(--am); }
+  .gst { font-size: 11px; color: var(--dim); letter-spacing: 1px; margin-top: 4px; min-height: 14px; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  /* preview */
+  .pv { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #1a2e40; }
+  .pv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .pv video.mirror { transform: scaleX(-1); }
+  .pv .off { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 13px; letter-spacing: 2px; text-align: center; padding: 10px; }
+  .pv .badge { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 800; letter-spacing: 1px; padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,.6); display: none; }
+  .pv .badge.on { display: block; color: #fff; background: rgba(255,77,94,.85); }
+  .pv .badge.wait { display: block; color: var(--am); }
+  .meter { height: 8px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gr), var(--am), var(--rd)); transition: width .08s; }
+
+  .big { width: 100%; padding: 16px 12px; border-radius: 14px; font-weight: 800; font-size: 18px; letter-spacing: 1px; }
+  .pri { background: linear-gradient(90deg, #12b8d6, #8a3df0); box-shadow: 0 0 22px rgba(77,232,255,.3); color: #fff; }
+  .stop { background: linear-gradient(90deg, #d6123f, #8a3df0); box-shadow: 0 0 22px rgba(255,77,94,.3); color: #fff; }
+  .big:disabled { opacity: .4; }
+
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .k { width: 64px; font-size: 11px; letter-spacing: 2px; color: var(--dim); flex: none; }
+  .seg { display: flex; flex: 1; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; padding: 11px 4px; font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--dim); border-left: 1px solid var(--edge); }
+  .seg button:first-child { border-left: 0; }
+  .seg button.on { color: #04060a; background: var(--cy); }
+  .rows { display: flex; flex-direction: column; gap: 9px; }
+  #ptt { display: none; margin-top: 2px; background: rgba(4,10,16,.9); border: 2px solid var(--am); color: var(--am); touch-action: none; }
+  #ptt.show { display: block; }
+  #ptt.down { background: var(--am); color: #04060a; box-shadow: 0 0 26px rgba(255,201,77,.55); }
+
+  /* text */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+  .chips button { font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--edge); color: var(--ink); background: rgba(77,232,255,.05); }
+  .chips button:active { background: var(--cy); color: #04060a; }
+  #txt { width: 100%; min-height: 78px; resize: none; background: #050b11; border: 2px solid var(--edge); border-radius: 12px; padding: 10px 12px;
+         font: 600 17px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; outline: none; }
+  #txt:focus { border-color: var(--cy); }
+  .send { display: flex; gap: 8px; margin-top: 8px; align-items: stretch; }
+  .send .big { flex: 1; padding: 13px; }
+  .send .buzz { width: auto; flex: none; padding: 13px 14px; font-size: 14px; border: 1px solid var(--edge); color: var(--am); }
+  .cnt { font-size: 11px; color: var(--dim); letter-spacing: 1px; }
+  .opts { display: flex; gap: 8px; margin-top: 9px; align-items: center; }
+  .opts .seg button { padding: 8px 2px; font-size: 12px; }
+  #name { width: 110px; background: #050b11; border: 1px solid var(--edge); border-radius: 9px; padding: 8px 9px; font-size: 13px; font-weight: 700; text-transform: uppercase; outline: none; letter-spacing: 1px; }
+  .log { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 260px; overflow-y: auto; }
+  .log:empty { display: none; }
+  .m { align-self: flex-end; max-width: 88%; background: rgba(77,232,255,.08); border: 1px solid #1d3a50; border-radius: 12px 12px 4px 12px; padding: 7px 10px; }
+  .m .s { font: 600 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; word-wrap: break-word; overflow-wrap: anywhere; }
+  .m .st { font-size: 10px; letter-spacing: 1px; color: var(--dim); margin-top: 3px; text-align: right; }
+  .m .st.got { color: var(--cy); }
+  .m .st.said { color: var(--gr); }
+
+  details summary { list-style: none; cursor: pointer; font-size: 11px; letter-spacing: 2px; color: var(--dim); }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] summary { margin-bottom: 10px; }
+  .foot { text-align: center; font-size: 11px; color: var(--dim); line-height: 1.6; }
+  .err { color: var(--rd); font-size: 12.5px; text-align: center; min-height: 0; }
+  .err:empty { display: none; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div><div class="logo">COMS</div><div class="sub">PHONE &#8594; GLASSES</div></div>
+    <a class="home" href="/">&lt; ERROR-DOS</a>
+  </div>
+
+  <!-- link with the glasses -->
+  <div class="card">
+    <div id="linkNew">
+      <div class="lbl">GLASSES CODE</div>
+      <input id="codeIn" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="------">
+      <div class="hint">Open <b>COMS.EXE</b> on the glasses. The <b>CODE</b> is on its screen (the same code as SETUP.EXE and error.blue/hud).</div>
+    </div>
+    <div id="linkOk" class="hide">
+      <div class="linked"><span class="lbl" style="margin:0">GLASSES</span><span class="cd" id="codeShow"></span><button id="changeCode">CHANGE</button></div>
+      <div class="pill" id="pill"><i></i><span id="pillT">CONNECTING...</span></div>
+      <div class="gst" id="gst"></div>
+    </div>
+  </div>
+
+  <!-- camera + mic -->
+  <div class="card">
+    <div class="pv">
+      <video id="pv" muted playsinline autoplay></video>
+      <div class="off" id="pvOff">CAMERA OFF</div>
+      <div class="badge" id="badge"></div>
+    </div>
+    <div class="meter"><i id="lvl"></i></div>
+    <div class="rows" style="margin-top:10px">
+      <button class="big pri" id="live">&#9679; GO LIVE (CAMERA + MIC)</button>
+      <div class="row"><span class="k">CAMERA</span><div class="seg" id="segCam"><button data-v="back">BACK</button><button data-v="front">FRONT</button><button data-v="off" class="on">OFF</button></div></div>
+      <div class="row"><span class="k">MIC</span><div class="seg" id="segMic"><button data-v="open">ON</button><button data-v="push">PUSH</button><button data-v="off" class="on">OFF</button></div></div>
+      <button class="big" id="ptt">HOLD TO TALK</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- text -->
+  <div class="card">
+    <div class="lbl">TEXT &#8594; READ OUT LOUD ON THE GLASSES<span class="r cnt" id="cnt">0/300</span></div>
+    <div class="chips" id="chips">
+      <button>OK</button><button>Yes</button><button>No</button><button>Come here</button><button>Wait for me</button>
+      <button>Look left</button><button>Look right</button><button>On my way</button><button>Call me</button>
+    </div>
+    <textarea id="txt" maxlength="300" placeholder="Type a message..."></textarea>
+    <div class="send"><button class="big pri" id="sendBtn">SEND</button><button class="big buzz" id="buzz">BUZZ</button></div>
+    <div class="opts">
+      <span class="k" style="font-size:11px;letter-spacing:2px;color:var(--dim)">VOICE</span>
+      <div class="seg" id="segLang"><button data-v="auto" class="on">AUTO</button><button data-v="en-US">EN</button><button data-v="uk-UA">UK</button><button data-v="nl-NL">NL</button><button data-v="de-DE">DE</button></div>
+    </div>
+    <div class="opts">
+      <span class="k" style="font-size:11px;letter-spacing:2px;color:var(--dim)">FROM</span>
+      <input id="name" maxlength="12" placeholder="PHONE" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- setup -->
+  <div class="card">
+    <details id="setup">
+      <summary>SETUP &#9662;</summary>
+      <div class="rows">
+        <div class="row"><span class="k">PICTURE</span><div class="seg" id="segQ"><button data-v="low">LOW</button><button data-v="mid" class="on">MID</button><button data-v="high">HIGH</button></div></div>
+        <div class="row"><span class="k">SOUND</span><div class="seg" id="segSnd"><button data-v="voice" class="on">VOICE</button><button data-v="raw">ROOM / MUSIC</button></div></div>
+        <div class="row"><span class="k">LINK</span><div class="seg" id="segLink"><button data-v="auto" class="on">AUTO</button><button data-v="direct">DIRECT</button><button data-v="relay">RELAY</button></div></div>
+        <div class="hint">PICTURE: LOW for a weak connection, HIGH for the sharpest picture. SOUND: VOICE cleans up speech (echo and noise), ROOM / MUSIC sends everything as it is.
+          LINK: DIRECT goes straight from this phone to the glasses; RELAY goes through error.blue (works on any network, but a smaller picture). AUTO tries direct first.</div>
+      </div>
+    </details>
+  </div>
+
+  <div class="foot">Keep this page open and the screen on while you're live.<br>On the glasses: pinch = repeat &middot; &#8592;&#8594; picture &middot; &#8593; sound &middot; &#8595; voice</div>
+</div>
+
+<script src="/lib/gamelab.js"></script>
+<script src="/glasses/coms/link.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const ls = {
+    get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+  const clean = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+
+  /* ---------- settings ---------- */
+  const cfg = Object.assign({ q: "mid", snd: "voice", link: "auto", lang: "auto", name: "" }, ls.get("coms.cfg", {}));
+  const saveCfg = () => ls.set("coms.cfg", cfg);
+  const RES = { low: { width: 640, height: 360, frameRate: 24 }, mid: { width: 1280, height: 720, frameRate: 30 }, high: { width: 1920, height: 1080, frameRate: 30 } };
+
+  // the code: ?code=, this page's last one, or the one linked on error.blue/hud
+  const params = new URLSearchParams(location.search);
+  let code = clean(params.get("code")) || clean(ls.get("coms.code", "")) || clean(ls.get("hud.panel.code", ""));
+  if (!CODE_RE.test(code)) code = "";
+  if (params.has("code")) history.replaceState(null, "", location.pathname);
+
+  /* ---------- state ---------- */
+  let link = null, net = "idle", glasses = [], gst = null, viewers = [];
+  let camMode = "off", micMode = "off", talking = false;
+  let vTrack = null, aTrack = null, liveAt = 0, ac = null, an = null, anBuf = null, anSrc = null, wake = null;
+  const opts = { name: cfg.name || "" };
+  const out = [];          // sent messages: { id, s, lang, at, st: 'wait'|'sent'|'got'|'said', tries, last }
+
+  function err(t) { $("err").textContent = t || ""; }
+
+  /* ---------- link ---------- */
+  function connect() {
+    if (link) { link.close(); link = null; }
+    glasses = []; gst = null; viewers = [];
+    if (!code) { renderLink(); return; }
+    link = ComsLink.join(code, "phone", Object.assign(opts, {
+      onStatus(s) { net = s; renderLink(); },
+      onPeers() {
+        const before = glasses.length;
+        glasses = link.byRole("glasses");
+        if (glasses.length && !before) resendAll();
+        if (!glasses.length) gst = null;
+        renderLink();
+      },
+      onViewers(list) { viewers = list; renderLink(); },
+      onMsg(d, from) {
+        if (d.t === "gst") { if (!gst || gst.from === from || d.src === link.me) gst = Object.assign({ from }, d); renderLink(); }
+        else if (d.t === "got" || d.t === "said") {
+          const m = out.find((x) => x.id === d.id);
+          if (m && (d.t === "said" || m.st !== "said")) { m.st = d.t; renderLog(); }
+        }
+      },
+    }));
+    if (ac) link.setAudioCtx(ac);
+    link.setQuality(cfg.q);
+    sendHi();
+    link.setTracks({ video: vTrack, audio: aTrack });
+    renderLink();
+  }
+  function sendHi() {
+    if (!link) return;
+    link.hi(undefined, { cam: camMode === "off" ? null : camMode, mic: micMode, talk: talking, link: cfg.link, liveAt });
+  }
+  function setCode(c) {
+    code = c;
+    ls.set("coms.code", c);
+    if (!clean(ls.get("hud.panel.code", ""))) ls.set("hud.panel.code", c);    // the panel can use it too
+    connect();
+  }
+  function renderLink() {
+    $("linkNew").classList.toggle("hide", !!code);
+    $("linkOk").classList.toggle("hide", !code);
+    if (!code) return;
+    $("codeShow").textContent = code;
+    const pill = $("pill"), watching = gst && gst.src === (link && link.me);
+    let cls = "", t;
+    const live = !!(vTrack || aTrack);
+    const v = viewers.find((x) => glasses.some((g) => g.id === x.id));
+    if (net === "full") { t = "ROOM FULL"; cls = "warn"; }
+    else if (net !== "open") t = net === "reconnecting" ? "RECONNECTING..." : "CONNECTING...";
+    else if (!glasses.length) { t = "OPEN COMS.EXE ON THE GLASSES"; cls = "warn"; }
+    else if (!live) { t = "GLASSES ON · READY"; cls = "on"; }
+    else if (v && (v.mode === "relay" || v.state === "connected")) { t = "LIVE ON THE GLASSES · " + (v.mode === "relay" ? "RELAY" : "DIRECT"); cls = "live"; }
+    else if (v) { t = "LINKING TO THE GLASSES..."; cls = "on"; }
+    else { t = watching || !gst ? "GLASSES ON · LINKING..." : "GLASSES ARE WATCHING ANOTHER PHONE"; cls = "warn"; }
+    pill.className = "pill " + cls;
+    $("pillT").textContent = t;
+    let g = "";
+    if (gst && glasses.length) {
+      const bits = [];
+      if (!gst.started) bits.push("PINCH ON THE GLASSES TO START");
+      else {
+        bits.push(gst.sound ? "SOUND ON" : "SOUND OFF");
+        bits.push(gst.voice ? "VOICE ON" : "VOICE OFF");
+        bits.push("VIEW " + gst.view);
+        if (watching && gst.mode === "rtc" && gst.h) bits.push(gst.h + "P " + gst.fps + "FPS");
+      }
+      if (gst.bat != null) bits.push("BAT " + gst.bat + "%");
+      g = bits.join(" · ");
+    }
+    $("gst").textContent = g;
+    const b = $("badge");
+    b.className = "badge" + (live && cls === "live" ? " on" : live ? " wait" : "");
+    b.textContent = cls === "live" ? "● ON THE GLASSES" : live ? "NOT ON THE GLASSES YET" : "";
+  }
+
+  /* ---------- camera ---------- */
+  async function keepAwake() {
+    try { if (navigator.wakeLock && !document.hidden && !wake) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => { wake = null; }); } } catch {}
+  }
+  function stopVideo() {
+    if (vTrack) { try { vTrack.stop(); } catch {} }
+    vTrack = null;
+  }
+  const camWant = (mode) => {
+    const r = RES[cfg.q];
+    return { facingMode: { ideal: mode === "front" ? "user" : "environment" }, width: { ideal: r.width }, height: { ideal: r.height }, frameRate: { ideal: r.frameRate } };
+  };
+  const micWant = () => { const c = cfg.snd === "voice"; return { echoCancellation: c, noiseSuppression: c, autoGainControl: c, channelCount: 1 }; };
+  function adoptVideo(track, mode) {
+    vTrack = track;
+    try { vTrack.contentHint = "motion"; } catch {}
+    vTrack.addEventListener("ended", () => { if (vTrack === track) { vTrack = null; if (link) link.setTracks({ video: null }); afterMedia(); } });
+    const pv = $("pv");
+    pv.srcObject = new MediaStream([vTrack]);
+    pv.classList.toggle("mirror", mode === "front");
+    pv.play().catch(() => {});
+    $("pvOff").classList.add("hide");
+    if (link) link.setTracks({ video: vTrack });
+  }
+  async function setCam(mode) {
+    err("");
+    camMode = mode;
+    segShow("segCam", mode);
+    if (mode === "off") {
+      stopVideo();
+      $("pv").srcObject = null;
+      $("pvOff").classList.remove("hide");
+      if (link) link.setTracks({ video: null });
+      afterMedia();
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { err("This browser can't use the camera."); camMode = "off"; segShow("segCam", "off"); return; }
+    stopVideo();                                       // some phones can only open one camera at a time
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: camWant(mode) });
+      if (camMode !== mode) { s.getTracks().forEach((t) => t.stop()); return; }
+      adoptVideo(s.getVideoTracks()[0], mode);
+    } catch (e) {
+      camMode = "off";
+      segShow("segCam", "off");
+      $("pvOff").classList.remove("hide");
+      err("No camera: allow camera access for error.blue and try again.");
+    }
+    afterMedia();
+  }
+
+  /* ---------- mic ---------- */
+  function audioCtx() {
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) { ac = new AC(); an = ac.createAnalyser(); an.fftSize = 512; anBuf = new Uint8Array(an.fftSize); if (link) link.setAudioCtx(ac); }
+      }
+      if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+    } catch { ac = null; }
+    return ac;
+  }
+  function stopAudio() {
+    try { anSrc && anSrc.disconnect(); } catch {}
+    anSrc = null;
+    if (aTrack) { try { aTrack.stop(); } catch {} }
+    aTrack = null;
+  }
+  async function openMic() {
+    if (aTrack && aTrack.readyState === "live") return true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { err("This browser can't use the microphone."); return false; }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: false, audio: micWant() });
+      adoptAudio(s.getAudioTracks()[0]);
+      return true;
+    } catch (e) {
+      err("No microphone: allow microphone access for error.blue and try again.");
+      return false;
+    }
+  }
+  function adoptAudio(track) {
+    aTrack = track;
+    try { aTrack.contentHint = cfg.snd === "voice" ? "speech" : "music"; } catch {}
+    aTrack.addEventListener("ended", () => { if (aTrack === track) { aTrack = null; if (link) link.setTracks({ audio: null }); micMode = "off"; segShow("segMic", "off"); $("ptt").classList.remove("show"); afterMedia(); } });
+    const c = audioCtx();
+    if (c && an) { try { anSrc = c.createMediaStreamSource(new MediaStream([aTrack])); anSrc.connect(an); } catch {} }
+  }
+  async function setMic(mode) {
+    err("");
+    audioCtx();
+    micMode = mode;
+    segShow("segMic", mode);
+    $("ptt").classList.toggle("show", mode === "push");
+    if (mode === "off") { stopAudio(); if (link) link.setTracks({ audio: null }); afterMedia(); return; }
+    if (!(await openMic())) { micMode = "off"; segShow("segMic", "off"); $("ptt").classList.remove("show"); afterMedia(); return; }
+    if (micMode !== mode) return;
+    aTrack.enabled = mode === "open" || talking;
+    if (link) link.setTracks({ audio: aTrack });
+    afterMedia();
+  }
+  async function reopenMic() {                         // the SOUND setting changed: a new mic track
+    if (micMode === "off") return;
+    stopAudio();
+    const m = micMode;
+    if (await openMic()) { aTrack.enabled = m === "open" || talking; if (link) link.setTracks({ audio: aTrack }); }
+    afterMedia();
+  }
+  function setTalk(on) {
+    if (talking === on) return;
+    talking = on;
+    $("ptt").classList.toggle("down", on);
+    $("ptt").textContent = on ? "TALKING..." : "HOLD TO TALK";
+    if (aTrack && micMode === "push") aTrack.enabled = on;
+    if (on && navigator.vibrate) try { navigator.vibrate(25); } catch {}
+    sendHi();
+  }
+
+  function afterMedia() {
+    const live = !!(vTrack || aTrack);
+    if (live && !liveAt) liveAt = Date.now();
+    if (!live) liveAt = 0;
+    if (live) keepAwake(); else if (wake) { try { wake.release(); } catch {} wake = null; }
+    const b = $("live");
+    b.className = "big " + (live ? "stop" : "pri");
+    b.innerHTML = live ? "&#9632; STOP CAMERA + MIC" : "&#9679; GO LIVE (CAMERA + MIC)";
+    sendHi();
+    renderLink();
+  }
+
+  /* ---------- text ---------- */
+  function langFor(s) {
+    if (cfg.lang !== "auto") return cfg.lang;
+    if (/[Ѐ-ӿ]/.test(s)) return "uk-UA";
+    return navigator.language || "en-US";
+  }
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  function send(text) {
+    const s = String(text || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (!s) return;
+    if (!code) { err("Type the glasses code first."); $("codeIn").focus(); return; }
+    const m = { id: newId(), s, lang: langFor(s), at: Date.now(), st: "wait", tries: 0, last: 0 };
+    out.push(m);
+    if (out.length > 40) out.shift();
+    trySend(m);
+    renderLog();
+  }
+  function trySend(m) {
+    if (!link || !link.open || !glasses.length || m.st === "got" || m.st === "said") return;
+    m.tries++; m.last = Date.now();
+    link.send({ t: "say", id: m.id, s: m.s, lang: m.lang, name: opts.name || "" });
+    if (m.st === "wait") m.st = "sent";
+  }
+  function resendAll() { for (const m of out) if (m.st === "wait" || m.st === "sent") trySend(m); renderLog(); }
+  setInterval(() => {                                  // no receipt after 4 s: send it again (up to 5 times)
+    let ch = false;
+    for (const m of out) if ((m.st === "sent" || m.st === "wait") && m.tries < 5 && Date.now() - m.last > 4000) { trySend(m); ch = true; }
+    if (ch) renderLog();
+  }, 1000);
+  const ST = { wait: "WAITING FOR THE GLASSES", sent: "SENDING...", got: "ON THE GLASSES ✓", said: "READ OUT LOUD ✓✓" };
+  function renderLog() {
+    const el = $("log");
+    el.innerHTML = "";
+    for (const m of out.slice(-20)) {
+      const d = document.createElement("div");
+      d.className = "m";
+      const t = new Date(m.at);
+      const st = m.st === "sent" && m.tries >= 5 ? "NOT DELIVERED" : ST[m.st];
+      d.innerHTML = '<div class="s"></div><div class="st ' + m.st + '"></div>';
+      d.firstChild.textContent = m.s;
+      d.lastChild.textContent = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") + " · " + st;
+      el.appendChild(d);
+    }
+    el.scrollTop = el.scrollHeight;
+  }
+
+  /* ---------- level meter ---------- */
+  function meter() {
+    requestAnimationFrame(meter);
+    let v = 0;
+    if (an && anBuf && aTrack && aTrack.enabled) {
+      an.getByteTimeDomainData(anBuf);
+      let sum = 0;
+      for (let i = 0; i < anBuf.length; i++) { const x = (anBuf[i] - 128) / 128; sum += x * x; }
+      v = Math.min(1, Math.sqrt(sum / anBuf.length) * 4);
+    }
+    $("lvl").style.width = Math.round(v * 100) + "%";
+  }
+  requestAnimationFrame(meter);
+
+  /* ---------- UI ---------- */
+  function segShow(id, v) { for (const b of $(id).children) b.classList.toggle("on", b.dataset.v === v); }
+  function seg(id, fn) { $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) fn(b.dataset.v); }); }
+
+  $("codeIn").addEventListener("input", (e) => {
+    const c = clean(e.target.value);
+    e.target.value = c;
+    if (CODE_RE.test(c)) { e.target.blur(); setCode(c); }
+  });
+  $("changeCode").addEventListener("click", () => { code = ""; ls.set("coms.code", ""); if (link) { link.close(); link = null; } $("codeIn").value = ""; renderLink(); $("codeIn").focus(); });
+
+  $("live").addEventListener("click", async () => {
+    audioCtx();
+    if (vTrack || aTrack) { await setCam("off"); await setMic("off"); return; }
+    err("");
+    const mode = camMode === "front" ? "front" : "back";
+    // one permission question for both
+    let s = null;
+    try { if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) s = await navigator.mediaDevices.getUserMedia({ video: camWant(mode), audio: micWant() }); } catch {}
+    if (s && s.getVideoTracks()[0] && s.getAudioTracks()[0]) {
+      camMode = mode; segShow("segCam", mode);
+      adoptVideo(s.getVideoTracks()[0], mode);
+      micMode = "open"; segShow("segMic", "open"); $("ptt").classList.remove("show");
+      adoptAudio(s.getAudioTracks()[0]);
+      aTrack.enabled = true;
+      if (link) link.setTracks({ audio: aTrack });
+      afterMedia();
+      return;
+    }
+    if (s) s.getTracks().forEach((t) => t.stop());
+    await setMic("open");                              // one of them is missing: try them one by one
+    await setCam(mode);
+  });
+  seg("segCam", (v) => { audioCtx(); setCam(v); });
+  seg("segMic", (v) => setMic(v));
+  seg("segQ", (v) => {
+    cfg.q = v; saveCfg(); segShow("segQ", v);
+    if (link) link.setQuality(v);
+    if (vTrack) { const r = RES[v]; vTrack.applyConstraints({ width: { ideal: r.width }, height: { ideal: r.height }, frameRate: { ideal: r.frameRate } }).catch(() => setCam(camMode)); }
+  });
+  seg("segSnd", (v) => { cfg.snd = v; saveCfg(); segShow("segSnd", v); reopenMic(); });
+  seg("segLink", (v) => { cfg.link = v; saveCfg(); segShow("segLink", v); sendHi(); });
+  seg("segLang", (v) => { cfg.lang = v; saveCfg(); segShow("segLang", v); });
+
+  const ptt = $("ptt");
+  ptt.addEventListener("pointerdown", (e) => { e.preventDefault(); try { ptt.setPointerCapture(e.pointerId); } catch {} setTalk(true); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) ptt.addEventListener(ev, () => setTalk(false));
+  ptt.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  const txt = $("txt");
+  txt.addEventListener("input", () => { $("cnt").textContent = txt.value.length + "/300"; });
+  txt.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("sendBtn").click(); } });
+  $("sendBtn").addEventListener("click", () => { send(txt.value); txt.value = ""; $("cnt").textContent = "0/300"; });
+  $("chips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) send(b.textContent); });
+  $("buzz").addEventListener("click", () => { if (link && glasses.length) { link.send({ t: "ring" }); if (navigator.vibrate) try { navigator.vibrate(40); } catch {} } else err(code ? "The glasses aren't connected yet." : "Type the glasses code first."); });
+  const nm = $("name");
+  nm.value = cfg.name || "";
+  nm.addEventListener("input", () => {
+    nm.value = nm.value.toUpperCase().replace(/[^A-Z0-9Ѐ-ӿ .'-]/gi, "").slice(0, 12);
+    cfg.name = nm.value.trim(); saveCfg(); opts.name = cfg.name;
+    clearTimeout(nm.t); nm.t = setTimeout(sendHi, 400);
+  });
+
+  segShow("segQ", cfg.q); segShow("segSnd", cfg.snd); segShow("segLink", cfg.link); segShow("segLang", cfg.lang);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    if (vTrack || aTrack) keepAwake();
+    if (camMode !== "off" && (!vTrack || vTrack.readyState === "ended")) setCam(camMode);       // the phone stopped the camera in the background
+    if (micMode !== "off" && (!aTrack || aTrack.readyState === "ended")) setMic(micMode);
+    if (ac && ac.state === "suspended") ac.resume().catch(() => {});
+  });
+
+  window.__comsPhone = { get state() { return { code, net, glasses: glasses.length, gst, viewers, camMode, micMode, talking, out: out.map((m) => m.st) }; }, get link() { return link; }, send, setCam, setMic, setTalk };
+
+  connect();
+  renderLink();
+  renderLog();
+})();
+</script>
+</body>
+</html>
