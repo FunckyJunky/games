@@ -52,7 +52,7 @@ button,input{font:inherit;color:inherit}
 .status.lock{color:var(--red);text-shadow:0 0 8px rgba(255,31,61,.7)}
 .vitals{display:grid;grid-template-columns:1fr 1.3fr auto;gap:8px}
 .vbox{padding:6px 10px;border-radius:14px;background:var(--pan);border:1px solid var(--line);display:grid;gap:4px}
-.lab{font:15px/1 VT323,monospace;color:var(--mute);letter-spacing:.08em}
+.lab{font:15px/1 VT323,monospace;color:var(--mute);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cells{display:flex;gap:4px;height:16px}
 .cells i{flex:1;border-radius:3px;background:#2a1452;transition:background .2s}
 .cells i.on{background:var(--mg);box-shadow:0 0 8px rgba(255,42,109,.7)}
@@ -67,7 +67,10 @@ button,input{font:inherit;color:inherit}
 .round:disabled{opacity:.45;box-shadow:none}
 .round.on{background:var(--cy);color:var(--bg)}
 .round.on small{color:var(--bg)}
-#reload{border-color:var(--sun);color:var(--sun);box-shadow:0 0 16px rgba(255,211,25,.3);background:radial-gradient(circle at 50% 35%,#3a2a10,#0b0626)}
+#spot{border-color:var(--sun);color:var(--sun);box-shadow:0 0 16px rgba(255,211,25,.3);background:radial-gradient(circle at 50% 35%,#3a2a10,#0b0626)}
+#spot small{font-size:15px}
+.cellbtn{font:inherit;color:inherit;text-align:left;cursor:pointer;touch-action:manipulation}
+.cellbtn:active{filter:brightness(1.3)}
 .fire{height:96px;border-radius:48px;border:0;cursor:pointer;touch-action:manipulation;font:900 30px/1 Orbitron,sans-serif;letter-spacing:.12em;color:#fff;text-shadow:0 0 12px #fff;
   background:radial-gradient(120% 140% at 50% 0%,#ff6b8f,#ff1f3d 45%,#8a0021);box-shadow:0 0 0 3px #ff8aa6 inset,0 0 34px rgba(255,31,61,.65),0 10px 30px rgba(0,0,0,.5)}
 .fire:active,.fire.hit{transform:scale(.97);filter:brightness(1.3)}
@@ -139,14 +142,14 @@ input::placeholder{color:#6f5aa3}
 
   <section class="vitals">
     <div class="vbox"><span class="lab">HULL</span><div class="cells" id="hp"></div></div>
-    <div class="vbox"><span class="lab">ENERGY CELLS</span><div class="cells ammo" id="ammo"></div></div>
+    <button class="vbox cellbtn" id="reload" aria-label="Reload energy cells"><span class="lab">CELLS · TAP RELOAD</span><div class="cells ammo" id="ammo"></div></button>
     <div class="vbox kd"><span class="lab">K · D</span><b id="kd">0 · 0</b></div>
   </section>
 
   <section class="ctrl">
     <button class="round" id="shield"><span>SHIELD</span><small id="shT">ready</small></button>
     <button class="fire" id="fire">FIRE</button>
-    <button class="round" id="reload"><span>RELOAD</span><small id="rlT">5/5</small></button>
+    <button class="round" id="spot"><span>SPOT</span><small id="spT">see them?</small></button>
   </section>
 </main>
 
@@ -176,6 +179,7 @@ input::placeholder{color:#6f5aa3}
       <li><b>LOCKED</b> means a shot hits. Dead centre is a critical hit (double damage).</li>
       <li><b>3 hits</b> derez a player. They come back after 10 seconds.</li>
       <li><b>Shield</b> blocks shots for 4 s, but you can't fire while it's up.</li>
+      <li><b>SPOT:</b> can you see a player for real? Point the top edge at them and tap SPOT. Your compass fixes where the game puts them.</li>
       <li>GPS works best when players are <b>15 to 300 m</b> apart, outdoors.</li>
     </ol>
     <p class="fine">Play outside in an open space. Look up while you move and stay away from roads.</p>
@@ -202,6 +206,8 @@ input::placeholder{color:#6f5aa3}
     <button class="btn pri" id="bDone">Back to the scope</button>
     <ol class="rules">
       <li><b>Aim with the whole phone</b>, held flat, top edge forward.</li>
+      <li><b>SPOT</b> a player you can really see: point straight at them and tap SPOT. Their trooper moves to where your compass says they are, and gets ◆. If you both spot each other, the two compass readings are averaged. It fades after 3 minutes, so spot again.</li>
+      <li>Your steps and compass move you between GPS updates, so positions follow you smoothly.</li>
       <li>The drone is a practice target only you can see.</li>
       <li>The brackets around a trooper show where a shot counts. They are wider up close, because GPS is never exact.</li>
       <li>A red beam pointing at you and <b>TARGETED</b> means someone is aiming at you. Move, or raise your shield.</li>
@@ -222,6 +228,7 @@ const store = {
 const GAME = 'space-rifle', CODE_CH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', ID_CH = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const COLORS = ['#05d9e8', '#ffd319', '#b6ff3d', '#ff9a3c', '#c77dff', '#7cf5c4'];
 const MAX_HP = 3, MAG = 5, RELOAD_MS = 2200, COOLDOWN = 550, RESPAWN_MS = 10000, PROTECT_MS = 3000, SHIELD_MS = 4000, SHIELD_CD = 25000, RANGE = 400, MAX_EL = 35;
+const CORR_MS = 180000, SPOT_WIN = 30000, STEP_M = 0.7;
 const rad = Math.PI / 180, THMAX = 80 * rad, PW = 0.78, SCALE = 2.4, EYE = 1.6, LOFI = 0.5;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -267,7 +274,8 @@ const me = { id: store.get('sr.id', '') || rnd(12, ID_CH), name: clean(store.get
 store.set('sr.id', me.id);
 const sc0 = store.get('sr.score', null); if (sc0 && sc0.code === sess.code) { me.k = sc0.k | 0; me.d = sc0.d | 0; }
 const saveScore = () => store.set('sr.score', { code: sess.code, k: me.k, d: me.d });
-const players = new Map();
+const players = new Map(), corr = new Map(), spots = new Map();
+let lastSpot = 0, spotTip = false;
 const fx = { hit: 0, miss: 0 };
 let entered = false, lastSent = 0, lastAimAt = 0, lastAimSent = -999, lastLock = null, feedList = [];
 
@@ -315,13 +323,69 @@ function startGps() {
   pos.watch = navigator.geolocation.watchPosition((p) => {
     pos.fix = { la: p.coords.latitude, lo: p.coords.longitude, ac: Math.max(1, Math.round(p.coords.accuracy || 0)), at: Date.now() };
     if (!pos.origin) pos.origin = { la: pos.fix.la, lo: pos.fix.lo };
-    pos.err = 0; sendState(false);
+    fuse(Date.now()); pos.err = 0; sendState(false);
   }, (e) => {
     pos.err = e.code;
     if (e.code === 1) { pos.watch = null; toast('Location is blocked. Allow it for this site in the browser settings'); }
   }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
 }
 function enu(p) { const o = pos.origin || p; return { x: (p.lo - o.lo) * Math.cos(o.la * rad) * 111320, y: (p.la - o.la) * 110540 }; }
+function fromENU(x, y) { const o = pos.origin; return { la: o.la + y / 110540, lo: o.lo + x / (Math.cos(o.la * rad) * 111320) }; }
+/* between GPS fixes, steps + compass move you (dead reckoning); every GPS fix pulls you back towards it */
+const pdr = { x: null, y: null, lp: 9.81, hi: false, last: 0, steps: 0 };
+function fuse(now) {
+  const g = enu(pos.fix);
+  if (pdr.x == null || Math.hypot(g.x - pdr.x, g.y - pdr.y) > 25) { pdr.x = g.x; pdr.y = g.y; return; }
+  const k = now - pdr.last < 2500 ? 0.3 : 0.5;
+  pdr.x += (g.x - pdr.x) * k; pdr.y += (g.y - pdr.y) * k;
+}
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  pdr.lp += (Math.hypot(a.x, a.y || 0, a.z || 0) - pdr.lp) * 0.3;
+  const now = Date.now();
+  if (!pdr.hi && pdr.lp > 11 && now - pdr.last > 300) {
+    pdr.hi = true; pdr.last = now; pdr.steps++;
+    if (pdr.x != null && aim.h != null && aim.src !== 'drag') { pdr.x += STEP_M * Math.sin(aim.h * rad); pdr.y += STEP_M * Math.cos(aim.h * rad); sendState(false); }
+  } else if (pdr.hi && pdr.lp < 9.9) pdr.hi = false;
+}
+const myXY = () => pdr.x != null ? { x: pdr.x, y: pdr.y } : enu(pos.fix);
+const myLL = () => pdr.x != null ? fromENU(pdr.x, pdr.y) : pos.fix;
+function relLL(la, lo) { const t = enu({ la, lo }), m = myXY(), dx = t.x - m.x, dy = t.y - m.y; return { dx, dy, d: Math.hypot(dx, dy), b: wrap(Math.atan2(dx, dy) / rad) }; }
+/* SPOT: a compass sighting of a player you can really see fixes the direction GPS got wrong; it fades over 3 minutes */
+function corrW(id, now) { const c = corr.get(id); return c ? Math.max(0, 1 - (now - c.at) / CORR_MS) : 0; }
+function relOf(p, now) {
+  const r = relLL(p.la, p.lo), c = corr.get(p.id), w = corrW(p.id, now);
+  if (w > 0) { r.dx += c.dx * w; r.dy += c.dy * w; r.d = Math.hypot(r.dx, r.dy); r.b = wrap(Math.atan2(r.dx, r.dy) / rad); }
+  return r;
+}
+function setCorr(id, b, now) {   // keep the GPS distance, take the direction from the compass
+  const p = players.get(id); if (!p || p.la == null || !pos.fix) return false;
+  const r = relLL(p.la, p.lo), d = Math.max(r.d, 3);
+  corr.set(id, { dx: d * Math.sin(b * rad) - r.dx, dy: d * Math.cos(b * rad) - r.dy, at: now });
+  fx.spot = { id, at: now }; return true;
+}
+function spotBearing(id, now) {   // my sighting, theirs turned round, or both averaged
+  const s = spots.get(id); if (!s) return null;
+  const mine = s.mineAt && now - s.mineAt < SPOT_WIN ? s.mineH : null, theirs = s.theirAt && now - s.theirAt < SPOT_WIN ? wrap(s.theirH + 180) : null;
+  if (mine != null && theirs != null) return { b: wrap(mine + adiff(theirs, mine) / 2), both: true };
+  return mine != null ? { b: mine } : theirs != null ? { b: theirs } : null;
+}
+function spot() {
+  if (!entered) return; unlock();
+  const now = Date.now(); if (now - lastSpot < 1500) return;
+  if (aim.h == null || aim.src === 'drag') { toast('SPOT needs the compass'); return; }
+  if (!pos.fix) { toast('Waiting for GPS'); return; }
+  if (Math.abs(aim.el) > MAX_EL) { toast('Hold the phone flat, top edge at the player'); return; }
+  let best = null, bd = 70;
+  for (const t of foes(now)) { if (t.drone || !t.fresh) continue; const a = Math.abs(adiff(t.b, aim.h)); if (a < bd) { bd = a; best = t; } }
+  if (!best) { toast('No player in that direction'); return; }
+  lastSpot = now;
+  const s = spots.get(best.id) || {}; s.mineH = aim.h; s.mineAt = now; spots.set(best.id, s);
+  const sb = spotBearing(best.id, now); setCorr(best.id, sb.b, now);
+  send({ t: 'spot', to: best.id, hd: Math.round(aim.h * 10) / 10 });
+  sfx.spot(); vib(25);
+  toast((sb.both ? 'Synced with ' : 'Spotted ') + best.n + (bd >= 3 ? ' · moved ' + Math.round(bd) + '°' : ' · GPS was spot on'));
+}
 
 /* ---------- aiming: the top edge of the phone is the barrel ---------- */
 const aim = { h: null, el: 0, src: '', at: 0, off: null };
@@ -344,7 +408,8 @@ function onRel(e) {
 function startSensors() {
   let p = null;
   try { if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') p = DeviceOrientationEvent.requestPermission(); } catch (e) {}
-  addEventListener('deviceorientationabsolute', onAbs); addEventListener('deviceorientation', onRel);
+  try { if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') DeviceMotionEvent.requestPermission().catch(() => {}); } catch (e) {}
+  addEventListener('deviceorientationabsolute', onAbs); addEventListener('deviceorientation', onRel); addEventListener('devicemotion', onMotion);
   setTimeout(() => { if (aim.h == null) { aim.src = 'drag'; aim.h = 0; aim.el = 0; toast('No compass found: drag the scope to aim'); } }, 3500);
   return p;
 }
@@ -367,7 +432,7 @@ function sendState(force) {
   lastSent = now;
   const o = { t: 'st', n: me.name || 'Pilot', hp: me.hp, al: me.alive ? 1 : 0, k: me.k, d: me.d, sh: Math.max(0, me.shieldUntil - now), pr: Math.max(0, me.protectUntil - now) };
   if (aim.h != null) o.hd = Math.round(aim.h);
-  if (pos.fix) { o.la = +pos.fix.la.toFixed(6); o.lo = +pos.fix.lo.toFixed(6); o.ac = pos.fix.ac; }
+  if (pos.fix) { const f = myLL(); o.la = +f.la.toFixed(6); o.lo = +f.lo.toFixed(6); o.ac = pos.fix.ac; }
   send(o);
 }
 function upsert(d) {
@@ -386,12 +451,18 @@ function onData(d) {
     p.shUntil = now + Math.min(SHIELD_MS, d.sh | 0); p.prUntil = now + Math.min(PROTECT_MS, d.pr | 0); p.h = !!d.h;
     if (typeof d.hd === 'number') p.hd = wrap(d.hd);
     if (typeof d.la === 'number' && typeof d.lo === 'number' && Math.abs(d.la) <= 90 && Math.abs(d.lo) <= 180) { p.la = d.la; p.lo = d.lo; p.ac = Math.min(999, d.ac | 0); }
-    if (isNew) { feed(p.n + ' entered the arena'); sfx.join(); }
+    if (isNew) { feed(p.n + ' entered the arena'); sfx.join(); if (!spotTip) { spotTip = true; setTimeout(() => toast('Tip: can you see ' + p.n + '? Point at them for real and tap SPOT'), 3000); } }
     return;
   }
   if (d.t === 'aim') { const p = players.get(d.id); if (p && typeof d.hd === 'number') { p.hd = wrap(d.hd); p.seen = now; } return; }
   if (d.t === 'fire') { onFire(d, now); return; }
   if (d.t === 'hit') { onHit(d); return; }
+  if (d.t === 'spot' && d.to === me.id && typeof d.hd === 'number') {
+    const s = spots.get(d.id) || {}; s.theirH = wrap(d.hd); s.theirAt = now; spots.set(d.id, s);
+    const sb = spotBearing(d.id, now), p = players.get(d.id);
+    if (sb && setCorr(d.id, sb.b, now)) { sfx.spot(); toast((p ? p.n : 'Someone') + (sb.both ? ' synced with you' : ' spotted you')); }
+    return;
+  }
   if (d.t === 'reset' && d.h) { resetMe(); toast('New round! Scores are back to zero'); }
 }
 function onFire(d, now) {
@@ -409,8 +480,8 @@ function onFire(d, now) {
     } else toast('Hit by ' + who + (dmg > 1 ? ' · critical' : ''));
     send({ t: 'hit', by: d.id, dmg, hp: me.hp, ko: me.alive ? 0 : 1 }); sendState(true);
   } else if (me.alive && pos.fix && typeof d.la === 'number' && typeof d.hd === 'number') {
-    const g = geo({ la: d.la, lo: d.lo }, pos.fix);
-    if (g.d < RANGE && Math.abs(adiff(d.hd, g.b)) < tolFor(g.d, 10, pos.fix.ac) * 1.8) { sfx.whoosh(); toast(who + ' shot at you and missed'); }
+    const g = p && p.la != null ? relOf(p, now) : relLL(d.la, d.lo);
+    if (g.d < RANGE && Math.abs(adiff(d.hd, wrap(g.b + 180))) < tolFor(g.d, 10, pos.fix.ac) * 1.8) { sfx.whoosh(); toast(who + ' shot at you and missed'); }
   }
 }
 function onHit(d) {
@@ -436,14 +507,14 @@ function foes(now) {
   const out = []; if (!pos.fix) return out;
   for (const p of players.values()) {
     if (p.la == null || now - p.seen > 15000) continue;
-    const g = geo(pos.fix, p);
+    const g = relOf(p, now), sp = corrW(p.id, now) > 0.3, acA = sp ? pos.fix.ac / 2 : pos.fix.ac, acB = sp ? (p.ac || 10) / 2 : p.ac;
     const t = { id: p.id, n: p.n || 'Pilot', color: p.color, ph: p.ph, hd: p.hd, al: p.al, hp: p.hp, shUntil: p.shUntil || 0, prUntil: p.prUntil || 0, fireAt: p.fireAt, fireTo: p.fireTo,
-      fresh: now - p.seen < 8000, d: g.d, b: g.b, v: vdist(g.d), tol: tolFor(g.d, pos.fix.ac, p.ac) };
-    if (t.al && t.fresh && t.hd != null) { const back = geo(p, pos.fix); t.aimsAtMe = g.d < RANGE && Math.abs(adiff(t.hd, back.b)) < tolFor(g.d, p.ac, pos.fix.ac); }
+      fresh: now - p.seen < 8000, d: g.d, b: g.b, v: vdist(g.d), tol: tolFor(g.d, acA, acB), spotted: sp };
+    if (t.al && t.fresh && t.hd != null) t.aimsAtMe = g.d < RANGE && Math.abs(adiff(t.hd, wrap(g.b + 180))) < tolFor(g.d, acB, acA);
     out.push(t);
   }
   if (drone.on && drone.la != null) {
-    const g = geo(pos.fix, drone);
+    const g = relLL(drone.la, drone.lo);
     out.push({ id: 'drone', drone: true, n: 'Drone', color: '#ff9a3c', al: drone.alive ? 1 : 0, hp: drone.hp, fresh: true, d: g.d, b: g.b, v: vdist(g.d), tol: tolFor(g.d, pos.fix.ac, 0), ph: 0, shUntil: 0, prUntil: 0 });
   }
   return out;
@@ -470,7 +541,7 @@ function fire() {
   const f = $('#fire'); f.classList.add('hit'); setTimeout(() => f.classList.remove('hit'), 90);
   const t = lockTarget(foes(now)), dmg = t ? (t.score < 0.3 ? 2 : 1) : 0;
   if (t && t.drone) hitDrone(dmg, now);
-  if (pos.fix && aim.h != null) send({ t: 'fire', hd: Math.round(aim.h), la: +pos.fix.la.toFixed(6), lo: +pos.fix.lo.toFixed(6), to: t && !t.drone ? t.id : null, dmg });
+  if (pos.fix && aim.h != null) { const f = myLL(); send({ t: 'fire', hd: Math.round(aim.h), la: +f.la.toFixed(6), lo: +f.lo.toFixed(6), to: t && !t.drone ? t.id : null, dmg }); }
   if (!t) fx.miss = now;
   if (me.ammo === 0) startReload();
 }
@@ -482,7 +553,7 @@ function shield() {
 
 /* ---------- training drone (only you see it) ---------- */
 const drone = { on: false, c: null, la: null, lo: null, ang: 0, hp: 3, alive: true, back: 0, kills: 0 };
-function placeDrone() { if (!pos.fix) return; drone.c = dest(pos.fix, Math.random() * 360, 30 + Math.random() * 45); drone.ang = Math.random() * 360; drone.hp = 3; drone.alive = true; }
+function placeDrone() { if (!pos.fix) return; drone.c = dest(myLL(), Math.random() * 360, 30 + Math.random() * 45); drone.ang = Math.random() * 360; drone.hp = 3; drone.alive = true; }
 function updateDrone(now) {
   if (!drone.on) return;
   if (!drone.c) { placeDrone(); if (!drone.c) return; }
@@ -537,6 +608,7 @@ const sfx = {
   whoosh() { this.noise(0.5, 0.22, 1400); },
   shield() { this.tone('sine', 180, 720, 0.45, 0.12); },
   join() { this.tone('triangle', 660, 990, 0.18, 0.08); },
+  spot() { this.tone('sine', 1200, 2400, 0.12, 0.08); this.tone('sine', 2400, 2400, 0.12, 0.06, 0.13); },
 };
 
 /* ---------- 3D: fisheye camera into a neon grid world ---------- */
@@ -608,7 +680,7 @@ function drawWorld(N, L, lock, now, h) {
   }
   c.globalAlpha = 0.75; c.stroke(); c.globalAlpha = 1;
   // the grid floor, anchored to the real world so it slides as you walk
-  const eye = pos.fix ? enu(pos.fix) : { x: 0, y: 0 }, GS = 6, GE = 90, SEG = 3;
+  const eye = pos.fix ? myXY() : { x: 0, y: 0 }, GS = 6, GE = 90, SEG = 3;
   const x0 = Math.floor((eye.x - GE) / GS) * GS, y0 = Math.floor((eye.y - GE) / GS) * GS, x1 = x0 + 2 * GE + GS, y1 = y0 + 2 * GE + GS;
   const paths = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
   const seg = (ax, ay, bx, by) => {
@@ -734,7 +806,8 @@ function drawHud(S, dpr, L, lock, now, h) {
     }
     const lx = Math.max(40, Math.min(S - 40, (x0 + x1) / 2)), ly = Math.max(30, y0 - 22);
     c.globalAlpha = t.fresh ? 1 : 0.5; c.font = '20px VT323, monospace';
-    const tag = (t.al ? t.n : t.n + ' · DOWN') + (t.fresh ? '' : ' · lost'), w = Math.max(c.measureText(tag).width, 60) + 12;
+    const tag = (t.al ? t.n : t.n + ' · DOWN') + (t.fresh ? '' : ' · lost') + (t.spotted ? ' ◆' : ''), w = Math.max(c.measureText(tag).width, 60) + 12;
+    if (fx.spot && fx.spot.id === t.id && now - fx.spot.at < 900) { const q = (now - fx.spot.at) / 900; c.strokeStyle = '#05d9e8'; c.lineWidth = 3 * (1 - q); c.beginPath(); c.arc((x0 + x1) / 2, (y0 + y1) / 2, 18 + 60 * q, 0, 7); c.stroke(); }
     c.fillStyle = 'rgba(13,2,33,.72)'; c.fillRect(lx - w / 2, ly - 11, w, 36);
     c.fillStyle = col; c.fillText(tag, lx, ly);
     c.font = '17px VT323, monospace'; c.fillStyle = '#f4ecff';
@@ -822,7 +895,7 @@ function renderVitals(now) {
   const sb = $('#shield'), on = now < me.shieldUntil;
   sb.classList.toggle('on', on); sb.disabled = !on && (now < me.shieldReady || !me.alive);
   $('#shT').textContent = on ? ((me.shieldUntil - now) / 1000).toFixed(1) + 's' : now < me.shieldReady ? Math.ceil((me.shieldReady - now) / 1000) + 's' : 'ready';
-  $('#rlT').textContent = me.reloadUntil ? '…' : me.ammo + '/' + MAG;
+  $('#spT').textContent = now - lastSpot < 1500 ? 'got it' : 'see them?';
   const f = $('#fire'), off = !entered || !me.alive || on || !!me.reloadUntil;
   f.classList.toggle('off', off);
   const label = !entered ? 'FIRE' : !me.alive ? 'DOWN' : on ? 'SHIELD UP' : me.reloadUntil ? 'RELOADING' : 'FIRE';
@@ -848,7 +921,7 @@ function renderBoard() {
     const dot = document.createElement('i'); dot.className = 'dot'; dot.style.background = p.color; nm.appendChild(dot); nm.appendChild(document.createTextNode(p.n));
     const sm = document.createElement('small');
     let where = '';
-    if (!p.me && p.la != null && pos.fix) { const g = geo(pos.fix, p); where = fmt(g.d) + ' ' + card8(g.b); }
+    if (!p.me && p.la != null && pos.fix) { const g = relOf(p, now); where = fmt(g.d) + ' ' + card8(g.b) + (corrW(p.id, now) > 0.3 ? ' · spotted' : ''); }
     sm.textContent = (now - p.seen > 15000 ? 'left' : !p.al ? 'derezzed' : '■'.repeat(Math.max(0, p.hp)) + '□'.repeat(Math.max(0, MAX_HP - p.hp))) + (where ? ' · ' + where : '');
     nm.appendChild(sm);
     const k = document.createElement('span'); k.className = 'sc'; k.textContent = p.k + ' K';
@@ -889,6 +962,7 @@ function bind() {
   addEventListener('keydown', (e) => { if (e.key === ' ' && entered && e.target === document.body) { e.preventDefault(); fire(); } });
   $('#shield').onclick = shield;
   $('#reload').onclick = () => { unlock(); startReload(); };
+  $('#spot').onclick = spot;
   $('#menu').onclick = () => { renderBoard(); $('#board').hidden = false; };
   $('#bDone').onclick = () => { $('#board').hidden = true; };
   $('#bInvite').onclick = showQR;

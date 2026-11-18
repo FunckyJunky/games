@@ -49,6 +49,8 @@ public/                 the website
                         encrypted like Friend Radar). The phone's top edge is the barrel; a red-dot scope shows a fisheye 3D
                         neon grid world (own canvas renderer, drawn at half resolution) with wireframe troopers where the
                         players really are. Hit zone widens with GPS error. 3 hull, 5 cells, shield, respawn, practice drone
+                        SPOT: point at a player you can see and the compass fixes their direction (mutual spots averaged,
+                        fades after 3 min). Steps + compass move you between GPS fixes (dead reckoning)
   lib/qrcode.js         QR code generator used by radar/ and rifle/ (MIT, Kazuhiko Arase)
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/room404/      ROOM404.EXE (Room 404): a small 3D room you look round with head motion, like VR. Pinch = walk/stop,
