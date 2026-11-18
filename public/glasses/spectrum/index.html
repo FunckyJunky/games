@@ -255,7 +255,10 @@ const DM = (() => {
   }
   const settings = {
     get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
-    set(v) { v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v); },
+    set(v) {
+      v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v);
+      if (window.GlassesPresence) GlassesPresence.sendSettings(pick(v), v.updatedAt);   // live to error.blue/hud
+    },
     code: hudCode,
     async sync() {                               // -> true when the server had newer settings
       try {
@@ -334,6 +337,7 @@ const DM = (() => {
   "use strict";
   const G = 300, CX = 150;
   const PAL = DM.dosPalette();                                          // HUD colour from Settings
+  if (window.GlassesPresence) GlassesPresence.onSettings((n, o) => { if (n.color !== o.color) location.reload(); });
   const GREEN = PAL.c, BRIGHT = PAL.b, MID = PAL.m, DIM = PAL.d;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const store = {

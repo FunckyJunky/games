@@ -36,9 +36,10 @@ public/                 the website
   glasses/con/          Yaro-Vission CON: live first-person view from the wearer + game controls (error.blue/glasses/con)
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/SM/           Святий Миколайчик gift page for phones: leave a gift on the spot where you stand (error.blue/glasses/SM)
-  hud/                  Glasses HUD control panel for phones (error.blue/hud): connected or not, app in use, live preview,
-                        show/hide apps, HUD settings, GeoLock settings and saved spots, Святий Миколайчик and
-                        Yaro-Vission pages. Uses /api/hud/<CODE>
+  hud/                  Glasses HUD control panel for phones (error.blue/hud), ERROR-DOS look, installable web app:
+                        connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and
+                        saved spots, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE> and the live link.
+                        Edit public/hud/ directly (index.html, sw.js, manifest.webmanifest, icons)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -121,6 +122,18 @@ A phone page for the glasses home screen at error.blue/glasses.
 - Settings and hidden apps are saved on the server under that code: `GET/PUT /api/hud/<CODE>`,
   D1 table `hud_profiles`. The newest change wins (glasses or panel). The glasses check on opening
   the home screen and every 30 s.
+- Live link (changes show up on the glasses at once): the glasses and the panel both join the
+  WebSocket room `/api/room/hud/<CODE>` (the glasses as "glasses", the panel as "panel").
+  `presence.js` does this on the glasses side for every app:
+  - panel → glasses: `{t:"settings", settings, updated}` is stored in `glasses.settings` and handed to
+    the open app (`GlassesPresence.onSettings(fn)`). The home screen and SETUP.EXE apply it at once;
+    CRUMBS and SPECTRUM restart for a new colour. Other messages go to `GlassesPresence.on(type, fn)`,
+    e.g. `{t:"geo"}` makes GEOLOCK.EXE fetch its spots and settings now.
+  - glasses → panel: `{t:"hello"|"state", app, focus, state}` (app in use, card in view) and
+    `{t:"settings"}` when SETUP.EXE changes something. The glasses answer each change with `{t:"ack"}`,
+    so the panel can say "applied on the glasses".
+- Web app: `public/hud/manifest.webmanifest`, icons and `sw.js` (keeps the page for a bad connection;
+  never caches /api/). The page's INSTALL.EXE box shows how to add it to an iPhone or Android home screen.
 - Connected / app in use: every glasses app loads `/glasses/presence.js`, which posts
   `/api/hud/<CODE>/ping` every 15 s (and "hidden" when the display goes off). The panel counts the
   glasses as connected if a ping came in the last 40 s; on the home screen it also shows the card

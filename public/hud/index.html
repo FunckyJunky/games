@@ -5,270 +5,582 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <meta name="description" content="Control panel for the error.blue glasses HUD">
-<title>Glasses HUD · Control Panel</title>
-<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABoklEQVR42u3cPVLDMBDF8TXDUahpuFMOxZ1oqLmL6Jg0YWz0sRL6vSpNbMVv3n+0WXmPiChBaXryCBjAAGIAA4gBDCAGbKfnFRf9Vm4/nz+OdwkgBkBQFnZWx5EEMACCltbqOJIABuytIxp1xO7jfwYXvQuuq989s/6a3yIBEETDdkGP4jky5o92RzX3urp+CYAgmqoQyyqOZi7KJIABEESJ3TcJgCAI8rewBDCA7IJ+12f5+vN3X48XCSAGQFANdmow0uo6EgBBFCs05WuKr964qLl+jwJTAiAIgspq2GnVZG+Fo5rumwRAkEJsifezrp7J6b3OM2efztxXAiAIgrZ6LTQme2FEAiAIgpqcNN4ZTTXPRAIgCIJSCpAZXrgYiRoJgCCKnh2xVjiarSPmdDQE0Vbngu6x4FwQMQCCJsSR09HEAAhKxFH8o5FoEgBBEBTmOUsAA2izXdDIrlbWREQJgCBKQVCPKYVZQ18lAIIoVmvKzzA6bJXCUAIYYBcUJhxKAAQRBG05lVECGKAQK2HnIwEQRBAkAcQABhADGEDD9A3GRr/kWb9x4AAAAABJRU5ErkJggg==">
+<title>HUD.EXE · ERROR-DOS</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAABYklEQVR42u1aq44CMRS9s6neH8ABmmyCBbNqExI+AIVC8EErVqHAk5CgMKzF4EiYcTgUPwCiCZvsTDuXvpgO55jJtJPTnnva2ztJiYDnIpGP5noY3dSzr+XfS3QC7hMWha0RxV7ofKl27CXeYt/EEAABEAABEGAFoeroXieW1LvkxxNbiQD7wXxAziovQ5Tobs1NBktHAdiUAqRKex/cOqlaQvXdxHq89xtEdNmenGxiDtvrpdGQ+J2tiKjT+vAloPn9+a/lvDgUtmfTjQGbqp3DxhKQJ5KrljMAh41SMmarxBLqjQeohR6EWcrzwVZ3B/R1iNuqBg7wiie3pRgcgAAIQBbSd++vRyLqJG1mr9n3eagYUAv5QT7eeifhQChPOD4gjUJAiD2gytZwIJQD+pMVDkAABEBA/WohVKMuqkib8wR/ZLxIqHr58eN/iTQayxKK7gKpiOvOpU5AjLePgQrgBnred74AVmcLAAAAAElFTkSuQmCC">
+<link rel="manifest" href="/hud/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/hud/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HUD">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="application-name" content="HUD">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
-  @font-face { font-family: "VGA"; src: url("/hud/vga.woff2") format("woff2"); font-display: swap; }
-  :root { --c: #33ff66; --b: #d2ffdc; --m: #22b84e; --d: #0e5f27; --k: #031c0b; }
+  /* VGA 8x14 (Unifont): Cyrillic and box drawing, and everything if VT323 can't load */
+  @font-face { font-family: "VGA"; src: url("/hud/vga.woff2") format("woff2"); font-display: swap; size-adjust: 88%; }
+  :root { --c: #39ff7a; --b: #c8ffd9; --m: #25b956; --d: #1b7a3c; --k: #031208; --g: rgba(57,255,122,.55); }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: #000; color: var(--c); font: 16px/1.25 "VGA", ui-monospace, Menlo, Consolas, monospace; }
-  body { min-height: 100vh; padding: max(12px, env(safe-area-inset-top)) 12px 40px; -webkit-font-smoothing: none; }
-  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9;
-    background: repeating-linear-gradient(rgba(0,0,0,.22) 0 1px, transparent 1px 3px); }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  a { color: var(--b); }
-  .glow { text-shadow: 0 0 6px var(--d), 0 0 2px var(--m); }
-  .prompt { color: var(--m); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .cursor { animation: blink 1s steps(1) infinite; }
+  [hidden] { display: none !important; }
+  html { background: #000; -webkit-text-size-adjust: 100%; }
+  body { background: #000; color: var(--c); font: 21px/1.12 "VT323", "VGA", ui-monospace, Menlo, monospace; -webkit-tap-highlight-color: transparent; }
+  ::selection { background: var(--c); color: var(--k); }
+
+  /* ---------- the picture tube ---------- */
+  #tube { position: relative; max-width: 1060px; margin: 0 auto; min-height: 100vh; min-height: 100dvh;
+    background: radial-gradient(ellipse 130% 60% at 50% 0%, color-mix(in srgb, var(--k) 78%, var(--d)) 0%, var(--k) 70%);
+    text-shadow: 0 0 5px var(--g); padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  #tube.on { animation: poweron .55s cubic-bezier(.2,.8,.3,1); }
+  @keyframes poweron { 0% { transform: scale(1, .004); filter: brightness(5); } 45% { transform: scale(1, .01); filter: brightness(3); } 100% { transform: none; filter: none; } }
+  @media (min-width: 1100px) {
+    body { padding: 18px 0; }
+    #tube { border-radius: 18px / 22px; overflow: clip; min-height: calc(100vh - 36px); box-shadow: 0 0 0 3px #0c0c0c, 0 0 0 7px #161616, 0 0 80px rgba(0,0,0,.9); }
+  }
+  .fx { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+  #scan { background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, rgba(0,0,0,0) 1px 3px); }
+  #roll { inset: auto 0; height: 14%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.04) 60%, rgba(255,255,255,0)); animation: roll 8s linear infinite; }
+  @keyframes roll { from { top: -15%; } to { top: 101%; } }
+  #vig { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 62%, rgba(0,0,0,.5) 100%); }
+  @media (prefers-reduced-motion: reduce) { #roll { display: none; } #tube.on { animation: none; } }
+
+  /* ---------- top status bar ---------- */
+  #bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 10px; justify-content: space-between;
+    padding: calc(4px + env(safe-area-inset-top)) 12px 4px; background: var(--c); color: var(--k); text-shadow: none; box-shadow: 0 0 10px var(--g); }
+  #bar b { font-weight: normal; }
+  #chip { font: inherit; color: var(--k); background: none; border: 0; min-height: 0; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #chip:hover { background: none; color: var(--k); }
+  #chip i { width: 11px; height: 11px; display: inline-block; border: 2px solid var(--k); }
+  #chip.online i { background: var(--k); animation: pulse 1.4s infinite; }
+  #chip.off i { background: linear-gradient(90deg, var(--k) 50%, transparent 50%); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (max-width: 420px) { #bar .long { display: none; } }
+
+  /* ---------- page parts ---------- */
+  main { padding: 10px 14px 0; }
+  main > section { display: none; }
+  main > section.on { display: block; animation: tabin .25s steps(4); }
+  @keyframes tabin { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0); } }
+  .path { color: var(--c); margin: 6px 0 2px; }
+  .cur { animation: blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  h1 { font-size: 32px; font-weight: normal; color: var(--b); letter-spacing: 1px; }
-  h2 { font-size: 16px; font-weight: normal; color: var(--b); margin-bottom: 8px; }
-  .sub { color: var(--m); margin-bottom: 14px; }
-  /* DOS double-line boxes */
-  .box { border: 3px double var(--c); padding: 14px 14px 12px; margin: 16px 0; position: relative; background: #000; }
-  .box > .t { position: absolute; top: -11px; left: 12px; background: #000; padding: 0 6px; color: var(--b); }
-  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .muted { color: var(--m); }
-  .dim { color: var(--d); }
-  /* status */
-  .status { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
-  .dot { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; background: var(--d); }
-  .dot.on { background: var(--c); box-shadow: 0 0 8px var(--c); animation: pulse 1.6s infinite; }
-  .dot.sleep { background: var(--m); }
-  @keyframes pulse { 50% { opacity: .45; } }
-  /* menu bar */
-  nav { display: flex; gap: 0; overflow-x: auto; border-top: 1px solid var(--d); border-bottom: 1px solid var(--d); margin: 6px -12px 0; padding: 0 12px; scrollbar-width: none; position: sticky; top: 0; background: #000; z-index: 5; }
-  nav::-webkit-scrollbar { display: none; }
-  nav a { flex: none; padding: 8px 12px; text-decoration: none; color: var(--c); white-space: nowrap; }
-  nav a.on { background: var(--c); color: #000; }
-  section { display: none; }
-  section.on { display: block; }
-  /* buttons and inputs */
-  button, .btn { font: inherit; color: var(--c); background: #000; border: 2px solid var(--c); padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block; }
-  button:hover, .btn:hover, button:focus-visible, .btn:focus-visible { background: var(--c); color: #000; outline: none; }
-  button.inv { background: var(--c); color: #000; }
-  input[type=text] { font: inherit; font-size: 32px; letter-spacing: 6px; text-transform: uppercase; width: 8.4em; max-width: 100%;
-    background: #000; color: var(--b); border: 2px solid var(--c); padding: 4px 8px; caret-color: var(--b); }
-  input[type=text]:focus { outline: none; box-shadow: 0 0 10px var(--d); }
-  .err { color: #ff6060; margin-top: 8px; min-height: 20px; }
-  /* preview */
-  .preview { display: grid; grid-template-columns: minmax(0, 420px) 1fr; gap: 18px; align-items: start; }
-  @media (max-width: 760px) { .preview { grid-template-columns: 1fr; } }
-  .lens { position: relative; width: 100%; aspect-ratio: 1; border: 3px double var(--c); border-radius: 18px; overflow: hidden; background: #000; }
+  .logo { font-size: clamp(40px, 11vw, 64px); line-height: .95; color: var(--b); letter-spacing: 1px; margin: 4px 0 4px;
+    text-shadow: 1px 1px 0 var(--m), 2px 2px 0 var(--m), 3px 3px 0 var(--d), 4px 4px 0 var(--d), 5px 5px 0 var(--d), 0 0 14px var(--g); }
+  .logo.uk { font-family: "VGA", monospace; font-size: clamp(28px, 8vw, 50px); }
+  .lede { color: var(--m); margin-bottom: 4px; }
+  a { color: var(--b); }
+  .dim { color: var(--d); text-shadow: none; }
+  .mid { color: var(--m); }
+  .hi { color: var(--b); }
+  .grid2 { display: grid; gap: 0 18px; grid-template-columns: minmax(0, 1fr); }
+  .grid2 > * { min-width: 0; }
+  @media (min-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+
+  .box { position: relative; border: 3px double var(--c); margin: 24px 0 14px; padding: 16px 12px 12px; background: color-mix(in srgb, var(--k) 88%, #000);
+    box-shadow: 0 0 6px var(--g), inset 0 0 6px var(--g); }
+  .box > .t { position: absolute; top: -14px; left: 10px; padding: 0 6px; background: var(--k); color: var(--b); white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+  .box > .t .dim { color: var(--m); }
+  .hint { color: var(--m); margin-top: 8px; font-size: 19px; }
+
+  button, .btn { font: inherit; color: var(--c); background: transparent; border: 2px solid var(--c); min-height: 40px; padding: 4px 12px; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-shadow: inherit; white-space: nowrap; }
+  button:hover, .btn:hover, button:focus-visible, .btn:focus-visible { background: var(--c); color: var(--k); text-shadow: none; outline: none; }
+  button.solid, .btn.solid { background: var(--c); color: var(--k); text-shadow: none; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* switches: [ OFF | ON ] */
+  .sw { padding: 0; gap: 0; border-width: 2px; min-width: 104px; align-items: stretch; }
+  .sw span { padding: 4px 10px; color: var(--d); text-shadow: none; flex: 1; display: flex; align-items: center; justify-content: center; }
+  .sw[aria-pressed="true"] .y, .sw[aria-pressed="false"] .n { background: var(--c); color: var(--k); }
+  .sw:hover, .sw:focus-visible { background: transparent; box-shadow: 0 0 10px var(--g); }
+  .seg { display: inline-flex; flex-wrap: wrap; }
+  .seg button + button { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--c); color: var(--k); text-shadow: none; }
+  .seg button[aria-pressed="true"] .mid { color: var(--k); }
+
+  /* readouts and dot leaders */
+  .ro { display: grid; grid-template-columns: 10.5ch minmax(0, 1fr); gap: 4px 10px; align-items: baseline; }
+  .ro > :nth-child(odd) { color: var(--m); }
+  .dl { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; }
+  .dl .l { white-space: nowrap; }
+  .dl .f { flex: 1; border-bottom: 2px dotted var(--d); min-width: 12px; transform: translateY(-5px); }
+  .dl .v { color: var(--b); white-space: nowrap; }
+  .dl a { margin-left: 6px; }
+
+  /* ---------- STATUS ---------- */
+  #g3d { width: 100%; height: 210px; display: block; touch-action: pan-y; cursor: grab; }
+  #g3d:active { cursor: grabbing; }
+  .state { font-size: 34px; color: var(--b); display: flex; align-items: center; gap: 10px; }
+  .led { width: 16px; height: 16px; display: inline-block; border: 2px solid var(--c); flex: none; }
+  .led.on { background: var(--c); box-shadow: 0 0 10px var(--c); animation: pulse 1.4s infinite; }
+  .led.half { background: linear-gradient(90deg, var(--m) 50%, transparent 50%); }
+  #log { height: 172px; overflow-y: auto; display: flex; flex-direction: column; font-size: 19px; scrollbar-color: var(--d) #000; }
+  #log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+  #log div:first-child { color: var(--b); }
+  #log .ts { color: var(--d); text-shadow: none; }
+  .codein { font: inherit; font-size: 44px; letter-spacing: .35em; text-transform: uppercase; width: 8.2ch; max-width: 100%; padding: 2px 4px 2px 12px;
+    color: var(--b); caret-color: var(--b); background: #000; border: 2px solid var(--c); text-shadow: 0 0 6px var(--g); }
+  .codein:focus { outline: none; box-shadow: 0 0 12px var(--g); }
+  .codein::placeholder { color: var(--d); }
+  .err { color: #ff6b6b; text-shadow: none; min-height: 24px; margin-top: 6px; }
+  .howto { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .howto svg { width: 100%; height: auto; }
+  .howto ol { list-style: none; counter-reset: s; }
+  .howto li { counter-increment: s; margin: 4px 0; }
+  .howto li::before { content: counter(s); background: var(--c); color: var(--k); text-shadow: none; padding: 0 5px; margin-right: 8px; }
+
+  /* ---------- APPS ---------- */
+  .lens { position: relative; width: 100%; aspect-ratio: 1; border: 3px double var(--c); border-radius: 22px; overflow: hidden; background: #000; box-shadow: 0 0 14px var(--g); }
   .lens iframe { position: absolute; left: 0; top: 0; width: 600px; height: 600px; border: 0; transform-origin: 0 0; }
-  .pad { display: grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 52px); gap: 6px; margin: 4px 0 12px; }
-  .pad button { padding: 0; font-size: 20px; }
-  .pad .u { grid-column: 2; } .pad .l { grid-column: 1; grid-row: 2; } .pad .p { grid-column: 2; grid-row: 2; }
-  .pad .r { grid-column: 3; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 3; } .pad .x { grid-column: 3; grid-row: 3; font-size: 14px; }
-  /* apps */
-  .apps { display: grid; gap: 8px; }
-  .app { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--d); }
-  .app.hidden { opacity: .55; }
-  .app .name { color: var(--b); }
-  .app .desc { color: var(--m); grid-column: 2 / 4; }
-  .app .use { color: #000; background: var(--c); padding: 0 6px; margin-left: 8px; white-space: nowrap; display: inline-block; }
-  .app .btn { white-space: nowrap; }
-  .toggle { min-width: 104px; text-align: left; }
-  .rowname { margin: 16px 0 6px; color: var(--m); }
-  /* settings */
-  .set { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--d); flex-wrap: wrap; }
-  .check { cursor: pointer; user-select: none; }
-  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
-  .sw { width: 44px; height: 32px; border: 2px solid #000; outline: 2px solid var(--d); cursor: pointer; }
-  .sw.on { outline: 3px solid var(--b); }
-  .saved { color: var(--m); min-height: 20px; margin-top: 10px; }
-  /* embedded pages */
-  .embed { width: 100%; height: min(86vh, 900px); border: 3px double var(--c); background: #000; display: block; }
-  .stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 8px 0 12px; }
-  .stat b { display: block; font-size: 32px; font-weight: normal; color: var(--b); }
-  .found { margin-top: 8px; display: grid; gap: 4px; }
-  .uk { font-size: 32px; color: var(--b); }
-  footer { margin-top: 26px; color: var(--d); }
-  /* GeoLock */
-  .gcheck { cursor: pointer; user-select: none; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 10px; }
-  button.tile { border: 2px solid var(--d); background: #000; color: var(--m); padding: 6px 4px 8px; text-align: center; }
-  button.tile canvas { width: 96px; height: 96px; display: block; margin: 0 auto 4px; }
-  button.tile:hover, button.tile:focus-visible { background: #000; color: var(--b); border-color: var(--c); }
-  button.tile.on { border-color: var(--b); color: var(--b); box-shadow: 0 0 10px var(--d); }
-  .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-top: 8px; }
-  .views button { text-align: left; padding: 8px 10px; }
-  .views button small { display: block; font-size: 14px; color: var(--m); margin-top: 4px; white-space: normal; }
-  .views button.inv small, .views button:hover small { color: #000; }
-  input[type=range] { accent-color: var(--c); width: min(340px, 100%); height: 28px; }
-  .val { color: var(--b); min-width: 4.5em; display: inline-block; }
-  .places { display: grid; gap: 10px; margin-top: 10px; }
+  .lens .veil { position: absolute; inset: 0; display: none; place-items: center; text-align: center; background: rgba(0,0,0,.75); color: var(--b); padding: 20px; font-size: 30px; }
+  .lens.hid .veil { display: grid; }
+  .lens .tag { position: absolute; right: 10px; bottom: 10px; background: var(--c); color: var(--k); text-shadow: none; padding: 0 6px; font-size: 18px; animation: pulse 1.4s infinite; }
+  .pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
+  .pad button { padding: 0; min-height: 54px; font-size: 30px; flex-direction: column; gap: 2px; line-height: 1; }
+  .pad small { display: block; font-size: 15px; }
+  .pad .g, .padg { font-family: "VGA", monospace; font-size: 26px; line-height: 1; }
+  .dir .hd span { white-space: pre; }
+  .dir .hd { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px; color: var(--m); border-bottom: 1px solid var(--d); padding: 2px 0 4px 12px; }
+  .dir .grp { color: var(--m); margin: 10px 0 2px; white-space: nowrap; overflow: hidden; }
+  .dir .r { display: grid; grid-template-columns: minmax(0, 1fr) 104px; align-items: center; gap: 8px; padding: 2px 0; }
+  .dir .nm { border: 0; min-height: 40px; justify-content: flex-start; padding: 0 6px; text-align: left; width: 100%; overflow: hidden; gap: 0; }
+  .dir .nm .fn { display: inline-block; width: 9ch; flex: none; }
+  .dir .nm .ex { display: inline-block; width: 4.5ch; color: var(--m); flex: none; }
+  .dir .nm .ds { color: var(--d); text-shadow: none; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .dir .r.sel .nm { background: var(--c); color: var(--k); text-shadow: none; }
+  .dir .r.sel .nm .ex, .dir .r.sel .nm .ds { color: var(--k); }
+  .dir .r.off .nm .fn, .dir .r.off .nm .ex { opacity: .45; }
+  .dir .use { background: var(--b); color: var(--k); text-shadow: none; padding: 0 4px; margin-left: 6px; flex: none; animation: pulse 1.2s infinite; }
+  .dir .foot { border-top: 1px solid var(--d); margin-top: 8px; padding-top: 8px; color: var(--m); justify-content: space-between; }
+  #selInfo { margin-top: 12px; }
+
+  /* ---------- SETUP ---------- */
+  .opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--d); }
+  .opt:last-child { border-bottom: 0; }
+  .opt .lbl { color: var(--b); }
+  .opt .sub { color: var(--m); font-size: 19px; }
+  .opt .full { grid-column: 1 / -1; }
+  .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .swatch { flex-direction: column; padding: 6px 2px; min-height: 0; border-color: var(--d); gap: 4px; }
+  .swatch .scr { width: 100%; height: 34px; background: #000; display: grid; place-items: center; font-size: 18px; border: 1px solid currentColor; }
+  .swatch[aria-pressed="true"] { border-color: var(--b); box-shadow: 0 0 10px var(--g); }
+  .swatch[aria-pressed="true"]::after { content: "▲"; color: var(--b); line-height: .6; }
+  .swatch:hover, .swatch:focus-visible { background: transparent; color: inherit; }
+  .ill { height: 64px; position: relative; overflow: hidden; border: 1px solid var(--d); background: #000; }
+  .comp .clk { position: absolute; left: 0; right: 0; top: 2px; text-align: center; font-size: 32px; color: var(--b); }
+  .comp .tape { position: absolute; left: 0; right: 0; bottom: 4px; height: 20px; overflow: hidden;
+    -webkit-mask: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent); mask: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent); }
+  .comp .tick { position: absolute; left: 0; white-space: nowrap; font-size: 18px; color: var(--c); animation: tape 14s linear infinite; }
+  .comp .needle { position: absolute; left: 50%; bottom: 0; width: 2px; height: 8px; background: var(--b); }
+  @keyframes tape { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .comp.off .tape, .comp.off .needle { opacity: 0; }
+  .comp.off::after { content: "NO COMPASS"; position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; color: var(--d); font-size: 17px; }
+  .head svg { position: absolute; left: 12px; top: 6px; width: 52px; height: 52px; }
+  .head .hd { transform-origin: 26px 28px; animation: turn var(--spd, 1.8s) ease-in-out infinite alternate; }
+  @keyframes turn { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+  .head .cards { position: absolute; left: 80px; right: 8px; top: 13px; height: 38px; overflow: hidden; }
+  .head .strip { position: absolute; top: 0; left: 50%; display: flex; gap: 8px; animation: slide var(--spd, 1.8s) ease-in-out infinite alternate; }
+  .head .strip i { width: 36px; height: 36px; border: 2px solid var(--m); display: block; flex: none; }
+  .head .strip i:nth-child(3) { border-color: var(--b); box-shadow: 0 0 8px var(--g); }
+  @keyframes slide { from { transform: translateX(-60px); } to { transform: translateX(-148px); } }
+  .head.inv .strip { animation-direction: alternate-reverse; }
+  .head.off .hd, .head.off .strip { animation-play-state: paused; opacity: .3; }
+  .head .lbl2 { position: absolute; right: 8px; bottom: 2px; font-size: 15px; color: var(--m); }
+  .snd { display: flex; align-items: center; gap: 12px; padding-left: 12px; font-size: 26px; }
+  .snd .w { animation: pulse 1s steps(2) infinite; }
+  .snd.off .w { visibility: hidden; }
+  .saved { color: var(--m); min-height: 24px; margin-top: 8px; }
+
+  /* ---------- Mykolai / Yaro ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 2px 0 12px; }
+  .tile { border: 1px solid var(--d); padding: 8px 8px 6px; }
+  .tile b { display: block; font-weight: normal; font-size: 40px; line-height: 1; color: var(--b); }
+  .tile span { color: var(--m); font-size: 18px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 6px; align-items: center; text-align: center; margin: 6px 0 12px; }
+  .flow > div { border: 1px solid var(--d); padding: 8px 4px; height: 100%; }
+  .flow b { display: block; font-weight: normal; font-size: 30px; color: var(--b); }
+  .flow span { font-size: 17px; color: var(--m); }
+  .embed { width: 100%; height: min(84vh, 900px); border: 0; background: #000; display: block; }
+  .found div { margin: 2px 0; }
+
+  /* ---------- save as an app ---------- */
+  .ptabs { display: flex; margin: 10px 0 12px; }
+  .ptabs button { flex: 1; }
+  .ptabs button + button { border-left: 0; }
+  .ptabs button[aria-selected="true"] { background: var(--c); color: var(--k); text-shadow: none; }
+  .guide { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 10px; scrollbar-color: var(--d) #000; }
+  .step { flex: 0 0 176px; scroll-snap-align: start; border: 1px solid var(--d); padding: 8px 8px 10px; cursor: pointer; }
+  .step.on { border-color: var(--c); box-shadow: 0 0 12px var(--g); }
+  .step svg { width: 100%; height: auto; display: block; margin-bottom: 8px; }
+  .step .n { background: var(--d); color: var(--b); padding: 0 6px; display: inline-block; text-shadow: none; margin-bottom: 4px; }
+  .step.on .n { background: var(--c); color: var(--k); }
+  .step .cap { color: var(--m); font-size: 19px; }
+  .step.on .cap { color: var(--c); }
+  .step .cap b { font-weight: normal; color: var(--b); }
+  .ph text { fill: var(--c); font-family: "VT323", "VGA", monospace; font-size: 13px; }
+  .ph text.s { font-size: 10px; fill: var(--m); }
+  .ph text.b { fill: var(--b); }
+  .ph .ln { fill: none; stroke: var(--c); stroke-width: 2; }
+  .ph .th { fill: none; stroke: var(--m); stroke-width: 1; }
+  .ph .dm { fill: none; stroke: var(--d); stroke-width: 1; }
+  .ph .fd { fill: var(--d); }
+  .ph .fk { fill: #000; stroke: var(--c); stroke-width: 1.5; }
+  .ph .fc { fill: var(--c); }
+  .ph .hl { fill: none; stroke: var(--b); stroke-width: 2.5; opacity: 0; }
+  .ph .tap { fill: var(--b); opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .step.on .ph .hl { animation: blink .8s steps(1) infinite; opacity: 1; }
+  .step.on .ph .tap { animation: tap 1.4s ease-out infinite; }
+  @keyframes tap { 0% { transform: scale(.4); opacity: .9; } 70% { transform: scale(2.6); opacity: 0; } 100% { opacity: 0; } }
+
+  footer { color: var(--d); text-shadow: none; margin: 18px 0 10px; font-size: 18px; }
+
+  /* ---------- GEOLOCK ---------- */
+  .views { display: grid; gap: 8px; }
+  .views button { justify-content: flex-start; text-align: left; white-space: normal; padding: 8px 10px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .views button small { grid-column: 2; font-size: 18px; color: var(--m); }
+  .views button[aria-pressed="true"] { background: var(--c); color: var(--k); text-shadow: none; }
+  .views button[aria-pressed="true"] small, .views button:hover small { color: var(--k); }
+  .atiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 10px; }
+  .atile { flex-direction: column; border-color: var(--d); padding: 6px 2px 6px; font-size: 17px; white-space: normal; text-align: center; gap: 2px; }
+  .atile canvas { width: 80px; height: 80px; display: block; }
+  .atile:hover, .atile:focus-visible { background: transparent; color: var(--b); border-color: var(--c); }
+  .atile[aria-pressed="true"] { border-color: var(--b); color: var(--b); box-shadow: 0 0 10px var(--g); }
+  input[type=range] { accent-color: var(--c); width: 100%; height: 32px; }
+  .val { color: var(--b); font-size: 30px; }
+  #geoMap { width: 100%; max-width: 420px; aspect-ratio: 1; display: block; margin: 0 auto; touch-action: manipulation; }
+  #geoMap text { font-family: "VT323", "VGA", monospace; }
+  #geoMap .spot { cursor: pointer; }
+  .gbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 8px 0; }
+  .places { display: grid; gap: 10px; margin-top: 6px; }
   .place { border: 1px solid var(--d); padding: 10px; display: grid; gap: 8px; }
-  .place.act { border: 2px solid var(--c); }
-  input.nm { font: inherit; font-size: 20px; color: var(--b); background: #000; border: 2px solid var(--d); padding: 3px 8px;
-    width: 13em; max-width: 100%; text-transform: uppercase; letter-spacing: 1px; }
-  input.nm:focus { outline: none; border-color: var(--c); box-shadow: 0 0 10px var(--d); }
-  .sw.sm { width: 32px; height: 26px; }
-  .chip { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; border: 2px solid #000; outline: 1px solid var(--d); }
-  .seg button.sz { min-width: 46px; padding: 4px 6px; }
-  .small { font-size: 14px; }
+  .place.act { border: 2px solid var(--c); box-shadow: 0 0 10px var(--g); }
+  .place.picked { border-left: 6px solid var(--c); }
+  .pname { font: inherit; font-size: 24px; color: var(--b); background: #000; border: 2px solid var(--d); padding: 2px 8px; width: min(12em, calc(100% - 34px)); max-width: 100%; text-transform: uppercase; }
+  .pname:focus { outline: none; border-color: var(--c); box-shadow: 0 0 10px var(--g); }
+  .pdot { display: inline-block; width: 20px; height: 20px; border: 2px solid #000; outline: 1px solid var(--d); flex: none; }
+  .csw { width: 34px; min-width: 0; height: 30px; min-height: 0; padding: 0; border: 2px solid #000; outline: 1px solid var(--d); }
+  .csw[aria-pressed="true"] { outline: 3px solid var(--b); }
+  .csw:hover, .csw:focus-visible { outline: 2px solid var(--c); }
+  .seg .sz { min-width: 46px; padding: 2px 6px; }
+  .small { font-size: 18px; }
+
+  /* ---------- bottom key bar (Norton Commander style) ---------- */
+  #keys { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-width: 1060px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr);
+    background: #000; border-top: 2px solid var(--d); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); gap: 4px; }
+  #keys a { display: flex; align-items: stretch; text-decoration: none; min-height: 44px; font-size: 20px; }
+  #keys a .k { color: var(--b); padding: 0 3px 0 2px; display: flex; align-items: center; }
+  #keys a .n { flex: 1; background: var(--d); color: var(--k); text-shadow: none; display: flex; align-items: center; justify-content: center; padding: 0 2px; overflow: hidden; white-space: nowrap; }
+  #keys a .n.uk { font-family: "VGA", monospace; font-size: 15px; }
+  #keys a.on .n { background: var(--c); box-shadow: 0 0 10px var(--g); }
+  @media (max-width: 480px) { #keys a .k { display: none; } #keys a { font-size: 18px; } #keys .full { display: none; } }
+  @media (min-width: 481px) { #keys .short { display: none; } }
+  #keys a.dot .n::after { content: ""; width: 7px; height: 7px; margin-left: 4px; background: var(--k); animation: pulse 1.2s infinite; flex: none; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="prompt"><span>C:\HUD&gt;<span class="cursor">_</span></span><span id="clock" class="muted"></span></div>
-  <h1 class="glow">GLASSES HUD</h1>
-  <div class="sub">CONTROL PANEL FOR ERROR.BLUE/GLASSES</div>
+<div id="tube" class="on">
+  <header id="bar">
+    <b><span class="long">ERROR-DOS 1.0 · </span>HUD.EXE</b>
+    <button id="chip" title="Glasses status"><i></i><span id="chipTxt">NOT LINKED</span></button>
+    <b id="clock">--:--:--</b>
+  </header>
 
-  <div class="box" id="statusBox">
-    <span class="t">GLASSES</span>
-    <div class="status">
-      <span>LINK</span><span id="stLink" class="muted">-</span>
-      <span>STATE</span><span id="stState"><span class="dot"></span>-</span>
-      <span>APP</span><span id="stApp" class="muted">-</span>
-    </div>
-  </div>
+  <main>
+  <!-- ================= 1 STATUS ================= -->
+  <section id="tab-status" aria-label="Status">
+    <div class="path">C:\HUD\STATUS&gt;<span class="cur">_</span></div>
+    <div class="logo">GLASSES HUD</div>
+    <div class="lede">CONTROL PANEL FOR THE HUD AT ERROR.BLUE/GLASSES</div>
 
-  <nav id="nav">
-    <a href="#hud">HUD</a><a href="#apps">APPS</a><a href="#settings">SETTINGS</a><a href="#geolock">GEOLOCK</a><a href="#mykolai">СВЯТИЙ МИКОЛАЙЧИК</a><a href="#yaro">YARO-VISSION</a>
-  </nav>
-
-  <!-- ===================== HUD ===================== -->
-  <section id="tab-hud">
     <div class="box" id="linkBox">
-      <span class="t">LINK THE GLASSES</span>
-      <div id="linkForm">
-        <p>On the glasses open <b>SETUP.EXE</b> (the gear on the home screen, bottom row). The 6-letter <b>CODE</b> is at the top right. Type it here:</p>
-        <div class="row" style="margin-top:10px">
-          <input id="codeIn" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC234" aria-label="Glasses code">
-          <button id="linkBtn">LINK</button>
-        </div>
-        <div class="err" id="linkErr"></div>
+      <span class="t">LINK.EXE <span class="dim">· CONNECT THIS PHONE TO THE GLASSES</span></span>
+      <div class="howto">
+        <svg viewBox="0 0 130 130" aria-hidden="true" font-family="VT323, VGA, monospace" font-size="12">
+          <rect x="2" y="2" width="126" height="126" rx="16" fill="#000" stroke="var(--c)" stroke-width="2"/>
+          <text x="10" y="20" fill="var(--m)">C:\SETUP&gt;</text>
+          <rect x="66" y="9" width="58" height="15" fill="var(--b)"><animate attributeName="opacity" values="1;.25;1" dur="1s" repeatCount="indefinite"/></rect>
+          <text x="69" y="20" fill="#000" font-size="11" textLength="52" lengthAdjust="spacingAndGlyphs">CODE KX7Q2M</text>
+          <rect x="10" y="32" width="110" height="88" fill="none" stroke="var(--d)"/>
+          <text x="16" y="48" fill="var(--c)">[X] COMPASS</text>
+          <text x="16" y="62" fill="var(--c)">[X] HEAD MOTION</text>
+          <text x="16" y="76" fill="var(--c)">    SPEED   MED</text>
+          <text x="16" y="90" fill="var(--c)">    COLOUR  GREEN</text>
+          <text x="16" y="104" fill="var(--c)">[X] SOUNDS</text>
+        </svg>
+        <ol>
+          <li>ON THE GLASSES OPEN <span class="hi">SETUP.EXE</span> (THE GEAR, BOTTOM ROW)</li>
+          <li>READ THE <span class="hi">CODE</span> AT THE TOP RIGHT</li>
+          <li>TYPE IT HERE</li>
+        </ol>
       </div>
-      <div id="linked" hidden>
-        <div class="row"><span>LINKED TO</span><span id="codeShow" class="uk" style="letter-spacing:4px"></span><button id="unlinkBtn">CHANGE</button></div>
-        <p class="muted" style="margin-top:8px">Changes here reach the glasses within 30 seconds, or straight away when they open the home screen.</p>
-      </div>
-    </div>
-
-    <div class="box">
-      <span class="t">LIVE PREVIEW</span>
-      <div class="preview">
-        <div>
-          <div class="lens" id="lens"><iframe id="pv" title="Glasses home preview" src="about:blank" allow="autoplay; fullscreen"></iframe></div>
-        </div>
-        <div>
-          <p class="muted">The real home screen, running here. Drive it like the glasses:</p>
-          <div class="pad" role="group" aria-label="Preview controls">
-            <button class="u" data-k="ArrowUp" aria-label="Swipe up">▲</button>
-            <button class="l" data-k="ArrowLeft" aria-label="Swipe left">◄</button>
-            <button class="p" data-k="Enter" aria-label="Pinch">●</button>
-            <button class="r" data-k="ArrowRight" aria-label="Swipe right">►</button>
-            <button class="d" data-k="ArrowDown" aria-label="Swipe down">▼</button>
-            <button class="x" data-k="Escape" aria-label="Back">BACK</button>
-          </div>
-          <p class="muted">● = PINCH &nbsp; BACK = BACK GESTURE</p>
-          <div style="margin-top:14px" id="summary"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== APPS ===================== -->
-  <section id="tab-apps">
-    <div class="box">
-      <span class="t">APPS ON THE GLASSES HUD</span>
-      <p class="muted">Hide apps you don't use. Hidden apps stay installed; they just leave the home screen. SETUP.EXE always stays.</p>
-      <div class="row" style="margin:12px 0 0"><button id="showAll">SHOW ALL</button><span class="saved" id="appsSaved"></span></div>
-      <div id="appList"></div>
-    </div>
-  </section>
-
-  <!-- ===================== SETTINGS ===================== -->
-  <section id="tab-settings">
-    <div class="box">
-      <span class="t">HUD SETTINGS</span>
-      <div class="set"><span class="check" data-b="compass" tabindex="0" role="checkbox"></span><span class="muted">Compass lines under the clock</span></div>
-      <div class="set"><span class="check" data-b="head" tabindex="0" role="checkbox"></span><span class="muted">Turn / tilt your head to move through the apps</span></div>
-      <div class="set"><span>HEAD SPEED</span><span class="seg" id="speedSeg"></span></div>
-      <div class="set"><span class="check" data-b="invert" tabindex="0" role="checkbox"></span><span class="muted">If turning moves the wrong way</span></div>
-      <div class="set"><span>HUD COLOUR</span><span class="seg" id="colorSeg"></span></div>
-      <div class="set"><span class="check" data-b="sounds" tabindex="0" role="checkbox"></span><span class="muted">Clicks when you move and open apps</span></div>
-      <div class="saved" id="setSaved"></div>
-    </div>
-  </section>
-
-  <!-- ===================== GEOLOCK ===================== -->
-  <section id="tab-geolock">
-    <div class="box">
-      <span class="t">GEOLOCK</span>
-      <div class="uk glow">GEOLOCK</div>
-      <p class="muted" style="margin:6px 0 10px">On the glasses, GEOLOCK.EXE says READY. Pinch to lock the spot where you stand. Walk away and an arrow points you back; close by, a radar shows the spot as a dot. Swipe left/right for other saved spots, up/down to change the view.</p>
       <div class="row">
-        <a class="btn" href="/glasses/geolock/" target="_blank" rel="noopener">GLASSES APP ↗</a>
-        <span id="geoInUse"></span>
+        <input id="codeIn" class="codein" type="text" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="······" aria-label="Glasses code">
+        <button id="linkBtn" class="solid">LINK ►</button>
       </div>
+      <div class="err" id="linkErr"></div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <div class="box">
+          <span class="t">GLASSES.SYS <span class="dim">· LIVE · DRAG TO TURN</span></span>
+          <canvas id="g3d" aria-label="3D view of the glasses"></canvas>
+          <div class="state" id="stState"><span class="led"></span><span>NOT LINKED</span></div>
+          <div class="ro" style="margin-top:8px">
+            <span>RUNNING</span><span id="stApp" class="hi">-</span>
+            <span>LOOKING AT</span><span id="stFocus">-</span>
+            <span>LAST PING</span><span id="stPing">-</span>
+            <span>LIVE LINK</span><span id="stLive">-</span>
+            <span>CODE</span><span id="stCode">-</span>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <a class="btn" href="#apps">▶ SEE THE HOME SCREEN</a>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="box">
+          <span class="t">CONFIG.SYS <span class="dim">· WHAT THE GLASSES USE</span></span>
+          <div id="summary"></div>
+        </div>
+        <div class="box">
+          <span class="t">EVENTS.LOG <span class="dim">· NEWEST FIRST</span></span>
+          <div id="log"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2 APPS ================= -->
+  <section id="tab-apps" aria-label="Apps">
+    <div class="path">C:\HUD\APPS&gt;<span class="cur">_</span></div>
+    <div class="logo">APPS</div>
+    <div class="lede">WHAT THE GLASSES HOME SCREEN SHOWS. TAP AN APP TO FLY TO IT · SWITCH IT OFF TO HIDE IT.</div>
+    <div class="grid2">
+      <div>
+        <div class="box">
+          <span class="t">MIRROR.EXE <span class="dim">· THE REAL HOME SCREEN</span></span>
+          <div class="lens" id="lens">
+            <iframe id="pv" title="Glasses home screen preview" src="about:blank" allow="autoplay"></iframe>
+            <div class="veil"><div>HIDDEN<br><span class="mid">NOT ON THE GLASSES HOME</span></div></div>
+            <span class="tag" id="pvTag" hidden>IN USE ON THE GLASSES</span>
+          </div>
+          <div class="pad" role="group" aria-label="Drive the preview like the glasses">
+            <button data-k="ArrowLeft" aria-label="Swipe left"><span class="g">◄</span><small>LEFT</small></button>
+            <button data-k="ArrowUp" aria-label="Swipe up"><span class="g">▲</span><small>UP</small></button>
+            <button data-k="Enter" aria-label="Pinch" class="solid"><span class="g">●</span><small>PINCH</small></button>
+            <button data-k="ArrowDown" aria-label="Swipe down"><span class="g">▼</span><small>DOWN</small></button>
+            <button data-k="ArrowRight" aria-label="Swipe right"><span class="g">►</span><small>RIGHT</small></button>
+          </div>
+          <div class="row" style="margin-top:6px"><button data-k="Escape"><span class="padg" style="font-size:20px">◄</span> BACK</button><span class="mid">BUTTONS = NEURAL BAND GESTURES</span></div>
+          <div id="selInfo"></div>
+        </div>
+      </div>
+      <div>
+        <div class="box">
+          <span class="t">DIR C:\GLASSES <span class="dim">· ON THE HOME SCREEN?</span></span>
+          <div class="dir" id="appList"></div>
+          <div class="saved" id="appsSaved"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3 SETUP ================= -->
+  <section id="tab-setup" aria-label="Setup">
+    <div class="path">C:\HUD\SETUP&gt;<span class="cur">_</span></div>
+    <div class="logo">SETUP</div>
+    <div class="lede">THE SAME SETTINGS AS SETUP.EXE ON THE GLASSES. WHEN THE GLASSES ARE ON, EVERY CHANGE SHOWS UP THERE AT ONCE.</div>
+    <div class="saved" id="setSaved"></div>
+    <div class="grid2">
+      <div>
+        <div class="box">
+          <span class="t">DISPLAY</span>
+          <div class="opt">
+            <div><div class="lbl">HUD COLOUR</div><div class="sub">THE COLOUR OF EVERY PIXEL ON THE GLASSES (AND THIS PANEL)</div></div><span></span>
+            <div class="swatches full" id="colorSeg"></div>
+          </div>
+          <div class="opt">
+            <div><div class="lbl">COMPASS UNDER THE CLOCK</div><div class="sub">ROTATING LINES WITH N · E · S · W</div></div>
+            <button class="sw" data-b="compass" aria-pressed="false" aria-label="Compass"><span class="n">OFF</span><span class="y">ON</span></button>
+            <div class="ill comp full" id="illComp"><div class="clk" id="illClock">12:45</div><div class="tape"><div class="tick" id="illTape"></div></div><div class="needle"></div></div>
+          </div>
+        </div>
+        <div class="box">
+          <span class="t">SOUND</span>
+          <div class="opt">
+            <div><div class="lbl">SOUNDS</div><div class="sub">CLICKS WHEN YOU MOVE AND OPEN APPS</div></div>
+            <button class="sw" data-b="sounds" aria-pressed="false" aria-label="Sounds"><span class="n">OFF</span><span class="y">ON</span></button>
+            <div class="ill snd full" id="illSnd"><span>◄█</span><span class="w">)))</span><span class="mid" style="font-size:19px">TICK · ROW · OPEN · BACK</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="box">
+          <span class="t">HEAD MOTION</span>
+          <div class="opt">
+            <div><div class="lbl">MOVE APPS WITH YOUR HEAD</div><div class="sub">TURN = NEXT APP · TILT = OTHER ROW</div></div>
+            <button class="sw" data-b="head" aria-pressed="false" aria-label="Head motion"><span class="n">OFF</span><span class="y">ON</span></button>
+            <div class="ill head full" id="illHead">
+              <svg viewBox="0 0 52 52" aria-hidden="true"><g class="hd"><circle cx="26" cy="28" r="15" fill="none" stroke="var(--c)" stroke-width="2"/>
+                <rect x="13" y="13" width="11" height="6" fill="var(--c)"/><rect x="28" y="13" width="11" height="6" fill="var(--c)"/><rect x="24" y="15" width="4" height="2" fill="var(--c)"/>
+                <path d="M26 2 L22 9 L30 9 Z" fill="var(--b)"/></g></svg>
+              <div class="cards"><div class="strip"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+              <span class="lbl2" id="illHeadLbl">TOP VIEW</span>
+            </div>
+          </div>
+          <div class="opt">
+            <div><div class="lbl">HEAD SPEED</div><div class="sub">HOW FAR TO TURN FOR ONE APP</div></div><span></span>
+            <div class="seg full" id="speedSeg"></div>
+          </div>
+          <div class="opt">
+            <div><div class="lbl">INVERT</div><div class="sub">IF TURNING MOVES THE WRONG WAY</div></div>
+            <button class="sw" data-b="invert" aria-pressed="false" aria-label="Invert head motion"><span class="n">OFF</span><span class="y">ON</span></button>
+          </div>
+        </div>
+        <div class="box">
+          <span class="t">LINK</span>
+          <div class="dl"><span class="l">GLASSES CODE</span><span class="f"></span><span class="v" id="setCode">-</span></div>
+          <div class="row" style="margin-top:8px"><button id="unlinkBtn">CHANGE CODE</button><button id="copyLink">COPY PANEL LINK</button></div>
+          <div class="hint">THE PANEL LINK OPENS THIS PANEL ALREADY LINKED, ON ANY PHONE.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4 GEOLOCK ================= -->
+  <section id="tab-geolock" aria-label="GeoLock">
+    <div class="path">C:\HUD\GEOLOCK&gt;<span class="cur">_</span></div>
+    <div class="logo">GEOLOCK</div>
+    <div class="lede">LOCK A SPOT WITH THE GLASSES, FIND IT AGAIN. PINCH ON "READY" TO LOCK WHERE YOU STAND; AN ARROW, COMPASS OR 360 VIEW LEADS YOU BACK.</div>
+    <div class="box">
+      <span class="t">GEOLOCK.EXE</span>
+      <div class="dl"><span class="l">ON THE GLASSES</span><span class="f"></span><span class="v" id="geoInUse">-</span></div>
+      <div class="dl"><span class="l">SAVED SPOTS</span><span class="f"></span><span class="v" id="geoCount">-</span></div>
+      <div class="row" style="margin-top:8px"><a class="btn" href="/glasses/geolock/" target="_blank" rel="noopener">GLASSES APP ↗</a></div>
       <div class="err" id="geoNote"></div>
     </div>
     <div id="geoBody">
-      <div class="box">
-        <span class="t">VIEW ON THE GLASSES</span>
-        <div class="views" id="geoViews"></div>
+      <div class="saved" id="geoSaved"></div>
+      <div class="grid2">
+        <div>
+          <div class="box">
+            <span class="t">MAP.EXE <span class="dim">· TAP A SPOT TO SHOW / HIDE IT</span></span>
+            <svg id="geoMap" viewBox="0 0 300 300" aria-label="Map of the saved spots"></svg>
+            <div class="hint" id="geoMapNote"></div>
+          </div>
+          <div class="box">
+            <span class="t">VIEW ON THE GLASSES</span>
+            <div class="views" id="geoViews"></div>
+            <div class="hint">SWIPE UP / DOWN ON THE GLASSES TO CHANGE IT THERE.</div>
+          </div>
+        </div>
+        <div>
+          <div class="box">
+            <span class="t">ARROW</span>
+            <div class="mid small">THE ARROW TAKES THE COLOUR OF THE SPOT IT POINTS TO.</div>
+            <div class="atiles" id="geoArrows"></div>
+            <div class="opt"><div><div class="lbl">DISTANCE UNDER THE ARROW</div><div class="sub">OFF = ONLY THE ARROW ON BLACK</div></div>
+              <button class="sw" data-g="dist" aria-pressed="false" aria-label="Distance under the arrow"><span class="n">OFF</span><span class="y">ON</span></button></div>
+          </div>
+          <div class="box">
+            <span class="t">RADAR</span>
+            <div class="opt"><div><div class="lbl">RADAR WHEN CLOSE</div><div class="sub">THE ARROW OR COMPASS TURNS INTO A RADAR NEAR THE SPOT</div></div>
+              <button class="sw" data-g="radar" aria-pressed="false" aria-label="Radar when close"><span class="n">OFF</span><span class="y">ON</span></button></div>
+            <div class="opt"><div><div class="lbl">TRIGGER DISTANCE</div><div class="sub">CLOSER THAN THIS = RADAR</div></div><span class="val" id="geoRadarMv">-</span>
+              <input class="full" type="range" id="geoRadarM" min="5" max="100" step="1" aria-label="Radar trigger distance in metres"></div>
+          </div>
+        </div>
       </div>
       <div class="box">
-        <span class="t">ARROW</span>
-        <p class="muted">The arrow takes the colour of the spot it points to.</p>
-        <div class="tiles" id="geoArrows"></div>
-        <div class="set" style="margin-top:8px"><span class="gcheck" data-g="dist" tabindex="0" role="checkbox"></span><span class="muted">Off = only the arrow on black</span></div>
-      </div>
-      <div class="box">
-        <span class="t">RADAR</span>
-        <div class="set"><span class="gcheck" data-g="radar" tabindex="0" role="checkbox"></span><span class="muted">Switch to the radar when you get close</span></div>
-        <div class="set"><span>TRIGGER DISTANCE</span>
-          <span class="row"><input type="range" id="geoRadarM" min="5" max="100" step="1" aria-label="Radar trigger distance in metres"><span class="val" id="geoRadarMv"></span></span></div>
-        <p class="muted small" style="margin-top:8px">Closer than this, the arrow (or compass) turns into the radar. The 360 view keeps its ovals.</p>
-      </div>
-      <div class="box">
-        <span class="t">SAVED LOCATIONS</span>
-        <p class="muted">Rename, recolour or delete the spots locked with the glasses. <b>IN 360 VIEW</b> picks which spots float around you in the 360 view (none picked = the one you navigate to); <b>SIZE</b> is the size of its oval there.</p>
+        <span class="t">SAVED LOCATIONS <span class="dim">· PICK SEVERAL TO SEE THEM TOGETHER</span></span>
+        <div class="gbar"><span id="geoPicked" class="hi">-</span><span class="row"><button id="geoAll">SHOW ALL</button><button id="geoNone">NONE</button></span></div>
+        <div class="hint" style="margin-top:0">PICKED SPOTS SHOW TOGETHER ON THE GLASSES: OVALS IN THE <span class="hi">360 VIEW</span>, LINES IN THE <span class="hi">COMPASS</span>. THE <span class="hi">ARROW</span> POINTS TO THE ONE YOU NAVIGATE TO. SIZE = OVAL SIZE IN 360.</div>
         <div class="places" id="geoList"></div>
       </div>
-      <div class="saved" id="geoSaved"></div>
     </div>
   </section>
 
-  <!-- ===================== СВЯТИЙ МИКОЛАЙЧИК ===================== -->
-  <section id="tab-mykolai">
+  <!-- ================= 5 СВЯТИЙ МИКОЛАЙЧИК ================= -->
+  <section id="tab-mykolai" aria-label="Святий Миколайчик">
+    <div class="path">C:\HUD\MYKOLAI&gt;<span class="cur">_</span></div>
+    <div class="logo uk">СВЯТИЙ МИКОЛАЙЧИК</div>
+    <div class="lede">LEAVE A LITTLE STATUE ON A GPS SPOT. YARO FINDS IT WITH MYKOLAI.EXE ON THE GLASSES.</div>
     <div class="box">
-      <span class="t">СВЯТИЙ МИКОЛАЙЧИК</span>
-      <div class="uk glow">СВЯТИЙ МИКОЛАЙЧИК</div>
-      <p class="muted" style="margin:6px 0 10px">Play Saint Nicholas: stand on a spot, choose a statue, write a note and leave the gift there. Yaro finds it with the glasses app MYKOLAI.EXE.</p>
-      <div class="stats">
-        <div class="stat"><b id="smWaiting">-</b>GIFTS WAITING</div>
-        <div class="stat"><b id="smFound">-</b>FOUND (30 DAYS)</div>
+      <span class="t">GIFTS.DAT</span>
+      <div class="tiles">
+        <div class="tile"><b id="smWaiting">-</b><span>WAITING</span></div>
+        <div class="tile"><b id="smFound">-</b><span>FOUND · 30 DAYS</span></div>
+        <div class="tile"><b id="smUse">-</b><span>ON THE GLASSES</span></div>
+      </div>
+      <div class="flow">
+        <div><b>⌖</b><span>STAND ON A SPOT</span></div><span>►</span>
+        <div><b>■</b><span>LEAVE THE GIFT</span></div><span>►</span>
+        <div><b>◎</b><span>YARO FINDS IT · 7 M</span></div>
       </div>
       <div class="row">
-        <a class="btn" href="/glasses/SM/" target="_blank" rel="noopener">LEAVE A GIFT ↗</a>
+        <a class="btn solid" href="/glasses/SM/" target="_blank" rel="noopener">LEAVE A GIFT ↗</a>
         <a class="btn" href="/glasses/mykolai/" target="_blank" rel="noopener">GLASSES APP ↗</a>
-        <span id="smInUse"></span>
       </div>
-      <div class="found" id="smList"></div>
+      <div class="found" id="smList" style="margin-top:10px"></div>
     </div>
-    <iframe class="embed" id="smFrame" title="Святий Миколайчик" data-src="/glasses/SM/" allow="geolocation; fullscreen"></iframe>
-  </section>
-
-  <!-- ===================== YARO-VISSION ===================== -->
-  <section id="tab-yaro">
     <div class="box">
-      <span class="t">YARO-VISSION</span>
-      <div class="uk glow">YARO-VISSION</div>
-      <p class="muted" style="margin:6px 0 10px">One person wears the glasses (YARO.EXE), another steers them like a game character from CON, with a live first-person view: move, take, jump, hug, dance.</p>
-      <div class="row">
-        <a class="btn" href="/glasses/con/" target="_blank" rel="noopener">OPEN CON FULL SCREEN ↗</a>
-        <a class="btn" href="/glasses/yaro/" target="_blank" rel="noopener">GLASSES APP ↗</a>
-        <span id="yaroInUse"></span>
-      </div>
+      <span class="t">GIFT PAGE <span class="dim">· ERROR.BLUE/GLASSES/SM</span></span>
+      <iframe class="embed" id="smFrame" title="Святий Миколайчик" data-src="/glasses/SM/" allow="geolocation; fullscreen"></iframe>
     </div>
-    <iframe class="embed" id="yaroFrame" title="Yaro-Vission CON" data-src="/glasses/con/" allow="camera; microphone; autoplay; fullscreen; gamepad; geolocation"></iframe>
   </section>
 
-  <footer>ERROR.BLUE · GLASSES HUD PANEL · SETTINGS ARE SAVED ON THE SERVER UNDER THE GLASSES CODE</footer>
+  <!-- ================= 6 YARO-VISSION ================= -->
+  <section id="tab-yaro" aria-label="Yaro-Vission">
+    <div class="path">C:\HUD\YARO&gt;<span class="cur">_</span></div>
+    <div class="logo">YARO-VISSION</div>
+    <div class="lede">REMOTE-CONTROL A HUMAN: SEE THROUGH THE GLASSES, SEND ORDERS.</div>
+    <div class="box">
+      <span class="t">YARO.EXE</span>
+      <div class="dl"><span class="l">ON THE GLASSES</span><span class="f"></span><span class="v" id="yaroUse">-</span></div>
+      <div class="flow">
+        <div><b>◉</b><span>YARO WEARS THE GLASSES</span></div><span>►</span>
+        <div><b>⌖</b><span>YOU WATCH ON CON</span></div><span>►</span>
+        <div><b>▲</b><span>MOVE · TAKE · JUMP · HUG · DANCE</span></div>
+      </div>
+      <div class="row">
+        <a class="btn solid" href="/glasses/con/" target="_blank" rel="noopener">OPEN CON FULL SCREEN ↗</a>
+        <a class="btn" href="/glasses/yaro/" target="_blank" rel="noopener">GLASSES APP ↗</a>
+      </div>
+    </div>
+    <div class="box">
+      <span class="t">CON <span class="dim">· ERROR.BLUE/GLASSES/CON</span></span>
+      <iframe class="embed" id="yaroFrame" title="Yaro-Vission CON" data-src="/glasses/con/" allow="camera; microphone; autoplay; fullscreen; gamepad; geolocation"></iframe>
+    </div>
+  </section>
+
+  <!-- ================= save as an app (below every screen) ================= -->
+  <div class="box" id="installBox">
+    <span class="t">INSTALL.EXE <span class="dim">· SAVE AS AN APP</span></span>
+    <div id="instState"></div>
+    <div class="row" id="instNowRow" hidden style="margin:10px 0 4px"><button class="solid" id="instNow">▼ INSTALL HUD APP NOW</button><span class="mid">ONE TAP ON THIS PHONE</span></div>
+    <div id="instGuide">
+      <p class="mid" style="margin-top:6px">PUT THE PANEL ON YOUR HOME SCREEN: IT OPENS FULL SCREEN WITH ITS OWN ICON. FOLLOW THE BLINKING BOXES:</p>
+      <div class="ptabs" role="tablist"><button id="pIos" role="tab">IPHONE · SAFARI</button><button id="pAnd" role="tab">ANDROID · CHROME</button></div>
+      <div class="guide" id="guide" aria-live="polite"></div>
+      <div class="hint" id="guideNote"></div>
+    </div>
+  </div>
+
+  <footer>ERROR.BLUE · HUD.EXE · SETTINGS LIVE ON THE SERVER UNDER YOUR GLASSES CODE · KEYS 1-6 SWITCH SCREENS</footer>
+  </main>
+
+  <nav id="keys" aria-label="Screens">
+    <a href="#status"><span class="k">1</span><span class="n">STATUS</span></a>
+    <a href="#apps"><span class="k">2</span><span class="n">APPS</span></a>
+    <a href="#setup"><span class="k">3</span><span class="n">SETUP</span></a>
+    <a href="#geolock"><span class="k">4</span><span class="n"><span class="full">GEOLOCK</span><span class="short">GEO</span></span></a>
+    <a href="#mykolai"><span class="k">5</span><span class="n uk">МИКОЛАЙ</span></a>
+    <a href="#yaro"><span class="k">6</span><span class="n">YARO</span></a>
+  </nav>
 </div>
+<div class="fx" id="scan"></div><div class="fx" id="roll"></div><div class="fx" id="vig"></div>
 
 <script src="/glasses/geolock/arrows.js"></script>
 <script>
@@ -277,28 +589,34 @@
   const $ = (id) => document.getElementById(id);
   const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
   const PALETTES = [
-    { name: "GREEN", c: "#33ff66", b: "#d2ffdc", m: "#22b84e", d: "#0e5f27", k: "#031c0b" },
-    { name: "AMBER", c: "#ffb000", b: "#ffe6b0", m: "#b87c00", d: "#5c3e00", k: "#1c1300" },
-    { name: "CYAN",  c: "#33e6ff", b: "#d0f8ff", m: "#1fa3ba", d: "#0d505c", k: "#03171c" },
-    { name: "RED",   c: "#ff4848", b: "#ffd6d6", m: "#b82a2a", d: "#5c1212", k: "#1c0505" },
-    { name: "WHITE", c: "#e6e6e6", b: "#ffffff", m: "#a3a3a3", d: "#4d4d4d", k: "#161616" },
+    { name: "GREEN", c: "#39ff7a", b: "#c8ffd9", m: "#25b956", d: "#1b7a3c", k: "#031208", g: "rgba(57,255,122,.55)" },
+    { name: "AMBER", c: "#ffb000", b: "#ffe6ad", m: "#c38600", d: "#7a5400", k: "#120c02", g: "rgba(255,176,0,.5)" },
+    { name: "CYAN",  c: "#33e6ff", b: "#cbf7ff", m: "#22a8bd", d: "#136a78", k: "#021012", g: "rgba(51,230,255,.5)" },
+    { name: "RED",   c: "#ff4d4d", b: "#ffd2d2", m: "#c23636", d: "#7a1f1f", k: "#120303", g: "rgba(255,77,77,.5)" },
+    { name: "WHITE", c: "#e8e8e8", b: "#ffffff", m: "#a8a8a8", d: "#5c5c5c", k: "#0b0b0b", g: "rgba(232,232,232,.4)" },
   ];
   const DEFAULTS = { compass: true, head: true, speed: 1, invert: false, color: 0, sounds: true, hidden: [] };
-  const LABELS = { compass: "COMPASS UNDER CLOCK", head: "HEAD MOTION MOVES APPS", invert: "INVERT HEAD MOTION", sounds: "SOUNDS" };
+  const LABELS = { compass: "COMPASS", head: "HEAD MOTION", invert: "INVERT", sounds: "SOUNDS" };
+  const SPEEDS = [["SLOW", "26°", "2.6s"], ["MEDIUM", "18°", "1.8s"], ["FAST", "12°", "1.1s"]];
   const ls = {
     get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : JSON.parse(v); } catch { return f; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const hhmmss = (d = new Date()) => d.toTimeString().slice(0, 8);
 
-  let code = null, profile = Object.assign({}, DEFAULTS), updated = 0, presence = null, serverNow = Date.now(), catalog = [];
+  let code = null, profile = Object.assign({}, DEFAULTS), updated = 0, presence = null, serverNow = Date.now(), pulledAt = Date.now(), catalog = [];
   const params = new URLSearchParams(location.search);
   code = (params.get("code") || ls.get("hud.panel.code", "") || "").toUpperCase();
   if (!CODE_RE.test(code)) code = null;
+  if (params.has("code")) { ls.set("hud.panel.code", code || ""); history.replaceState(null, "", location.pathname + location.hash); }
 
   /* ---------- colours follow the HUD colour ---------- */
+  let pal = PALETTES[0];
   function paint() {
-    const p = PALETTES[profile.color] || PALETTES[0], r = document.documentElement.style;
-    r.setProperty("--c", p.c); r.setProperty("--b", p.b); r.setProperty("--m", p.m); r.setProperty("--d", p.d); r.setProperty("--k", p.k);
+    pal = PALETTES[profile.color] || PALETTES[0];
+    const r = document.documentElement.style;
+    for (const k of ["c", "b", "m", "d", "k", "g"]) r.setProperty("--" + k, pal[k]);
   }
 
   /* ---------- app list: read straight from the glasses home screen ---------- */
@@ -310,214 +628,462 @@
       while ((m = rowRe.exec(html))) {
         const apps = [], appRe = /\{\s*id:\s*"([^"]+)",\s*file:\s*"([^"]+)",\s*desc:\s*"([^"]+)",\s*url:\s*"([^"]+)"\s*\}/g;
         let a;
-        while ((a = appRe.exec(m[2]))) apps.push({ id: a[1], file: a[2], desc: a[3], url: a[4] });
+        while ((a = appRe.exec(m[2]))) apps.push({ id: a[1], file: a[2], desc: a[3], url: a[4], row: m[1] });
         if (apps.length) rows.push({ name: m[1], apps });
       }
       catalog = rows;
     } catch { catalog = []; }
+    if (!sel || !appById(sel)) sel = catalog.length ? catalog[0].apps[0].id : null;
     renderApps(); renderSummary(); renderStatus();
   }
   const appById = (id) => { for (const r of catalog) for (const a of r.apps) if (a.id === id) return a; return null; };
   const EXTRA = { home: "HOME SCREEN", mini: "MINI HUB", time: "THE CLOCK", unknown: "AN APP" };
-  const appName = (id) => (appById(id) ? appById(id).file : EXTRA[id] || String(id || "").toUpperCase());
+  const appName = (id) => (appById(id) ? appById(id).file : EXTRA[id] || String(id || "-").toUpperCase());
 
   /* ---------- server ---------- */
+  let saving = 0, saveTimer = 0, pulled = false;
   async function pull() {
     if (!code) return;
     try {
       const r = await fetch("/api/hud/" + code, { cache: "no-store" });
       if (!r.ok) return;
       const j = await r.json();
-      serverNow = j.now; presence = j.presence;
-      if (j.settings && j.updated > updated && !saving) { profile = Object.assign({}, DEFAULTS, j.settings); updated = j.updated; mirror(); paint(); renderSettings(); renderApps(); renderSummary(); }
+      serverNow = j.now; pulledAt = Date.now(); presence = j.presence; pulled = true;
+      if (j.settings && j.updated > updated && !saving) {
+        const first = !updated;
+        profile = Object.assign({}, DEFAULTS, j.settings); updated = j.updated;
+        mirror(); paint(); renderSettings(); renderApps(); renderSummary();
+        if (!first) { log("SETTINGS CHANGED ON THE GLASSES"); reloadPreview(); }
+      }
       renderStatus();
     } catch {}
   }
-  let saving = 0, saveTimer = 0;
   function save(msgEl, msg) {
     updated = Date.now();
     mirror(); paint(); renderSettings(); renderApps(); renderSummary();
     clearTimeout(saveTimer);
-    msgEl.textContent = "SAVING...";
-    saving = 1;                                   // a newer click replaces the waiting save
+    msgEl.dataset.msg = msg; lastMsgEl = msgEl;
+    if (wsSay({ t: "settings", settings: profile, updated })) { sentAt[updated] = Date.now(); msgEl.textContent = glassesIn.size ? "» " + msg + " · SENT LIVE TO THE GLASSES..." : "SAVING " + msg + "..."; }
+    else msgEl.textContent = "SAVING...";
+    saving++;
     saveTimer = setTimeout(async () => {
-      if (!code) { msgEl.textContent = "LINK THE GLASSES FIRST (HUD TAB) - SAVED ON THIS DEVICE ONLY"; saving = 0; return; }
+      if (!code) { msgEl.textContent = "LINK THE GLASSES FIRST (1 STATUS). SAVED ON THIS PHONE ONLY."; saving--; return; }
       try {
-        const r = await fetch("/api/hud/" + code, { method: "PUT", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ settings: profile, updated }) });
+        const r = await fetch("/api/hud/" + code, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: profile, updated }) });
         const j = await r.json();
-        if (j.ok) { msgEl.textContent = "✓ " + msg + " - SAVED. THE GLASSES UPDATE WITHIN 30 S."; reloadPreview(); }
+        if (j.ok) {
+          if (ackShown !== updated) msgEl.textContent = "✓ " + msg + " · SAVED " + hhmmss() + (glassesIn.size ? " · SENT LIVE" : " · THE GLASSES GET IT WHEN THEY'RE ON");
+          log("SAVED: " + msg); reloadPreview();
+        }
         else msgEl.textContent = "COULD NOT SAVE: " + (j.error || r.status);
       } catch { msgEl.textContent = "COULD NOT SAVE (NO CONNECTION?)"; }
-      saving = 0;
+      saving--;
     }, 350);
   }
-  // the live preview uses this browser's storage: make it look like the glasses
+  // the live preview runs in this browser: give it the same code and settings as the glasses
   function mirror() {
     if (code) ls.set("glasses.code", code);
     ls.set("glasses.settings", Object.assign({}, profile, { updatedAt: updated }));
+  }
+
+  /* ---------- live channel: settings reach the glasses at once ---------- */
+  let ws = null, wsTries = 0, wsRetry = 0, glassesIn = new Set(), live = null, sentAt = {}, ackShown = 0, lastMsgEl = null;
+  function wsSay(d) { if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify(d)); return true; } catch {} } return false; }
+  function connectLive() {
+    clearTimeout(wsRetry);
+    if (ws) { const old = ws; ws = null; try { old.onclose = null; old.close(1000, "bye"); } catch {} }
+    glassesIn = new Set(); live = null;
+    if (!code) return;
+    const myCode = code;
+    let sock;
+    try { sock = new WebSocket((location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + "/api/room/hud/" + code + "?name=panel"); } catch { return; }
+    ws = sock;
+    sock.onopen = () => { wsTries = 0; wsSay({ t: "who" }); renderStatus(); };
+    sock.onmessage = (e) => {
+      if (code !== myCode) return;
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.type === "welcome") { glassesIn = new Set((m.players || []).filter((p) => p.name === "glasses").map((p) => p.id)); }
+      else if (m.type === "join" && m.player && m.player.name === "glasses") glassesIn.add(m.player.id);
+      else if (m.type === "leave") { glassesIn.delete(m.id); if (live && live.from === m.id) live.gone = Date.now(); }
+      else if (m.type === "msg" && m.data && glassesIn.has(m.from)) onGlasses(m.data, m.from);
+      renderStatus();
+    };
+    sock.onclose = () => { if (ws !== sock) return; ws = null; glassesIn = new Set(); renderStatus(); wsRetry = setTimeout(connectLive, Math.min(15000, 800 * 2 ** wsTries++)); };
+    sock.onerror = () => {};
+  }
+  setInterval(() => { if (ws && ws.readyState === 1) ws.send('{"type":"ping"}'); }, 25000);
+  function onGlasses(d, from) {
+    if (d.t === "hello" || d.t === "state") {
+      live = { app: d.app, focus: d.focus, state: d.state === "hidden" ? "hidden" : "active", at: Date.now(), from };
+      if (d.t === "hello" && d.updated < updated && updated) wsSay({ t: "settings", settings: profile, updated });   // the glasses missed a change
+    } else if (d.t === "ack" && d.kind === "geo") {
+      if (d.updated === geoSentAt) { geoMsg("✓ " + geoLastMsg + " · APPLIED ON THE GLASSES IN " + ((Date.now() - geoSentAt) / 1000).toFixed(1) + " S"); log("GLASSES APPLIED: " + geoLastMsg); }
+    } else if (d.t === "ack") {
+      const t0 = sentAt[d.updated];
+      if (t0 && d.updated === updated && lastMsgEl && ackShown !== d.updated) {
+        ackShown = d.updated;
+        lastMsgEl.textContent = "✓ " + lastMsgEl.dataset.msg + " · APPLIED ON THE GLASSES IN " + ((Date.now() - t0) / 1000).toFixed(1) + " S";
+        log("GLASSES APPLIED: " + lastMsgEl.dataset.msg);
+      }
+    } else if (d.t === "settings" && d.settings && Number(d.updated) > updated) {    // changed in SETUP.EXE on the glasses
+      profile = Object.assign({}, DEFAULTS, d.settings); updated = Number(d.updated);
+      mirror(); paint(); renderSettings(); renderApps(); renderSummary(); reloadPreview();
+      log("CHANGED ON THE GLASSES (SETUP.EXE)");
+    }
+  }
+  // the newest word on the glasses: the live channel, else the last heartbeat
+  function presenceNow() {
+    if (live && glassesIn.size && !live.gone) return { app: live.app, focus: live.focus, state: live.state, seen: serverNow + (Date.now() - pulledAt), viaLive: true };
+    return presence;
   }
 
   /* ---------- link ---------- */
   async function link(c) {
     c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     $("linkErr").textContent = "";
-    if (!CODE_RE.test(c)) { $("linkErr").textContent = "6 LETTERS/DIGITS, AS SHOWN IN SETUP.EXE (NO 0, 1, I OR O)"; return; }
-    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS); geoForget();
-    renderLink();
+    if (!CODE_RE.test(c)) { $("linkErr").textContent = "6 LETTERS AND DIGITS, AS IN SETUP.EXE (NO 0, 1, I OR O)"; return; }
+    if (c === code) return;
+    code = c; ls.set("hud.panel.code", c); updated = 0; profile = Object.assign({}, DEFAULTS); presence = null; lastConn = null; geoForget();
+    renderLink(); log("LINKED TO CODE " + c); connectLive();
     await pull();
-    if (!presence && !updated) $("linkErr").textContent = "";
     reloadPreview();
   }
   function renderLink() {
-    $("linkForm").hidden = !!code; $("linked").hidden = !code;
-    if (code) $("codeShow").textContent = code;
-    $("stLink").textContent = code ? "CODE " + code : "NOT LINKED - SEE THE HUD TAB";
+    $("linkBox").hidden = !!code;
+    $("stCode").textContent = code || "-";
+    $("setCode").textContent = code || "NOT LINKED";
+    if (!code) $("codeIn").value = "";
   }
 
   /* ---------- status ---------- */
   const ago = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + " S AGO" : s < 3600 ? Math.round(s / 60) + " MIN AGO" : s < 86400 ? Math.round(s / 3600) + " H AGO" : Math.round(s / 86400) + " DAYS AGO"; };
+  function conn() {
+    if (!code) return { k: "nolink" };
+    const presence = presenceNow();
+    if (!presence) return { k: "never" };
+    const age = serverNow - presence.seen + (Date.now() - pulledAt);
+    if (age < 40000 && presence.state === "active") return { k: "online", age };
+    if (presence.state === "hidden" && age < 6 * 3600 * 1000) return { k: "off", age };
+    return { k: "offline", age };
+  }
+  let lastConn = null, lastApp = null, g3dState = { k: "nolink", app: "" };
   function renderStatus() {
-    const st = $("stState"), ap = $("stApp");
-    let inUse = null;
-    if (!code) { st.innerHTML = '<span class="dot"></span>UNKNOWN'; ap.textContent = "-"; }
-    else if (!presence) { st.innerHTML = '<span class="dot"></span>NEVER SEEN WITH THIS CODE'; ap.textContent = "OPEN THE HOME SCREEN ON THE GLASSES"; }
-    else {
-      const age = serverNow - presence.seen, live = age < 40000;
-      if (live && presence.state === "active") {
-        st.innerHTML = '<span class="dot on"></span>CONNECTED <span class="muted">(' + ago(age) + ")</span>";
-        inUse = presence.app;
-        let t = "NOW IN " + appName(presence.app);
-        const a = appById(presence.app);
-        if (a) t += " - " + a.desc;
-        if (presence.app === "home" && presence.focus) t += " · LOOKING AT " + appName(presence.focus);
-        ap.textContent = t;
-      } else if (presence.state === "hidden" && age < 6 * 3600 * 1000) {
-        st.innerHTML = '<span class="dot sleep"></span>DISPLAY OFF <span class="muted">(' + ago(age) + ")</span>";
-        ap.textContent = "LAST IN " + appName(presence.app);
-      } else {
-        st.innerHTML = '<span class="dot"></span>NOT CONNECTED <span class="muted">(LAST SEEN ' + ago(age) + ")</span>";
-        ap.textContent = "LAST IN " + appName(presence.app);
-      }
+    const s = conn(), chip = $("chip");
+    const TXT = { nolink: "NOT LINKED", never: "WAITING", online: "ONLINE", off: "DISPLAY OFF", offline: "OFFLINE" };
+    const BIG = { nolink: "NOT LINKED", never: "NEVER SEEN", online: "CONNECTED", off: "DISPLAY OFF", offline: "NOT CONNECTED" };
+    chip.className = s.k; $("chipTxt").textContent = TXT[s.k];
+    $("stState").innerHTML = `<span class="${{ online: "led on", off: "led half" }[s.k] || "led"}"></span><span>${BIG[s.k]}</span>`;
+    const presence = presenceNow();
+    const inUse = s.k === "online" ? presence.app : null;
+    $("stLive").innerHTML = !code ? "-" : ws && ws.readyState === 1
+      ? (glassesIn.size ? '<span class="hi">◆ ON · CHANGES ARRIVE AT ONCE</span>' : "WAITING FOR THE GLASSES")
+      : "CONNECTING...";
+    if (!presence) {
+      $("stApp").textContent = s.k === "never" ? "OPEN THE HOME SCREEN ON THE GLASSES" : "-";
+      $("stFocus").textContent = "-"; $("stPing").textContent = "-";
+    } else {
+      const a = appById(presence.app);
+      $("stApp").textContent = (s.k === "online" ? "" : "LAST: ") + appName(presence.app) + (a ? " · " + a.desc : "");
+      $("stFocus").textContent = s.k === "online" && presence.app === "home" && presence.focus ? appName(presence.focus) : "-";
+      $("stPing").textContent = presence.viaLive ? "NOW (LIVE)" : ago(s.age);
     }
-    document.querySelectorAll(".app").forEach((el) => {
-      const u = el.querySelector(".use");
-      if (u) u.hidden = el.dataset.id !== inUse;
+    // events
+    if (code && lastConn === null && s.k !== "nolink" && s.k !== "never") log(s.k === "online" ? "GLASSES ONLINE IN " + appName(inUse) : BIG[s.k]);
+    else if (lastConn !== null && s.k !== lastConn) log({ online: "GLASSES ONLINE IN " + appName(inUse), off: "GLASSES DISPLAY OFF", offline: "GLASSES OFFLINE", never: "WAITING FOR THE GLASSES" }[s.k] || TXT[s.k]);
+    else if (lastConn === "online" && inUse && inUse !== lastApp) log(inUse === "home" ? "BACK ON THE HOME SCREEN" : "OPENED " + appName(inUse));
+    lastConn = code && (s.k !== "never" || pulled) ? s.k : null; lastApp = inUse;
+    // in-use markers everywhere
+    document.querySelectorAll(".dir .r").forEach((el) => { const u = el.querySelector(".use"); if (u) u.hidden = el.dataset.id !== inUse; });
+    $("pvTag").hidden = !(inUse && inUse === sel);
+    $("smUse").textContent = inUse === "mykolai" ? "● NOW" : "-";
+    $("yaroUse").textContent = inUse === "yaro" ? "● RUNNING NOW" : "NOT RUNNING";
+    $("geoInUse").textContent = inUse === "geolock" ? "● RUNNING NOW" : "NOT RUNNING";
+    document.querySelector('#keys a[href="#geolock"]').classList.toggle("dot", inUse === "geolock");
+    document.querySelector('#keys a[href="#mykolai"]').classList.toggle("dot", inUse === "mykolai");
+    document.querySelector('#keys a[href="#yaro"]').classList.toggle("dot", inUse === "yaro");
+    g3dState = { k: s.k, app: inUse || (presence && presence.app) || "" };
+  }
+  const logLines = [];
+  function log(msg) {
+    if (!msg) return;
+    if (logLines.length && logLines[0].msg === msg) return;
+    logLines.unshift({ t: hhmmss(), msg });
+    if (logLines.length > 60) logLines.pop();
+    $("log").innerHTML = logLines.map((l) => `<div><span class="ts">${l.t}</span> ${esc(l.msg)}</div>`).join("");
+  }
+
+  /* ---------- 3D glasses (GLASSES.SYS) ---------- */
+  const cv = $("g3d"), cx = cv.getContext("2d");
+  let yaw = 0.5, pitch = 0.3, drag = null, freeAt = 0, g3dVisible = true;
+  const GL = (() => {
+    const segs = [], lensPts = [];
+    const W = 0.86, H = 0.58, R = 0.15, LX = 0.53;
+    function ring(cxl, z) {
+      const pts = [], cs = [[W / 2 - R, H / 2 - R, 0], [-(W / 2 - R), H / 2 - R, 90], [-(W / 2 - R), -(H / 2 - R), 180], [W / 2 - R, -(H / 2 - R), 270]];
+      for (const [ox, oy, a0] of cs) for (let i = 0; i <= 5; i++) {
+        const a = (a0 + i * 18) * Math.PI / 180, rr = oy < 0 ? R * 1.5 : R;
+        pts.push([cxl + ox + Math.cos(a) * rr * (oy < 0 ? 0.75 : 1), oy + Math.sin(a) * rr, z]);
+      }
+      return pts;
+    }
+    for (const side of [-1, 1]) {
+      const f = ring(side * LX, 0), b = ring(side * LX, 0.07);
+      lensPts.push(f);
+      for (let i = 0; i < f.length; i++) {
+        const j = (i + 1) % f.length;
+        segs.push([f[i], f[j], 1], [b[i], b[j], 0.45]);
+        if (i % 6 === 0) segs.push([f[i], b[i], 0.45]);
+      }
+      const hx = side * (LX + W / 2);
+      const t = [[hx, 0.17, 0.02], [side * 1.0, 0.17, 0.12], [side * 1.03, 0.15, 1.45], [side * 1.03, 0.04, 1.66], [side * 1.0, -0.12, 1.76]];
+      for (let i = 0; i < t.length - 1; i++) segs.push([t[i], t[i + 1], 0.8]);
+    }
+    const br = [];
+    for (let i = 0; i <= 8; i++) { const u = i / 8, x = -LX + W / 2 + u * (2 * LX - W), y = 0.13 + Math.sin(u * Math.PI) * 0.07; br.push([x, y, 0]); }
+    for (let i = 0; i < br.length - 1; i++) segs.push([br[i], br[i + 1], 1]);
+    return { segs, lensPts, LX };
+  })();
+  function proj(p, w, h) {
+    const [x, y, z] = p;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    const y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp + 3.3;
+    const f = Math.min(w * 0.95, h * 1.75) / z2;
+    return [w / 2 + x1 * f, h * 0.4 - y1 * f, z2];
+  }
+  function projFloor(p, w, h) {                         // the floor doesn't turn with the glasses
+    const sv = yaw; yaw = 0; const r = proj(p, w, h); yaw = sv; return r;
+  }
+  function drawG3d(t) {
+    const dpr = Math.min(2, devicePixelRatio || 1), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+    if (!w) return;
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    cx.clearRect(0, 0, w, h);
+    const st = g3dState.k, live = st === "online", dark = st === "nolink" || st === "never" || st === "offline";
+    const col = dark ? pal.d : pal.c;
+    if (!drag && performance.now() > freeAt) yaw = Math.sin(t * 0.45) * 0.62;
+    // floor grid, rolling toward you
+    cx.lineWidth = dpr; cx.shadowBlur = 0; cx.strokeStyle = pal.d;
+    const scroll = (t * 0.35) % 0.4;
+    for (let i = -6; i <= 6; i++) {
+      const a = projFloor([i * 0.4, -0.72, -2.4], w, h), b = projFloor([i * 0.4, -0.72, 4], w, h);
+      cx.globalAlpha = 0.5; cx.beginPath(); cx.moveTo(a[0], a[1]); cx.lineTo(b[0], b[1]); cx.stroke();
+    }
+    for (let k = 0; k < 16; k++) {
+      const z = -2.4 + k * 0.4 - scroll;
+      const a = projFloor([-2.4, -0.72, z], w, h), b = projFloor([2.4, -0.72, z], w, h);
+      cx.globalAlpha = 0.6 * Math.max(0, 1 - k / 16); cx.beginPath(); cx.moveTo(a[0], a[1]); cx.lineTo(b[0], b[1]); cx.stroke();
+    }
+    cx.globalAlpha = 1;
+    // glass, and the display in the wearer's right lens
+    GL.lensPts.forEach((ring, li) => {
+      const pts = ring.map((p) => proj(p, w, h));
+      cx.beginPath(); pts.forEach((p, i) => (i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1]))); cx.closePath();
+      cx.fillStyle = live && li === 0 ? pal.g.replace(/[\d.]+\)$/, "0.16)") : "rgba(0,0,0,0.55)"; cx.fill();
+      if (li !== 0) return;
+      cx.save(); cx.clip();
+      const c = proj([-GL.LX, 0, 0], w, h), fs = Math.max(10, Math.min(w, h * 2) / 22);
+      cx.textAlign = "center"; cx.textBaseline = "middle";
+      if (live) {
+        cx.fillStyle = pal.b; cx.shadowColor = pal.c; cx.shadowBlur = 8 * dpr;
+        cx.font = `${fs}px VT323, VGA, monospace`;
+        const nm = ({ home: "HOME", mini: "MINI", time: "CLOCK" }[g3dState.app]) || appName(g3dState.app).replace(/\.EXE$/, "");
+        cx.fillText(nm.length > 9 ? nm.slice(0, 9) : nm, c[0], c[1] - fs * 0.3);
+        cx.fillStyle = pal.c; cx.fillRect(c[0] - fs * 1.6, c[1] + fs * 0.45, fs * 3.2 * ((t * 0.5) % 1), 2 * dpr);
+      } else if (st === "offline" || st === "never") {
+        cx.fillStyle = pal.d;
+        for (let i = 0; i < 70; i++) cx.fillRect(c[0] + (Math.random() - 0.5) * fs * 5, c[1] + (Math.random() - 0.5) * fs * 3, 2 * dpr, 2 * dpr);
+        cx.font = `${fs * 0.8}px VT323, VGA, monospace`; cx.fillStyle = pal.m; cx.fillText("NO SIGNAL", c[0], c[1]);
+      } else if (st === "off") {
+        cx.font = `${fs * 0.8}px VT323, VGA, monospace`; cx.fillStyle = pal.d; cx.fillText("Z z z", c[0], c[1]);
+      } else {
+        cx.font = `${fs * 0.7}px VT323, VGA, monospace`; cx.fillStyle = pal.d; cx.fillText("LINK ME", c[0], c[1]);
+      }
+      cx.restore();
     });
-    $("smInUse").innerHTML = inUse === "mykolai" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
-    $("yaroInUse").innerHTML = inUse === "yaro" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
-    $("geoInUse").innerHTML = inUse === "geolock" ? '<span class="dot on"></span>IN USE ON THE GLASSES' : "";
+    // the frame, far lines first
+    cx.shadowColor = col; cx.shadowBlur = (dark ? 0 : 7) * dpr; cx.lineCap = "round"; cx.strokeStyle = col;
+    const sorted = GL.segs.map((s) => { const a = proj(s[0], w, h), b = proj(s[1], w, h); return [a, b, s[2], (a[2] + b[2]) / 2]; }).sort((p, q) => q[3] - p[3]);
+    for (const [a, b, wgt, z] of sorted) {
+      cx.globalAlpha = Math.max(0.2, Math.min(1, 0.35 + wgt * (4.2 - z) * 0.55));
+      cx.lineWidth = (1 + wgt * 1.6) * dpr;
+      cx.beginPath(); cx.moveTo(a[0], a[1]); cx.lineTo(b[0], b[1]); cx.stroke();
+    }
+    cx.globalAlpha = 1;
+    // signal waves while connected
+    if (live) {
+      const top = proj([0, 0.42, 0], w, h);
+      cx.strokeStyle = pal.c; cx.lineWidth = 2 * dpr;
+      for (let i = 0; i < 3; i++) {
+        const u = (t * 0.9 + i / 3) % 1;
+        cx.globalAlpha = 1 - u; cx.beginPath(); cx.arc(top[0], top[1], (8 + u * 46) * dpr, Math.PI * 1.2, Math.PI * 1.8); cx.stroke();
+      }
+      cx.globalAlpha = 1;
+    }
+    cx.shadowBlur = 0;
+  }
+  cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, yaw, pitch }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    yaw = drag.yaw + (e.clientX - drag.x) * 0.012;
+    pitch = Math.max(-0.5, Math.min(0.8, drag.pitch + (e.clientY - drag.y) * 0.006));
+  });
+  const endDrag = () => { if (drag) { drag = null; freeAt = performance.now() + 2500; } };
+  cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+  new IntersectionObserver((es) => { g3dVisible = es[0].isIntersecting; }).observe(cv);
+  let lastF = 0;
+  function loop(now) {
+    requestAnimationFrame(loop);
+    if (now - lastF < 33 || !g3dVisible || document.hidden || tab !== "status") return;
+    lastF = now; drawG3d(now / 1000);
   }
 
   /* ---------- apps ---------- */
+  let sel = null;
   function renderApps() {
     const box = $("appList");
-    if (!catalog.length) { box.innerHTML = '<p class="muted" style="margin-top:12px">LOADING THE APP LIST...</p>'; return; }
+    if (!catalog.length) { box.innerHTML = '<p class="mid">READING C:\\GLASSES ...</p>'; return; }
     const hid = new Set(profile.hidden || []);
-    box.innerHTML = "";
+    let html = '<div class="hd"><span>NAME     EXT  WHAT IT DOES</span><span>HOME</span></div>';
+    let total = 0, shown = 0;
     for (const r of catalog) {
-      const h = document.createElement("div"); h.className = "rowname"; h.textContent = "── " + r.name + " ──"; box.appendChild(h);
-      const list = document.createElement("div"); list.className = "apps";
+      html += `<div class="grp">── ${esc(r.name)} ROW ${"─".repeat(30)}</div>`;
       for (const a of r.apps) {
-        const shown = !hid.has(a.id), locked = a.id === "settings";
-        const el = document.createElement("div");
-        el.className = "app" + (shown ? "" : " hidden"); el.dataset.id = a.id;
-        el.innerHTML = `<button class="toggle ${shown ? "inv" : ""}" ${locked ? "disabled" : ""} aria-pressed="${shown}">${shown ? "[X] SHOWN" : "[ ] HIDDEN"}</button>
-          <span class="name">${a.file}<span class="use" hidden>IN USE</span></span>
-          <a class="btn" href="${a.url}" target="_blank" rel="noopener" title="Open it here">OPEN ↗</a>
-          <span class="desc">${a.desc}${locked ? " · ALWAYS SHOWN" : ""}</span>`;
-        if (!locked) el.querySelector("button").onclick = () => {
-          const s = new Set(profile.hidden || []);
-          s.has(a.id) ? s.delete(a.id) : s.add(a.id);
-          profile.hidden = [...s];
-          save($("appsSaved"), a.file + (s.has(a.id) ? " HIDDEN" : " SHOWN"));
-        };
-        list.appendChild(el);
+        const on = !hid.has(a.id), locked = a.id === "settings";
+        total++; if (on) shown++;
+        const [fn, ex] = a.file.split(".");
+        html += `<div class="r${a.id === sel ? " sel" : ""}${on ? "" : " off"}" data-id="${esc(a.id)}">
+          <button class="nm" data-act="sel" title="${esc(a.desc)}"><span class="fn">${esc(fn)}</span><span class="ex">${esc(ex || "")}</span><span class="ds">${esc(a.desc)}</span><span class="use" hidden>IN USE</span></button>
+          <button class="sw" data-act="tog" aria-pressed="${on}" ${locked ? 'disabled title="SETUP.EXE always stays"' : ""} aria-label="${esc(a.file)} on the home screen"><span class="n">OFF</span><span class="y">ON</span></button>
+        </div>`;
       }
-      box.appendChild(list);
     }
-    renderStatus();
-  }
-  $("showAll").onclick = () => { profile.hidden = []; save($("appsSaved"), "ALL APPS SHOWN"); };
-
-  /* ---------- settings ---------- */
-  function renderSettings() {
-    document.querySelectorAll(".check").forEach((el) => {
-      const k = el.dataset.b;
-      el.textContent = (profile[k] ? "[X] " : "[ ] ") + LABELS[k];
-      el.setAttribute("aria-checked", !!profile[k]);
+    html += `<div class="foot row"><span>${total} FILE(S) · ${shown} SHOWN · ${total - shown} HIDDEN</span><button id="showAll">SHOW ALL</button></div>`;
+    box.innerHTML = html;
+    box.querySelectorAll(".r").forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelector('[data-act="sel"]').onclick = () => select(id, true);
+      el.querySelector('[data-act="tog"]').onclick = () => {
+        const s = new Set(profile.hidden || []), a = appById(id);
+        s.has(id) ? s.delete(id) : s.add(id);
+        profile.hidden = [...s]; sel = id;
+        save($("appsSaved"), a.file + (s.has(id) ? " HIDDEN" : " SHOWN"));
+      };
     });
+    $("showAll").onclick = () => { profile.hidden = []; save($("appsSaved"), "ALL APPS SHOWN"); };
+    renderSel(); renderStatus();
+  }
+  function renderSel() {
+    const a = appById(sel), hidden = a && (profile.hidden || []).includes(a.id);
+    $("lens").classList.toggle("hid", !!hidden);
+    $("selInfo").innerHTML = a ? `<div class="ro"><span>SELECTED</span><span class="hi">${esc(a.file)}</span><span>DOES</span><span>${esc(a.desc)}</span>
+      <span>ROW</span><span>${esc(a.row)}</span><span>HOME</span><span>${hidden ? "HIDDEN" : "SHOWN"}</span></div>
+      <div class="row" style="margin-top:8px"><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener">OPEN ${esc(a.file)} HERE ↗</a></div>` : "";
+  }
+  function select(id, drive) {
+    if (!appById(id)) return;
+    sel = id;
+    document.querySelectorAll(".dir .r").forEach((el) => el.classList.toggle("sel", el.dataset.id === id));
+    renderSel(); renderStatus();
+    if (drive) {
+      try { const h = pv.contentWindow.__home; if (h) h.goto(id); } catch {}
+      if (matchMedia("(max-width: 859px)").matches) $("lens").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+
+  /* ---------- live preview (MIRROR.EXE) ---------- */
+  const pv = $("pv"), lens = $("lens");
+  function fitPreview() { pv.style.transform = "scale(" + lens.clientWidth / 600 + ")"; }
+  new ResizeObserver(fitPreview).observe(lens);
+  let pvTimer = 0, pvFocus = null;
+  function reloadPreview() {
+    clearTimeout(pvTimer);
+    if (tab !== "apps") { pv.dataset.stale = "1"; return; }
+    pvTimer = setTimeout(() => { pv.src = "/glasses/?preview=1&t=" + Date.now(); }, 250);
+  }
+  pv.addEventListener("load", () => { try { const h = pv.contentWindow.__home; if (h && sel) { h.goto(sel); pvFocus = sel; } } catch {} });
+  setInterval(() => {                                   // swipes inside the preview move the list too
+    if (tab !== "apps") return;
+    try { const h = pv.contentWindow.__home; if (h && h.focus !== pvFocus) { pvFocus = h.focus; if (pvFocus !== "time" && pvFocus !== sel) select(pvFocus, false); } } catch {}
+  }, 250);
+  function key(k) {
+    try { const w = pv.contentWindow; w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true })); } catch {}
+  }
+  document.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => key(b.dataset.k)));
+
+  /* ---------- setup ---------- */
+  function renderSettings() {
+    document.querySelectorAll(".sw[data-b]").forEach((el) => el.setAttribute("aria-pressed", !!profile[el.dataset.b]));
     $("speedSeg").innerHTML = "";
-    ["SLOW", "MEDIUM", "FAST"].forEach((n, i) => {
-      const b = document.createElement("button"); b.textContent = n; if (profile.speed === i) b.className = "inv";
+    SPEEDS.forEach(([n, deg], i) => {
+      const b = document.createElement("button"); b.innerHTML = `${n} <span class="mid">${deg}</span>`; b.setAttribute("aria-pressed", profile.speed === i);
       b.onclick = () => { profile.speed = i; save($("setSaved"), "HEAD SPEED " + n); };
       $("speedSeg").appendChild(b);
     });
     $("colorSeg").innerHTML = "";
     PALETTES.forEach((p, i) => {
-      const b = document.createElement("button"); b.className = "sw" + (profile.color === i ? " on" : ""); b.style.background = p.c;
-      b.title = p.name; b.setAttribute("aria-label", p.name);
+      const b = document.createElement("button"); b.className = "swatch"; b.setAttribute("aria-pressed", profile.color === i);
+      b.style.color = p.c; b.innerHTML = `<span class="scr" style="text-shadow:0 0 6px ${p.g}">C:\\&gt;_</span><span>${p.name}</span>`;
       b.onclick = () => { profile.color = i; save($("setSaved"), "HUD COLOUR " + p.name); };
       $("colorSeg").appendChild(b);
     });
+    $("illComp").classList.toggle("off", !profile.compass);
+    const hd = $("illHead"); hd.classList.toggle("off", !profile.head); hd.classList.toggle("inv", !!profile.invert);
+    hd.style.setProperty("--spd", (SPEEDS[profile.speed] || SPEEDS[1])[2]);
+    $("illHeadLbl").textContent = profile.head ? (profile.invert ? "INVERTED" : "TOP VIEW") : "HEAD MOTION OFF";
+    $("illSnd").classList.toggle("off", !profile.sounds);
   }
-  document.querySelectorAll(".check").forEach((el) => {
-    const flip = () => { const k = el.dataset.b; profile[k] = !profile[k]; save($("setSaved"), LABELS[k] + (profile[k] ? " ON" : " OFF")); };
-    el.onclick = flip;
-    el.onkeydown = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } };
+  document.querySelectorAll(".sw[data-b]").forEach((el) => el.onclick = () => {
+    const k = el.dataset.b; profile[k] = !profile[k]; save($("setSaved"), LABELS[k] + (profile[k] ? " ON" : " OFF"));
   });
+  $("illTape").textContent = "N · · · NE · · · E · · · SE · · · S · · · SW · · · W · · · NW · · · ".repeat(2);
   function renderSummary() {
     const total = catalog.reduce((n, r) => n + r.apps.length, 0), hidden = (profile.hidden || []).length;
-    const p = PALETTES[profile.color] || PALETTES[0];
+    const row = (l, v, href) => `<div class="dl"><span class="l">${l}</span><span class="f"></span><span class="v">${v}</span>${href ? `<a href="${href}">EDIT</a>` : ""}</div>`;
     $("summary").innerHTML =
-      `<div class="muted">APPS SHOWN</div><div>${Math.max(0, total - hidden)} OF ${total} <a href="#apps">CHANGE</a></div>
-       <div class="muted" style="margin-top:8px">HUD</div><div>${p.name} · HEAD ${profile.head ? "ON" : "OFF"} · COMPASS ${profile.compass ? "ON" : "OFF"} · SOUNDS ${profile.sounds ? "ON" : "OFF"} <a href="#settings">CHANGE</a></div>`;
+      row("APPS ON HOME", total ? `${Math.max(0, total - hidden)} OF ${total}` : "-", "#apps") +
+      row("HUD COLOUR", (PALETTES[profile.color] || PALETTES[0]).name, "#setup") +
+      row("HEAD MOTION", profile.head ? (SPEEDS[profile.speed] || SPEEDS[1])[0] + (profile.invert ? " · INV" : "") : "OFF", "#setup") +
+      row("COMPASS", profile.compass ? "ON" : "OFF", "#setup") +
+      row("SOUNDS", profile.sounds ? "ON" : "OFF", "#setup");
   }
+  $("copyLink").onclick = async () => {
+    if (!code) { $("setSaved").textContent = "LINK THE GLASSES FIRST"; return; }
+    const u = location.origin + "/hud/?code=" + code;
+    try { await navigator.clipboard.writeText(u); $("setSaved").textContent = "✓ COPIED: " + u; } catch { $("setSaved").textContent = u; }
+  };
+  $("unlinkBtn").onclick = () => {
+    code = null; ls.set("hud.panel.code", ""); presence = null; lastConn = null; geoForget(); connectLive(); renderLink(); renderStatus(); log("UNLINKED");
+    location.hash = "#status"; setTimeout(() => $("codeIn").focus(), 50);
+  };
 
-  /* ---------- live preview ---------- */
-  const pv = $("pv"), lens = $("lens");
-  function fitPreview() { const s = lens.clientWidth / 600; pv.style.transform = "scale(" + s + ")"; }
-  new ResizeObserver(fitPreview).observe(lens);
-  let pvTimer = 0;
-  function reloadPreview() { clearTimeout(pvTimer); pvTimer = setTimeout(() => { pv.src = "/glasses/?preview=1&t=" + Date.now(); }, 250); }
-  document.querySelectorAll(".pad button").forEach((b) => b.addEventListener("click", () => {
-    try {
-      const w = pv.contentWindow;
-      w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: b.dataset.k, bubbles: true, cancelable: true }));
-    } catch {}
-  }));
-
-  /* ---------- Святий Миколайчик stats ---------- */
-  async function smStats() {
-    try {
-      const j = await (await fetch("/api/sm/gifts", { cache: "no-store" })).json();
-      $("smWaiting").textContent = j.waiting.length; $("smFound").textContent = j.found.length;
-      $("smList").innerHTML = j.found.slice(0, 4).map((g) =>
-        `<div class="muted">✓ ${esc(g.from)}: ${esc(g.note || "-")} <span class="dim">(${ago(j.now - g.got)})</span></div>`).join("");
-    } catch { $("smWaiting").textContent = "?"; $("smFound").textContent = "?"; }
-  }
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-  /* ---------- GeoLock: spots locked with the glasses + the app's settings (/api/hud/<CODE>/geo) ---------- */
+  /* ---------- GEOLOCK: spots locked with the glasses + the app's settings (/api/hud/<CODE>/geo) ---------- */
   const GEO_COLORS = ["#33ff66", "#33e6ff", "#ffb000", "#ff4848", "#ff55ff", "#fff04d", "#5b8cff", "#e6e6e6"];
   const GEO_COLOR_NAMES = ["GREEN", "CYAN", "AMBER", "RED", "PINK", "YELLOW", "BLUE", "WHITE"];
   const GEO_SIZES = ["S", "M", "L", "XL", "XXL"];
   const GEO_DEFAULT = { view: "arrow", radar: true, radarM: 20, arrow: "arrow", dist: false, active: null, show: [] };
   const GEO_VIEWS = [
-    ["arrow", "ARROW", "Only an arrow on black, pointing at the spot."],
-    ["compass", "COMPASS", "A compass scale that turns with your head; a long line marks the spot."],
-    ["360", "360° VIEW", "Spots float around you as ovals with their distance. Turn your head like in VR to find them."],
+    ["arrow", "ARROW", "ONLY AN ARROW ON BLACK, POINTING AT THE SPOT YOU NAVIGATE TO."],
+    ["compass", "COMPASS", "A COMPASS SCALE THAT TURNS WITH YOUR HEAD. EVERY PICKED SPOT IS A LINE."],
+    ["360", "360° VIEW", "EVERY PICKED SPOT FLOATS AROUND YOU AS AN OVAL WITH ITS DISTANCE. TURN YOUR HEAD LIKE IN VR."],
   ];
   const GEO_LABELS = { radar: "RADAR WHEN CLOSE", dist: "DISTANCE UNDER THE ARROW" };
   const ARROW_TYPES = (window.GeoArrows && GeoArrows.TYPES) || [
     { id: "arrow", name: "3D ARROW" }, { id: "chevron", name: "3D CHEVRON" }, { id: "dart", name: "3D DART" }, { id: "needle", name: "3D NEEDLE" },
     { id: "wire", name: "3D WIREFRAME" }, { id: "flat", name: "2D ARROW" }, { id: "outline", name: "2D OUTLINE" }, { id: "chevrons", name: "2D CHEVRONS" }];
-  let geo = { s: Object.assign({}, GEO_DEFAULT), u: 0, places: [], loaded: false }, geoPending = 0, geoTimer = 0, geoDragging = false;
+  let geo = { s: Object.assign({}, GEO_DEFAULT), u: 0, places: [], loaded: false }, geoPending = 0, geoTimer = 0, geoDragging = false, geoSentAt = 0, geoLastMsg = "";
   const geoApi = () => "/api/hud/" + code + "/geo";
   const geoMsg = (t) => { $("geoSaved").textContent = t; };
   const pad2 = (n) => String(n).padStart(2, "0");
   const stamp = (ms) => { const d = new Date(ms); return pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + "." + d.getFullYear() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); };
   function geoForget() { geo = { s: Object.assign({}, GEO_DEFAULT), u: 0, places: [], loaded: false }; renderGeo(); }
+  // tell GEOLOCK.EXE to fetch the news now (live link), and note it in the log
+  function geoLive(msg) {
+    geoLastMsg = msg; geoSentAt = Date.now();
+    if (wsSay({ t: "geo", updated: geoSentAt })) geoMsg((glassesIn.size ? "» " + msg + " · SENT LIVE TO THE GLASSES" : "✓ " + msg + " · SAVED"));
+    else geoMsg("✓ " + msg + " · SAVED");
+    log("SAVED: " + msg);
+  }
   async function geoPull() {
     if (!code) { renderGeo(); return; }
     const asked = code;
@@ -545,10 +1111,10 @@
       try {
         const r = await fetch(geoApi(), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ settings: geo.s, updated: geo.u }) });
         const j = await r.json();
-        geoMsg(j.ok ? "✓ " + msg + " - SAVED. THE GLASSES UPDATE WITHIN 10 S." : "COULD NOT SAVE: " + (j.error || r.status));
+        if (j.ok) geoLive(msg); else geoMsg("COULD NOT SAVE: " + (j.error || r.status));
       } catch { geoMsg("COULD NOT SAVE (NO CONNECTION?)"); }
       geoPending = 0;
-    }, 300);
+    }, 250);
   }
   async function geoPatch(id, body, msg) {
     const p = geo.places.find((x) => x.id === id);
@@ -557,7 +1123,7 @@
     try {
       const r = await fetch(geoApi() + "/places/" + id, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (j.ok) { Object.assign(p, j.place); geoMsg("✓ " + msg + " - SAVED"); }
+      if (j.ok) { Object.assign(p, j.place); geoLive(msg); }
       else { geoMsg(r.status === 404 ? "THAT SPOT IS GONE" : "COULD NOT SAVE: " + (j.error || r.status)); geoPull(); }
     } catch { geoMsg("COULD NOT SAVE (NO CONNECTION?)"); }
     renderGeo();
@@ -574,20 +1140,24 @@
         geo.s.show = show;
         if (geo.s.active === id) geo.s.active = geo.places.length ? geo.places[0].id : null;
         geoSave((p ? p.name : "SPOT") + " DELETED");
-      } else { geoMsg("✓ " + (p ? p.name : "SPOT") + " DELETED"); renderGeo(); }
+      } else { geoLive((p ? p.name : "SPOT") + " DELETED"); renderGeo(); }
     } catch { geoMsg("COULD NOT DELETE (NO CONNECTION?)"); }
   }
   const geoActive = () => geo.places.find((p) => p.id === geo.s.active) || geo.places[0] || null;
+  function geoToggleShow(p) {
+    const set = new Set(geo.s.show || []); set.has(p.id) ? set.delete(p.id) : set.add(p.id);
+    geo.s.show = [...set]; geoSave(String(p.name).toUpperCase() + (set.has(p.id) ? " SHOWN" : " HIDDEN") + " ON THE GLASSES");
+  }
 
-  // arrow previews, turning slowly while the tab is open
+  // arrow previews, turning slowly while the screen is open
   const arrowCanvases = [];
   function buildArrowTiles() {
     const box = $("geoArrows");
     if (box.childElementCount) return;
     for (const T of ARROW_TYPES) {
       const b = document.createElement("button");
-      b.className = "tile"; b.dataset.id = T.id; b.setAttribute("aria-label", T.name);
-      const c = document.createElement("canvas"); c.width = c.height = 96 * Math.min(3, Math.ceil(devicePixelRatio || 1));
+      b.className = "atile"; b.dataset.id = T.id; b.setAttribute("aria-label", T.name);
+      const c = document.createElement("canvas"); c.width = c.height = 80 * Math.min(3, Math.ceil(devicePixelRatio || 1));
       b.appendChild(c); b.appendChild(document.createTextNode(T.name));
       b.onclick = () => { geo.s.arrow = T.id; geoSave("ARROW " + T.name); };
       box.appendChild(b); arrowCanvases.push([c, T.id]);
@@ -595,68 +1165,95 @@
   }
   function spinArrows(now) {
     requestAnimationFrame(spinArrows);
-    if (document.hidden || location.hash !== "#geolock" || !window.GeoArrows) return;
-    const t = now / 1000, a = geoActive(), col = a ? GEO_COLORS[a.color | 0] : getComputedStyle(document.documentElement).getPropertyValue("--c").trim() || "#33ff66";
+    if (document.hidden || tab !== "geolock" || !window.GeoArrows) return;
+    const t = now / 1000, a = geoActive(), col = a ? GEO_COLORS[a.color | 0] : pal.c;
     for (const [c, id] of arrowCanvases) {
-      const g = c.getContext("2d"), s = c.width / 96;
+      const g = c.getContext("2d"), sc = c.width / 96;
       g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height);
-      g.setTransform(s, 0, 0, s, 0, 0);
+      g.setTransform(sc, 0, 0, sc, 0, 0);
       GeoArrows.draw(g, id, { x: 48, y: 50, size: 70, rel: (t * 45) % 360, color: col, t });
     }
   }
-  requestAnimationFrame(spinArrows);
+
+  // MAP.EXE: the spots seen from above, around the one you navigate to; tap = show / hide
+  function renderGeoMap() {
+    const svg = $("geoMap"), act = geoActive(), show = new Set(geo.s.show || []);
+    if (!geo.places.length) { svg.innerHTML = `<text x="150" y="154" text-anchor="middle" fill="${pal.d}" font-size="20">NO SPOTS YET</text>`; $("geoMapNote").textContent = ""; return; }
+    const c0 = act || geo.places[0], kx = Math.cos(c0.lat * Math.PI / 180) * 111320, ky = 110540;
+    const pts = geo.places.map((p) => ({ p, x: (p.lng - c0.lng) * kx, y: (p.lat - c0.lat) * ky }));
+    const far = Math.max(10, ...pts.map((q) => Math.hypot(q.x, q.y)));
+    const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6].find((n) => n >= far) || far;
+    const R = 120, k = R / nice, fmt = (m) => (m >= 1000 ? (m / 1000) + " KM" : m + " M");
+    let h = `<rect x="0" y="0" width="300" height="300" fill="#000"/>`;
+    for (const f of [1, 0.5]) h += `<circle cx="150" cy="150" r="${R * f}" fill="none" stroke="${pal.d}" stroke-dasharray="${f === 1 ? "none" : "3 4"}"/>`;
+    h += `<line x1="30" y1="150" x2="270" y2="150" stroke="${pal.d}"/><line x1="150" y1="30" x2="150" y2="270" stroke="${pal.d}"/>`;
+    h += `<text x="150" y="22" text-anchor="middle" fill="${pal.m}" font-size="16">N</text><text x="150" y="${150 + R + 18}" text-anchor="middle" fill="${pal.m}" font-size="15">RING = ${fmt(nice)}</text>`;
+    for (const { p, x, y } of pts.sort((a, b) => (a.p === act) - (b.p === act))) {
+      const sx = 150 + x * k, sy = 150 - y * k, col = GEO_COLORS[p.color | 0] || GEO_COLORS[0], on = show.has(p.id) || (p === act && !show.size), isAct = p === act;
+      h += `<g class="spot" data-id="${esc(p.id)}" role="button" aria-label="${esc(p.name)}">
+        <rect x="${sx - 16}" y="${sy - 26}" width="${34 + 8 * Math.min(12, String(p.name).length)}" height="42" fill="transparent"/>
+        ${isAct ? `<circle cx="${sx}" cy="${sy}" r="11" fill="none" stroke="${col}" stroke-width="2"><animate attributeName="r" values="9;14;9" dur="1.6s" repeatCount="indefinite"/></circle>` : ""}
+        <rect x="${sx - 5}" y="${sy - 5}" width="10" height="10" fill="${on ? col : "#000"}" stroke="${col}" stroke-width="2" transform="rotate(45 ${sx} ${sy})" opacity="${on ? 1 : 0.6}"/>
+        <text x="${sx + 9}" y="${sy - 8}" fill="${col}" font-size="15" opacity="${on ? 1 : 0.55}">${esc(String(p.name).toUpperCase().slice(0, 12))}</text></g>`;
+    }
+    svg.innerHTML = h;
+    svg.querySelectorAll(".spot").forEach((g) => g.onclick = () => { const p = geo.places.find((q) => q.id === g.dataset.id); if (p) geoToggleShow(p); });
+    $("geoMapNote").textContent = "◆ FILLED = SHOWN ON THE GLASSES · RING = THE ARROW POINTS HERE · CENTRE = " + String(c0.name).toUpperCase();
+  }
 
   function renderGeo() {
     $("geoBody").hidden = !code;
-    if (!code) { $("geoNote").textContent = "LINK THE GLASSES FIRST ON THE HUD TAB: THE SPOTS ARE KEPT UNDER THE GLASSES CODE."; return; }
+    $("geoCount").textContent = code ? (geo.loaded ? String(geo.places.length) : "...") : "-";
+    if (!code) { $("geoNote").textContent = "LINK THE GLASSES FIRST (1 STATUS): THE SPOTS ARE KEPT UNDER THE GLASSES CODE."; return; }
     const s = geo.s;
-    // view
+    // views
     const vb = $("geoViews");
     vb.innerHTML = "";
     for (const [id, name, desc] of GEO_VIEWS) {
       const b = document.createElement("button");
-      b.className = s.view === id ? "inv" : ""; b.setAttribute("aria-pressed", s.view === id);
-      b.innerHTML = (s.view === id ? "(•) " : "( ) ") + name + "<small>" + desc + "</small>";
+      b.setAttribute("aria-pressed", s.view === id);
+      b.innerHTML = `<span>${s.view === id ? "(●)" : "( )"}</span><span>${name}</span><small>${desc}</small>`;
       b.onclick = () => { s.view = id; geoSave("VIEW " + name); };
       vb.appendChild(b);
     }
-    // arrows
+    // arrows, switches, slider
     buildArrowTiles();
-    for (const b of $("geoArrows").children) { const on = b.dataset.id === s.arrow; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }
-    // toggles + slider
-    document.querySelectorAll(".gcheck").forEach((el) => {
-      const k = el.dataset.g; el.textContent = (s[k] ? "[X] " : "[ ] ") + GEO_LABELS[k]; el.setAttribute("aria-checked", !!s[k]);
-    });
+    for (const b of $("geoArrows").children) b.setAttribute("aria-pressed", b.dataset.id === s.arrow);
+    document.querySelectorAll(".sw[data-g]").forEach((el) => el.setAttribute("aria-pressed", !!s[el.dataset.g]));
     const sl = $("geoRadarM");
     if (!geoDragging && document.activeElement !== sl) sl.value = s.radarM;
     $("geoRadarMv").textContent = sl.value + " M";
     sl.disabled = !s.radar;
+    // the map + who's picked
+    const show = new Set(s.show || []), picked = geo.places.filter((p) => show.has(p.id));
+    $("geoPicked").textContent = geo.places.length ? (picked.length ? `SHOWN ON THE GLASSES: ${picked.length} OF ${geo.places.length}` : `NONE PICKED: THE GLASSES SHOW ONLY ${String((geoActive() || {}).name || "-").toUpperCase()}`) : "-";
+    renderGeoMap();
     // saved spots
     const list = $("geoList");
     if (list.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // don't disturb typing
     list.innerHTML = "";
     if (!geo.places.length) {
-      list.innerHTML = '<p class="muted">' + (geo.loaded ? "NO SPOTS YET. OPEN GEOLOCK.EXE ON THE GLASSES AND PINCH TO LOCK ONE." : "LOADING...") + "</p>";
+      list.innerHTML = '<p class="mid">' + (geo.loaded ? "NO SPOTS YET. OPEN GEOLOCK.EXE ON THE GLASSES AND PINCH TO LOCK ONE." : "LOADING...") + "</p>";
       return;
     }
-    const act = geoActive(), show = new Set(s.show || []);
+    const act = geoActive();
     for (const p of geo.places) {
-      const col = GEO_COLORS[p.color | 0] || GEO_COLORS[0], isAct = act && act.id === p.id, in360 = show.has(p.id);
+      const col = GEO_COLORS[p.color | 0] || GEO_COLORS[0], isAct = act && act.id === p.id, on = show.has(p.id);
       const el = document.createElement("div");
-      el.className = "place" + (isAct ? " act" : "");
+      el.className = "place" + (isAct ? " act" : "") + (on ? " picked" : "");
       const map = "https://www.openstreetmap.org/?mlat=" + p.lat.toFixed(6) + "&mlon=" + p.lng.toFixed(6) + "#map=19/" + p.lat.toFixed(6) + "/" + p.lng.toFixed(6);
       el.innerHTML =
-        `<div class="row"><span class="chip" style="background:${col}"></span><input class="nm" maxlength="24" value="${esc(p.name)}" aria-label="Name of the spot" spellcheck="false" autocomplete="off">
-           ${isAct ? '<span class="muted">◄ THE ARROW POINTS HERE</span>' : ""}</div>
-         <div class="muted small">SAVED ${stamp(p.created)} · GPS ${Math.round(p.acc)} M · ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} · <a href="${map}" target="_blank" rel="noopener">MAP ↗</a></div>
+        `<div class="row"><span class="pdot" style="background:${col}"></span><input class="pname" maxlength="24" value="${esc(p.name)}" aria-label="Name of the spot" spellcheck="false" autocomplete="off">
+           ${isAct ? '<span class="hi">◄ THE ARROW POINTS HERE</span>' : ""}</div>
+         <div class="mid small">SAVED ${stamp(p.created)} · GPS ±${Math.round(p.acc)} M · ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} · <a href="${map}" target="_blank" rel="noopener">MAP ↗</a></div>
          <div class="row">
-           <button data-a="go" ${isAct ? 'class="inv" disabled' : ""}>${isAct ? "● NAVIGATING" : "► NAVIGATE TO IT"}</button>
-           <button data-a="show" class="${in360 ? "inv" : ""}" aria-pressed="${in360}">${in360 ? "[X]" : "[ ]"} IN 360 VIEW</button>
+           <span class="mid">SHOW ON GLASSES</span><button class="sw" data-a="show" aria-pressed="${on}" aria-label="Show ${esc(p.name)} on the glasses"><span class="n">OFF</span><span class="y">ON</span></button>
+           <button data-a="go" ${isAct ? 'class="solid" disabled' : ""}>${isAct ? "● NAVIGATING" : "► NAVIGATE TO IT"}</button>
            <button data-a="del">DELETE</button>
          </div>
-         <div class="row"><span class="muted" style="min-width:5.5em">COLOUR</span><span class="seg" data-a="col"></span></div>
-         <div class="row"><span class="muted" style="min-width:5.5em">360 SIZE</span><span class="seg" data-a="size"></span></div>`;
-      const nm = el.querySelector(".nm");
+         <div class="row"><span class="mid" style="min-width:5.5em">COLOUR</span><span class="row" style="gap:6px" data-a="col"></span></div>
+         <div class="row"><span class="mid" style="min-width:5.5em">360 SIZE</span><span class="seg" data-a="size"></span></div>`;
+      const nm = el.querySelector(".pname");
       const rename = () => {
         const v = nm.value.replace(/[\u0000-\u001f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, 24);
         if (!v) { nm.value = p.name; return; }
@@ -665,38 +1262,35 @@
       nm.onchange = rename;
       nm.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); nm.blur(); } if (e.key === "Escape") { nm.value = p.name; nm.blur(); } };
       nm.onblur = () => setTimeout(renderGeo, 0);
-      el.querySelector('[data-a="go"]').onclick = () => { s.active = p.id; geoSave("THE ARROW NOW POINTS TO " + p.name.toUpperCase()); };
-      el.querySelector('[data-a="show"]').onclick = () => {
-        const set = new Set(s.show || []); set.has(p.id) ? set.delete(p.id) : set.add(p.id);
-        s.show = [...set]; geoSave(p.name.toUpperCase() + (set.has(p.id) ? " SHOWN" : " HIDDEN") + " IN 360 VIEW");
-      };
+      el.querySelector('[data-a="go"]').onclick = () => { s.active = p.id; geoSave("THE ARROW NOW POINTS TO " + String(p.name).toUpperCase()); };
+      el.querySelector('[data-a="show"]').onclick = () => geoToggleShow(p);
       const del = el.querySelector('[data-a="del"]');
       del.onclick = () => {
         if (del.dataset.sure) { del.disabled = true; geoDelete(p.id); return; }
-        del.dataset.sure = "1"; del.textContent = "SURE? TAP AGAIN"; del.classList.add("inv");
-        setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = "DELETE"; del.classList.remove("inv"); } }, 3500);
+        del.dataset.sure = "1"; del.textContent = "SURE? TAP AGAIN"; del.classList.add("solid");
+        setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = "DELETE"; del.classList.remove("solid"); } }, 3500);
       };
       const cs = el.querySelector('[data-a="col"]');
       GEO_COLORS.forEach((c, i) => {
-        const b = document.createElement("button"); b.className = "sw sm" + ((p.color | 0) === i ? " on" : ""); b.style.background = c;
+        const b = document.createElement("button"); b.className = "csw"; b.setAttribute("aria-pressed", (p.color | 0) === i); b.style.background = c;
         b.title = GEO_COLOR_NAMES[i]; b.setAttribute("aria-label", GEO_COLOR_NAMES[i]);
-        b.onclick = () => geoPatch(p.id, { color: i }, p.name.toUpperCase() + " IS " + GEO_COLOR_NAMES[i]);
+        b.onclick = () => geoPatch(p.id, { color: i }, String(p.name).toUpperCase() + " IS " + GEO_COLOR_NAMES[i]);
         cs.appendChild(b);
       });
       const ss = el.querySelector('[data-a="size"]');
       GEO_SIZES.forEach((n, i) => {
-        const b = document.createElement("button"); b.className = "sz" + ((p.size | 0) === i + 1 ? " inv" : ""); b.textContent = n;
-        b.onclick = () => geoPatch(p.id, { size: i + 1 }, p.name.toUpperCase() + " SIZE " + n);
+        const b = document.createElement("button"); b.className = "sz"; b.setAttribute("aria-pressed", (p.size | 0) === i + 1); b.textContent = n;
+        b.onclick = () => geoPatch(p.id, { size: i + 1 }, String(p.name).toUpperCase() + " SIZE " + n);
         ss.appendChild(b);
       });
       list.appendChild(el);
     }
   }
-  document.querySelectorAll(".gcheck").forEach((el) => {
-    const flip = () => { const k = el.dataset.g; geo.s[k] = !geo.s[k]; geoSave(GEO_LABELS[k] + (geo.s[k] ? " ON" : " OFF")); };
-    el.onclick = flip;
-    el.onkeydown = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); } };
+  document.querySelectorAll(".sw[data-g]").forEach((el) => el.onclick = () => {
+    const k = el.dataset.g; geo.s[k] = !geo.s[k]; geoSave(GEO_LABELS[k] + (geo.s[k] ? " ON" : " OFF"));
   });
+  $("geoAll").onclick = () => { geo.s.show = geo.places.map((p) => p.id); geoSave("ALL SPOTS SHOWN ON THE GLASSES"); };
+  $("geoNone").onclick = () => { geo.s.show = []; geoSave("NO SPOTS PICKED"); };
   (() => {
     const sl = $("geoRadarM");
     sl.addEventListener("pointerdown", () => { geoDragging = true; });
@@ -705,41 +1299,168 @@
     sl.onchange = () => { geo.s.radarM = +sl.value; geoSave("RADAR AT " + sl.value + " M"); };
   })();
 
-  /* ---------- tabs ---------- */
+  /* ---------- Святий Миколайчик ---------- */
+  async function smStats() {
+    try {
+      const j = await (await fetch("/api/sm/gifts", { cache: "no-store" })).json();
+      $("smWaiting").textContent = j.waiting.length; $("smFound").textContent = j.found.length;
+      $("smList").innerHTML = j.found.length ? '<div class="mid">LAST FOUND:</div>' + j.found.slice(0, 4).map((g) =>
+        `<div>✓ ${esc(g.from)}: ${esc(g.note || "-")} <span class="dim">(${ago(j.now - g.got)})</span></div>`).join("") : "";
+    } catch { $("smWaiting").textContent = "?"; $("smFound").textContent = "?"; }
+  }
+
+  /* ---------- screens ---------- */
+  const TABS = ["status", "apps", "setup", "geolock", "mykolai", "yaro"];
+  let tab = null;
   function route() {
-    const id = (location.hash || "#hud").slice(1);
-    const tab = ["hud", "apps", "settings", "geolock", "mykolai", "yaro"].includes(id) ? id : "hud";
-    document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + tab));
-    const nav = $("nav");
-    document.querySelectorAll("nav a").forEach((a) => {
-      const on = a.getAttribute("href") === "#" + tab;
-      a.classList.toggle("on", on);
-      if (on) { const l = a.offsetLeft - nav.offsetLeft, r = l + a.offsetWidth; if (l < nav.scrollLeft) nav.scrollLeft = l - 12; else if (r > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = r - nav.clientWidth + 12; }
-    });
-    const top = $("statusBox").offsetTop + $("statusBox").offsetHeight + 16;   // where the menu sits when not stuck
-    if (scrollY > top) scrollTo(0, top);                                      // new tab starts at its top
+    const id = (location.hash || "#status").slice(1);
+    const next = TABS.includes(id) ? id : id === "settings" ? "setup" : "status";
+    const changed = next !== tab; tab = next;
+    document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + tab));
+    document.querySelectorAll("#keys a").forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + tab));
     for (const f of document.querySelectorAll("iframe[data-src]")) if (f.closest("section").id === "tab-" + tab && !f.src.includes(f.dataset.src)) f.src = f.dataset.src;
+    if (tab === "apps") { if (pv.getAttribute("src") === "about:blank" || pv.dataset.stale) { pv.dataset.stale = ""; reloadPreview(); } setTimeout(fitPreview, 0); }
+    else if (pv.getAttribute("src") !== "about:blank") { pv.src = "about:blank"; pvFocus = null; }    // no 3D running in the background
     if (tab === "mykolai") smStats();
     if (tab === "geolock") { renderGeo(); geoPull(); }
-    if (tab === "hud") setTimeout(fitPreview, 0);
+    if (changed) scrollTo(0, 0);
   }
   window.addEventListener("hashchange", route);
-
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea")) return;
+    if (/^[1-6]$/.test(e.key)) { location.hash = "#" + TABS[+e.key - 1]; return; }
+    if (tab === "apps" && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", "Escape"].includes(e.key) && !e.target.closest("button, a")) { e.preventDefault(); key(e.key); }
+  });
+  $("chip").onclick = () => { location.hash = "#status"; };
   $("linkBtn").onclick = () => link($("codeIn").value);
   $("codeIn").onkeydown = (e) => { if (e.key === "Enter") link($("codeIn").value); };
-  $("unlinkBtn").onclick = () => { code = null; ls.set("hud.panel.code", ""); presence = null; geoForget(); renderLink(); renderStatus(); $("codeIn").focus(); };
-  setInterval(() => { const d = new Date(); $("clock").textContent = d.toTimeString().slice(0, 8); }, 1000);
-  setInterval(() => { if (!document.hidden) pull(); }, 5000);
-  setInterval(() => { if (!document.hidden && location.hash === "#mykolai") smStats(); }, 20000);
-  setInterval(() => { if (!document.hidden && location.hash === "#geolock") geoPull(); }, 5000);
+  $("codeIn").oninput = () => { const v = $("codeIn").value.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (v !== $("codeIn").value) $("codeIn").value = v; if (CODE_RE.test(v)) link(v); };
 
-  // start
+  /* ---------- save as an app ---------- */
+  const UA = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(UA);
+  const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let deferredInstall = null, plat = isIOS ? "ios" : "and", stepIx = 0, pauseUntil = 0;
+  // tiny phone drawings: parts drawn on the screen (x 12..138, y 14..276)
+  const T = (x, y, str, c = "") => `<text x="${x}" y="${y}" class="${c}">${str}</text>`;
+  const HL = (x, y, w, h, tx, ty) => `<rect class="hl" x="${x}" y="${y}" width="${w}" height="${h}" rx="4"/><circle class="tap" cx="${tx ?? x + w / 2}" cy="${ty ?? y + h / 2}" r="7"/>`;
+  const page = (y0 = 34) => `${T(20, y0 + 14, "GLASSES HUD", "b")}<rect class="dm" x="20" y="${y0 + 24}" width="110" height="34"/>
+    ${T(26, y0 + 38, "■ CONNECTED", "s")}${T(26, y0 + 50, "RUNNING SYNTH.EXE", "s")}
+    <rect class="fd" x="20" y="${y0 + 66}" width="70" height="5"/><rect class="fd" x="20" y="${y0 + 78}" width="96" height="5"/><rect class="fd" x="20" y="${y0 + 90}" width="84" height="5"/>`;
+  const phone = (inner, android) => `<svg class="ph" viewBox="0 0 150 290" aria-hidden="true">
+    <rect class="ln" x="3" y="3" width="144" height="284" rx="20"/><rect class="dm" x="10" y="12" width="130" height="266" rx="12"/>
+    ${android ? `<circle class="fc" cx="75" cy="20" r="3"/>` : `<rect class="fc" x="58" y="16" width="34" height="9" rx="4.5"/>`}
+    ${inner}</svg>`;
+  const homeGrid = (ys) => {
+    let g = "";
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { if (r === 2 && c === 1) continue; g += `<rect class="dm" x="${20 + c * 29}" y="${ys + r * 36}" width="22" height="22" rx="5"/>`; }
+    return g + `<image href="/hud/apple-touch-icon.png" x="49" y="${ys + 72}" width="22" height="22"/>${T(50, ys + 106, "HUD", "s")}` + HL(46, ys + 69, 28, 28);
+  };
+  const IOS = [
+    { cap: "Open <b>error.blue/hud</b> in <b>Safari</b>. Tap <b>•••</b> next to the address bar.",
+      svg: phone(page() + `<rect class="fk" x="16" y="246" width="96" height="22" rx="11"/>${T(30, 261, "error.blue", "s")}
+        <rect class="fk" x="116" y="246" width="20" height="22" rx="11"/>${T(119, 260, "•••")}` + HL(113, 243, 26, 28)) },
+    { cap: "Tap <b>Share</b> in the menu.",
+      svg: phone(page() + `<rect class="fk" x="54" y="150" width="82" height="92" rx="8"/>
+        ${T(62, 168, "Copy", "s")}<line class="dm" x1="54" y1="176" x2="136" y2="176"/>
+        ${T(62, 193, "Share ⇪")}<line class="dm" x1="54" y1="200" x2="136" y2="200"/>
+        ${T(62, 216, "Bookmark", "s")}<line class="dm" x1="54" y1="224" x2="136" y2="224"/>${T(62, 236, "Reader", "s")}
+        <rect class="fk" x="116" y="246" width="20" height="22" rx="11"/>${T(119, 260, "•••")}` + HL(56, 179, 78, 20)) },
+    { cap: "Scroll down and tap <b>Add to Home Screen</b>.",
+      svg: phone(`<rect class="fd" x="10" y="12" width="130" height="80" rx="12" opacity=".35"/>
+        <rect class="fk" x="10" y="96" width="130" height="182" rx="12"/>${T(20, 114, "error.blue/hud", "s")}
+        ${[0, 1, 2, 3].map((i) => `<circle class="th" cx="${30 + i * 30}" cy="134" r="10"/>`).join("")}
+        <rect class="dm" x="18" y="154" width="114" height="22" rx="5"/>${T(24, 169, "Copy", "s")}
+        <rect class="dm" x="18" y="180" width="114" height="22" rx="5"/>${T(24, 195, "Add to Favourites", "s")}
+        <rect class="dm" x="18" y="206" width="114" height="22" rx="5"/>${T(24, 222, "Add to Home Screen")}${T(121, 222, "⊞")}
+        <rect class="dm" x="18" y="232" width="114" height="22" rx="5"/>${T(24, 247, "Find on Page", "s")}` + HL(16, 204, 118, 26)) },
+    { cap: "Leave <b>Open as Web App</b> on and tap <b>Add</b>.",
+      svg: phone(`${T(16, 44, "Cancel", "s")}${T(50, 44, "Add to Home", "s")}${T(117, 45, "Add", "b")}
+        <line class="dm" x1="10" y1="54" x2="140" y2="54"/>
+        <image href="/hud/apple-touch-icon.png" x="20" y="66" width="30" height="30"/>
+        <rect class="dm" x="56" y="66" width="76" height="16" rx="3"/>${T(60, 78, "HUD")}${T(58, 94, "error.blue/hud", "s")}
+        <rect class="dm" x="18" y="108" width="114" height="26" rx="5"/>${T(24, 125, "Open as Web App", "s")}
+        <rect class="fc" x="108" y="114" width="20" height="13" rx="6.5"/><circle cx="121" cy="120.5" r="5" fill="#000"/>` + HL(110, 30, 28, 20)) },
+    { cap: "Done: open <b>HUD</b> from your home screen and type the glasses <b>CODE</b> once more.",
+      svg: phone(homeGrid(48)) },
+  ];
+  const AND = [
+    { cap: "Open <b>error.blue/hud</b> in <b>Chrome</b>. Tap <b>⋮</b> at the top right.",
+      svg: phone(`<rect class="fk" x="16" y="30" width="100" height="20" rx="10"/>${T(26, 44, "error.blue/hud", "s")}${T(124, 45, "⋮")}` + page(54) + HL(117, 29, 18, 22), true) },
+    { cap: "Tap <b>Add to Home screen</b> (or <b>Install app</b>).",
+      svg: phone(`<rect class="fk" x="16" y="30" width="100" height="20" rx="10"/>${T(26, 44, "error.blue/hud", "s")}` + page(54) +
+        `<rect class="fk" x="50" y="34" width="86" height="118" rx="4"/>
+        ${T(58, 54, "New tab", "s")}${T(58, 76, "History", "s")}${T(58, 98, "Downloads", "s")}
+        ${T(58, 120, "Add to Home")}${T(58, 132, "screen")}${T(58, 147, "Settings", "s")}` + HL(52, 107, 82, 30), true) },
+    { cap: "Tap <b>Install</b> (or <b>Add</b>).",
+      svg: phone(`<rect class="fd" x="10" y="12" width="130" height="266" rx="12" opacity=".35"/>
+        <rect class="fk" x="18" y="92" width="114" height="104" rx="8"/>${T(28, 112, "Install app")}
+        <image href="/hud/icon-192.png" x="28" y="122" width="26" height="26"/>${T(60, 134, "HUD")}${T(60, 146, "error.blue", "s")}
+        ${T(42, 182, "Cancel", "s")}${T(92, 182, "Install", "b")}` + HL(86, 168, 42, 22), true) },
+    { cap: "Done: open <b>HUD</b> from your home screen. Your link and settings come along.",
+      svg: phone(homeGrid(40), true) },
+  ];
+  function renderGuide() {
+    const steps = plat === "ios" ? IOS : AND;
+    $("pIos").setAttribute("aria-selected", plat === "ios"); $("pAnd").setAttribute("aria-selected", plat === "and");
+    $("guide").innerHTML = steps.map((st, i) => `<div class="step" data-i="${i}">${st.svg}<div class="n">STEP ${i + 1}/${steps.length}</div><div class="cap">${st.cap}</div></div>`).join("");
+    $("guide").querySelectorAll(".step").forEach((el) => el.onclick = () => { pauseUntil = Date.now() + 10000; showStep(+el.dataset.i, true); });
+    $("guideNote").innerHTML = plat === "ios"
+      ? "OLDER IPHONES: THE SHARE BUTTON ⇪ IS RIGHT IN THE BOTTOM BAR, SO START AT STEP 3. CHROME ON IPHONE: SHARE ⇪ AT THE TOP RIGHT, THEN STEP 3."
+      : "SAMSUNG INTERNET: ≡ MENU → ADD PAGE TO → HOME SCREEN. ON A COMPUTER: THE INSTALL ICON AT THE RIGHT OF CHROME'S OR EDGE'S ADDRESS BAR.";
+    stepIx = 0; showStep(0, false);
+  }
+  function showStep(i, scroll) {
+    const els = $("guide").querySelectorAll(".step");
+    stepIx = (i + els.length) % els.length;
+    els.forEach((el, j) => el.classList.toggle("on", j === stepIx));
+    if (scroll) { const g = $("guide"), el = els[stepIx]; g.scrollTo({ left: el.offsetLeft - g.offsetLeft - 2, behavior: "smooth" }); }
+  }
+  let guideVisible = false;
+  new IntersectionObserver((es) => { guideVisible = es[0].isIntersecting; }, { threshold: 0.2 }).observe($("guide"));
+  ["pointerdown", "touchstart", "wheel"].forEach((ev) => $("guide").addEventListener(ev, () => { pauseUntil = Date.now() + 10000; }, { passive: true }));
+  setInterval(() => { if (guideVisible && Date.now() > pauseUntil && !document.hidden) showStep(stepIx + 1, true); }, 2600);
+  $("pIos").onclick = () => { plat = "ios"; renderGuide(); };
+  $("pAnd").onclick = () => { plat = "and"; renderGuide(); };
+  function renderInstall() {
+    const st = $("instState");
+    if (standalone()) {
+      st.innerHTML = '<span class="hi">✓ RUNNING AS AN APP.</span> <span class="mid">FOR ANOTHER PHONE: OPEN ERROR.BLUE/HUD THERE.</span>';
+      $("instNowRow").hidden = true; $("instGuide").hidden = true;
+    } else {
+      st.innerHTML = deferredInstall ? "" : '<span class="mid">' + (isIOS ? "THIS IS AN IPHONE: 4 TAPS IN SAFARI."
+        : isAndroid ? "THIS IS AN ANDROID PHONE: 3 TAPS IN CHROME." : "OPEN ERROR.BLUE/HUD ON YOUR PHONE, THEN:") + "</span>";
+      $("instNowRow").hidden = !deferredInstall;
+    }
+  }
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; renderInstall(); });
+  window.addEventListener("appinstalled", () => { deferredInstall = null; $("instState").innerHTML = '<span class="hi">✓ INSTALLED. OPEN HUD FROM YOUR HOME SCREEN.</span>'; $("instNowRow").hidden = true; });
+  $("instNow").onclick = async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    try { await deferredInstall.userChoice; } catch {}
+    deferredInstall = null; renderInstall();
+  };
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/hud/sw.js", { scope: "/hud/" }).catch(() => {});
+
+  /* ---------- start ---------- */
+  setInterval(() => { const d = new Date(); $("clock").textContent = hhmmss(d); $("illClock").textContent = d.toTimeString().slice(0, 5); renderStatus(); }, 1000);
+  setInterval(() => { if (!document.hidden) pull(); }, 5000);
+  setInterval(() => { if (!document.hidden && tab === "mykolai") smStats(); }, 20000);
+  setInterval(() => { if (!document.hidden && tab === "geolock") geoPull(); }, 5000);
+  requestAnimationFrame(spinArrows);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+  setTimeout(() => $("tube").classList.remove("on"), 700);
+  $("clock").textContent = hhmmss();
   if (code) mirror();
-  paint(); renderLink(); renderSettings(); renderSummary(); renderStatus(); route();
+  log("HUD.EXE STARTED");
+  paint(); renderLink(); renderSettings(); renderSummary(); renderStatus(); renderGuide(); renderInstall(); route();
+  requestAnimationFrame(loop);
   loadCatalog();
-  pull().then(() => reloadPreview());
-  if (!code) reloadPreview();
-  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, get geo() { return geo; }, link, pull, geoPull };
+  pull();
+  connectLive();
+  window.__panel = { get code() { return code; }, get profile() { return profile; }, get presence() { return presence; }, get catalog() { return catalog; }, get sel() { return sel; }, get tab() { return tab; }, get live() { return { open: !!(ws && ws.readyState === 1), glasses: glassesIn.size, live }; }, get geo() { return geo; }, link, pull, select, geoPull };
 })();
 </script>
 </body>

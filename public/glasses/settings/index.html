@@ -254,7 +254,10 @@ const DM = (() => {
   }
   const settings = {
     get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
-    set(v) { v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v); },
+    set(v) {
+      v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v);
+      if (window.GlassesPresence) GlassesPresence.sendSettings(pick(v), v.updatedAt);   // live to error.blue/hud
+    },
     code: hudCode,
     async sync() {                               // -> true when the server had newer settings
       try {
@@ -565,7 +568,9 @@ const DM = (() => {
   }
   requestAnimationFrame(frame);
 
-  DM.settings.sync().then((changed) => { if (changed) { S = DM.settings.get(); P = DM.dosPalette(S.color); atlases = {}; flash("UPDATED FROM PANEL"); } });
+  const fromPanel = () => { S = DM.settings.get(); P = DM.dosPalette(S.color); atlases = {}; flash("UPDATED FROM PANEL"); };
+  if (window.GlassesPresence) GlassesPresence.onSettings(fromPanel);                    // live from error.blue/hud
+  DM.settings.sync().then((changed) => { if (changed) fromPanel(); });
   window.__settings = { get S() { return S; }, get sel() { return sel; }, motion, get view() { return view; } };
 })();
 </script>

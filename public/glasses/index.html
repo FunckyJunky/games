@@ -254,7 +254,10 @@ const DM = (() => {
   }
   const settings = {
     get() { return Object.assign({}, SETTINGS_DEFAULT, store.get("glasses.settings", {})); },
-    set(v) { v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v); },
+    set(v) {
+      v = Object.assign({}, v, { updatedAt: Date.now() }); store.set("glasses.settings", v); push(v);
+      if (window.GlassesPresence) GlassesPresence.sendSettings(pick(v), v.updatedAt);   // live to error.blue/hud
+    },
     code: hudCode,
     async sync() {                               // -> true when the server had newer settings
       try {
@@ -1045,7 +1048,8 @@ const DM = (() => {
     DM.settings.sync().then((changed) => changed && applyFresh());
     motion.zero(); headLive = false;                                    // where you look now = the card you left from
   });
-  // pick up changes made at error.blue/hud: on start, then every 30 s while the screen is on
+  // changes made at error.blue/hud: live over the panel link, plus a check on start and every 30 s
+  if (window.GlassesPresence) GlassesPresence.onSettings(() => { if (!launching) applyFresh(); });
   DM.settings.sync().then((changed) => changed && applyFresh());
   setInterval(() => { if (!document.hidden && !launching) DM.settings.sync().then((changed) => changed && applyFresh()); }, 30000);
 
@@ -1068,7 +1072,17 @@ const DM = (() => {
   }
   requestAnimationFrame(frame);
 
-  window.__home = { get row() { return row; }, cols, ROWS, move, select, get launching() { return launching; }, motion, get S() { return S; } };
+  // the control panel (error.blue/hud) drives its live preview of this screen with goto()
+  function goto(id) {
+    if (id === "time") { row = -1; saveNav(); return true; }
+    for (let r = 0; r < ROWS.length; r++) {
+      const c = ROWS[r].apps.findIndex((a) => a.id === id);
+      if (c >= 0) { if (row !== r || cols[r] !== c) DM.sfx("tick"); row = r; cols[r] = c; anchorHead(); saveNav(); return true; }
+    }
+    return false;
+  }
+  window.__home = { get row() { return row; }, cols, ROWS, move, select, goto, get launching() { return launching; }, motion, get S() { return S; },
+    get focus() { return row < 0 ? "time" : ROWS[row].apps[cols[row]].id; } };
 })();
 </script>
 </body>
