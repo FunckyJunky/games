@@ -396,7 +396,12 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   side-by-side, one picture per eye (full SBS on a 32:9 screen, half SBS on 16:9), the interface hidden,
   messages shown in both eyes. Calibration: 5 steps (still, left, right, up, down) learn the sensor
   axes; recenter (R), flip up/down, field of view, eye distance, 3D depth, prediction. Keys: R recenter,
-  F fullscreen on the glasses' screen, 3 stereo on/off. Stored in wt.xr and wt.xrmap
+  F fullscreen on the glasses' screen, 3 stereo on/off. Stored in wt.xr and wt.xrmap.
+  Fullscreen switch (on the glasses or on this screen); Center view button; "Head only" (the glasses turn
+  just your explorer's head, the camera stays behind you; the head pose goes out in presence as `hd`
+  so others see it). VR comfort: immersive view (interface hidden, H shows it), comfort vignette while
+  walking or turning (strength slider), walk where you look, head tilt on/off (level horizon), eye
+  height, steadiness (smoothing), turn speed, interface size
 - Advanced settings, Lighting & map: global illumination (screen-space bounce light and ambient
   occlusion), ray tracing (screen-space reflections on wet ground and water) and map optimization
   (the world is only built as far as the fog lets you see, and far terrain is much simpler; the
