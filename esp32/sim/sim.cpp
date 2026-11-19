@@ -106,6 +106,7 @@ class FakeSys : public Sys {
   int btBonds() override { return kb ? 1 : 0; }
   uint32_t freeHeap() override { return 182 * 1024; }
   uint32_t totalHeap() override { return 312 * 1024; }
+  uint32_t maxBlock() override { return 90 * 1024; }
   const char* chipInfo() override { return "ESP32-C3 160MHZ"; }
   void reboot() override { fprintf(stderr, "  [reboot]\n"); }
   void runJobs() {

@@ -20,7 +20,7 @@ struct Settings {
   uint8_t glitch;          // ERROR-DOS style screen glitches
   uint8_t toasts;          // pop-ups when someone comes online / writes
   uint8_t beacon;          // show this box as online on error.blue
-  uint8_t tlsCheck;        // check error.blue's certificate
+  uint8_t tlsCheck;        // 1 = HTTPS + check the certificate, 0 = HTTPS without the check, 2 = plain HTTP
   uint8_t saver;           // burn-in protection: shift the picture, dim when idle
 };
 void settingsDefaults(Settings& s);
@@ -28,19 +28,19 @@ void settingsDefaults(Settings& s);
 // ---- GET /api/online
 struct OnGame {
   char id[28];
-  char title[64];          // full name (UTF-8, can be Cyrillic)
+  char title[48];          // full name (UTF-8, can be Cyrillic)
   char dos[9];             // 8-letter DOS name, as in the ERROR-DOS menu
   char folder[8];          // games / online / apps / menu
   uint8_t n;
 };
 struct OnPlayer {
   char name[NAME_B];
-  char detail[52];         // e.g. S01E04 (Вгадай що?!) or FLIGHT.EXE (glasses)
+  char detail[26];         // e.g. S01E04 (Вгадай що?!) or FLIGHT.EXE (glasses)
   uint32_t secs;           // how long they've been in this game
   uint8_t game;            // index into OnlineSnap.games
 };
-#define ON_MAX_GAMES 20
-#define ON_MAX_PLAYERS 48
+#define ON_MAX_GAMES 12
+#define ON_MAX_PLAYERS 32
 struct OnlineSnap {
   uint8_t nGames, nPlayers;
   uint16_t total;
@@ -70,9 +70,9 @@ struct ChatMsg {
   uint32_t id;
   uint32_t at;             // seconds since 1970 (from the server)
   char name[NAME_B];
-  char text[420];
+  char text[300];
 };
-#define CHAT_MAX 24
+#define CHAT_MAX 16
 struct ChatLog {
   char code[9];            // channel these messages belong to
   ChatMsg m[CHAT_MAX];     // oldest first

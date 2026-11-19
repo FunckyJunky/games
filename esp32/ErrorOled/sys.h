@@ -56,6 +56,7 @@ class Sys {
   // the chip
   virtual uint32_t freeHeap() = 0;
   virtual uint32_t totalHeap() = 0;
+  virtual uint32_t maxBlock() = 0;                    // biggest piece of free memory
   virtual const char* chipInfo() = 0;
   virtual void reboot() = 0;
 };

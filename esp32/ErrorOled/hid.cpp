@@ -47,6 +47,8 @@ static uint8_t wantType = 0;
 static volatile uint8_t want = 0;           // 1 = pair (you picked it), 2 = reconnect a known one
 static volatile int8_t evUp = -1, evDown = -1;
 static bool uaKeys = false;
+static bool started = false;               // Bluetooth is on
+static char devName[24] = "ERROR-OLED";
 static char blockAddr[18] = "";            // a paired one that just refused: leave it alone for a minute
 static uint32_t blockUntil = 0;
 
@@ -91,7 +93,7 @@ class ScanCB : public NimBLEScanCallbacks {
     // one of ours is back: reconnect
     bool blocked = a == blockAddr && (int32_t)(millis() - blockUntil) < 0;
     if (!want && !blocked && !isUp(a) && freeSlot() >= 0) {
-      bool ours = NimBLEDevice::isBonded(d->getAddress());
+      bool ours = false;
       for (int i = 0; i < knownN && !ours; i++) ours = a == known[i].addr || (!nm.empty() && nm == known[i].name);
       if (ours && d->isConnectable()) {
         strncpy(wantAddr, a.c_str(), sizeof(wantAddr) - 1);
@@ -249,7 +251,7 @@ static void hidTask(void*) {
       // paired keyboard/mouse not here? listen for it now and then
       int up = 0;
       for (auto& P : peers) if (P.up) up++;
-      if (knownN > up || NimBLEDevice::getNumBonds() > up) { lastBg = millis(); startScan(4000, false); }
+      if (knownN > up) { lastBg = millis(); startScan(4000, false); }
     }
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -267,6 +269,7 @@ static void emitKey(const KeyEv& k) {
 }
 
 void hidLoop(uint32_t now, uint8_t layout) {
+  if (!started) return;
   Rep r;
   while (xQueueReceive(repQ, &r, 0) == pdTRUE) {
     if (r.peer >= MAX_PEERS) continue;
@@ -303,20 +306,33 @@ void hidLoop(uint32_t now, uint8_t layout) {
   }
 }
 
+// Bluetooth only starts when it's needed (a keyboard/mouse was paired before, or you open BT.EXE):
+// it takes a big piece of memory that HTTPS needs too.
+static void start() {
+  if (started) return;
+  started = true;
+  NimBLEDevice::init(devName);
+  NimBLEDevice::setSecurityAuth(true, true, true);           // bond, protect against snooping, secure connections
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);    // we show a code, the keyboard types it
+  if (knownN == 0 && NimBLEDevice::getNumBonds() > 0) NimBLEDevice::deleteAllBonds();   // left over from other sketches
+  NimBLEScan* sc = NimBLEDevice::getScan();
+  sc->setScanCallbacks(&scanCB, false);
+  sc->setMaxResults(0);                                      // don't keep every device it hears: saves memory
+  xTaskCreate(hidTask, "hid", 5120, nullptr, 2, nullptr);
+}
+
 void hidBegin(const char* deviceName) {
-  repQ = xQueueCreate(24, sizeof(Rep));
+  repQ = xQueueCreate(16, sizeof(Rep));
   mtx = xSemaphoreCreateMutex();
+  strncpy(devName, deviceName, sizeof(devName) - 1);
   kp.begin("errorbt", false);
   knownN = kp.getUChar("knownN", 0);
   if (knownN > 3 || kp.getBytes("known", known, sizeof(known)) != sizeof(known)) { knownN = 0; memset(known, 0, sizeof(known)); }
-  NimBLEDevice::init(deviceName);
-  NimBLEDevice::setSecurityAuth(true, true, true);           // bond, protect against snooping, secure connections
-  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);    // we show a code, the keyboard types it
-  NimBLEDevice::getScan()->setScanCallbacks(&scanCB, false);
-  xTaskCreate(hidTask, "hid", 6144, nullptr, 2, nullptr);
+  if (knownN > 0) start();
 }
 
 void hidScan() {
+  start();
   lock(); foundN = 0; memset(found, 0, sizeof(found)); unlock();
   startScan(8000, true);
   setStatus("");
@@ -334,6 +350,7 @@ int hidResults(BtDev* out, int max) {
   return n;
 }
 void hidPair(const char* addr) {
+  start();
   lock();
   wantType = 1;
   for (int i = 0; i < foundN; i++) if (!strcmp(found[i].addr, addr)) wantType = foundType[i];
@@ -342,8 +359,10 @@ void hidPair(const char* addr) {
   want = 1;
 }
 void hidForget() {
-  for (auto& P : peers) if (P.client && P.client->isConnected()) P.client->disconnect();
-  NimBLEDevice::deleteAllBonds();
+  if (started) {
+    for (auto& P : peers) if (P.client && P.client->isConnected()) P.client->disconnect();
+    NimBLEDevice::deleteAllBonds();
+  }
   knownN = 0;
   memset(known, 0, sizeof(known));
   saveKnown();
@@ -366,4 +385,4 @@ const char* hidStatus() {
   if (status[0] && !statusSticky && millis() - statusAt > 6000) status[0] = 0;
   return status;
 }
-int hidBonds() { int n = NimBLEDevice::getNumBonds(); return n > knownN ? n : knownN; }
+int hidBonds() { return knownN; }

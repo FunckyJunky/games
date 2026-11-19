@@ -95,6 +95,9 @@ Click moves to the next letter and hold picks it.
 
 The box checks error.blue's HTTPS certificate against the root certificates in `certs.h`.
 If that ever fails ("TLS ..." under `NET`), set **TLS → SKIP** in SETUP.EXE.
+`MEM` shows the free memory. HTTPS needs about 40 KB of it.
+Bluetooth only starts once a keyboard has been paired (or you open BT.EXE), because it takes a big part of that memory.
+If you see "TLS: LOW MEMORY", **TLS → HTTP** uses plain HTTP, which needs far less.
 
 ## Screenshots without a board
 

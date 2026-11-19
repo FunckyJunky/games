@@ -63,6 +63,7 @@ static String htmlEscape(const char* s) {
 // ------------------------------------------------------------------ HTTPS task
 static void netTask(void*) {
   WiFiClientSecure tls;
+  WiFiClient plain;                        // TLS = HTTP in SETUP.EXE: no encryption, much less memory
   HTTPClient http;
   http.setReuse(true);                     // keep the connection: no new TLS handshake every time
   int lastCheck = -1;
@@ -72,12 +73,15 @@ static void netTask(void*) {
     Result r = {j.kind, -1, nullptr, 0};
     if (WiFi.status() == WL_CONNECTED) {
       if (lastCheck != C->tlsCheck) {
+        http.end();
         tls.stop();
-        if (C->tlsCheck) tls.setCACert(ROOT_CAS); else tls.setInsecure();
+        plain.stop();
+        if (C->tlsCheck == 1) tls.setCACert(ROOT_CAS); else tls.setInsecure();
         lastCheck = C->tlsCheck;
       }
-      String url = String("https://") + SERVER_HOST + j.path;
-      if (http.begin(tls, url)) {
+      bool secure = C->tlsCheck != 2;
+      String url = String(secure ? "https://" : "http://") + SERVER_HOST + j.path;
+      if (secure ? http.begin(tls, url) : http.begin(plain, url)) {
         http.setConnectTimeout(8000);
         http.setTimeout(8000);
         http.setUserAgent("ERROR-OLED/1.0");
@@ -95,9 +99,11 @@ static void netTask(void*) {
           if (code == 200) err[0] = 0; else snprintf(err, sizeof(err), "HTTP %d", code);
         } else {
           char tlsErr[64] = "";
-          if (tls.lastError(tlsErr, sizeof(tlsErr)) != 0) snprintf(err, sizeof(err), "TLS %s", tlsErr);
+          if (secure && tls.lastError(tlsErr, sizeof(tlsErr)) != 0) snprintf(err, sizeof(err), "TLS %s", tlsErr);
           else snprintf(err, sizeof(err), "%s", HTTPClient::errorToString(code).c_str());
+          if (secure && ESP.getMaxAllocHeap() < 18000) snprintf(err, sizeof(err), "TLS: LOW MEMORY (%uK)", (unsigned)(ESP.getMaxAllocHeap() / 1024));
           tls.stop();
+          plain.stop();
         }
         http.end();
       } else snprintf(err, sizeof(err), "BAD ADDRESS");

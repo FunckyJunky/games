@@ -321,7 +321,7 @@ static void leDraw(LineEdit& e, int r, int c0, bool mask, bool cursor) {
 
 // ======================================================================= DOS console
 struct CLine { char t[100]; char cmd[24]; };
-#define CL_MAX 40
+#define CL_MAX 30
 static CLine cl[CL_MAX];
 static int clN = 0;
 static int clScroll = 0;          // rows scrolled back
@@ -749,14 +749,14 @@ static void chatSend(const char* text) {
 }
 // one message as rows of text: "NAME text text" with word wrap
 struct CRow { int msg; int start; int len; bool first; };  // msg >= 100: pending
-static CRow crows[96];
+static CRow crows[64];
 static int crn = 0;
 static void wrapMsg(int id, const char* name, const char* text) {
   int nameW = u8len(name) + 1;
   int width0 = COLS - nameW, start = 0, len = u8len(text);
   bool first = true;
   if (width0 < 4) width0 = COLS;              // very long names
-  while (crn < 96) {
+  while (crn < 64) {
     int width = first ? width0 : COLS - 1;
     int take = len - start;
     if (take > width) {
@@ -1027,7 +1027,7 @@ static void setValue(int i, char* b, size_t n) {
     case ST_FLIP: scopy(b, n, CFG.flip ? on : off); break;
     case ST_SAVER: scopy(b, n, CFG.saver ? on : off); break;
     case ST_ONLINE: scopy(b, n, CFG.beacon ? on : off); break;
-    case ST_TLS: scopy(b, n, CFG.tlsCheck ? "CHECK" : "SKIP"); break;
+    case ST_TLS: scopy(b, n, CFG.tlsCheck == 1 ? "CHECK" : CFG.tlsCheck == 2 ? "HTTP" : "SKIP"); break;
     default: b[0] = 0;
   }
 }
@@ -1045,7 +1045,7 @@ static void setPick(int i) {
     case ST_FLIP: CFG.flip = !CFG.flip; uiApplyDisplay(); break;
     case ST_SAVER: CFG.saver = !CFG.saver; break;
     case ST_ONLINE: CFG.beacon = !CFG.beacon; break;
-    case ST_TLS: CFG.tlsCheck = !CFG.tlsCheck; break;
+    case ST_TLS: CFG.tlsCheck = CFG.tlsCheck == 1 ? 0 : CFG.tlsCheck == 0 ? 2 : 1; break;
     case ST_ABOUT: { char b[48]; snprintf(b, sizeof(b), "ERROR-OLED " OLED_VERSION " %s", S->chipInfo()); uiToast(b); return; }
     case ST_REBOOT: S->reboot(); return;
   }
@@ -1179,7 +1179,7 @@ static void runCommand(const char* line) {
   else if (!strcmp(cmd, "DIR")) cmdDir();
   else if (!strcmp(cmd, "CLS")) clN = 0;
   else if (!strcmp(cmd, "VER")) { cprint("ERROR-DOS " OLED_VERSION); cprintf("ERROR-OLED %s", S->chipInfo()); }
-  else if (!strcmp(cmd, "MEM")) cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024));
+  else if (!strcmp(cmd, "MEM")) { cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024)); cprintf("BIGGEST %uK", (unsigned)(S->maxBlock() / 1024)); }
   else if (!strcmp(cmd, "TIME") || !strcmp(cmd, "DATE")) { int h, m, s; if (S->clock(h, m, s)) cprintf("%02d:%02d:%02d", h, m, s); else cprint("NO TIME YET (WIFI)"); }
   else if (!strcmp(cmd, "IP") || !strcmp(cmd, "NET")) {
     static const char* const ST[] = {"OFF", "CONNECTING", "ON", "FAILED", "PHONE SETUP"};
@@ -1445,6 +1445,7 @@ static void bootTick() {
       bootMem += total / 12 + 1;
       if (bootMem < total) { snprintf(cl[clN - 1].t, sizeof(cl[0].t), "MEMORY %uK", (unsigned)bootMem); bootNext = now + 25; redraw(); return; }
       snprintf(cl[clN - 1].t, sizeof(cl[0].t), "MEMORY %uK OK", (unsigned)total);
+      S->serialOut(cl[clN - 1].t);
       bootNext = now + 200;
       break;
     }
