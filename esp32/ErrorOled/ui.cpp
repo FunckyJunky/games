@@ -195,6 +195,9 @@ static void blink(uint32_t ms) { ledUntil = now + ms; S->led(true); }
 static void glitch(uint8_t kind) { if (!CFG.glitch) return; glitchKind = kind; glitchSeed = rand(); glitchUntil = now + 90 + rand() % 120; redraw(); }
 
 void uiToast(const char* t) {
+  char line[48];
+  snprintf(line, sizeof(line), "* %s", t);
+  if (S) S->serialOut(line);
   if (toastN == 4) { memmove(toastQ[0], toastQ[1], sizeof(toastQ[0]) * 3); toastN = 3; }
   scopy(toastQ[toastN++], sizeof(toastQ[0]), t);
   if (toastN == 1) toastAt = now;
@@ -953,7 +956,7 @@ static void btnPortal(BtnEv e) { (void)e; S->portalStop(); back(); }
 static BtDev btFound[10], btConn[3];
 static int btFoundN = 0, btConnN = 0;
 static List btL = {0, 0};
-static const char* btType(uint8_t t) { return t == BT_KEYBOARD ? "KB" : t == BT_MOUSE ? "MOUSE" : t == BT_COMBO ? "KB+M" : "HID"; }
+static const char* btType(uint8_t t) { return t == BT_KEYBOARD ? "KB" : t == BT_MOUSE ? "MOUSE" : t == BT_COMBO ? "KB+M" : "?"; }
 static int btItems() { return btConnN + 1 + btFoundN + (S->btBonds() ? 1 : 0); }
 static void btPick(int i) {
   if (i < btConnN) { uiToast(btConn[i].name); return; }
@@ -1106,6 +1109,18 @@ static void keyLog(const KeyEv& k) {
   else if (k.code == K_ESC || k.code == K_ENTER) back();
 }
 
+// BT PAIR: waiting for a device with this name
+static char btWant[30] = "";
+static uint32_t btWantUntil = 0;
+static bool hasText(const char* hay, const char* needle) {
+  for (; *hay; hay++) {
+    const char* a = hay; const char* b = needle;
+    while (*a && *b) { char x = *a, y = *b; if (x >= 'a' && x <= 'z') x -= 32; if (y >= 'a' && y <= 'z') y -= 32; if (x != y) break; a++; b++; }
+    if (!*b) return true;
+  }
+  return false;
+}
+
 // ======================================================================= DOS commands
 static int splitArgs(char* s, char** av, int max) {
   int n = 0;
@@ -1126,6 +1141,7 @@ static void cmdHelp() {
   cprint("NAME x YOUR NAME");
   cprint("WIFI  NETWORK", "WIFI");
   cprint("BT    KEYBOARD", "BT");
+  cprint("BT PAIR name");
   cprint("SETUP SETTINGS", "SETUP");
   cprint("LOG DIR MEM TIME");
   cprint("VER CLS EXIT");
@@ -1211,6 +1227,22 @@ static void runCommand(const char* line) {
   else if (!strcmp(cmd, "PORTAL")) { S->portalStart(); go(SC_PORTAL); }
   else if (!strcmp(cmd, "BT")) {
     if (ac > 1 && ieq(av[1], "FORGET")) { S->btForget(); cprint("FORGOT ALL"); }
+    else if (ac > 1 && ieq(av[1], "PAIR")) {
+      // BT PAIR Bluetooth Keyboard: scan, then pair with the first device whose name has this in it
+      const char* want = rest; while (*want && *want != ' ') want++; while (*want == ' ') want++;
+      if (!*want) { cprint("BT PAIR <NAME>"); return; }
+      scopy(btWant, sizeof(btWant), want);
+      btWantUntil = now + 20000;
+      S->btScan();
+      cprintf("LOOKING FOR %s...", btWant);
+    }
+    else if (ac > 1 && ieq(av[1], "LIST")) {
+      BtDev d[10]; int n = S->btResults(d, 10);
+      for (int i = 0; i < n; i++) cprintf("%s %s", btType(d[i].type), d[i].name[0] ? d[i].name : d[i].addr);
+      n = S->btConnected(d, 3);
+      for (int i = 0; i < n; i++) cprintf("ON: %s %s", btType(d[i].type), d[i].name);
+      if (S->btStatus()[0]) cprint(S->btStatus());
+    }
     else { if (ac > 1 && ieq(av[1], "SCAN")) S->btScan(); go(SC_BT); }
   }
   else if (!strcmp(cmd, "SETUP")) go(SC_SETUP);
@@ -1610,6 +1642,36 @@ void uiTick() {
       }
     }
     if (CFG.beacon && (tBeacon == 0 || now - tBeacon >= 25000)) { S->beacon(); tBeacon = now ? now : 1; }
+  }
+  if (btWant[0]) {
+    BtDev d[10];
+    int n = S->btResults(d, 10);
+    for (int i = 0; i < n; i++)
+      if (hasText(d[i].name, btWant)) { cprintf("PAIRING %s", d[i].name); S->btPair(d[i].addr); btWant[0] = 0; break; }
+    if (btWant[0] && (int32_t)(now - btWantUntil) > 0) { cprintf("%s NOT FOUND", btWant); btWant[0] = 0; }
+  }
+  {
+    static uint32_t lastPk = 0;
+    static uint8_t lastNet = 255;
+    static bool saidWho = false;
+    static int lastErr = 0;
+    static char lastBt[28] = "";
+    uint32_t pk = S->btPasskey();
+    if (pk != lastPk) { lastPk = pk; if (pk) { char t[48]; snprintf(t, sizeof(t), "KEYBOARD CODE: TYPE %06u + ENTER", (unsigned)(pk % 1000000)); S->serialOut(t); } }
+    uint8_t ns = S->netState();
+    if (ns != lastNet) {
+      lastNet = ns;
+      char t[64];
+      if (ns == NET_UP) snprintf(t, sizeof(t), "WIFI ON %s %s", S->netSsid(), S->netIp());
+      else if (ns == NET_CONNECTING) snprintf(t, sizeof(t), "WIFI JOINING %s", S->netSsid());
+      else if (ns == NET_FAIL) snprintf(t, sizeof(t), "WIFI FAILED %s", S->netSsid());
+      else t[0] = 0;
+      if (t[0]) S->serialOut(t);
+    }
+    if (onHave && !saidWho) { saidWho = true; char t[40]; snprintf(t, sizeof(t), "WHO: %u ONLINE", (unsigned)on->total); S->serialOut(t); }
+    if (onErr != lastErr) { lastErr = onErr; if (onErr) { char t[80]; snprintf(t, sizeof(t), "NET ERROR %d %s", onErr, S->netError()); S->serialOut(t); } }
+    const char* bs = S->btStatus();
+    if (strcmp(bs, lastBt)) { scopy(lastBt, sizeof(lastBt), bs); if (bs[0]) { char t[40]; snprintf(t, sizeof(t), "BT %s", bs); S->serialOut(t); } }
   }
   if (sayRetryAt && now >= sayRetryAt) { sayRetryAt = 0; if (npend && netUp()) S->sendChat(CFG.channel, pend[0]); }
   // the LED

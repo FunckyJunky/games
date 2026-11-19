@@ -77,6 +77,7 @@ Click moves to the next letter and hold picks it.
 **Bluetooth keyboard + mouse**
 
 - In BT.EXE, pick **SCAN**, put the keyboard in pairing mode and pick it.
+  Or type `BT PAIR <part of its name>` in the Serial Monitor; `BT LIST` shows what the box can hear.
 - If the screen shows a 6-digit code, type it on the keyboard and press Enter.
 - After that it reconnects by itself.
 - It can hold two devices at a time, e.g. a keyboard and a mouse, or one combo device.

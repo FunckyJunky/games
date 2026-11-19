@@ -104,10 +104,14 @@ class ScanCB : public NimBLEScanCallbacks {
     if (!userScan) return;
     uint16_t app = d->haveAppearance() ? d->getAppearance() : 0;
     bool hid = d->isAdvertisingService(UUID_HID) || (app >= 0x03C0 && app <= 0x03CF);
-    if (!hid) return;
+    // keyboards / mice first; other devices with a name are listed too (some keyboards don't say what they are)
+    if (!hid && (nm.empty() || !d->isConnectable())) return;
     lock();
     int i = 0;
     for (; i < foundN; i++) if (a == found[i].addr) break;
+    if (i == foundN && foundN == 10 && hid) {                  // full: a keyboard pushes out a non-keyboard
+      for (int k = 9; k >= 0; k--) if (!(foundType[k] & 0x80)) { i = k; break; }
+    }
     if (i == foundN && foundN < 10) foundN++;
     if (i < 10) {
       BtDev& f = found[i];
@@ -116,7 +120,8 @@ class ScanCB : public NimBLEScanCallbacks {
       f.rssi = d->getRSSI();
       if (app == 0x03C1) f.type = BT_KEYBOARD; else if (app == 0x03C2) f.type = BT_MOUSE;
       f.bonded = NimBLEDevice::isBonded(d->getAddress());
-      foundType[i] = d->getAddress().getType();
+      if (hid && f.type == BT_OTHER) f.type = BT_KEYBOARD;      // HID without saying which: probably a keyboard
+      foundType[i] = d->getAddress().getType() | (hid ? 0x80 : 0);
     }
     unlock();
   }
@@ -341,11 +346,13 @@ bool hidScanning() { return scanning && userScan; }
 int hidResults(BtDev* out, int max) {
   lock();
   int n = 0;
-  for (int i = 0; i < foundN && n < max; i++) {
-    bool on = false;
-    for (auto& P : peers) if (P.up && !strcmp(P.addr, found[i].addr)) on = true;
-    if (!on) out[n++] = found[i];
-  }
+  for (int pass = 0; pass < 2; pass++)                       // keyboards/mice first, then the rest
+    for (int i = 0; i < foundN && n < max; i++) {
+      if (((foundType[i] & 0x80) != 0) != (pass == 0)) continue;
+      bool on = false;
+      for (auto& P : peers) if (P.up && !strcmp(P.addr, found[i].addr)) on = true;
+      if (!on) out[n++] = found[i];
+    }
   unlock();
   return n;
 }
@@ -353,7 +360,7 @@ void hidPair(const char* addr) {
   start();
   lock();
   wantType = 1;
-  for (int i = 0; i < foundN; i++) if (!strcmp(found[i].addr, addr)) wantType = foundType[i];
+  for (int i = 0; i < foundN; i++) if (!strcmp(found[i].addr, addr)) wantType = foundType[i] & 0x7F;
   unlock();
   strncpy(wantAddr, addr, sizeof(wantAddr) - 1);
   want = 1;
