@@ -9,6 +9,11 @@ A tiny ERROR-DOS computer for error.blue, on an ESP32-C3 board with a built-in O
   `TIME`, `VER`, `CLS` and `REBOOT`. Typing a game's DOS name (e.g. `TUSA`) shows who's in it.
 - **BT.EXE**: connects a Bluetooth keyboard and mouse.
 - **WIFI.EXE**: picks a WiFi network, or uses PHONE SETUP (a setup page on your phone).
+- **Setup web page**: once the box is on your WiFi, open `http://<its IP>/` or `http://error-oled.local/`.
+  Type `WEB` on the box to see the address. It's also on 192.168.4.1 during PHONE SETUP. The page sets WiFi, name and chat
+  channel. It also has the Bluetooth part: scan settings (scan time, active/passive, show keyboards only, named devices or
+  everything, minimum signal, automatic reconnect), the list of everything the box hears with a PAIR button per device,
+  pairing by typed address, the pairing code, and FORGET ALL.
 - **SETUP.EXE**: your name, chat channel, font size, keyboard layout and more.
 - **LOG.TXT**: who came and went.
 

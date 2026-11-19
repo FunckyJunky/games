@@ -34,9 +34,12 @@ static int knownN = 0;
 static Preferences kp;
 
 static SemaphoreHandle_t mtx;
-static BtDev found[10];
-static uint8_t foundType[10];
+#define MAX_FOUND 24
+static BtDev found[MAX_FOUND];
+static uint8_t foundType[MAX_FOUND];        // address type, + 0x80 when it says it's a keyboard/mouse
 static int foundN = 0;
+static BtOpts opts = {10, 1, 1, -100, 1};
+static uint32_t scanStartedAt = 0;
 static volatile bool userScan = false, scanning = false;
 static volatile uint32_t passkey = 0;
 static char status[28] = "";
@@ -92,7 +95,7 @@ class ScanCB : public NimBLEScanCallbacks {
     std::string nm = d->haveName() ? d->getName() : "";
     // one of ours is back: reconnect
     bool blocked = a == blockAddr && (int32_t)(millis() - blockUntil) < 0;
-    if (!want && !blocked && !isUp(a) && freeSlot() >= 0) {
+    if (opts.autoReconnect && !want && !blocked && !isUp(a) && freeSlot() >= 0) {
       bool ours = false;
       for (int i = 0; i < knownN && !ours; i++) ours = a == known[i].addr || (!nm.empty() && nm == known[i].name);
       if (ours && d->isConnectable()) {
@@ -104,16 +107,20 @@ class ScanCB : public NimBLEScanCallbacks {
     if (!userScan) return;
     uint16_t app = d->haveAppearance() ? d->getAppearance() : 0;
     bool hid = d->isAdvertisingService(UUID_HID) || (app >= 0x03C0 && app <= 0x03CF);
-    // keyboards / mice first; other devices with a name are listed too (some keyboards don't say what they are)
-    if (!hid && (nm.empty() || !d->isConnectable())) return;
+    // what to list (setup page): keyboards/mice only, + anything with a name, or everything
+    if (!hid && opts.show == 0) return;
+    if (!hid && opts.show == 1 && (nm.empty() || !d->isConnectable())) return;
+    if (d->getRSSI() < opts.minRssi) return;
     lock();
     int i = 0;
     for (; i < foundN; i++) if (a == found[i].addr) break;
-    if (i == foundN && foundN == 10 && hid) {                  // full: a keyboard pushes out a non-keyboard
-      for (int k = 9; k >= 0; k--) if (!(foundType[k] & 0x80)) { i = k; break; }
+    bool fresh = i == foundN;
+    if (fresh && foundN == MAX_FOUND && hid) {                 // full: a keyboard pushes out a non-keyboard
+      for (int k = MAX_FOUND - 1; k >= 0; k--) if (!(foundType[k] & 0x80)) { i = k; break; }
     }
-    if (i == foundN && foundN < 10) foundN++;
-    if (i < 10) {
+    if (i == foundN && foundN < MAX_FOUND) foundN++;
+    if (fresh && i < MAX_FOUND) { memset(&found[i], 0, sizeof(found[i])); foundType[i] = 0; }
+    if (i < MAX_FOUND) {
       BtDev& f = found[i];
       strncpy(f.addr, a.c_str(), sizeof(f.addr) - 1);
       if (!nm.empty()) strncpy(f.name, nm.c_str(), sizeof(f.name) - 1);
@@ -121,7 +128,10 @@ class ScanCB : public NimBLEScanCallbacks {
       if (app == 0x03C1) f.type = BT_KEYBOARD; else if (app == 0x03C2) f.type = BT_MOUSE;
       f.bonded = NimBLEDevice::isBonded(d->getAddress());
       if (hid && f.type == BT_OTHER) f.type = BT_KEYBOARD;      // HID without saying which: probably a keyboard
-      foundType[i] = d->getAddress().getType() | (hid ? 0x80 : 0);
+      if (hid) foundType[i] |= 0x80;
+      foundType[i] = (foundType[i] & 0x80) | d->getAddress().getType();
+      f.hid = (foundType[i] & 0x80) ? 1 : 0;
+      f.atype = d->getAddress().getType();
     }
     unlock();
   }
@@ -133,10 +143,11 @@ static void startScan(uint32_t ms, bool user) {
   NimBLEScan* s = NimBLEDevice::getScan();
   if (s->isScanning()) s->stop();
   userScan = user;
-  s->setActiveScan(user);              // active: also get the names
+  s->setActiveScan(user && opts.active);   // active: also ask for the names
   s->setInterval(100);
-  s->setWindow(user ? 90 : 30);        // in the background: listen only a little (WiFi needs the radio too)
+  s->setWindow(user ? 90 : 30);            // in the background: listen only a little (WiFi needs the radio too)
   s->clearResults();
+  scanStartedAt = millis();
   scanning = s->start(ms, false, true);
 }
 
@@ -256,7 +267,7 @@ static void hidTask(void*) {
       // paired keyboard/mouse not here? listen for it now and then
       int up = 0;
       for (auto& P : peers) if (P.up) up++;
-      if (knownN > up) { lastBg = millis(); startScan(4000, false); }
+      if (opts.autoReconnect && knownN > up) { lastBg = millis(); startScan(4000, false); }
     }
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -333,14 +344,34 @@ void hidBegin(const char* deviceName) {
   kp.begin("errorbt", false);
   knownN = kp.getUChar("knownN", 0);
   if (knownN > 3 || kp.getBytes("known", known, sizeof(known)) != sizeof(known)) { knownN = 0; memset(known, 0, sizeof(known)); }
+  BtOpts o;
+  if (kp.getBytes("opts", &o, sizeof(o)) == sizeof(o)) hidSetOpts(o);
   if (knownN > 0) start();
 }
 
 void hidScan() {
   start();
-  lock(); foundN = 0; memset(found, 0, sizeof(found)); unlock();
-  startScan(8000, true);
+  lock(); foundN = 0; memset(found, 0, sizeof(found)); memset(foundType, 0, sizeof(foundType)); unlock();
+  startScan(opts.secs * 1000u, true);
   setStatus("");
+}
+const BtOpts& hidOpts() { return opts; }
+void hidSetOpts(const BtOpts& o) {
+  opts = o;
+  if (opts.secs < 3) opts.secs = 3;
+  if (opts.secs > 60) opts.secs = 60;
+  if (opts.show > 2) opts.show = 2;
+  opts.active = opts.active ? 1 : 0;
+  opts.autoReconnect = opts.autoReconnect ? 1 : 0;
+  kp.putBytes("opts", &opts, sizeof(opts));
+}
+bool hidStarted() { return started; }
+uint32_t hidScanStartedMs() { return scanStartedAt; }
+void hidPairAddr(const char* addr, uint8_t atype) {
+  start();
+  strncpy(wantAddr, addr, sizeof(wantAddr) - 1);
+  wantType = atype & 1;
+  want = 1;
 }
 bool hidScanning() { return scanning && userScan; }
 int hidResults(BtDev* out, int max) {
@@ -351,7 +382,11 @@ int hidResults(BtDev* out, int max) {
       if (((foundType[i] & 0x80) != 0) != (pass == 0)) continue;
       bool on = false;
       for (auto& P : peers) if (P.up && !strcmp(P.addr, found[i].addr)) on = true;
-      if (!on) out[n++] = found[i];
+      if (on) continue;
+      out[n] = found[i];
+      out[n].hid = (foundType[i] & 0x80) ? 1 : 0;
+      out[n].atype = foundType[i] & 0x7F;
+      n++;
     }
   unlock();
   return n;

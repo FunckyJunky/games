@@ -11,7 +11,7 @@ enum NetJob : uint8_t { JOB_ONLINE = 1, JOB_CHAT, JOB_CHAT_BG, JOB_SAY, JOB_BEAC
 struct WifiNet { char ssid[33]; int8_t rssi; uint8_t open; };
 
 enum BtType : uint8_t { BT_OTHER = 0, BT_KEYBOARD = 1, BT_MOUSE = 2, BT_COMBO = 3 };
-struct BtDev { char name[30]; char addr[18]; int8_t rssi; uint8_t type; uint8_t bonded; };
+struct BtDev { char name[30]; char addr[18]; int8_t rssi; uint8_t type; uint8_t bonded; uint8_t hid; uint8_t atype; };
 
 class Sys {
  public:

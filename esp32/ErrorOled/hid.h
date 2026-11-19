@@ -16,3 +16,17 @@ int hidConnected(BtDev* out, int max);
 uint32_t hidPasskey();
 const char* hidStatus();
 int hidBonds();
+
+// scan settings (set on the setup web page, kept in flash)
+struct BtOpts {
+  uint8_t secs;           // how long a scan runs: 5..60 s
+  uint8_t active;         // 1 = ask devices for their name too (active scan), 0 = only listen
+  uint8_t show;           // 0 = keyboards/mice only, 1 = + any device with a name, 2 = everything
+  int8_t minRssi;         // hide devices weaker than this (dBm), -100 = show all
+  uint8_t autoReconnect;  // look for paired keyboards/mice and connect by themselves
+};
+const BtOpts& hidOpts();
+void hidSetOpts(const BtOpts& o);
+bool hidStarted();
+void hidPairAddr(const char* addr, uint8_t atype);   // pair with an address typed by hand (atype 0 public, 1 random)
+uint32_t hidScanStartedMs();

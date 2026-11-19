@@ -1005,8 +1005,8 @@ static void btnBt(BtnEv e) {
 }
 
 // ======================================================================= SETUP.EXE
-enum { ST_NAME, ST_CHAN, ST_FONT, ST_KEYS, ST_WHO, ST_POLL, ST_TOAST, ST_GLITCH, ST_LIGHT, ST_FLIP, ST_SAVER, ST_ONLINE, ST_TLS, ST_ABOUT, ST_REBOOT, ST_N };
-static const char* const ST_LABEL[ST_N] = {"NAME", "CHAT", "FONT", "KEYS", "WHO", "POLL", "POPUPS", "GLITCH", "LIGHT", "FLIP", "SAVER", "SHOW ME", "TLS", "ABOUT", "REBOOT"};
+enum { ST_NAME, ST_CHAN, ST_WEB, ST_FONT, ST_KEYS, ST_WHO, ST_POLL, ST_TOAST, ST_GLITCH, ST_LIGHT, ST_FLIP, ST_SAVER, ST_ONLINE, ST_TLS, ST_ABOUT, ST_REBOOT, ST_N };
+static const char* const ST_LABEL[ST_N] = {"NAME", "CHAT", "WEB", "FONT", "KEYS", "WHO", "POLL", "POPUPS", "GLITCH", "LIGHT", "FLIP", "SAVER", "SHOW ME", "TLS", "ABOUT", "REBOOT"};
 static List setL = {0, 0};
 static const uint8_t LIGHTS[] = {255, 120, 40, 8};
 void uiApplyDisplay() {
@@ -1020,6 +1020,7 @@ static void setValue(int i, char* b, size_t n) {
   switch (i) {
     case ST_NAME: scopy(b, n, CFG.name); break;
     case ST_CHAN: scopy(b, n, CFG.channel[0] ? CFG.channel : "-"); break;
+    case ST_WEB: scopy(b, n, netUp() ? S->netIp() : "-"); break;
     case ST_FONT: scopy(b, n, CFG.font ? "BIG" : "SMALL"); break;
     case ST_KEYS: scopy(b, n, CFG.keymap == 1 ? "DE" : CFG.keymap == 2 ? "FR" : "US"); break;
     case ST_WHO: scopy(b, n, CFG.whoByGame ? "GAMES" : "PEOPLE"); break;
@@ -1038,6 +1039,7 @@ static void setPick(int i) {
   switch (i) {
     case ST_NAME: askText("SETUP.EXE", "YOUR NAME:", 1, false, 16, CFG.name, askedName); return;
     case ST_CHAN: askText("SETUP.EXE", "CHAT CHANNEL:", 0, false, 8, CFG.channel, askedChannel); return;
+    case ST_WEB: { char b[48]; if (netUp()) snprintf(b, sizeof(b), "OPEN http://%s/", S->netIp()); else snprintf(b, sizeof(b), "NO WIFI: USE PHONE SETUP"); uiToast(b); return; }
     case ST_FONT: CFG.font = !CFG.font; layout(); break;
     case ST_KEYS: CFG.keymap = (CFG.keymap + 1) % 3; break;
     case ST_WHO: CFG.whoByGame = !CFG.whoByGame; whoL = {0, 0}; break;
@@ -1140,6 +1142,7 @@ static void cmdHelp() {
   cprint("CODE x CHANNEL");
   cprint("NAME x YOUR NAME");
   cprint("WIFI  NETWORK", "WIFI");
+  cprint("WEB   SETUP PAGE", "WEB");
   cprint("BT    KEYBOARD", "BT");
   cprint("BT PAIR name");
   cprint("SETUP SETTINGS", "SETUP");
@@ -1225,6 +1228,10 @@ static void runCommand(const char* line) {
     else go(SC_WIFI);
   }
   else if (!strcmp(cmd, "PORTAL")) { S->portalStart(); go(SC_PORTAL); }
+  else if (!strcmp(cmd, "WEB")) {
+    if (netUp()) { cprint("SETUP PAGE:"); cprintf("http://%s/", S->netIp()); cprint("http://error-oled.local/"); }
+    else cprint("NO WIFI: TRY PORTAL");
+  }
   else if (!strcmp(cmd, "BT")) {
     if (ac > 1 && ieq(av[1], "FORGET")) { S->btForget(); cprint("FORGOT ALL"); }
     else if (ac > 1 && ieq(av[1], "PAIR")) {
@@ -1662,7 +1669,7 @@ void uiTick() {
     if (ns != lastNet) {
       lastNet = ns;
       char t[64];
-      if (ns == NET_UP) snprintf(t, sizeof(t), "WIFI ON %s %s", S->netSsid(), S->netIp());
+      if (ns == NET_UP) { snprintf(t, sizeof(t), "WIFI ON %s %s", S->netSsid(), S->netIp()); S->serialOut(t); snprintf(t, sizeof(t), "SETUP PAGE: http://%s/", S->netIp()); }
       else if (ns == NET_CONNECTING) snprintf(t, sizeof(t), "WIFI JOINING %s", S->netSsid());
       else if (ns == NET_FAIL) snprintf(t, sizeof(t), "WIFI FAILED %s", S->netSsid());
       else t[0] = 0;
