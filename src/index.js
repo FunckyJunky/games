@@ -9,6 +9,10 @@
 //   GET  /api/room/<game>/<CODE>/who           who is in that room now, without joining
 //   GET  /api/wall                             the shared Pixel Wall (WebSocket)
 //   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
+//   GET  /api/chat/<CODE>/log?after=ID&name=X  ERROR-CHAT without a WebSocket (ERROR-OLED): new messages + who
+//   POST /api/chat/<CODE>/say {name, text}     ERROR-CHAT without a WebSocket: say something
+//   GET  /api/online                           who is online, in which game (ERROR-OLED's WHO screen)
+//   POST /api/online {sid, path, name, detail} "I'm in this game" from /lib/online.js every 25 s ({sid, bye} = gone)
 //   GET  /api/tusa?char=VITO                   Туса У Берліні: the shared Hoongy (WebSocket)
 //   GET  /api/vgadai/<SSEE>?name=X&mode=create Вгадай що?!: one episode of the quiz show (WebSocket)
 //   GET  /api/vgadai/live                      Вгадай що?!: episodes on air
@@ -811,6 +815,90 @@ async function handleHello(request, env, ctx, url) {
   return json({ ok: true, sent: subs.length });
 }
 
+// ---------------------------------------------------------------------------
+// Who's online, and in which game (for the ERROR-OLED box and anything else).
+// Every page with /lib/online.js says "I'm here" every 25 s; a tab that is closed or
+// hidden says bye. Someone counts as online for 60 s after their last beat.
+// The list lives in one OnlineBoard (in memory only: after a restart it fills
+// up again within 25 s). Pages are matched to games through games.json.
+const ONLINE_TTL = 60 * 1000;
+const ONLINE_MAX = 2000;
+// pages that aren't in games.json
+const ONLINE_EXTRA = [
+  { prefix: "/oled", id: "error-oled", title: "ERROR-OLED", dos: "OLED", folder: "apps" },
+  { prefix: "/rifle/", id: "space-rifle", title: "Space Rifle", dos: "RIFLE", folder: "online" },
+  { prefix: "/radar/", id: "friend-radar", title: "Friend Radar", dos: "RADAR", folder: "apps" },
+  { prefix: "/glasses/", id: "glasses", title: "Glasses", dos: "GLASSES", folder: "apps" },
+];
+function dosNameOf(g) {
+  if (g.dos) return String(g.dos).toUpperCase().slice(0, 8);
+  const base = String(g.title || g.id || "?").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return base.length <= 8 ? base : base.slice(0, 6) + "~1";
+}
+let onlineGames = null, onlineGamesAt = 0;
+async function onlineCatalog(env, url) {
+  if (onlineGames && Date.now() - onlineGamesAt < 60 * 1000) return onlineGames;
+  let list = [];
+  try { list = await (await env.ASSETS.fetch(new Request(new URL("/games.json", url)))).json(); } catch {}
+  const games = (Array.isArray(list) ? list : []).filter((g) => g && g.path).map((g) => ({
+    prefix: "/" + String(g.path).replace(/^\/+/, ""), id: g.id, title: g.title, dos: dosNameOf(g), folder: g.folder || "games",
+  }));
+  for (const id in SHORT_PATHS) {          // old addresses of games that moved
+    const g = games.find((x) => x.id === id);
+    if (g) games.push({ ...g, prefix: "/games/" + id + "/" });
+  }
+  onlineGames = [...games, ...ONLINE_EXTRA].sort((a, b) => b.prefix.length - a.prefix.length);
+  onlineGamesAt = Date.now();
+  return onlineGames;
+}
+async function handleOnline(request, env, url) {
+  const board = env.ONLINE.get(env.ONLINE.idFromName("all"));
+  if (request.method === "POST") {
+    let b;
+    try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
+    const sid = String((b && b.sid) || "");
+    if (!/^[A-Za-z0-9]{12}$/.test(sid)) return json({ error: "bad sid" }, 400);
+    if (b.bye) return board.fetch(new Request("https://online/bye", { method: "POST", body: JSON.stringify({ sid }) }));
+    const path = String(b.path || "/").slice(0, 200);
+    const name = cleanName(b.name) || "guest";
+    const detail = String(b.detail || "").replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 24);
+    return board.fetch(new Request("https://online/here", { method: "POST", body: JSON.stringify({ sid, path, name, detail }) }));
+  }
+  if (request.method !== "GET") return json({ error: "use GET or POST" }, 405);
+  const [raw, cat] = await Promise.all([board.fetch(new Request("https://online/list")).then((r) => r.json()), onlineCatalog(env, url)]);
+  const now = Date.now(), by = new Map();
+  for (const p of raw.list || []) {
+    let g = p.path === "/" || p.path === "/index.html" ? { id: "error-dos", title: "ERROR-DOS", dos: "MENU", folder: "menu" } : cat.find((x) => p.path.startsWith(x.prefix) || p.path + "/" === x.prefix);
+    if (!g) continue;                       // a page that isn't a game or app
+    if (!by.has(g.id)) by.set(g.id, { id: g.id, title: g.title, dos: g.dos, folder: g.folder, players: [] });
+    by.get(g.id).players.push({ name: p.name, detail: p.detail, secs: Math.max(0, Math.round((now - p.since) / 1000)) });
+  }
+  const games = [...by.values()];
+  for (const g of games) { g.players.sort((a, b) => b.secs - a.secs); g.n = g.players.length; }
+  games.sort((a, b) => b.n - a.n || (a.folder === "menu") - (b.folder === "menu") || String(a.dos).localeCompare(String(b.dos)));
+  return json({ now, total: games.reduce((t, g) => t + g.n, 0), games });
+}
+
+export class OnlineBoard extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.list = new Map();                  // sid -> { path, name, detail, since, seen }
+  }
+  async fetch(request) {
+    const url = new URL(request.url), now = Date.now();
+    for (const [sid, p] of this.list) if (now - p.seen > ONLINE_TTL) this.list.delete(sid);
+    if (url.pathname === "/list") return json({ list: [...this.list.values()] });
+    const b = await request.json();
+    if (url.pathname === "/bye") { this.list.delete(b.sid); return json({ ok: true }); }
+    const old = this.list.get(b.sid);
+    if (!old && this.list.size >= ONLINE_MAX) return json({ error: "full" }, 429);
+    // a new game in the same tab starts the clock again
+    const since = old && old.path === b.path ? old.since : now;
+    this.list.set(b.sid, { path: b.path, name: b.name, detail: b.detail, since, seen: now });
+    return json({ ok: true, online: this.list.size });
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -843,6 +931,17 @@ export default {
         if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
         const room = env.ROOMS.get(env.ROOMS.idFromName(`${game}:${code.toUpperCase()}`));
         return room.fetch(request);
+      }
+
+      if (path === "/api/online") return await handleOnline(request, env, url);
+
+      m = path.match(/^\/api\/chat\/([^/]+)\/(log|say)$/);
+      if (m) {
+        const code = m[1].toUpperCase();
+        if (!ROOM_RE.test(code)) return json({ error: "bad channel code" }, 400);
+        if (m[2] === "say" && request.method !== "POST") return json({ error: "use POST" }, 405);
+        const u = new URL(request.url); u.pathname = "/http/" + m[2] + "/" + code;
+        return env.CHAT.get(env.CHAT.idFromName(code)).fetch(new Request(u, request));
       }
 
       m = path.match(/^\/api\/chat\/([^/]+)$/);
@@ -923,7 +1022,7 @@ export default {
           })
           .on("body", {
             element(el) {
-              el.append('<script src="/lib/appback.js" defer></script><script src="/lib/fullscreen.js" defer></script>', { html: true });
+              el.append('<script src="/lib/appback.js" defer></script><script src="/lib/fullscreen.js" defer></script><script src="/lib/online.js" defer></script>', { html: true });
             },
           })
           .transform(res);
@@ -1154,6 +1253,8 @@ const CHAT_HISTORY = 80;
 const CHAT_MAX_LEN = 300;
 const CHAT_COOLDOWN_MS = 350;
 const CHAT_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000;
+// someone reading over HTTP (ERROR-OLED) stays in the who list this long after their last read
+const CHAT_HTTP_TTL = 45 * 1000;
 
 export class ChatRoom extends DurableObject {
   constructor(ctx, env) {
@@ -1169,6 +1270,75 @@ export class ChatRoom extends DurableObject {
          text TEXT NOT NULL
        )`
     );
+    // people who read the channel over HTTP instead of a WebSocket (ERROR-OLED)
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS http_who (name TEXT PRIMARY KEY, seen INTEGER NOT NULL)`);
+    this.lastSay = new Map();
+  }
+
+  httpNames() {
+    return this.sql.exec(`SELECT name FROM http_who WHERE seen > ? ORDER BY name`, Date.now() - CHAT_HTTP_TTL).toArray().map((r) => r.name);
+  }
+
+  // HTTP readers who stopped reading: tell everyone they left
+  sweepHttp() {
+    const gone = this.sql.exec(`DELETE FROM http_who WHERE seen <= ? RETURNING name`, Date.now() - CHAT_HTTP_TTL).toArray();
+    for (const r of gone) this.broadcast({ type: "leave", name: r.name, who: this.who() });
+  }
+
+  // one alarm does two jobs: wipe the channel 7 days after the last message,
+  // and notice HTTP readers that went away
+  async planAlarm(bumpExpiry) {
+    const st = this.ctx.storage;
+    let expireAt = await st.get("expireAt");
+    if (expireAt === undefined) {              // a channel from before: its alarm was the expiry
+      const a = await st.getAlarm();
+      if (a) expireAt = a;
+    }
+    if (bumpExpiry) expireAt = Date.now() + CHAT_EXPIRE_MS;
+    if (expireAt !== undefined) await st.put("expireAt", expireAt);
+    const next = this.sql.exec(`SELECT MIN(seen) AS s FROM http_who`).one().s;
+    const at = [expireAt, next ? next + CHAT_HTTP_TTL + 1000 : undefined].filter((x) => x !== undefined);
+    if (at.length) await st.setAlarm(Math.min(...at));
+  }
+
+  // GET /http/log/<CODE>?after=ID&name=X&limit=N   POST /http/say/<CODE> {name, text}
+  async httpChat(request, url, kind, code) {
+    this.sweepHttp();
+    if (kind === "say") {
+      let b;
+      try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
+      const name = cleanName(b && b.name) || "guest";
+      const text = String((b && b.text) ?? "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim().slice(0, CHAT_MAX_LEN);
+      if (!text) return json({ error: "nothing to say" }, 400);
+      const now = Date.now();
+      if (now - (this.lastSay.get(name) || 0) < CHAT_COOLDOWN_MS) return json({ error: "slow down" }, 429);
+      this.lastSay.set(name, now);
+      this.seeHttp(name);
+      const msg = this.save("msg", name, text);
+      this.broadcast({ type: "msg", ...msg });
+      await this.planAlarm(true);
+      return json({ ok: true, msg });
+    }
+    const name = cleanName(url.searchParams.get("name"));
+    if (name && url.searchParams.get("bg") !== "1" && this.seeHttp(name)) await this.planAlarm(false);
+    const after = Math.max(0, parseInt(url.searchParams.get("after") || "0", 10) || 0);
+    const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "20", 10) || 20));
+    const msgs = this.sql
+      .exec(`SELECT id, at, kind, name, text FROM msgs WHERE id > ? ORDER BY id DESC LIMIT ?`, after, limit)
+      .toArray()
+      .reverse();
+    const last = this.sql.exec(`SELECT MAX(id) AS id FROM msgs`).one().id || 0;
+    return json({ code, now: Date.now(), last, msgs, who: this.who() });
+  }
+
+  // an HTTP reader is here (again)
+  seeHttp(name) {
+    const now = Date.now();
+    const row = this.sql.exec(`SELECT seen FROM http_who WHERE name = ?`, name).toArray()[0];
+    if (row && now - row.seen < 15 * 1000) return false;      // saved a moment ago: fewer writes
+    this.sql.exec(`INSERT OR REPLACE INTO http_who (name, seen) VALUES (?, ?)`, name, now);
+    if (!row) this.broadcast({ type: "join", name, who: this.who() });
+    return true;
   }
 
   openSockets(except) {
@@ -1178,7 +1348,8 @@ export class ChatRoom extends DurableObject {
   who(except) {
     return this.openSockets(except)
       .map((ws) => ws.deserializeAttachment()?.name)
-      .filter(Boolean);
+      .filter(Boolean)
+      .concat(this.httpNames());
   }
 
   broadcast(message, except) {
@@ -1204,6 +1375,8 @@ export class ChatRoom extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
     const code = (url.pathname.split("/").pop() || "").toUpperCase();
+    const hm = url.pathname.match(/^\/http\/(log|say)\//);
+    if (hm) return this.httpChat(request, url, hm[1], code);
     const name = cleanName(url.searchParams.get("name")) || "guest";
 
     const pair = new WebSocketPair();
@@ -1252,7 +1425,7 @@ export class ChatRoom extends DurableObject {
       ws.serializeAttachment(me);
       const msg = this.save("msg", me.name, text);
       this.broadcast({ type: "msg", ...msg });
-      await this.ctx.storage.setAlarm(now + CHAT_EXPIRE_MS);
+      await this.planAlarm(true);
     } else if (d.t === "nick") {
       const to = cleanName(d.name);
       if (!to || to === me.name) return;
@@ -1283,9 +1456,15 @@ export class ChatRoom extends DurableObject {
     this.broadcast({ type: "leave", name: me.name, who: this.who(ws) }, ws);
   }
 
-  // 7 days without a message: forget the channel
+  // 7 days without a message: forget the channel. Also: HTTP readers who went away.
   async alarm() {
-    this.sql.exec(`DELETE FROM msgs`);
+    this.sweepHttp();
+    const expireAt = await this.ctx.storage.get("expireAt");
+    if (expireAt === undefined || Date.now() >= expireAt - 1000) {
+      this.sql.exec(`DELETE FROM msgs`);
+      await this.ctx.storage.delete("expireAt");
+    }
+    await this.planAlarm(false);
   }
 }
 

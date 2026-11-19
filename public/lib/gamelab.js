@@ -102,6 +102,7 @@
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const url = proto + '//' + location.host + '/api/room/' + encodeURIComponent(game) + '/' +
         encodeURIComponent(String(code).toUpperCase()) + '?name=' + encodeURIComponent(handlers.name || GameLab.playerName() || 'Player');
+      if (handlers.name && !(window.errorOnline && window.errorOnline.name)) { window.errorOnline = Object.assign({}, window.errorOnline, { name: String(handlers.name) }); window.ErrorOnline && ErrorOnline.update(); }
       const ws = new WebSocket(url);
       const room = { id: null, players: [], code: String(code).toUpperCase(), socket: ws };
       let ping = null;

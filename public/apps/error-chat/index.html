@@ -130,6 +130,7 @@
 </style>
 <script src="/lib/nozoom.js"></script>
 <script src="/lib/fullscreen.js"></script>
+<script src="/lib/online.js" defer></script>
 </head>
 <body>
 <div id="tube">
@@ -284,6 +285,7 @@ function join() {
     else { st.lobbyMsg = 'Channel code: 3-8 letters or digits.'; st.focus = 'code'; SND.err(); drawLobby(); return; }
   }
   store.set('gamelab-player-name', st.handle);
+  window.errorOnline = { name: st.handle }; window.ErrorOnline && ErrorOnline.update();
   st.lobbyMsg = '';
   st.screen = 'chat'; st.focus = 'msg'; st.msg = ''; st.lastId = 0;
   history.replaceState(null, '', '?c=' + st.code);

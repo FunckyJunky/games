@@ -499,6 +499,7 @@ function goEpisode(mode) {
 }
 function openWs() {
   if (NET.ws) { try { NET.ws.onclose = null; NET.ws.close(); } catch (e) {} }
+  window.errorOnline = { name: S.me, detail: 'S' + NET.code.slice(0, 2) + 'E' + NET.code.slice(2) }; window.ErrorOnline && ErrorOnline.update();
   const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/vgadai/' + NET.code + '?name=' + encodeURIComponent(S.me) + '&mode=' + NET.mode;
   let ws;
   try { ws = new WebSocket(url); } catch (e) { return lobMsg('Geen verbinding.', true); }

@@ -31,6 +31,12 @@
   const readSettings = () => { try { return JSON.parse(localStorage.getItem("glasses.settings") || "{}") || {}; } catch { return {}; } };
   const me = document.currentScript;
   let app = (me && me.dataset.app) || "unknown", focus = null, timer = 0, lastSent = 0, later = 0;
+  // who's online on error.blue (ERROR-OLED): "glasses, in FLIGHT.EXE"
+  try {
+    const on = document.createElement("script");
+    on.src = "/lib/online.js"; on.defer = true; on.dataset.detail = app.toUpperCase().slice(0, 8) + ".EXE"; on.dataset.name = "glasses";
+    (document.head || document.documentElement).appendChild(on);
+  } catch {}
   const state = () => (document.hidden ? "hidden" : "active");
 
   /* ---------- backup heartbeat (also what the panel shows after the fact) ---------- */

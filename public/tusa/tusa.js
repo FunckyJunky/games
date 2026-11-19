@@ -141,6 +141,7 @@ function connect(arrive, x) {
   NET.want = true;
   clearTimeout(NET.retry);
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  window.errorOnline = { name: G.me }; window.ErrorOnline && ErrorOnline.update();
   const ws = new WebSocket(proto + '//' + location.host + '/api/tusa?char=' + G.me + '&arrive=' + (arrive || '') + '&x=' + Math.round(x || G.p.x));
   NET.ws = ws;
   ws.onopen = () => { NET.ok = true; NET.ping = setInterval(() => ws.readyState === 1 && ws.send('{"t":"ping"}'), 25000); };

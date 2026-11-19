@@ -62,6 +62,10 @@ public/                 the website
                         connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and
                         saved spots, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE> and the live link.
                         Edit public/hud/ directly (index.html, sw.js, manifest.webmanifest, icons)
+lib/online.js         "I'm in this game" beacon for the who's-online list (GET /api/online); game pages under
+                        /games/, /voyage and /music3d get it from the server, other pages load it themselves
+esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online in which game and does ERROR-CHAT
+                        (see esp32/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -534,3 +538,22 @@ choose one, and offers [C] CHANGE CODE.)
 Every page behaves like an installed app: no double-tap or pinch zoom
 (`/lib/nozoom.js`, `touch-action: manipulation`); game pages get this added by
 the Worker as they are served.
+
+## Who's online (error.blue/api/online, for ERROR-OLED)
+
+- Every game/app page loads `/lib/online.js`. It posts `{sid, path, name, detail}` to `/api/online` every 25 s,
+  and `{sid, bye}` when the tab closes or is hidden. Someone counts as online for 60 s after their last beat.
+- The name is `window.errorOnline.name` if the page set it. Otherwise it's the ERROR-CHAT/GameLab name
+  (`gamelab-player-name`), then the TUSA/Вгадай що name (`tusa-name`), then "guest".
+  TUSA sends the character, Вгадай що?! the player plus `S01E04`, and the glasses their app (e.g. `FLIGHT.EXE`).
+  A game can add its own: `window.errorOnline = { name, detail }; ErrorOnline.update();`
+- `GET /api/online` returns `{now, total, games: [{id, title, dos, folder, n, players: [{name, detail, secs}]}]}`.
+  Pages are matched to games through games.json (plus `/rifle`, `/radar`, `/glasses`, `/oled` and the menu at `/`).
+  Room and channel codes are never sent.
+- The list lives in memory in one Durable Object (`OnlineBoard`). After a deploy it fills up again within 25 s.
+
+## ERROR-CHAT without a WebSocket
+
+`GET /api/chat/<CODE>/log?after=ID&name=X&limit=20` returns the messages after ID and who is in the channel.
+`POST /api/chat/<CODE>/say {name, text}` sends a message. Whoever reads with a name shows up in the channel's who-list
+(web users see "X joined") and leaves 45 s after their last read. `&bg=1` reads without joining.

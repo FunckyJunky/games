@@ -41,7 +41,8 @@
       { "name": "WALL", "class_name": "PixelWall" },
       { "name": "CHAT", "class_name": "ChatRoom" },
       { "name": "TUSA", "class_name": "TusaRoom" },
-      { "name": "VGADAI", "class_name": "VgadaiRoom" }
+      { "name": "VGADAI", "class_name": "VgadaiRoom" },
+      { "name": "ONLINE", "class_name": "OnlineBoard" }
     ]
   },
   "migrations": [
@@ -49,7 +50,8 @@
     { "tag": "v2", "new_sqlite_classes": ["PixelWall"] },
     { "tag": "v3", "new_sqlite_classes": ["ChatRoom"] },
     { "tag": "v4", "new_sqlite_classes": ["TusaRoom"] },
-    { "tag": "v5", "new_sqlite_classes": ["VgadaiRoom"] }
+    { "tag": "v5", "new_sqlite_classes": ["VgadaiRoom"] },
+    { "tag": "v6", "new_sqlite_classes": ["OnlineBoard"] }
   ],
 
   "observability": { "enabled": true }
