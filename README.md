@@ -7,7 +7,8 @@ Every push to `main` is deployed automatically.
 
 ```
 public/                 the website
-  index.html            game menu
+  index.html            game menu (ERROR-DOS): the DOS list, or the 3D view (V, or VIEW in setup):
+                        a large panel with every program's 3D logo as a card, scrolling sideways in 3D
   games.json            list of games shown on the menu
   lib/gamelab.js        helper for scores, saves, multiplayer and music
   games/

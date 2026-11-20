@@ -37,6 +37,7 @@
   @keyframes flicker { 50% { opacity: .965; } }
 
   #logo { position: absolute; z-index: 1; display: block; }
+  #flow { position: absolute; z-index: 1; display: none; touch-action: none; }
   #boxes { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
   .box { position: absolute; border: 3px double var(--fg); box-shadow: 0 0 6px var(--glow), inset 0 0 6px var(--glow); }
   .box.panel { background: var(--bg); }
@@ -132,6 +133,7 @@
 <div id="tube">
   <div id="crt">
     <canvas id="logo"></canvas>
+    <canvas id="flow"></canvas>
     <div id="boxes"></div>
     <div id="text"></div>
     <div id="glitch"></div>
@@ -180,7 +182,7 @@ try {
     if (o != null) localStorage.removeItem('fk' + 'dos-' + k);
   }
 } catch (e) {}
-const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0, full: false }, store.get('errordos-settings', {}));
+const S = Object.assign({ color: 0, glitch: 1, curved: true, sound: true, boot: 0, full: false, view: 0 }, store.get('errordos-settings', {}));
 const stats = store.get('errordos-stats', {});
 function saveSettings() { store.set('errordos-settings', S); }
 
@@ -190,6 +192,7 @@ function saveSettings() { store.set('errordos-settings', S); }
 const $ = id => document.getElementById(id);
 const tube = $('tube'), crt = $('crt'), textEl = $('text'), boxesEl = $('boxes'), glitchEl = $('glitch');
 const logoCv = $('logo'), lctx = logoCv.getContext('2d');
+const flowCv = $('flow'), fctx = flowCv.getContext('2d');
 const noiseCv = $('noise'), nctx = noiseCv.getContext('2d');
 
 let COLS = 40, ROWS = 32, CW = 10, LH = 20, PADX = 12, PADY = 10, WIDE = false, LAY = null;
@@ -230,7 +233,19 @@ function layout() {
   textEl.style.right = textEl.style.bottom = 'auto';
   noiseCv.width = W; noiseCv.height = H;
 
-  if (WIDE) {
+  if (S.view) {
+    // 3D view: one large panel across the screen, the picked program's name under it
+    const pr1 = WIDE ? 19 : ROWS - 8;
+    LAY = {
+      status: 0,
+      tabs: { r: 2, c0: 0, c1: COLS - 1 },
+      panel: { r0: 3, c0: 0, r1: pr1, c1: COLS - 1 },
+      caption: pr1 + 1,
+      desc: { r: pr1 + 2, c0: 0, c1: COLS - 1 },
+      prompt: WIDE ? 22 : ROWS - 4, msg: WIDE ? 23 : ROWS - 3, fkeys: ROWS - 1,
+    };
+    LAY.logo = LAY.panel;
+  } else if (WIDE) {
     LAY = {
       status: 0,
       logo: { r0: 2, c0: 0, r1: 16, c1: 43 },
@@ -263,9 +278,12 @@ function placeLogo() {
   const b = LAY.logo;
   const r = cellRect(b.r0 + 1, b.c0 + 1, b.r1 - 1, b.c1 - 1);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  logoCv.style.left = r.x + 'px'; logoCv.style.top = r.y + 'px';
-  logoCv.style.width = r.w + 'px'; logoCv.style.height = r.h + 'px';
-  logoCv.width = Math.round(r.w * dpr); logoCv.height = Math.round(r.h * dpr);
+  const cv = S.view ? flowCv : logoCv;
+  cv.style.left = r.x + 'px'; cv.style.top = r.y + 'px';
+  cv.style.width = r.w + 'px'; cv.style.height = r.h + 'px';
+  cv.width = Math.round(r.w * dpr); cv.height = Math.round(r.h * dpr);
+  logoCv.style.display = S.view ? 'none' : 'block';
+  flowCv.style.display = S.view ? 'block' : 'none';
   L.reveal = 0;
 }
 
@@ -280,6 +298,8 @@ function applyColors() {
   st.setProperty('--bg', COL.bg); st.setProperty('--glow', COL.glow);
   tube.classList.toggle('flat', !S.curved);
   lctx.fillStyle = COL.bg; lctx.fillRect(0, 0, logoCv.width, logoCv.height);
+  fctx.fillStyle = COL.bg; fctx.fillRect(0, 0, flowCv.width, flowCv.height);
+  if (typeof FL !== 'undefined') FL.cards.forEach(k => { k.fresh = true; });
   dirty = true;
 }
 
@@ -723,13 +743,35 @@ function drawLogo(dt) {
 
   c.save();
   c.beginPath(); c.rect(0, 0, W, revealY); c.clip();
+  paintScene(c, W, H, g, L.t);
+  c.restore();
+
+  // the scan line that draws a new logo in
+  if (L.reveal < 1) {
+    c.fillStyle = '#ffffff'; c.globalAlpha = 0.8;
+    c.fillRect(0, revealY - 2, W, 3);
+    c.globalAlpha = 1;
+  }
+  tearCanvas(c, logoCv, W, H);
+}
+// tearing: shift strips of the picture sideways
+function tearCanvas(c, cv, W, H) {
+  if (L.tear <= 0) return;
+  L.tear--;
+  for (let i = 0; i < 3; i++) {
+    const y = Math.random() * H, h = 4 + Math.random() * H * 0.12, dx = (Math.random() - 0.5) * W * 0.25;
+    c.drawImage(cv, 0, y, W, h, dx, y, W, h);
+  }
+}
+// a program's 3D logo and its title, into any canvas
+function paintScene(c, W, H, g, t, noGlow) {
   const scene = SCENES[g.logo];
   c.strokeStyle = COL.fg; c.fillStyle = COL.fg;
   c.lineWidth = Math.max(1, W / 420);
-  c.shadowColor = COL.fg; c.shadowBlur = W / 90;
+  c.shadowColor = COL.fg; c.shadowBlur = noGlow ? 0 : W / 90;
   if (scene) {
     const seg = [], quads = [];
-    const cam = scene(L.t, seg, quads);
+    const cam = scene(t, seg, quads);
     const f = H * 1.25, cx = W * 0.5, cy = H * 0.58;
     const P = p => {
       let q = [p[0], p[1] - cam.ty, p[2]];
@@ -753,26 +795,10 @@ function drawLogo(dt) {
       c.globalAlpha = 1;
     }
   } else {
-    drawSynthwave(c, W, H, L.t);
+    drawSynthwave(c, W, H, t);
   }
   c.shadowBlur = 0;
-  drawTitle(c, W, H, g.title, L.t);
-  c.restore();
-
-  // the scan line that draws a new logo in
-  if (L.reveal < 1) {
-    c.fillStyle = '#ffffff'; c.globalAlpha = 0.8;
-    c.fillRect(0, revealY - 2, W, 3);
-    c.globalAlpha = 1;
-  }
-  // tearing: shift strips of the picture sideways
-  if (L.tear > 0) {
-    L.tear--;
-    for (let i = 0; i < 3; i++) {
-      const y = Math.random() * H, h = 4 + Math.random() * H * 0.12, dx = (Math.random() - 0.5) * W * 0.25;
-      c.drawImage(logoCv, 0, y, W, h, dx, y, W, h);
-    }
-  }
+  drawTitle(c, W, H, g.title, t);
 }
 function drawSynthwave(c, W, H, t) {
   const hz = H * 0.62, cx = W * 0.5, r = H * 0.3;
@@ -818,6 +844,173 @@ function drawTitle(c, W, H, title, t) {
   c.fillStyle = sh;
   c.fillText(text, x, y);
   c.restore();
+}
+
+// ===================================================================
+// 3D view: a large panel showing every program of the folder as a card with
+// its live 3D logo, in a row that scrolls sideways in 3D. The picked card
+// faces you; the others stand to the sides, turned towards the middle, with
+// reflections on a floor grid that slides along. The row moves on a spring
+// (a little overshoot), bounces at either end, and follows a finger or the
+// mouse while dragged. Up/Down (or a vertical swipe) changes folder.
+// ===================================================================
+const FL = { pos: 0, v: 0, drag: null, cards: new Map(), frame: 0, zoom: 0, slide: 0, slideDir: 1,
+  folder: -1, hit: [], unit: 100, wheel: 0, wheelT: 0 };
+function cardFor(g, w, h) {
+  let k = FL.cards.get(g.id);
+  if (!k || k.cv.width !== w || k.cv.height !== h) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    k = { cv, c: cv.getContext('2d'), fresh: true };
+    FL.cards.set(g.id, k);
+  }
+  return k;
+}
+function updateCard(k, g, t, front) {
+  const c = k.c, W = k.cv.width, H = k.cv.height;
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+  c.fillStyle = k.fresh ? COL.bg : hexA(COL.bg, 0.3);       // afterglow, as in the logo window
+  c.fillRect(0, 0, W, H);
+  k.fresh = false;
+  c.save(); paintScene(c, W, H, g, t, !front); c.restore();   // only the middle card glows (it's the costly part)
+}
+// where card i stands when the row is at pos: x and depth z in card widths,
+// and the direction its face runs (tx, tz), turned towards the middle
+function cardPose(d) {
+  const a = Math.min(1, Math.abs(d)), s = Math.sign(d), ang = a * 1.0;
+  return { x: s * (a * 0.72 + Math.max(0, Math.abs(d) - 1) * 0.36), z: a * 0.55, tx: Math.cos(ang), tz: -s * Math.sin(ang) };
+}
+function drawFlow(dt) {
+  const W = flowCv.width, H = flowCv.height, c = fctx;
+  if (!W || !H) return;
+  L.t += dt; FL.frame++;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.shadowBlur = 0;
+  c.fillStyle = hexA(COL.bg, mode === 'boot' ? 1 : 0.38);   // short trails behind moving cards
+  c.fillRect(0, 0, W, H);
+  FL.hit = [];
+  if (mode === 'boot' || mode === 'off') return;
+  const F = FOLDERS[folder], list = folders[F], n = list.length;
+  if (FL.folder !== folder) { FL.folder = folder; FL.pos = sel[F]; FL.v = 0; }
+
+  // the spring towards the picked card (not while a finger holds the row)
+  if (!FL.drag) {
+    const steps = Math.max(1, Math.ceil(dt / 0.012)), h = dt / steps;
+    for (let i = 0; i < steps; i++) { const a = 120 * (sel[F] - FL.pos) - 14 * FL.v; FL.v += a * h; FL.pos += FL.v * h; }
+  }
+  FL.slide = Math.max(0, FL.slide - dt * 3.4);
+  FL.zoom += ((mode === 'run' ? 1 : 0) - FL.zoom) * Math.min(1, dt * 4);
+
+  const dpr = W / Math.max(1, flowCv.clientWidth);
+  const CH = H > W * 0.9 ? 0.85 : 0.62;                       // card height in card widths: taller on a phone
+  const base = Math.min(W * (CH > 0.7 ? 0.74 : 0.6), H * (CH > 0.7 ? 0.62 : 0.7) / CH);   // the middle card's width in pixels
+  const S = base * (1 + FL.zoom * 0.75), D = 3.2, f = S * D;
+  const ease = FL.slide * FL.slide;
+  const cx = W / 2, cy = H * 0.42 + FL.slideDir * ease * H * 0.8;
+  FL.unit = base * 0.62 / dpr;
+  const pj = (X, Z) => { const s = f / (Z + D); return [cx + X * s, s]; };
+
+  // the floor: a grid sliding along with the row
+  const floorY = Z => cy + CH / 2 * f / (Z + D);
+  c.strokeStyle = COL.dim; c.lineWidth = Math.max(1, dpr); c.globalAlpha = 0.55 * (1 - ease);
+  c.beginPath();
+  for (const Z of [-0.6, -0.2, 0.3, 1, 2, 3.5, 6]) { const y = floorY(Z); c.moveTo(0, y); c.lineTo(W, y); }
+  const off = ((FL.pos * 0.72) % 0.5 + 0.5) % 0.5;
+  for (let k = -16; k <= 16; k++) {
+    const X = k * 0.5 - off, a = pj(X, -0.6), b = pj(X, 6);
+    c.moveTo(a[0], floorY(-0.6)); c.lineTo(b[0], floorY(6));
+  }
+  c.stroke();
+  c.globalAlpha = 1;
+  if (!n) return;
+
+  // the cards near the middle, far ones first
+  const vis = [];
+  for (let i = 0; i < n; i++) { const d = i - FL.pos; if (Math.abs(d) < 4.6) vis.push([i, d]); }
+  vis.sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
+  // cards are drawn at up to 1.5 pixels per screen point: sharp enough, and quick
+  const kres = Math.min(dpr, 1.5) / dpr;
+  const cw = Math.max(16, Math.round(base * kres)), chp = Math.max(10, Math.round(base * CH * kres));
+  const shapes = [];
+  for (const [i, d] of vis) {
+    const g = list[i], k = cardFor(g, cw, chp), ad = Math.abs(d);
+    // the middle card plays every frame, its neighbours every 2nd, the rest every 4th
+    const every = ad < 0.5 ? 1 : ad < 1.5 ? 2 : 4;
+    if (k.fresh || (FL.frame + i) % every === 0) updateCard(k, g, L.t, ad < 0.5);
+    const p = cardPose(d);
+    const span = Math.abs(pj(p.x + 0.5 * p.tx, p.z + 0.5 * p.tz)[0] - pj(p.x - 0.5 * p.tx, p.z - 0.5 * p.tz)[0]);
+    const N = Math.max(6, Math.min(40, Math.round(span / (12 * dpr))));
+    const strips = [];
+    for (let s = 0; s < N; s++) {
+      const u0 = -0.5 + s / N, u1 = -0.5 + (s + 1) / N;
+      const A = pj(p.x + u0 * p.tx, p.z + u0 * p.tz), B = pj(p.x + u1 * p.tx, p.z + u1 * p.tz);
+      const sc = (A[1] + B[1]) / 2, hh = CH * sc;
+      strips.push({ s, x: Math.min(A[0], B[0]), w: Math.abs(B[0] - A[0]) + 0.75, top: cy - hh / 2, hh });
+    }
+    const L0 = pj(p.x - 0.5 * p.tx, p.z - 0.5 * p.tz), R0 = pj(p.x + 0.5 * p.tx, p.z + 0.5 * p.tz);
+    const corners = [[L0[0], cy - CH / 2 * L0[1]], [R0[0], cy - CH / 2 * R0[1]], [R0[0], cy + CH / 2 * R0[1]], [L0[0], cy + CH / 2 * L0[1]]];
+    const fade = (1 - ease) * (ad < 0.5 ? 1 : 1 - FL.zoom);
+    shapes.push({ i, d, ad, k, strips, corners, fade, N });
+  }
+  // reflections on the floor, then the floor fading into the dark
+  c.globalAlpha = 1;
+  for (const sh of shapes) {
+    if (sh.ad > 2.6) continue;
+    c.globalAlpha = 0.2 * sh.fade * (1 - Math.min(1, sh.ad) * 0.4);
+    for (const st of sh.strips) {
+      const b = st.top + st.hh;
+      c.setTransform(1, 0, 0, -1, 0, 2 * b + 2 * dpr);
+      c.drawImage(sh.k.cv, st.s * sh.k.cv.width / sh.N, 0, sh.k.cv.width / sh.N, sh.k.cv.height, st.x, st.top, st.w, st.hh);
+    }
+  }
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1;
+  const fy = cy + CH / 2 * S;
+  const gr = c.createLinearGradient(0, fy, 0, fy + (H - fy) * 0.9);
+  gr.addColorStop(0, hexA(COL.bg, 0.25)); gr.addColorStop(1, hexA(COL.bg, 1));
+  c.fillStyle = gr; c.fillRect(0, fy, W, H - fy);
+
+  // the cards: an opaque back, the picture in vertical strips (each strip
+  // stays upright in a turn about the vertical axis), a glowing frame
+  for (const sh of shapes) {
+    if (sh.fade <= 0.01) continue;
+    const poly = () => { c.beginPath(); c.moveTo(sh.corners[0][0], sh.corners[0][1]); for (let q = 1; q < 4; q++) c.lineTo(sh.corners[q][0], sh.corners[q][1]); c.closePath(); };
+    c.globalAlpha = sh.fade; c.fillStyle = COL.bg; poly(); c.fill();
+    c.globalAlpha = sh.fade * (1 - Math.min(1, sh.ad) * 0.45);
+    for (const st of sh.strips) c.drawImage(sh.k.cv, st.s * sh.k.cv.width / sh.N, 0, sh.k.cv.width / sh.N, sh.k.cv.height, st.x, st.top, st.w, st.hh);
+    const front = sh.ad < 0.5;
+    c.globalAlpha = sh.fade * (front ? 1 : 0.6);
+    c.strokeStyle = COL.fg; c.lineWidth = Math.max(1, dpr * (front ? 2 : 1));
+    c.shadowColor = COL.fg; c.shadowBlur = front ? 10 * dpr : 0;
+    poly(); c.stroke();
+    c.shadowBlur = 0; c.globalAlpha = 1;
+    FL.hit.push({ i: sh.i, poly: sh.corners.map(q => [q[0] / dpr, q[1] / dpr]) });
+  }
+  c.globalAlpha = 1;
+  tearCanvas(c, flowCv, W, H);
+}
+// which card is under a point of the panel (front-most first)
+function flowCardAt(x, y) {
+  for (let j = FL.hit.length - 1; j >= 0; j--) {
+    const P = FL.hit[j].poly; let inside = false;
+    for (let a = 0, b = 3; a < 4; b = a++) {
+      if ((P[a][1] > y) !== (P[b][1] > y) && x < (P[b][0] - P[a][0]) * (y - P[a][1]) / (P[b][1] - P[a][1]) + P[a][0]) inside = !inside;
+    }
+    if (inside) return FL.hit[j].i;
+  }
+  return -1;
+}
+// the row's place under a dragging finger: picks the card in the middle as it passes
+function flowPick(i) {
+  const F = FOLDERS[folder], list = folders[F];
+  const n = Math.max(0, Math.min(list.length - 1, i));
+  if (n === sel[F] || !list.length) return;
+  sel[F] = n; marquee = 0; SND.move(); dirty = true;
+  store.set('errordos-sel', { folder, sel });
+}
+function setView(on) {
+  S.view = on ? 1 : 0; saveSettings();
+  layout(); applyColors();
+  FL.folder = -1; FL.drag = null;
+  SND.move(); glitch('tear');
 }
 
 // ===================================================================
@@ -911,6 +1104,7 @@ function statusBar() {
 }
 
 function drawMain() {
+  if (S.view) return drawMain3D();
   clear();
   hits = [];
   statusBar();
@@ -974,10 +1168,60 @@ function drawMain() {
   fkeyBar();
 }
 
+// the 3D view's screen: folder tabs, the large panel (drawn by drawFlow), the
+// picked program's name with < > and its number, the description, the prompt
+function drawMain3D() {
+  clear();
+  hits = [];
+  statusBar();
+  const g = current(), F = FOLDERS[folder], list = folders[F];
+  tabsLine(LAY.tabs);
+  const p = LAY.panel;
+  box(p.r0, p.c0, p.r1, p.c1, g ? dosName(g) + '.HTM' : 'NO PROGRAM');
+  if (!list.length) put(Math.floor((p.r0 + p.r1) / 2), Math.floor(COLS / 2) - 7, 'File not found', '');
+  else put(p.r0, p.c1 - 2 - (' ' + (sel[F] + 1) + '/' + list.length + ' ').length, ' ' + (sel[F] + 1) + '/' + list.length + ' ', 'm');
+  if (g) {
+    const name = g.title.toUpperCase(), r = LAY.caption;
+    const w = Math.min(name.length, COLS - 8), c0 = Math.floor((COLS - w) / 2);
+    put(r, c0, name.slice(0, w), 'i');
+    const L0 = c0 - 3, R0 = c0 + w + 1;
+    put(r, L0, '<', sel[F] > 0 ? '' : 'd'); put(r, R0 + 1, '>', sel[F] < list.length - 1 ? '' : 'd');
+    hits.push({ r, c0: L0 - 1, c1: L0 + 1, act: () => select(sel[F] - 1) });
+    hits.push({ r, c0: R0, c1: R0 + 2, act: () => select(sel[F] + 1) });
+    hits.push({ r, c0, c1: c0 + w - 1, act: run });
+    const d = LAY.desc, dw = d.c1 - d.c0 + 1;
+    const txt = (g.description || '') + '      ';
+    const loop = txt.length > dw ? txt + txt : txt;
+    const off = txt.length > dw ? Math.floor(marquee) % txt.length : 0;
+    put(d.r, txt.length > dw ? d.c0 : Math.floor((COLS - txt.trim().length) / 2), loop.slice(off, off + dw), 'd');
+  }
+  const pr = 'C:\\' + F.toUpperCase() + '>' + typed;
+  put(LAY.prompt, 0, pr, '');
+  if ((performance.now() / 530 | 0) % 2 === 0) put(LAY.prompt, pr.length, ' ', 'i');
+  if (message && performance.now() < messageUntil) put(LAY.msg, 0, message, '');
+  fkeyBar();
+}
+function tabsLine(t) {
+  const F = FOLDERS[folder];
+  put(t.r, t.c0, 'C:\\' + F.toUpperCase() + '\\', '');
+  let x = t.c1 - FOLDERS.reduce((n, f) => n + f.length + 3, 0) + 2;
+  FOLDERS.forEach((name, i) => {
+    const label = ' ' + name.toUpperCase() + ' ';
+    put(t.r, x, label, i === folder ? 'i' : 'd');
+    hits.push({ r: t.r, c0: x, c1: x + label.length - 1, act: () => setFolder(i) });
+    x += label.length + 1;
+  });
+}
+
 function fkeyBar() {
-  const keys = WIDE
-    ? [['ENTER', 'Run', run], ['<>', 'Dir', () => setFolder((folder + 1) % FOLDERS.length)], ['C', 'Colour', nextColor], ['I', 'Info', openInfo], ['ESC', 'Setup', openSetup], ['G', 'Glitch', () => burst(5)]]
-    : [['ENTER', 'Run', run], ['C', 'Col', nextColor], ['I', 'Info', openInfo], ['ESC', 'Setup', openSetup]];
+  const view = ['V', S.view ? 'DOS' : '3D', () => setView(!S.view)];
+  const keys = S.view
+    ? (WIDE
+      ? [['ENTER', 'Run', run], ['<>', 'Scroll', () => select(sel[FOLDERS[folder]] + 1)], ['^v', 'Dir', () => setFolder((folder + 1) % FOLDERS.length)], ['I', 'Info', openInfo], view, ['ESC', 'Setup', openSetup], ['G', 'Glitch', () => burst(5)]]
+      : [['ENTER', 'Run', run], ['I', 'Info', openInfo], view, ['ESC', 'Setup', openSetup]])
+    : (WIDE
+      ? [['ENTER', 'Run', run], ['<>', 'Dir', () => setFolder((folder + 1) % FOLDERS.length)], ['C', 'Colour', nextColor], ['I', 'Info', openInfo], view, ['ESC', 'Setup', openSetup], ['G', 'Glitch', () => burst(5)]]
+      : [['ENTER', 'Run', run], ['C', 'Col', nextColor], ['I', 'Info', openInfo], view, ['ESC', 'Setup', openSetup]]);
   let x = 0;
   for (const [k, label, act] of keys) {
     const start = x;
@@ -989,14 +1233,15 @@ function fkeyBar() {
 
 function setFolder(i) {
   if (mode !== 'main' || i === folder) return;
+  if (S.view) { FL.slideDir = i > folder ? 1 : -1; FL.slide = 1; }
   folder = i; SND.move(); L.tear = 6; glitch('tear'); dirty = true;
 }
 function select(i) {
   const F = FOLDERS[folder], list = folders[F];
   if (!list.length) return;
   const n = Math.max(0, Math.min(list.length - 1, i));
-  if (n === sel[F]) { SND.thud(); return; }
-  sel[F] = n; marquee = 0; SND.move(); L.tear = 8; dirty = true;
+  if (n === sel[F]) { SND.thud(); if (S.view && i !== n) FL.v += (i > n ? 1 : -1) * 4.5; return; }
+  sel[F] = n; marquee = 0; SND.move(); L.tear = S.view ? 0 : 8; dirty = true;
   store.set('errordos-sel', { folder, sel });
 }
 function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings(); applyColors(); glitch('static'); }
@@ -1004,6 +1249,7 @@ function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings();
 // ----- setup -----
 function setupRows() {
   return [
+    ['VIEW', S.view ? '3D' : 'DOS', () => setView(!S.view)],
     ['COLOUR', SCHEMES[S.color].name, d => { S.color = (S.color + d + SCHEMES.length) % SCHEMES.length; applyColors(); }],
     ['GLITCH', GLITCH[S.glitch], d => { S.glitch = (S.glitch + d + 4) % 4; scheduleGlitch(performance.now()); }],
     ['SCREEN', S.curved ? 'CURVED' : 'FLAT', () => { S.curved = !S.curved; applyColors(); }],
@@ -1374,6 +1620,10 @@ function key(k) {
   if (mode === 'info') { if (k === 'enter' || k === 'back' || k === 'esc' || k === 'info') closeOverlay(); return; }
   if (mode !== 'main') return;
   const F = FOLDERS[folder];
+  if (k === 'view') return setView(!S.view);
+  // 3D view: Left/Right along the row, Up/Down to another folder
+  if (S.view && (k === 'left' || k === 'right')) k = k === 'left' ? 'up' : 'down';
+  else if (S.view && (k === 'up' || k === 'down')) k = k === 'up' ? 'left' : 'right';
   if (k === 'up') select(sel[F] - 1);
   else if (k === 'down') select(sel[F] + 1);
   else if (k === 'left') setFolder((folder + FOLDERS.length - 1) % FOLDERS.length);
@@ -1390,6 +1640,7 @@ const KEYMAP = {
   ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   Enter: 'enter', Space: 'enter', NumpadEnter: 'enter', KeyC: 'color', KeyY: 'color', KeyI: 'info', KeyX: 'info',
   Escape: 'esc', Backspace: 'back', KeyO: 'setup', F2: 'setup', KeyG: 'glitch', PageUp: 'pgup', PageDown: 'pgdn',
+  KeyV: 'view', Tab: 'view',
 };
 addEventListener('keydown', e => {
   if (mode === 'lock' && /^[0-9]$/.test(e.key)) { e.preventDefault(); return lockKey(e.key); }
@@ -1407,12 +1658,69 @@ tube.addEventListener('pointerdown', e => {
   const r = Math.floor((e.clientY - rect.top) / LH), c = Math.floor((e.clientX - rect.left) / CW);
   const hit = hits.find(h => h.r === r && c >= h.c0 && c <= h.c1) || hits.find(h => h.all);
   if (hit) { e.preventDefault(); hit.act(); dirty = true; return; }
+  // 3D view: the row follows a finger or the mouse along the panel
+  if (S.view && mode === 'main') {
+    const fr = flowCv.getBoundingClientRect();
+    if (e.clientX >= fr.left && e.clientX <= fr.right && e.clientY >= fr.top && e.clientY <= fr.bottom) {
+      e.preventDefault();
+      FL.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, pos0: FL.pos, t0: performance.now(), lx: FL.pos, lt: performance.now(), v: 0, axis: null, fx: fr.left, fy: fr.top };
+      try { tube.setPointerCapture(e.pointerId); } catch (er) {}
+      return;
+    }
+  }
   // swipe on the logo window changes program
   swipeStart = { x: e.clientX, y: e.clientY };
 });
+tube.addEventListener('pointermove', e => {
+  const dr = FL.drag;
+  if (!dr || e.pointerId !== dr.id) return;
+  const dx = e.clientX - dr.x0, dy = e.clientY - dr.y0;
+  if (!dr.axis && Math.hypot(dx, dy) > 8) dr.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+  if (dr.axis !== 'x') return;
+  const n = folders[FOLDERS[folder]].length;
+  let p = dr.pos0 - dx / FL.unit;
+  if (p < 0) p *= 0.35; else if (p > n - 1) p = n - 1 + (p - n + 1) * 0.35;      // stretchy at the ends
+  const now = performance.now(), dts = (now - dr.lt) / 1000;
+  if (dts > 0.004) { dr.v = dr.v * 0.4 + 0.6 * (p - dr.lx) / dts; dr.lx = p; dr.lt = now; }
+  FL.pos = p; FL.v = 0;
+  flowPick(Math.round(p));
+});
+function flowRelease(e, cancel) {
+  const dr = FL.drag;
+  if (!dr || e.pointerId !== dr.id) return false;
+  FL.drag = null;
+  const F = FOLDERS[folder], n = folders[F].length;
+  const dx = e.clientX - dr.x0, dy = e.clientY - dr.y0;
+  if (cancel) return true;
+  if (dr.axis === 'x') {
+    const v = performance.now() - dr.lt > 120 ? 0 : dr.v;
+    flowPick(Math.round(FL.pos + v * 0.18));
+    FL.v = v;
+    if (FL.pos < -0.05 || FL.pos > n - 0.95) SND.thud();
+  } else if (dr.axis === 'y') {
+    if (Math.abs(dy) > 40) setFolder((folder + (dy < 0 ? 1 : FOLDERS.length - 1)) % FOLDERS.length);
+  } else if (performance.now() - dr.t0 < 500) {
+    // a tap: the middle card starts it, another card comes to the middle
+    const i = flowCardAt(e.clientX - dr.fx, e.clientY - dr.fy);
+    if (i >= 0 && i === sel[F]) run();
+    else if (i >= 0) select(i);
+  }
+  dirty = true;
+  return true;
+}
+tube.addEventListener('pointercancel', e => flowRelease(e, true));
+tube.addEventListener('wheel', e => {
+  if (!S.view || mode !== 'main') return;
+  e.preventDefault();
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  FL.wheel += d * (e.deltaMode === 1 ? 30 : 1);
+  if (Math.abs(FL.wheel) >= 60) { select(sel[FOLDERS[folder]] + Math.sign(FL.wheel)); FL.wheel = 0; }
+  clearTimeout(FL.wheelT); FL.wheelT = setTimeout(() => { FL.wheel = 0; }, 220);
+}, { passive: false });
 let swipeStart = null;
 addEventListener('pointerdown', () => { unlock(); if (mode === 'boot') bootSkip = true; });
 tube.addEventListener('pointerup', e => {
+  if (flowRelease(e)) return;
   if (!swipeStart || mode !== 'main') { swipeStart = null; return; }
   const dx = e.clientX - swipeStart.x, dy = e.clientY - swipeStart.y;
   swipeStart = null;
@@ -1431,12 +1739,13 @@ function pollPad(now) {
     const ax = p.axes || [];
     const state = {
       up: b(12) || ax[1] < -0.6, down: b(13) || ax[1] > 0.6, left: b(14) || ax[0] < -0.6, right: b(15) || ax[0] > 0.6,
-      enter: b(0), back: b(1), info: b(2), color: b(3), pgup: b(4), pgdn: b(5), glitch: b(8), setup: b(9),
+      enter: b(0), back: b(1), info: b(2), view: b(3), color: b(6), pgup: b(4), pgdn: b(5), glitch: b(8), setup: b(9),
     };
     const prev = padPrev[p.index] || {};
+    const rep = S.view ? ['left', 'right'] : ['up', 'down'];
     for (const k in state) {
-      if (state[k] && !prev[k]) { key(k); if (k === 'up' || k === 'down') padRepeat = now + 380; }
-      else if (state[k] && (k === 'up' || k === 'down') && now > padRepeat) { key(k); padRepeat = now + 110; }
+      if (state[k] && !prev[k]) { key(k); if (rep.includes(k)) padRepeat = now + 380; }
+      else if (state[k] && rep.includes(k) && now > padRepeat) { key(k); padRepeat = now + 110; }
     }
     padPrev[p.index] = state;
   }
@@ -1459,8 +1768,9 @@ function frame(now) {
     render();
     lastText = now;
   }
-  drawLogo(dt);
+  if (S.view) drawFlow(dt); else drawLogo(dt);
   logoCv.style.visibility = (mode === 'setup' || mode === 'info' || mode === 'boot') ? 'hidden' : 'visible';
+  flowCv.style.visibility = mode === 'boot' ? 'hidden' : 'visible';
   drawStatic();
   if (now > nextGlitch && (mode === 'main' || mode === 'setup')) { glitch(); scheduleGlitch(now); }
   requestAnimationFrame(frame);
