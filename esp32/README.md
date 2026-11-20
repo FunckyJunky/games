@@ -113,10 +113,13 @@ Click moves to the next letter and hold picks it.
 
 The box checks error.blue's HTTPS certificate against the root certificates in `certs.h`.
 If that ever fails ("TLS ..." under `NET`), set **TLS → SKIP** in SETUP.EXE.
-`MEM` shows the free memory. HTTPS needs about 40 KB of it.
-Bluetooth only starts once a keyboard has been paired (or you open BT.EXE), because it takes a big part of that memory.
-Bluetooth switches itself off again 45 s after a scan when nothing gets paired, which gives that memory back.
-If HTTPS still doesn't fit (with a keyboard connected), the box sends that request over plain HTTP instead.
+`MEM` shows the free memory. HTTPS needs about 45 KB of it, and Bluetooth takes about 70 KB:
+the ESP32-C3 can't do both at once.
+Bluetooth only starts when a keyboard has been paired before, or when you open BT.EXE.
+It switches itself off again when nothing is connected: 45 s after a scan, or 60 s after start-up
+when a paired keyboard doesn't turn up. Open BT.EXE to look for the keyboard again.
+While Bluetooth is on, or whenever HTTPS runs out of memory, the box sends requests over plain HTTP
+instead and tries HTTPS again 5 minutes later. `BT LIST` shows the paired devices.
 `NET` then says "VIA HTTP (LOW MEMORY)". **TLS → HTTP** in SETUP.EXE always uses plain HTTP.
 
 ## Screenshots without a board

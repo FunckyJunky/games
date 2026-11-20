@@ -56,14 +56,49 @@ String urlEncode(const char* s) {
 }
 
 // ------------------------------------------------------------------ HTTPS task
+// One try at a request. Returns the HTTP code (<= 0 = no answer); memFail = HTTPS ran out of memory.
+static int tryRequest(HTTPClient& http, WiFiClientSecure& tls, WiFiClient& plain, const Job& j, bool secure,
+                      Result& r, bool& memFail) {
+  memFail = false;
+  String url = String(secure ? "https://" : "http://") + SERVER_HOST + j.path;
+  if (!(secure ? http.begin(tls, url) : http.begin(plain, url))) { snprintf(err, sizeof(err), "BAD ADDRESS"); return -1; }
+  http.setConnectTimeout(8000);
+  http.setTimeout(8000);
+  http.setUserAgent("ERROR-OLED/1.0");
+  int code;
+  if (j.post) {
+    http.addHeader("Content-Type", "application/json");
+    code = http.POST((uint8_t*)j.body, strlen(j.body));
+  } else code = http.GET();
+  if (code >= 300 && code < 400 && !secure) snprintf(err, sizeof(err), "HTTP %d", code);   // sent on to HTTPS
+  else if (code > 0) {
+    String s = http.getString();
+    r.len = s.length();
+    r.body = (char*)malloc(r.len + 1);
+    if (r.body) memcpy(r.body, s.c_str(), r.len + 1); else r.len = 0;
+    if (code == 200) err[0] = 0; else snprintf(err, sizeof(err), "HTTP %d", code);
+  } else {
+    char tlsErr[64] = "";
+    if (secure && tls.lastError(tlsErr, sizeof(tlsErr)) != 0) snprintf(err, sizeof(err), "TLS %s", tlsErr);
+    else snprintf(err, sizeof(err), "%s", HTTPClient::errorToString(code).c_str());
+    memFail = secure && (ESP.getMaxAllocHeap() < 18000 || strstr(tlsErr, "alloc") || strstr(tlsErr, "ALLOC"));
+    if (memFail) snprintf(err, sizeof(err), "TLS: LOW MEMORY (%uK)", (unsigned)(ESP.getMaxAllocHeap() / 1024));
+    tls.stop();
+    plain.stop();
+  }
+  http.end();
+  return code;
+}
+
 static void netTask(void*) {
   WiFiClientSecure tls;
   WiFiClient plain;                        // TLS = HTTP in SETUP.EXE: no encryption, much less memory
   HTTPClient http;
   http.setReuse(true);                     // keep the connection: no new TLS handshake every time
   int lastCheck = -1;
-  bool httpRedirected = false;               // error.blue sent plain HTTP to HTTPS: no point trying it again
+  bool httpRedirected = false;             // error.blue sent plain HTTP to HTTPS: no point trying it again
   bool lastSecure = true;
+  uint32_t httpUntil = 0;                  // HTTPS ran out of memory: plain HTTP until then
   for (;;) {
     Job j;
     if (xQueueReceive(jobQ, &j, portMAX_DELAY) != pdTRUE) continue;
@@ -76,49 +111,33 @@ static void netTask(void*) {
         if (C->tlsCheck == 1) tls.setCACert(ROOT_CAS); else tls.setInsecure();
         lastCheck = C->tlsCheck;
       }
-      bool secure = C->tlsCheck != 2;
-      // HTTPS needs ~45 KB (two 16 KB buffers + the handshake). With Bluetooth on that can be too much:
-      // then this request goes over plain HTTP instead of failing.
+      // HTTPS needs ~45 KB (two 16 KB buffers + the handshake). With Bluetooth on (~70 KB) there isn't
+      // that much: then requests go over plain HTTP instead of failing, and HTTPS is tried again later.
+      bool wantSecure = C->tlsCheck != 2;
       bool lowMem = !tls.connected() && (ESP.getFreeHeap() < 48000 || ESP.getMaxAllocHeap() < 20000);
-      bool fallback = secure && lowMem && !httpRedirected;
-      if (fallback) secure = false;
+      bool viaHttp = wantSecure && !httpRedirected && (lowMem || (int32_t)(httpUntil - millis()) > 0);
+      bool secure = wantSecure && !viaHttp;
       if (secure != lastSecure) { http.end(); tls.stop(); plain.stop(); lastSecure = secure; }
       http.setReuse(ESP.getFreeHeap() > 70000);   // keep the connection only when there's memory to spare
-      String url = String(secure ? "https://" : "http://") + SERVER_HOST + j.path;
-      if (C->tlsCheck != 2 && lowMem && httpRedirected) {
+      if (wantSecure && lowMem && httpRedirected) {
         snprintf(err, sizeof(err), "LOW MEMORY FOR HTTPS (%uK)", (unsigned)(ESP.getFreeHeap() / 1024));
         r.status = -3;
-      } else if (secure ? http.begin(tls, url) : http.begin(plain, url)) {
-        http.setConnectTimeout(8000);
-        http.setTimeout(8000);
-        http.setUserAgent("ERROR-OLED/1.0");
-        int code;
-        if (j.post) {
-          http.addHeader("Content-Type", "application/json");
-          code = http.POST((uint8_t*)j.body, strlen(j.body));
-        } else code = http.GET();
+      } else {
+        bool memFail;
+        int code = tryRequest(http, tls, plain, j, secure, r, memFail);
+        if (memFail && !httpRedirected) {           // out of memory mid-handshake: same request over HTTP, now
+          httpUntil = millis() + 5 * 60000;
+          viaHttp = true;
+          http.end(); tls.stop(); plain.stop(); lastSecure = false;
+          code = tryRequest(http, tls, plain, j, false, r, memFail);
+        }
         r.status = code;
-        if (fallback && code >= 300 && code < 400) {      // the site wants HTTPS only
+        if (viaHttp && code >= 300 && code < 400) {  // the site wants HTTPS only
           httpRedirected = true;
           snprintf(err, sizeof(err), "LOW MEMORY FOR HTTPS (%uK)", (unsigned)(ESP.getFreeHeap() / 1024));
           r.status = -3;
-        } else if (code > 0) {
-          String s = http.getString();
-          r.len = s.length();
-          r.body = (char*)malloc(r.len + 1);
-          if (r.body) memcpy(r.body, s.c_str(), r.len + 1); else r.len = 0;
-          if (code == 200) { if (fallback) snprintf(err, sizeof(err), "VIA HTTP (LOW MEMORY)"); else err[0] = 0; }
-          else snprintf(err, sizeof(err), "HTTP %d", code);
-        } else {
-          char tlsErr[64] = "";
-          if (secure && tls.lastError(tlsErr, sizeof(tlsErr)) != 0) snprintf(err, sizeof(err), "TLS %s", tlsErr);
-          else snprintf(err, sizeof(err), "%s", HTTPClient::errorToString(code).c_str());
-          if (secure && ESP.getMaxAllocHeap() < 18000) snprintf(err, sizeof(err), "TLS: LOW MEMORY (%uK)", (unsigned)(ESP.getMaxAllocHeap() / 1024));
-          tls.stop();
-          plain.stop();
-        }
-        http.end();
-      } else snprintf(err, sizeof(err), "BAD ADDRESS");
+        } else if (viaHttp && code == 200) snprintf(err, sizeof(err), "VIA HTTP (LOW MEMORY)");
+      }
     } else snprintf(err, sizeof(err), "NO WIFI");
     free(j.path);
     free(j.body);
