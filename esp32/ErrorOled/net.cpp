@@ -35,16 +35,6 @@ struct Result { uint8_t kind; int status; char* body; size_t len; };
 static QueueHandle_t jobQ, resQ;
 static volatile uint32_t busy = 0;
 
-// HTTPS needs two ~17 KB buffers, each in one piece. After a while (Bluetooth, chat, the web page)
-// the free memory is chopped into small pieces and the handshake fails with "TLS: LOW MEMORY"
-// even when there's plenty free in total. So one 44 KB block is put aside at start-up, given back
-// just before a new HTTPS connection and taken again once that connection closes.
-static void* tlsReserve = nullptr;
-static const size_t TLS_RESERVE = 44 * 1024;
-static void reserveTake() { if (!tlsReserve) tlsReserve = malloc(TLS_RESERVE); }
-static void reserveGive() { if (tlsReserve) { free(tlsReserve); tlsReserve = nullptr; } }
-uint32_t netReserved() { return tlsReserve ? TLS_RESERVE : 0; }
-
 String jsonEscape(const char* s) {
   String o;
   for (; *s; s++) {
@@ -89,12 +79,11 @@ static void netTask(void*) {
       bool secure = C->tlsCheck != 2;
       // HTTPS needs ~45 KB (two 16 KB buffers + the handshake). With Bluetooth on that can be too much:
       // then this request goes over plain HTTP instead of failing.
-      bool lowMem = !tls.connected() && !tlsReserve && (ESP.getFreeHeap() < 48000 || ESP.getMaxAllocHeap() < 20000);
+      bool lowMem = !tls.connected() && (ESP.getFreeHeap() < 48000 || ESP.getMaxAllocHeap() < 20000);
       bool fallback = secure && lowMem && !httpRedirected;
       if (fallback) secure = false;
       if (secure != lastSecure) { http.end(); tls.stop(); plain.stop(); lastSecure = secure; }
-      http.setReuse(ESP.getFreeHeap() + netReserved() > 70000);   // keep the connection only when there's memory to spare
-      if (secure && !tls.connected()) reserveGive();              // new handshake: hand it the big block
+      http.setReuse(ESP.getFreeHeap() > 70000);   // keep the connection only when there's memory to spare
       String url = String(secure ? "https://" : "http://") + SERVER_HOST + j.path;
       if (C->tlsCheck != 2 && lowMem && httpRedirected) {
         snprintf(err, sizeof(err), "LOW MEMORY FOR HTTPS (%uK)", (unsigned)(ESP.getFreeHeap() / 1024));
@@ -131,7 +120,6 @@ static void netTask(void*) {
         http.end();
       } else snprintf(err, sizeof(err), "BAD ADDRESS");
     } else snprintf(err, sizeof(err), "NO WIFI");
-    if (!tls.connected()) reserveTake();                      // connection closed: put the block aside again
     free(j.path);
     free(j.body);
     xQueueSend(resQ, &r, portMAX_DELAY);
@@ -164,7 +152,6 @@ void netBegin(Settings* cfg, void (*save)()) {
   saveCfg = save;
   jobQ = xQueueCreate(8, sizeof(Job));
   resQ = xQueueCreate(8, sizeof(Result));
-  reserveTake();                           // before WiFi: this is when one big piece is easiest to get
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(DEVICE_NAME);

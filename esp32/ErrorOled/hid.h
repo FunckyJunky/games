@@ -16,6 +16,7 @@ int hidConnected(BtDev* out, int max);
 uint32_t hidPasskey();
 const char* hidStatus();
 int hidBonds();
+int hidKnown(BtDev* out, int max);         // the remembered keyboards/mice
 
 // scan settings (set on the setup web page, kept in flash)
 struct BtOpts {

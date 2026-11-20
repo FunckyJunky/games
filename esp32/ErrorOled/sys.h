@@ -52,12 +52,13 @@ class Sys {
   virtual uint32_t btPasskey() = 0;                   // != 0: show it, the keyboard wants it typed
   virtual const char* btStatus() = 0;                 // "", "CONNECTING", "PAIRING", "FAILED"...
   virtual int btBonds() = 0;
+  virtual int btKnown(BtDev*, int) { return 0; }      // remembered devices
+  virtual bool btOn() { return true; }                // Bluetooth running (it goes off when unused)
 
   // the chip
   virtual uint32_t freeHeap() = 0;
   virtual uint32_t totalHeap() = 0;
   virtual uint32_t maxBlock() = 0;
-  virtual uint32_t reserved() { return 0; }          // memory kept aside for HTTPS
   virtual const char* chipInfo() = 0;
   virtual void reboot() = 0;
 };

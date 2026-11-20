@@ -52,7 +52,7 @@ static volatile int8_t evUp = -1, evDown = -1;
 static bool uaKeys = false;
 static bool started = false;               // Bluetooth is on
 static bool taskMade = false;
-static volatile uint32_t lastUse = 0;      // last scan / pairing: Bluetooth goes off again 45 s later if nothing is paired
+static volatile uint32_t lastUse = 0;      // last scan / pairing / connection: Bluetooth goes off again when unused
 static char devName[24] = "ERROR-OLED";
 static char blockAddr[18] = "";            // a paired one that just refused: leave it alone for a minute
 static uint32_t blockUntil = 0;
@@ -264,10 +264,14 @@ static void hidTask(void*) {
   uint32_t lastBg = 0;
   for (;;) {
     if (!started) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
-    bool busy = scanning || want || passkey;
+    // Bluetooth takes ~70 KB: with it on there's no room left for HTTPS (WHO and CHAT stop working).
+    // So it goes off again when nothing is connected: 45 s after a scan, or 60 s after start-up when
+    // a paired keyboard doesn't show up (open BT.EXE to look for it again). Background scans for
+    // paired devices don't count as use.
+    bool busy = (scanning && userScan) || want || passkey;
     for (auto& P : peers) if (P.client) busy = true;
     if (busy) lastUse = millis();
-    else if (knownN == 0 && millis() - lastUse > 45000) { stopBle(); continue; }
+    else if (millis() - lastUse > (knownN ? 60000u : 45000u)) { stopBle(); continue; }
     for (auto& P : peers)
       if (P.dropped) {
         NimBLEClient* c = P.client;
@@ -447,3 +451,15 @@ const char* hidStatus() {
   return status;
 }
 int hidBonds() { return knownN; }
+int hidKnown(BtDev* out, int max) {
+  int n = 0;
+  for (int i = 0; i < knownN && n < max; i++) {
+    BtDev& d = out[n++];
+    memset(&d, 0, sizeof(d));
+    strncpy(d.name, known[i].name, sizeof(d.name) - 1);
+    strncpy(d.addr, known[i].addr, sizeof(d.addr) - 1);
+    d.atype = known[i].atype;
+    d.bonded = 1;
+  }
+  return n;
+}

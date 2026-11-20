@@ -1206,7 +1206,7 @@ static void runCommand(const char* line) {
   else if (!strcmp(cmd, "DIR")) cmdDir();
   else if (!strcmp(cmd, "CLS")) clN = 0;
   else if (!strcmp(cmd, "VER")) { cprint("ERROR-DOS " OLED_VERSION); cprintf("ERROR-OLED %s", S->chipInfo()); }
-  else if (!strcmp(cmd, "MEM")) { cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024)); cprintf("BIGGEST %uK", (unsigned)(S->maxBlock() / 1024)); if (S->reserved()) cprintf("+%uK FOR HTTPS", (unsigned)(S->reserved() / 1024)); }
+  else if (!strcmp(cmd, "MEM")) { cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024)); cprintf("BIGGEST %uK", (unsigned)(S->maxBlock() / 1024)); }
   else if (!strcmp(cmd, "TIME") || !strcmp(cmd, "DATE")) { int h, m, s; if (S->clock(h, m, s)) cprintf("%02d:%02d:%02d", h, m, s); else cprint("NO TIME YET (WIFI)"); }
   else if (!strcmp(cmd, "IP") || !strcmp(cmd, "NET")) {
     static const char* const ST[] = {"OFF", "CONNECTING", "ON", "FAILED", "PHONE SETUP"};
@@ -1257,6 +1257,9 @@ static void runCommand(const char* line) {
       for (int i = 0; i < n; i++) cprintf("%s %s", btType(d[i].type), d[i].name[0] ? d[i].name : d[i].addr);
       n = S->btConnected(d, 3);
       for (int i = 0; i < n; i++) cprintf("ON: %s %s", btType(d[i].type), d[i].name);
+      n = S->btKnown(d, 3);
+      for (int i = 0; i < n; i++) cprintf("PAIRED: %s %s", d[i].name[0] ? d[i].name : "?", d[i].addr);
+      if (!S->btOn()) cprint("BT OFF (OPEN BT.EXE TO LOOK)");
       if (S->btStatus()[0]) cprint(S->btStatus());
     }
     else { if (ac > 1 && ieq(av[1], "SCAN")) S->btScan(); go(SC_BT); }
@@ -1280,7 +1283,7 @@ static void runCommand(const char* line) {
 // ======================================================================= dispatch
 static void enter(Scr s) {
   if (s == SC_WIFI) { netN = -1; wifiL = {0, 0}; S->wifiScan(); }
-  if (s == SC_BT) btL = {0, 0};
+  if (s == SC_BT) { btL = {0, 0}; if (!S->btOn()) S->btScan(); }   // Bluetooth was off to save memory
   if (s == SC_CHAT) {
     if (strcmp(chat.code, CFG.channel)) chatReset(chat, CFG.channel);
     tChat = 0;                       // fetch now
@@ -1952,8 +1955,8 @@ void uiTick() {
       lastErr = onErr;
       if (onErr) {
         char t[140];
-        snprintf(t, sizeof(t), "NET ERROR %d %s | FREE %uK BIGGEST %uK RESERVE %uK BT %s", onErr, S->netError(),
-                 (unsigned)(S->freeHeap() / 1024), (unsigned)(S->maxBlock() / 1024), (unsigned)(S->reserved() / 1024),
+        snprintf(t, sizeof(t), "NET ERROR %d %s | FREE %uK BIGGEST %uK BT %s", onErr, S->netError(),
+                 (unsigned)(S->freeHeap() / 1024), (unsigned)(S->maxBlock() / 1024),
                  S->btStatus()[0] ? S->btStatus() : (S->btBonds() ? "REMEMBERS A DEVICE" : "-"));
         S->serialOut(t);
       }

@@ -15,7 +15,6 @@ void netScan();
 int netScanResults(WifiNet* out, int max);
 void netJoin(const char* ssid, const char* pass);
 void netPortal(bool on);
-uint32_t netReserved();                 // bytes kept aside for the next HTTPS handshake
 bool netJobBusy(uint8_t kind);
 void netRequest(uint8_t kind, const char* method, const String& path, const String& body);
 String jsonEscape(const char* s);

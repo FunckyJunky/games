@@ -102,11 +102,12 @@ class Board : public Sys {
   uint32_t btPasskey() override { return hidPasskey(); }
   const char* btStatus() override { return hidStatus(); }
   int btBonds() override { return hidBonds(); }
+  int btKnown(BtDev* d, int max) override { return hidKnown(d, max); }
+  bool btOn() override { return hidStarted(); }
 
   uint32_t freeHeap() override { return ESP.getFreeHeap(); }
   uint32_t totalHeap() override { return ESP.getHeapSize(); }
   uint32_t maxBlock() override { return ESP.getMaxAllocHeap(); }
-  uint32_t reserved() override { return netReserved(); }
   const char* chipInfo() override {
     static char b[32];
     snprintf(b, sizeof(b), "%s %uMHZ", ESP.getChipModel(), (unsigned)ESP.getCpuFreqMHz());
