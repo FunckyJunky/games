@@ -1206,7 +1206,7 @@ static void runCommand(const char* line) {
   else if (!strcmp(cmd, "DIR")) cmdDir();
   else if (!strcmp(cmd, "CLS")) clN = 0;
   else if (!strcmp(cmd, "VER")) { cprint("ERROR-DOS " OLED_VERSION); cprintf("ERROR-OLED %s", S->chipInfo()); }
-  else if (!strcmp(cmd, "MEM")) { cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024)); cprintf("BIGGEST %uK", (unsigned)(S->maxBlock() / 1024)); }
+  else if (!strcmp(cmd, "MEM")) { cprintf("%uK FREE OF %uK", (unsigned)(S->freeHeap() / 1024), (unsigned)(S->totalHeap() / 1024)); cprintf("BIGGEST %uK", (unsigned)(S->maxBlock() / 1024)); if (S->reserved()) cprintf("+%uK FOR HTTPS", (unsigned)(S->reserved() / 1024)); }
   else if (!strcmp(cmd, "TIME") || !strcmp(cmd, "DATE")) { int h, m, s; if (S->clock(h, m, s)) cprintf("%02d:%02d:%02d", h, m, s); else cprint("NO TIME YET (WIFI)"); }
   else if (!strcmp(cmd, "IP") || !strcmp(cmd, "NET")) {
     static const char* const ST[] = {"OFF", "CONNECTING", "ON", "FAILED", "PHONE SETUP"};
@@ -1948,7 +1948,16 @@ void uiTick() {
       if (t[0]) S->serialOut(t);
     }
     if (onHave && !saidWho) { saidWho = true; char t[40]; snprintf(t, sizeof(t), "WHO: %u ONLINE", (unsigned)on->total); S->serialOut(t); }
-    if (onErr != lastErr) { lastErr = onErr; if (onErr) { char t[80]; snprintf(t, sizeof(t), "NET ERROR %d %s", onErr, S->netError()); S->serialOut(t); } }
+    if (onErr != lastErr) {
+      lastErr = onErr;
+      if (onErr) {
+        char t[140];
+        snprintf(t, sizeof(t), "NET ERROR %d %s | FREE %uK BIGGEST %uK RESERVE %uK BT %s", onErr, S->netError(),
+                 (unsigned)(S->freeHeap() / 1024), (unsigned)(S->maxBlock() / 1024), (unsigned)(S->reserved() / 1024),
+                 S->btStatus()[0] ? S->btStatus() : (S->btBonds() ? "REMEMBERS A DEVICE" : "-"));
+        S->serialOut(t);
+      }
+    }
     const char* bs = S->btStatus();
     if (strcmp(bs, lastBt)) { scopy(lastBt, sizeof(lastBt), bs); if (bs[0]) { char t[40]; snprintf(t, sizeof(t), "BT %s", bs); S->serialOut(t); } }
   }
