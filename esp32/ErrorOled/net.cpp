@@ -62,6 +62,8 @@ static void netTask(void*) {
   HTTPClient http;
   http.setReuse(true);                     // keep the connection: no new TLS handshake every time
   int lastCheck = -1;
+  bool httpRedirected = false;               // error.blue sent plain HTTP to HTTPS: no point trying it again
+  bool lastSecure = true;
   for (;;) {
     Job j;
     if (xQueueReceive(jobQ, &j, portMAX_DELAY) != pdTRUE) continue;
@@ -75,8 +77,18 @@ static void netTask(void*) {
         lastCheck = C->tlsCheck;
       }
       bool secure = C->tlsCheck != 2;
+      // HTTPS needs ~45 KB (two 16 KB buffers + the handshake). With Bluetooth on that can be too much:
+      // then this request goes over plain HTTP instead of failing.
+      bool lowMem = !tls.connected() && (ESP.getFreeHeap() < 48000 || ESP.getMaxAllocHeap() < 20000);
+      bool fallback = secure && lowMem && !httpRedirected;
+      if (fallback) secure = false;
+      if (secure != lastSecure) { http.end(); tls.stop(); plain.stop(); lastSecure = secure; }
+      http.setReuse(ESP.getFreeHeap() > 70000);   // keep the connection only when there's memory to spare
       String url = String(secure ? "https://" : "http://") + SERVER_HOST + j.path;
-      if (secure ? http.begin(tls, url) : http.begin(plain, url)) {
+      if (C->tlsCheck != 2 && lowMem && httpRedirected) {
+        snprintf(err, sizeof(err), "LOW MEMORY FOR HTTPS (%uK)", (unsigned)(ESP.getFreeHeap() / 1024));
+        r.status = -3;
+      } else if (secure ? http.begin(tls, url) : http.begin(plain, url)) {
         http.setConnectTimeout(8000);
         http.setTimeout(8000);
         http.setUserAgent("ERROR-OLED/1.0");
@@ -86,12 +98,17 @@ static void netTask(void*) {
           code = http.POST((uint8_t*)j.body, strlen(j.body));
         } else code = http.GET();
         r.status = code;
-        if (code > 0) {
+        if (fallback && code >= 300 && code < 400) {      // the site wants HTTPS only
+          httpRedirected = true;
+          snprintf(err, sizeof(err), "LOW MEMORY FOR HTTPS (%uK)", (unsigned)(ESP.getFreeHeap() / 1024));
+          r.status = -3;
+        } else if (code > 0) {
           String s = http.getString();
           r.len = s.length();
           r.body = (char*)malloc(r.len + 1);
           if (r.body) memcpy(r.body, s.c_str(), r.len + 1); else r.len = 0;
-          if (code == 200) err[0] = 0; else snprintf(err, sizeof(err), "HTTP %d", code);
+          if (code == 200) { if (fallback) snprintf(err, sizeof(err), "VIA HTTP (LOW MEMORY)"); else err[0] = 0; }
+          else snprintf(err, sizeof(err), "HTTP %d", code);
         } else {
           char tlsErr[64] = "";
           if (secure && tls.lastError(tlsErr, sizeof(tlsErr)) != 0) snprintf(err, sizeof(err), "TLS %s", tlsErr);

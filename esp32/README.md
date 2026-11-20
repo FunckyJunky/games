@@ -36,6 +36,18 @@ tools/          gen_keymaps.py makes ErrorOled/keymaps.h (US / DE / FR / Ukraini
    - Partition Scheme: **Huge APP (3MB No OTA/1MB SPIFFS)**. WiFi, Bluetooth and HTTPS together need about 1.5 MB.
 5. Upload.
 
+## Start-up
+
+The box starts with a 3D welcome animation:
+1. The screen switches on like an old TV.
+2. Stars rush past.
+3. "ERROR" flies in, spinning, in solid 3D block letters.
+4. `error.blue` types itself underneath.
+5. A LOADING ERROR-DOS bar fills up.
+
+Then the ERROR-BIOS text boot starts. Any key, click or button press skips the animation.
+`INTRO` plays it again, and SETUP.EXE → INTRO switches it off.
+
 ## The first start
 
 The box starts with ERROR-BIOS, then types `C:\>WHO`. If it doesn't know a WiFi network yet, it opens WIFI.EXE.
@@ -103,7 +115,9 @@ The box checks error.blue's HTTPS certificate against the root certificates in `
 If that ever fails ("TLS ..." under `NET`), set **TLS → SKIP** in SETUP.EXE.
 `MEM` shows the free memory. HTTPS needs about 40 KB of it.
 Bluetooth only starts once a keyboard has been paired (or you open BT.EXE), because it takes a big part of that memory.
-If you see "TLS: LOW MEMORY", **TLS → HTTP** uses plain HTTP, which needs far less.
+Bluetooth switches itself off again 45 s after a scan when nothing gets paired, which gives that memory back.
+If HTTPS still doesn't fit (with a keyboard connected), the box sends that request over plain HTTP instead.
+`NET` then says "VIA HTTP (LOW MEMORY)". **TLS → HTTP** in SETUP.EXE always uses plain HTTP.
 
 ## Screenshots without a board
 

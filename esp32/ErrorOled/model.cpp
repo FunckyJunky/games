@@ -31,6 +31,7 @@ void settingsDefaults(Settings& s) {
   s.beacon = 1;
   s.tlsCheck = 1;
   s.saver = 1;
+  s.intro = 1;
 }
 
 bool parseOnline(const char* json, size_t len, OnlineSnap& out, const char* hideName) {

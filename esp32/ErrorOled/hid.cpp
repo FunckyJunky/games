@@ -51,6 +51,8 @@ static volatile uint8_t want = 0;           // 1 = pair (you picked it), 2 = rec
 static volatile int8_t evUp = -1, evDown = -1;
 static bool uaKeys = false;
 static bool started = false;               // Bluetooth is on
+static bool taskMade = false;
+static volatile uint32_t lastUse = 0;      // last scan / pairing: Bluetooth goes off again 45 s later if nothing is paired
 static char devName[24] = "ERROR-OLED";
 static char blockAddr[18] = "";            // a paired one that just refused: leave it alone for a minute
 static uint32_t blockUntil = 0;
@@ -247,9 +249,25 @@ static void connectTo(const char* addr, uint8_t atype, bool byUser) {
   evUp = slot;
 }
 
+// Bluetooth off again: gives its ~50 KB back (HTTPS needs it). Only when nothing is paired or connected.
+static void stopBle() {
+  if (!started) return;
+  if (NimBLEDevice::getScan()->isScanning()) NimBLEDevice::getScan()->stop();
+  for (auto& P : peers) { P.client = nullptr; P.up = false; P.dropped = false; }
+  NimBLEDevice::deinit(true);
+  started = false;
+  scanning = false;
+  userScan = false;
+}
+
 static void hidTask(void*) {
   uint32_t lastBg = 0;
   for (;;) {
+    if (!started) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+    bool busy = scanning || want || passkey;
+    for (auto& P : peers) if (P.client) busy = true;
+    if (busy) lastUse = millis();
+    else if (knownN == 0 && millis() - lastUse > 45000) { stopBle(); continue; }
     for (auto& P : peers)
       if (P.dropped) {
         NimBLEClient* c = P.client;
@@ -327,6 +345,7 @@ void hidLoop(uint32_t now, uint8_t layout) {
 static void start() {
   if (started) return;
   started = true;
+  lastUse = millis();
   NimBLEDevice::init(devName);
   NimBLEDevice::setSecurityAuth(true, true, true);           // bond, protect against snooping, secure connections
   NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);    // we show a code, the keyboard types it
@@ -334,7 +353,7 @@ static void start() {
   NimBLEScan* sc = NimBLEDevice::getScan();
   sc->setScanCallbacks(&scanCB, false);
   sc->setMaxResults(0);                                      // don't keep every device it hears: saves memory
-  xTaskCreate(hidTask, "hid", 5120, nullptr, 2, nullptr);
+  if (!taskMade) { taskMade = true; xTaskCreate(hidTask, "hid", 5120, nullptr, 2, nullptr); }
 }
 
 void hidBegin(const char* deviceName) {

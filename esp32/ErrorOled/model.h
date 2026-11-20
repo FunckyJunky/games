@@ -22,6 +22,7 @@ struct Settings {
   uint8_t beacon;          // show this box as online on error.blue
   uint8_t tlsCheck;        // 1 = HTTPS + check the certificate, 0 = HTTPS without the check, 2 = plain HTTP
   uint8_t saver;           // burn-in protection: shift the picture, dim when idle
+  uint8_t intro;           // 3D welcome animation when the box starts (new fields go at the end: old saved settings still load)
 };
 void settingsDefaults(Settings& s);
 

@@ -161,7 +161,13 @@ void setup() {
 
   prefs.begin("erroroled", false);
   settingsDefaults(cfg);
-  if (prefs.getUInt("ver", 0) != CFG_VERSION || prefs.getBytes("cfg", &cfg, sizeof(cfg)) != sizeof(cfg)) {
+  uint32_t ver = prefs.getUInt("ver", 0);
+  size_t have = prefs.getBytesLength("cfg");
+  bool older = (ver & 0xFFFF0000) == (CFG_VERSION & 0xFFFF0000) && have > 0 && have < sizeof(cfg);
+  if (older) {                                   // saved by an earlier ERROR-OLED: keep it, new settings get defaults
+    prefs.getBytes("cfg", &cfg, have);
+    saveSettings();
+  } else if (ver != CFG_VERSION || prefs.getBytes("cfg", &cfg, sizeof(cfg)) != sizeof(cfg)) {
     settingsDefaults(cfg);
     // each box gets its own name, e.g. OLED-3F, so two boxes don't look like one
     snprintf(cfg.name, sizeof(cfg.name), "OLED-%02X", mac[5]);

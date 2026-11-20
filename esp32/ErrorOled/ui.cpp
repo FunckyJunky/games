@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <strings.h>
+#include <math.h>
 
 #define OLED_VERSION "1.0"
 #ifndef SERVER_NAME
@@ -62,14 +63,18 @@ static uint32_t gc[MAXR][MAXC];
 static uint8_t ga[MAXR][MAXC];
 enum : uint8_t { A_INV = 1 };
 
-enum Scr : uint8_t { SC_BOOT, SC_WHO, SC_INFO, SC_MENU, SC_DOS, SC_CHAT, SC_QUICK, SC_WIFI, SC_BT, SC_SETUP, SC_INPUT, SC_LOG, SC_PORTAL };
+enum Scr : uint8_t { SC_BOOT, SC_WHO, SC_INFO, SC_MENU, SC_DOS, SC_CHAT, SC_QUICK, SC_WIFI, SC_BT, SC_SETUP, SC_INPUT, SC_LOG, SC_PORTAL, SC_INTRO };
 static uint8_t stk[10];
 static int sp = 0;
 static Scr cur() { return (Scr)stk[sp]; }
 
 static bool dirty = true;
 static uint32_t now = 0, lastDraw = 0, lastInput = 0;
-static bool kbOn = false, langUa = false;           // a Bluetooth keyboard is connected / types Cyrillic
+static bool kbOn = false, langUa = false;
+// the 3D welcome (see "the 3D welcome" below)
+static uint32_t introAt = 0, introLast = 0;
+static bool introReplay = false, starsReady = false;
+static void introEnd();           // a Bluetooth keyboard is connected / types Cyrillic
 
 // what error.blue told us
 static OnlineSnap onA, onB;
@@ -1005,8 +1010,8 @@ static void btnBt(BtnEv e) {
 }
 
 // ======================================================================= SETUP.EXE
-enum { ST_NAME, ST_CHAN, ST_WEB, ST_FONT, ST_KEYS, ST_WHO, ST_POLL, ST_TOAST, ST_GLITCH, ST_LIGHT, ST_FLIP, ST_SAVER, ST_ONLINE, ST_TLS, ST_ABOUT, ST_REBOOT, ST_N };
-static const char* const ST_LABEL[ST_N] = {"NAME", "CHAT", "WEB", "FONT", "KEYS", "WHO", "POLL", "POPUPS", "GLITCH", "LIGHT", "FLIP", "SAVER", "SHOW ME", "TLS", "ABOUT", "REBOOT"};
+enum { ST_NAME, ST_CHAN, ST_WEB, ST_FONT, ST_KEYS, ST_WHO, ST_POLL, ST_TOAST, ST_GLITCH, ST_INTRO, ST_LIGHT, ST_FLIP, ST_SAVER, ST_ONLINE, ST_TLS, ST_ABOUT, ST_REBOOT, ST_N };
+static const char* const ST_LABEL[ST_N] = {"NAME", "CHAT", "WEB", "FONT", "KEYS", "WHO", "POLL", "POPUPS", "GLITCH", "INTRO", "LIGHT", "FLIP", "SAVER", "SHOW ME", "TLS", "ABOUT", "REBOOT"};
 static List setL = {0, 0};
 static const uint8_t LIGHTS[] = {255, 120, 40, 8};
 void uiApplyDisplay() {
@@ -1027,6 +1032,7 @@ static void setValue(int i, char* b, size_t n) {
     case ST_POLL: snprintf(b, n, "%uS", CFG.poll); break;
     case ST_TOAST: scopy(b, n, CFG.toasts ? on : off); break;
     case ST_GLITCH: scopy(b, n, CFG.glitch ? on : off); break;
+    case ST_INTRO: scopy(b, n, CFG.intro ? on : off); break;
     case ST_LIGHT: { int k = 0; for (int j = 0; j < 4; j++) if (CFG.contrast >= LIGHTS[j]) { k = j; break; } snprintf(b, n, "%d/4", 4 - k); break; }
     case ST_FLIP: scopy(b, n, CFG.flip ? on : off); break;
     case ST_SAVER: scopy(b, n, CFG.saver ? on : off); break;
@@ -1046,6 +1052,7 @@ static void setPick(int i) {
     case ST_POLL: CFG.poll = CFG.poll == 5 ? 10 : CFG.poll == 10 ? 20 : CFG.poll == 20 ? 30 : 5; break;
     case ST_TOAST: CFG.toasts = !CFG.toasts; break;
     case ST_GLITCH: CFG.glitch = !CFG.glitch; if (CFG.glitch) glitch(1); break;
+    case ST_INTRO: CFG.intro = !CFG.intro; break;
     case ST_LIGHT: { int k = 0; for (int j = 0; j < 4; j++) if (CFG.contrast >= LIGHTS[j]) { k = j; break; } CFG.contrast = LIGHTS[(k + 1) % 4]; uiApplyDisplay(); break; }
     case ST_FLIP: CFG.flip = !CFG.flip; uiApplyDisplay(); break;
     case ST_SAVER: CFG.saver = !CFG.saver; break;
@@ -1147,6 +1154,7 @@ static void cmdHelp() {
   cprint("BT PAIR name");
   cprint("SETUP SETTINGS", "SETUP");
   cprint("LOG DIR MEM TIME");
+  cprint("INTRO 3D WELCOME", "INTRO");
   cprint("VER CLS EXIT");
 }
 static void cmdDir() {
@@ -1228,6 +1236,7 @@ static void runCommand(const char* line) {
     else go(SC_WIFI);
   }
   else if (!strcmp(cmd, "PORTAL")) { S->portalStart(); go(SC_PORTAL); }
+  else if (!strcmp(cmd, "INTRO")) { introReplay = true; introAt = now; introLast = 0; starsReady = false; go(SC_INTRO); }
   else if (!strcmp(cmd, "WEB")) {
     if (netUp()) { cprint("SETUP PAGE:"); cprintf("http://%s/", S->netIp()); cprint("http://error-oled.local/"); }
     else cprint("NO WIFI: TRY PORTAL");
@@ -1284,6 +1293,7 @@ static void enter(Scr s) {
 void uiKey(const KeyEv& k) {
   lastInput = now;
   redraw();
+  if (cur() == SC_INTRO) { introEnd(); return; }
   if (S->btPasskey()) return;
   if (toastN && k.code == K_ESC && now - toastAt < 3000) { toastAt = now - 4000; return; }   // Esc closes a pop-up first
   // keys that work everywhere
@@ -1305,12 +1315,14 @@ void uiKey(const KeyEv& k) {
     case SC_SETUP: keySetup(k); break;
     case SC_INPUT: keyInput(k); break;
     case SC_LOG: keyLog(k); break;
+    case SC_INTRO: break;
   }
 }
 
 void uiButton(BtnEv e) {
   lastInput = now;
   redraw();
+  if (cur() == SC_INTRO) { introEnd(); return; }
   switch (cur()) {
     case SC_BOOT: homeScreen(); break;
     case SC_WHO: btnWho(e); break;
@@ -1325,6 +1337,7 @@ void uiButton(BtnEv e) {
     case SC_SETUP: btnSetup(e); break;
     case SC_INPUT: btnInput(e); break;
     case SC_LOG: if (e == BTN_SHORT) { logL.top = (logL.top + 1) % (onEv.n ? onEv.n : 1); } else back(); break;
+    case SC_INTRO: break;
   }
 }
 
@@ -1375,6 +1388,7 @@ void uiMouse(int dx, int dy, int wheelD, uint8_t buttons) {
   if (dx || dy) pAt = now;
   uint8_t pressed = buttons & ~pButtons;
   pButtons = buttons;
+  if (pressed && cur() == SC_INTRO) { introEnd(); return; }
   if (pressed & MB_LEFT) {
     pAt = now;
     if (S->btPasskey()) return;
@@ -1399,6 +1413,7 @@ void uiMouse(int dx, int dy, int wheelD, uint8_t buttons) {
 void uiSerialLine(const char* line) {
   lastInput = now;
   redraw();
+  if (cur() == SC_INTRO) introEnd();
   if (cur() == SC_CHAT && line[0] != '/' && line[0] != '\\') { chatSend(line); return; }
   if (cur() == SC_INPUT) { leSet(inEd, line); inputFinish(); return; }
   const char* l = line[0] == '/' || line[0] == '\\' ? line + 1 : line;
@@ -1511,6 +1526,253 @@ static void bootTick() {
   redraw();
 }
 
+
+// ======================================================================= the 3D welcome
+// When the box starts: the screen switches on like an old CRT, stars rush past, "ERROR" in
+// solid 3D block letters flies in spinning, "error.blue" types itself underneath and a
+// LOADING ERROR-DOS bar fills up. Then the ERROR-BIOS text boot starts. Any key or button skips it.
+#define INTRO_MS 4900
+
+// block letters on a 4 x 5 grid, in tenths (y up). Each letter: outline + holes.
+static const int8_t L_E[] = {0,0, 40,0, 40,10, 10,10, 10,20, 30,20, 30,30, 10,30, 10,40, 40,40, 40,50, 0,50};
+static const int8_t L_R[] = {0,0, 10,0, 10,20, 18,20, 29,0, 41,0, 29,21, 40,26, 40,50, 0,50};
+static const int8_t L_RH[] = {10,30, 30,30, 30,40, 10,40};
+static const int8_t L_O[] = {7,0, 33,0, 40,7, 40,43, 33,50, 7,50, 0,43, 0,7};
+static const int8_t L_OH[] = {10,10, 30,10, 30,40, 10,40};
+struct LPoly { const int8_t* p; uint8_t n; };
+struct Letter { LPoly poly[2]; uint8_t np; };
+static const Letter LET_E = {{{L_E, 12}, {nullptr, 0}}, 1};
+static const Letter LET_R = {{{L_R, 10}, {L_RH, 4}}, 2};
+static const Letter LET_O = {{{L_O, 8}, {L_OH, 4}}, 2};
+static const Letter* const WORD[5] = {&LET_E, &LET_R, &LET_R, &LET_O, &LET_R};
+
+static const uint8_t BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+static void dpix(int x, int y, int level) {          // a pixel of a grey (level 0..16)
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  if (BAYER[y & 3][x & 3] < level) u8g2_DrawPixel(G, x, y);
+}
+static void ditherBox(int x0, int y0, int w, int h, int level) {
+  for (int y = y0; y < y0 + h; y++) for (int x = x0; x < x0 + w; x++) dpix(x, y, level);
+}
+// fade the whole picture towards black (level 16 = untouched, 0 = black)
+static void fadeBuffer(int level) {
+  uint8_t* buf = u8g2_GetBufferPtr(G);
+  int tw = u8g2_GetBufferTileWidth(G) * 8;
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++)
+      if (BAYER[y & 3][x & 3] >= level) buf[(y / 8) * tw + x] &= ~(1 << (y & 7));
+}
+static void cline(int x0, int y0, int x1, int y1) {
+  if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= W && x1 >= W) || (y0 >= H && y1 >= H)) return;
+  int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1, e = dx + dy;
+  for (int guard = 0; guard < 400; guard++) {
+    if (x0 >= 0 && y0 >= 0 && x0 < W && y0 < H) u8g2_DrawPixel(G, x0, y0);
+    if (x0 == x1 && y0 == y1) break;
+    int e2 = 2 * e;
+    if (e2 >= dy) { e += dy; x0 += sx; }
+    if (e2 <= dx) { e += dx; y0 += sy; }
+  }
+}
+static float easeOut(float t) { if (t < 0) return 0; if (t > 1) return 1; t = 1 - t; return 1 - t * t * t; }
+
+// fill the polygons (even-odd, so holes stay open) with a grey
+static void fillPolys(const float* xs, const float* ys, const uint8_t* cnt, int np, int level) {
+  float ymin = 1e9, ymax = -1e9;
+  int total = 0;
+  for (int k = 0; k < np; k++) total += cnt[k];
+  for (int i = 0; i < total; i++) { if (ys[i] < ymin) ymin = ys[i]; if (ys[i] > ymax) ymax = ys[i]; }
+  int y0 = (int)ceilf(ymin - 0.5f), y1 = (int)floorf(ymax - 0.5f);
+  if (y0 < 0) y0 = 0;
+  if (y1 > H - 1) y1 = H - 1;
+  for (int y = y0; y <= y1; y++) {
+    float yc = y + 0.5f, xi[32];
+    int n = 0, base = 0;
+    for (int k = 0; k < np; k++) {
+      for (int i = 0; i < cnt[k]; i++) {
+        int j = (i + 1) % cnt[k];
+        float ax = xs[base + i], ay = ys[base + i], bx = xs[base + j], by = ys[base + j];
+        if ((ay <= yc && by > yc) || (by <= yc && ay > yc)) if (n < 32) xi[n++] = ax + (yc - ay) * (bx - ax) / (by - ay);
+      }
+      base += cnt[k];
+    }
+    for (int a = 1; a < n; a++) { float v = xi[a]; int b = a - 1; while (b >= 0 && xi[b] > v) { xi[b + 1] = xi[b]; b--; } xi[b + 1] = v; }
+    for (int a = 0; a + 1 < n; a += 2)
+      for (int x = (int)ceilf(xi[a] - 0.5f); x <= (int)floorf(xi[a + 1] - 0.5f); x++) dpix(x, y, level);
+  }
+}
+
+// "ERROR" in 3D: yaw/pitch in radians, dist = how far away (units), cy = screen centre y
+static void drawWord(float yaw, float pitch, float dist, float cx, float cy, float F) {
+  float cyw = cosf(yaw), syw = sinf(yaw), cp = cosf(pitch), sp = sinf(pitch);
+  const float D = 0.7f;                                       // half the depth of the letters
+  float facing = cyw * cp;                                    // > 0: the front faces us
+  float af = fabsf(facing);
+  int level = af > 0.9f ? 16 : (int)(af * 16);                // turned away = darker grey
+  if (level < 3) level = 3;
+  for (int li = 0; li < 5; li++) {
+    const Letter& L = *WORD[li];
+    float fx[24], fy[24], bx[24], by[24];
+    uint8_t cnt[2];
+    int k = 0;
+    for (int pi = 0; pi < L.np; pi++) {
+      cnt[pi] = L.poly[pi].n;
+      for (int i = 0; i < L.poly[pi].n; i++, k++) {
+        float X = (L.poly[pi].p[i * 2] + li * 52 - 124) / 10.0f, Y = (L.poly[pi].p[i * 2 + 1] - 25) / 10.0f;
+        for (int side = 0; side < 2; side++) {
+          float Z = side ? D : -D;
+          float x1 = X * cyw + Z * syw, z1 = -X * syw + Z * cyw;
+          float y2 = Y * cp - z1 * sp, z2 = Y * sp + z1 * cp + dist;
+          if (z2 < 0.5f) z2 = 0.5f;
+          float sx = cx + x1 * F / z2, sy = cy - y2 * F / z2;
+          if (side) { bx[k] = sx; by[k] = sy; } else { fx[k] = sx; fy[k] = sy; }
+        }
+      }
+    }
+    // the face turned towards us is solid; the other one and the sides are lines behind it
+    float* vx = facing >= 0 ? fx : bx; float* vy = facing >= 0 ? fy : by;
+    float* hx = facing >= 0 ? bx : fx; float* hy = facing >= 0 ? by : fy;
+    u8g2_SetDrawColor(G, 1);
+    int base = 0;
+    for (int pi = 0; pi < L.np; pi++) {
+      for (int i = 0; i < cnt[pi]; i++) {
+        int a = base + i, b = base + (i + 1) % cnt[pi];
+        cline((int)hx[a], (int)hy[a], (int)hx[b], (int)hy[b]);
+        cline((int)vx[a], (int)vy[a], (int)hx[a], (int)hy[a]);
+      }
+      base += cnt[pi];
+    }
+    // clear the face area first so lines behind it don't show through, then fill it grey and outline it
+    u8g2_SetDrawColor(G, 0);
+    fillPolys(vx, vy, cnt, L.np, 17);
+    u8g2_SetDrawColor(G, 1);
+    fillPolys(vx, vy, cnt, L.np, level);
+    base = 0;
+    for (int pi = 0; pi < L.np; pi++) {
+      for (int i = 0; i < cnt[pi]; i++) {
+        int a = base + i, b = base + (i + 1) % cnt[pi];
+        cline((int)vx[a], (int)vy[a], (int)vx[b], (int)vy[b]);
+      }
+      base += cnt[pi];
+    }
+  }
+}
+
+struct Star { float x, y, z; };
+static Star stars[44];
+static void starReset(Star& s, bool anywhere) {
+  s.x = (rand() % 2001 - 1000) / 1000.0f;
+  s.y = (rand() % 2001 - 1000) / 1000.0f;
+  s.z = anywhere ? 0.08f + (rand() % 920) / 1000.0f : 1.0f;
+}
+
+static void drawIntro() {
+  uint32_t t = now - introAt;
+  float dt = (now - introLast) / 1000.0f;
+  if (dt > 0.1f || introLast == 0) dt = 0.03f;
+  introLast = now;
+  float cx = W / 2.0f, cyText = H * 0.40f;
+  float F = W * 0.42f * 30.0f / 12.4f;                      // "ERROR" fills ~85% of the width when it lands
+  u8g2_SetDrawColor(G, 1);
+
+  // 1. the CRT switches on: a dot becomes a line, the line opens into a white flash that fades
+  if (t < 130) {
+    int w = (int)(W * t / 130.0f) | 1;
+    u8g2_DrawHLine(G, (W - w) / 2, H / 2, w);
+    return;
+  }
+  if (t < 320) {
+    float p = (t - 130) / 190.0f;
+    int h = (int)(H * p) | 1;
+    ditherBox(0, (H - h) / 2, W, h, (int)(16 * (1 - p)) + 1);
+  }
+
+  // 2. stars rushing past
+  if (!starsReady) { for (auto& s : stars) starReset(s, true); starsReady = true; }
+  if (t > 200 && t < 2900) {
+    float speed = t < 1200 ? 0.4f + (t - 200) / 1000.0f * 1.6f : 2.0f - (t - 1200) / 1700.0f * 1.7f;
+    int show = t < 2100 ? 44 : (int)(44 * (2900 - t) / 800.0f);
+    for (int i = 0; i < 44; i++) {
+      Star& s = stars[i];
+      float zOld = s.z;
+      s.z -= speed * dt;
+      if (s.z < 0.06f) { starReset(s, false); continue; }
+      if (i >= show) continue;
+      float k1 = 1 / s.z, k0 = 1 / zOld;
+      int x1 = (int)(cx + s.x * k1 * W * 0.22f), y1 = (int)(H / 2 + s.y * k1 * H * 0.30f);
+      int x0 = (int)(cx + s.x * k0 * W * 0.22f), y0 = (int)(H / 2 + s.y * k0 * H * 0.30f);
+      if (x1 < -4 || x1 > W + 4 || y1 < -4 || y1 > H + 4) { starReset(s, false); continue; }
+      if (speed > 1.0f) cline(x0, y0, x1, y1); else if (x1 >= 0 && y1 >= 0 && x1 < W && y1 < H) u8g2_DrawPixel(G, x1, y1);
+    }
+  }
+
+  // 3. "WELCOME TO" while the word flies in
+  if (t > 450 && t < 2250) {
+    static const char* w = "WELCOME TO";
+    int n = (t - 450) / 60; if (n > 10) n = 10;
+    int x = (W - 10 * CW) / 2;
+    for (int i = 0; i < n; i++) u8g2_DrawGlyph(G, x + i * CW, ASC, (uint8_t)w[i]);
+  }
+
+  // 4. "ERROR" in 3D: spins in from far away, then sways gently
+  if (t > 500) {
+    float yaw, pitch, dist;
+    if (t < 2300) {
+      float p = easeOut((t - 500) / 1800.0f);
+      dist = 260 - 230 * p;
+      yaw = (1 - p) * 3 * 3.14159f;
+      pitch = (1 - p) * 0.9f * sinf(t / 180.0f);
+    } else {
+      float u = (t - 2300) / 1000.0f;
+      dist = 30;
+      yaw = 0.32f * sinf(u * 2.2f) * (u < 0.5f ? u * 2 : 1);
+      pitch = 0.13f * sinf(u * 1.5f) * (u < 0.5f ? u * 2 : 1);
+    }
+    drawWord(yaw, pitch, dist, cx, cyText, F);
+    if (t > 2300 && t < 2390) glitch(2);                     // it lands with a flicker
+  }
+
+  // 5. error.blue types itself in, with a blinking cursor
+  int capY = (int)(H * 0.66f);
+  if (t > 2450) {
+    static const char* d = "error.blue";
+    int n = (t - 2450) / 75; if (n > 10) n = 10;
+    int x = (W - 10 * CW) / 2;
+    for (int i = 0; i < n; i++) u8g2_DrawGlyph(G, x + i * CW, capY + ASC, (uint8_t)d[i]);
+    if ((n < 10 || (t / 260) % 2) && t < 4500) u8g2_DrawBox(G, x + n * CW, capY, CW - 1, CH - 1);
+  }
+
+  // 6. the loading bar, with the text drawn inverted over the part that's filled
+  if (t > 3100) {
+    int bh = CH + 1, by = H - bh, bw = W;
+    float p = (t - 3100) / 1300.0f;
+    if (p > 1) p = 1;
+    float q = p < 0.3f ? p * 1.4f : p < 0.45f ? 0.42f : p < 0.8f ? 0.42f + (p - 0.45f) * 1.3f : 0.875f + (p - 0.8f) * 0.625f;   // stutters like a real load
+    if (q > 1) q = 1;
+    u8g2_DrawFrame(G, 0, by, bw, bh);
+    u8g2_DrawBox(G, 1, by + 1, (int)((bw - 2) * q), bh - 2);
+    const char* txt = W >= 18 * CW ? "LOADING ERROR-DOS" : "LOADING DOS";
+    int tw = strlen(txt) * CW;
+    u8g2_SetDrawColor(G, 2);
+    u8g2_DrawStr(G, (bw - tw) / 2, by + 1 + ASC, txt);
+    u8g2_SetDrawColor(G, 1);
+  }
+
+  // 7. out: torn bands, then a dithered fade to black
+  if (t > 4500) {
+    float p = (t - 4500) / 400.0f;
+    if (p > 1) p = 1;
+    fadeBuffer((int)(16 * (1 - p)));
+  }
+}
+
+static void introEnd() {
+  introLast = 0;
+  starsReady = false;
+  if (introReplay) { introReplay = false; back(); }
+  else { stk[0] = SC_BOOT; sp = 0; bootNext = now + 150; }
+  redraw();
+}
+
 // ======================================================================= drawing + timers
 static void applyGlitch() {
   if (!glitchUntil) return;
@@ -1570,6 +1832,13 @@ static void drawPasskey(uint32_t pk) {
 }
 
 static void render() {
+  if (cur() == SC_INTRO) {
+    u8g2_ClearBuffer(G);
+    drawIntro();
+    applyGlitch();
+    u8g2_SendBuffer(G);
+    return;
+  }
   gclear();
   switch (cur()) {
     case SC_BOOT: drawDos(false); break;
@@ -1585,6 +1854,7 @@ static void render() {
     case SC_SETUP: drawSetup(); break;
     case SC_INPUT: drawInput(); break;
     case SC_LOG: drawLog(); break;
+    case SC_INTRO: break;
   }
   // a pop-up on the bottom row
   if (toastN) {
@@ -1625,7 +1895,8 @@ void uiBegin(u8g2_t* g, Sys* sys) {
   memset(&onEv, 0, sizeof(onEv));
   uiApplyDisplay();
   sp = 0;
-  stk[0] = SC_BOOT;
+  stk[0] = CFG.intro ? SC_INTRO : SC_BOOT;
+  introAt = now;
   bootNext = now + 200;
   lastInput = now;
   nextGlitch = now + 15000 + rand() % 30000;
@@ -1633,6 +1904,7 @@ void uiBegin(u8g2_t* g, Sys* sys) {
 
 void uiTick() {
   now = S->ms();
+  if (cur() == SC_INTRO && now - introAt >= INTRO_MS) introEnd();
   if (cur() == SC_BOOT) bootTick();
   // network: refresh what's on screen more often
   if (netUp()) {
@@ -1699,7 +1971,7 @@ void uiTick() {
     if (want != dim) { dim = want; u8g2_SetContrast(G, dim ? (CFG.contrast > 8 ? 8 : 1) : CFG.contrast); }
   }
   // draw: right away when something changed, else 4x a second (clock, cursor, paging)
-  uint32_t every = glitchUntil || toastN || (pAt && now - pAt < 4000) ? 40 : 250;
+  uint32_t every = cur() == SC_INTRO ? 25 : glitchUntil || toastN || (pAt && now - pAt < 4000) ? 40 : 250;
   if (now - lastDraw >= (dirty ? 30u : every)) {
     lastDraw = now;
     dirty = false;
