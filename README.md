@@ -20,6 +20,12 @@ public/                 the website
   music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
   games/mistwalkers/    Mistwalkers (3D walk for three, built from the World Tester project)
+  games/tussen-de-linies/  Tussen de Linies (LINIES.HTM): you're the interpreter on a training field, between Dutch
+                        instructors and Ukrainian trainees. Listen inside a speaker's circle, keep it (3 slots),
+                        bring it to the arrow and pick the right translation (NL <-> UA quiz). Solo = 5 days with
+                        scores; SAMEN = 2-4 players in room tussen-de-linies/<CODE> (?room=CODE): the oldest player
+                        hosts the game and sends the whole state 8x a second, the next one takes over if they leave.
+                        The sentences are in PHR near the top of the file; DAYS sets how busy each day is
   glasses/              Home screen for Meta Ray-Ban Display glasses: 3D app slider (swipes or head motion), big clock
                         with compass above (DOS look; colour, sounds and head motion set in glasses/settings/)
   glasses/mini/         Mini Hub: Clock, Counter, Dice, Snake (open one directly with ?app=clock|counter|dice|snake)
@@ -90,7 +96,7 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 
    `folder` is `games`, `online` or `apps` (the three tabs in the ERROR-DOS menu).
    `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, `tusa`, `vgadai`,
-   `studio`, `mist`, or leave it out for the name over a synthwave sun.
+   `studio`, `mist`, `tolk`, or leave it out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 

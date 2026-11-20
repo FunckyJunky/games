@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Tussen de Linies · ERROR-DOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --fg:#39ff7a; --dim:#1b7a3c; --bg:#000; --glow:rgba(57,255,122,.55); --amber:#ffd23f; --red:#ff5a4d; --blue:#4dd4ff; }
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; color:var(--fg);
+    font-family:VT323, ui-monospace, monospace; -webkit-user-select:none; user-select:none; touch-action:none; }
+  #cv { position:fixed; inset:0; width:100vw; height:100vh; display:block; }
+  #crt { position:fixed; inset:0; pointer-events:none; z-index:6;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 3px); }
+  #crt.off, #vig.off { display:none; }
+  #vig { position:fixed; inset:0; pointer-events:none; z-index:6; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 62%, rgba(0,0,0,.55)); }
+  .hidden { display:none !important; }
+
+  /* DOS panels */
+  .panel { position:fixed; z-index:10; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(600px, 94vw); max-height:92vh; overflow:auto; box-sizing:border-box;
+    background:rgba(0,10,4,.95); border:3px double var(--fg); padding:12px 18px 14px;
+    box-shadow:0 0 14px var(--glow), inset 0 0 12px rgba(57,255,122,.22);
+    font-size:22px; line-height:1.15; text-shadow:0 0 5px var(--glow); touch-action:pan-y; }
+  .panel.side { left:auto; right:max(10px, env(safe-area-inset-right)); top:44px; transform:none; width:min(300px, 46vw); font-size:19px; padding:8px 12px; }
+  .panel.low { top:auto; bottom:12px; transform:translateX(-50%); }
+  .panel h1 { margin:0 0 2px; font-weight:normal; font-size:44px; letter-spacing:2px; color:var(--fg); line-height:1; }
+  .panel h2 { margin:0 0 8px; font-weight:normal; font-size:26px; color:var(--amber); text-shadow:0 0 6px rgba(255,210,63,.5); }
+  .panel .d { color:var(--dim); text-shadow:none; }
+  .panel .a { color:var(--amber); text-shadow:0 0 6px rgba(255,210,63,.45); }
+  .panel .r { color:var(--red); text-shadow:0 0 6px rgba(255,90,77,.45); }
+  .panel .b { color:var(--blue); text-shadow:0 0 6px rgba(77,212,255,.45); }
+  .panel p { margin:6px 0; }
+  .panel pre { margin:0; font:inherit; white-space:pre; overflow:hidden; }
+  .bar { border-top:1px dashed var(--dim); margin:8px 0; }
+  .mi { display:block; width:100%; text-align:left; margin:2px 0; padding:3px 8px; box-sizing:border-box;
+    font:inherit; font-size:24px; color:var(--fg); background:transparent; border:0; cursor:pointer; text-shadow:inherit; }
+  .mi:hover, .mi.on { background:var(--fg); color:#000; text-shadow:none; box-shadow:0 0 8px var(--glow); }
+  .mi .k { color:var(--dim); }
+  .mi.on .k, .mi:hover .k { color:#063; }
+  .row2 { display:flex; gap:10px; flex-wrap:wrap; }
+  .row2 .mi { flex:1; text-align:center; min-width:140px; }
+  input.dos { font:inherit; font-size:26px; background:#000; color:var(--fg); border:1px solid var(--dim); padding:3px 8px;
+    width:100%; box-sizing:border-box; outline:none; text-shadow:0 0 5px var(--glow); text-transform:uppercase; user-select:text; -webkit-user-select:text; }
+  input.dos:focus { border-color:var(--fg); box-shadow:0 0 8px var(--glow); }
+  .big { font-size:54px; letter-spacing:8px; color:var(--amber); text-shadow:0 0 10px rgba(255,210,63,.6); }
+  table.t { border-collapse:collapse; width:100%; font-size:21px; }
+  table.t td { padding:1px 6px 1px 0; }
+  table.t td.n { text-align:right; }
+  .panel h1.title { font-size:clamp(40px, 9vw, 64px); letter-spacing:3px; text-shadow:0 0 10px var(--glow), 3px 3px 0 #063a1a; margin:2px 0 4px; }
+  .logo { color:var(--fg); font-size:12px; line-height:12px; margin:2px 0 6px; white-space:pre; text-shadow:0 0 6px var(--glow); }
+  .say { font-family:"Pixelify Sans", VT323, sans-serif; }
+  .blink { animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* quiz */
+  #quiz { position:fixed; z-index:9; left:50%; bottom:max(10px, env(safe-area-inset-bottom)); transform:translateX(-50%);
+    width:min(640px, 96vw); box-sizing:border-box; background:rgba(0,10,4,.96); border:3px double var(--amber);
+    box-shadow:0 0 14px rgba(255,210,63,.4); padding:8px 12px 10px; font-size:20px; color:var(--fg); text-shadow:0 0 4px var(--glow); }
+  #quiz .hd { display:flex; justify-content:space-between; color:var(--amber); font-size:20px; }
+  #quiz .heard { font-family:"Pixelify Sans", VT323, sans-serif; font-size:21px; color:#fff; text-shadow:none; margin:4px 0 2px; }
+  #quiz .heard .x { color:#ff6b5a; }
+  #quiz .tl { font-size:18px; color:var(--dim); text-shadow:none; margin-bottom:4px; }
+  #quiz button { display:flex; gap:10px; align-items:baseline; width:100%; text-align:left; margin:4px 0 0; padding:6px 10px; box-sizing:border-box;
+    background:#04140a; border:1px solid var(--dim); color:#fff; cursor:pointer; font-family:"Pixelify Sans", VT323, sans-serif; font-size:20px; text-shadow:none; }
+  #quiz button .n { font-family:VT323, monospace; color:var(--amber); font-size:22px; }
+  #quiz button small { display:block; font-family:VT323, monospace; color:#7fbf95; font-size:17px; }
+  #quiz button.on { border-color:var(--fg); box-shadow:0 0 8px var(--glow); background:#08301a; }
+  #quiz button.good { background:#0b5a2a; border-color:var(--fg); }
+  #quiz button.wrong { background:#5a1410; border-color:var(--red); }
+  #quiz .tm { height:4px; background:var(--amber); margin-top:6px; transform-origin:left; }
+
+  /* touch */
+  #touch { position:fixed; inset:0; z-index:8; pointer-events:none; }
+  #touch .btn { position:absolute; pointer-events:auto; border-radius:50%; display:grid; place-items:center;
+    font-family:VT323, monospace; color:var(--fg); background:rgba(0,30,12,.55); border:2px solid var(--fg);
+    box-shadow:0 0 10px var(--glow), inset 0 0 10px rgba(57,255,122,.25); text-shadow:0 0 6px var(--glow); touch-action:none; }
+  #touch .btn.on { background:rgba(57,255,122,.45); color:#000; }
+  #bTolk { width:96px; height:96px; font-size:28px; }
+  #bWacht { width:66px; height:66px; font-size:20px; border-color:var(--amber) !important; color:var(--amber) !important; }
+  #bPause { width:40px; height:40px; font-size:20px; border-radius:6px !important; }
+  #stick { position:absolute; width:110px; height:110px; margin:-55px 0 0 -55px; border-radius:50%; border:2px dashed rgba(57,255,122,.6); display:none; }
+  #knob { position:absolute; left:50%; top:50%; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%; background:rgba(57,255,122,.35); border:2px solid var(--fg); }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="vig"></div>
+<div id="crt"></div>
+<div id="touch" class="hidden">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="btn" id="bTolk">TOLK</div>
+  <div class="btn" id="bWacht">WACHT</div>
+  <div class="btn" id="bPause">II</div>
+</div>
+<div id="quiz" class="hidden"></div>
+<div id="panel" class="panel hidden"></div>
+
+<script src="/lib/gamelab.js"></script>
+<script>
+'use strict';
+/* =====================================================================================
+   TUSSEN DE LINIES  -  LINIES.EXE for ERROR-DOS (error.blue)
+   You are the interpreter (de tolk) on a training field where Dutch instructors train
+   Ukrainian trainees. Be close when someone speaks (you only hear what's said while
+   you're in their circle), keep it in your head (3 slots, they fade), bring it to the
+   other side and pick the right translation. Several people talk at once: choose, run,
+   and raise your hand (WACHT) to make the others wait.
+   Multiplayer: GameLab room "tussen-de-linies/<CODE>". The oldest player is the host and
+   runs the simulation; it sends the whole state 8x a second. Everyone sends their own
+   position ("pos") to all, and actions ("act") to the host. If the host leaves, the next
+   oldest player carries on from the last state.
+   ===================================================================================== */
+
+const GAME = 'tussen-de-linies';
+const W = 320, H = 200, TOP = 14, BOT = 172;          // world = VGA mode 13h
+const LISTEN_R = 30, DELIVER_R = 32, WACHT_R = 100, MEM_MAX = 3, SPEED = 70;
+const PCOL = ['#ffd23f', '#4dd4ff', '#ff6bd6', '#ff9a3c'];
+const F_UI = 'VT323, ui-monospace, monospace';
+const F_SAY = '"Pixelify Sans", VT323, sans-serif';
+
+const $ = (q) => document.querySelector(q);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const hyp = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function loadJ(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+function saveJ(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+const CFG = Object.assign({ mode: 'quiz', tr: true, snd: true, crt: true, diff: 1 }, loadJ('linies-settings') || {});
+function saveCfg() { saveJ('linies-settings', CFG); }
+
+/* ---------------------------------------------------------------- phrases
+   [station, kind, Dutch, Ukrainian, wrong option]
+   kind: i = instruction, s = safety (urgent), p = small talk   (instructor: Dutch -> Ukrainian)
+         q = question,    pq = small talk                       (trainee: Ukrainian -> Dutch)
+   wrong option: for i/s/p [Ukrainian, Dutch meaning]; for q/pq a Dutch sentence          */
+const PHR = [
+  ['sb', 'i', 'Wapen laden!', 'Зарядити зброю!'],
+  ['sb', 'i', 'Doel op tweehonderd meter.', 'Ціль — двісті метрів.', ['Ціль — двадцять метрів.', 'Doel op twintig meter.']],
+  ['sb', 'i', 'Rustig uitademen, dan schieten.', 'Спокійно видихніть, потім стріляйте.', ['Глибоко вдихніть і не стріляйте.', 'Diep inademen en niet schieten.']],
+  ['sb', 'i', 'Drie schoten, enkel vuur.', 'Три постріли, одиночним вогнем.', ['Три магазини, автоматичним вогнем.', 'Drie magazijnen, automatisch vuur.']],
+  ['sb', 'i', 'Magazijn wisselen!', 'Змінити магазин!'],
+  ['sb', 'i', 'Ontladen en wapen tonen.', 'Розрядити й показати зброю.'],
+  ['sb', 'i', 'Kijk door het vizier.', 'Дивіться через приціл.'],
+  ['sb', 'i', 'Kolf stevig in de schouder.', 'Приклад щільно до плеча.', ['Приклад під пахву.', 'Kolf onder de oksel.']],
+  ['sb', 's', 'Stop met vuren!', 'Припинити вогонь!', ['Відкрити вогонь!', 'Open het vuur!']],
+  ['sb', 's', 'Vinger van de trekker!', 'Палець зі спускового гачка!', ['Палець на спусковий гачок!', 'Vinger op de trekker!']],
+  ['sb', 's', 'Wapen op veilig!', 'Зброю на запобіжник!', ['Зброю зняти із запобіжника!', 'Wapen van veilig!']],
+  ['sb', 's', 'Loop naar de doelen!', 'Ствол у бік мішеней!', ['Ствол у бік людей!', 'Loop naar de mensen!']],
+  ['sb', 'q', 'Kunt u dat herhalen?', 'Можна повторити?', 'Mag ik naar huis?'],
+  ['sb', 'q', 'Mijn wapen heeft een storing!', 'Мій автомат заклинило!', 'Mijn wapen is kwijt!'],
+  ['sb', 'q', 'Mijn munitie is op.', 'У мене закінчилися набої.', 'Ik heb te veel munitie.'],
+  ['sb', 'q', 'Welk doel is van mij?', 'Яка ціль моя?', 'Wie heeft mijn wapen?'],
+  ['sb', 'q', 'Mag ik al schieten?', 'Можна вже стріляти?', 'Moet ik stoppen met schieten?'],
+  ['sb', 'p', 'Mooi schot, goed zo!', 'Гарний постріл, молодець!'],
+
+  ['eh', 'i', 'Leg de tourniquet aan!', 'Накладіть турнікет!'],
+  ['eh', 'i', 'Hoog en strak boven de wond.', 'Високо й туго, вище рани.', ['Низько й слабко, нижче рани.', 'Laag en los onder de wond.']],
+  ['eh', 'i', 'Schrijf de tijd op de tourniquet.', 'Напишіть час на турнікеті.', ['Напишіть своє ім’я на руці.', 'Schrijf je naam op je hand.']],
+  ['eh', 'i', 'Druk hard op de wond.', 'Сильно тисніть на рану.'],
+  ['eh', 'i', 'Controleer de ademhaling.', 'Перевірте дихання.'],
+  ['eh', 'i', 'Leg hem op zijn zij.', 'Покладіть його на бік.', ['Посадіть його на стілець.', 'Zet hem op een stoel.']],
+  ['eh', 'i', 'Handschoenen aan!', 'Одягніть рукавички!'],
+  ['eh', 'i', 'Praat met het slachtoffer.', 'Говоріть із пораненим.'],
+  ['eh', 's', 'Slagaderlijke bloeding! Nu afbinden!', 'Артеріальна кровотеча! Негайно турнікет!', ['Артеріальна кровотеча! Зачекайте!', 'Slagaderlijke bloeding! Even wachten!']],
+  ['eh', 's', 'Eerst je eigen veiligheid!', 'Спершу власна безпека!', ['Безпека — потім!', 'Veiligheid komt later!']],
+  ['eh', 's', 'Zijn hoofd niet bewegen!', 'Не рухайте йому голову!', ['Поверніть йому голову!', 'Draai zijn hoofd!']],
+  ['eh', 'q', 'Hoe strak moet ik aandraaien?', 'Як туго затягувати?', 'Hoe laat is het?'],
+  ['eh', 'q', 'Waar leg ik de tourniquet aan?', 'Куди накладати турнікет?', 'Waar is de wc?'],
+  ['eh', 'q', 'Hij ademt. Wat nu?', 'Він дихає. Що далі?', 'Hij ademt niet. Wat nu?'],
+  ['eh', 'q', 'Hoe lang mag een tourniquet blijven zitten?', 'Скільки можна тримати турнікет?', 'Hoeveel tourniquets hebben we?'],
+  ['eh', 'q', 'Ik heb geen handschoenen.', 'У мене немає рукавичок.', 'Ik heb twee handschoenen.'],
+  ['eh', 'p', 'Goed werk, jullie redden levens.', 'Гарна робота, ви рятуєте життя.'],
+
+  ['dk', 'i', 'Volg mij!', 'За мною!', ['Чекайте тут!', 'Wacht hier!']],
+  ['dk', 'i', 'Laag blijven!', 'Тримайтеся низько!'],
+  ['dk', 'i', 'Wacht op mijn teken.', 'Чекайте на мій сигнал.', ['Біжіть без сигналу.', 'Ren zonder teken.']],
+  ['dk', 'i', 'Twee man naar links.', 'Двоє — ліворуч.', ['Двоє — праворуч.', 'Twee man naar rechts.']],
+  ['dk', 'i', 'Om de beurt verplaatsen, ik geef dekking.', 'Переміщайтеся по черзі, я прикриваю.'],
+  ['dk', 'i', 'Kruip naar de loopgraaf.', 'Повзіть до окопу.'],
+  ['dk', 'i', 'Vijf meter afstand houden.', 'Тримайте дистанцію п’ять метрів.', ['Тримайтеся разом, без дистанції.', 'Blijf dicht bij elkaar.']],
+  ['dk', 's', 'Dekking!', 'В укриття!', ['Встати!', 'Opstaan!']],
+  ['dk', 's', 'Granaat! Liggen!', 'Граната! Лягай!', ['Граната! Встань!', 'Granaat! Opstaan!']],
+  ['dk', 's', 'Hoofd omlaag!', 'Голову вниз!', ['Голову вгору!', 'Hoofd omhoog!']],
+  ['dk', 'q', 'Waar moeten we heen?', 'Куди нам рухатися?', 'Wanneer gaan we eten?'],
+  ['dk', 'q', 'Hoeveel man gaan er naar voren?', 'Скільки людей іде вперед?', 'Hoeveel man blijven er achter?'],
+  ['dk', 'q', 'Wanneer komt het teken?', 'Коли буде сигнал?', 'Waar is het teken?'],
+  ['dk', 'q', 'Mogen we even rusten?', 'Можна хвилинку відпочити?', 'Mogen we naar huis?'],
+  ['dk', 'q', 'Wie geeft mij dekking?', 'Хто мене прикриває?', 'Wie heeft mijn helm?'],
+  ['dk', 'p', 'Jullie doen het beter dan mijn eigen peloton!', 'У вас виходить краще, ніж у мого взводу!'],
+
+  ['vr', 'i', 'Opstijgen!', 'По машинах!', ['Вийти з машини!', 'Uitstijgen!']],
+  ['vr', 'i', 'Radio op kanaal drie.', 'Рацію на третій канал.', ['Рацію на тринадцятий канал.', 'Radio op kanaal dertien.']],
+  ['vr', 'i', 'Kort en duidelijk op de radio.', 'По рації — коротко й чітко.'],
+  ['vr', 'i', 'Herhaal het bericht, over.', 'Повторіть повідомлення, прийом.'],
+  ['vr', 'i', 'Motor starten!', 'Запустити двигун!', ['Заглушити двигун!', 'Motor uitzetten!']],
+  ['vr', 'i', 'Controleer de banden en de olie.', 'Перевірте шини й оливу.'],
+  ['vr', 'i', 'Uitstijgen en spreiden!', 'Вийти з машини й розосередитися!', ['Вийти з машини й зібратися разом!', 'Uitstijgen en bij elkaar staan!']],
+  ['vr', 's', 'Niet achter het voertuig lopen!', 'Не ходіть позаду машини!', ['Ходіть позаду машини!', 'Loop achter het voertuig!']],
+  ['vr', 's', 'Stilte op de radio!', 'Тиша в ефірі!', ['Говоріть в ефірі!', 'Praat op de radio!']],
+  ['vr', 's', 'Stop! Voertuig rijdt achteruit!', 'Стоп! Машина здає назад!', ['Стоп! Машина їде вперед!', 'Stop! Voertuig rijdt vooruit!']],
+  ['vr', 'q', 'Wat is onze roepnaam?', 'Який у нас позивний?', 'Wat is onze kleur?'],
+  ['vr', 'q', 'De radio werkt niet.', 'Рація не працює.', 'De motor werkt niet.'],
+  ['vr', 'q', 'Wie gaat er rijden?', 'Хто сідає за кермо?', 'Wie gaat er slapen?'],
+  ['vr', 'q', "Hoe zeg je 'over' in het Nederlands?", 'Як сказати «прийом» нідерландською?', "Hoe zeg je 'stop' in het Engels?"],
+  ['vr', 'p', 'Wie rijdt, trakteert op koffie.', 'Хто за кермом — той пригощає кавою.'],
+
+  ['*', 'p', 'Wie wil er koffie?', 'Хто хоче кави?'],
+  ['*', 'p', 'Goed gedaan, jongens!', 'Молодці, хлопці!'],
+  ['*', 'p', 'Tien minuten pauze!', 'Перекур — десять хвилин!'],
+  ['*', 'p', 'Het regent weer. Welkom in Nederland!', 'Знову дощ. Ласкаво просимо до Нідерландів!'],
+  ['*', 'p', 'Morgen om zes uur verzamelen.', 'Завтра збір о шостій.', ['Завтра вихідний.', 'Morgen is het vrij.']],
+  ['*', 'pq', 'Dank u, instructeur!', 'Дякую, пане інструкторе!', 'Sorry, instructeur!'],
+  ['*', 'pq', 'Wanneer is het eten?', 'Коли обід?', 'Wanneer is het appèl?'],
+  ['*', 'pq', 'De koffie is hier erg lekker.', 'Кава тут дуже смачна.', 'De koffie is hier erg koud.'],
+  ['*', 'pq', 'Waar is de wc?', 'Де туалет?', 'Waar is de bus?'],
+  ['*', 'q', 'Ik heb het niet begrepen.', 'Я не зрозумів.', 'Ik heb het al gedaan.'],
+  ['*', 'q', 'Kunt u langzamer praten?', 'Можна говорити повільніше?', 'Kunt u harder praten?'],
+];
+const PH = PHR.map(([st, k, nl, uk, bad], i) => ({ i, st, k, nl, uk, bad }));
+const fromNL = (k) => k === 'i' || k === 's' || k === 'p';
+const srcOf = (ph) => fromNL(ph.k) ? ph.nl : ph.uk;
+const KIND = {
+  i: { tag: 'INSTRUCTIE', col: '#ff8a1e', base: 100, miss: 5, wrong: 5, gain: 3 },
+  s: { tag: 'VEILIGHEID!', col: '#ff3b30', base: 150, miss: 12, wrong: 10, gain: 5 },
+  p: { tag: 'PRAATJE', col: '#a7a7a7', base: 50, miss: 0, wrong: 2, gain: 1 },
+  q: { tag: 'VRAAG', col: '#4d9dff', base: 100, miss: 4, wrong: 4, gain: 3 },
+  pq: { tag: 'PRAATJE', col: '#a7a7a7', base: 50, miss: 0, wrong: 2, gain: 1 },
+};
+
+/* ---------------------------------------------------------------- transliteration (KMU-2010 style) */
+const TRL = { а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', ж: 'zh', з: 'z', и: 'y', і: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p',
+  р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ь: '', '\'': '', '’': '' };
+const TRS = { є: 'ye', ї: 'yi', й: 'y', ю: 'yu', я: 'ya' }, TRM = { є: 'ie', ї: 'i', й: 'i', ю: 'iu', я: 'ia' };
+const isCyr = (s) => /[\u0400-\u04ff]/.test(s);
+function translit(s) {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i], lo = ch.toLowerCase(), prev = i ? s[i - 1].toLowerCase() : ' ';
+    const start = !/[а-яіїєґ'’]/.test(prev);
+    let r;
+    if (lo in TRL) r = TRL[lo]; else if (lo in TRS) r = start ? TRS[lo] : TRM[lo]; else r = ch;
+    if (lo === 'г' && prev === 'з') r = 'gh';
+    if (ch !== lo && r) r = r[0].toUpperCase() + r.slice(1);
+    out += r;
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- the field */
+const ST = {
+  sb: { name: 'SCHIETBAAN', area: [0, 18, 126, 74], sign: [96, 24],
+    ins: { x: 92, y: 68, n: 'Sgt. De Vries', p: 98, k: 1 },
+    tr: [{ x: 42, y: 28, pose: 'prone' }, { x: 42, y: 44, pose: 'prone' }, { x: 42, y: 60, pose: 'prone' }, { x: 42, y: 76, pose: 'prone' }] },
+  eh: { name: 'EHBO', area: [196, 18, 124, 74], sign: [206, 24],
+    ins: { x: 288, y: 76, n: 'Kpl. Jansen', p: 122, k: 0 },
+    tr: [{ x: 222, y: 66, pose: 'kneel' }, { x: 258, y: 66, pose: 'kneel' }, { x: 240, y: 82, pose: 'kneel' }] },
+  dk: { name: 'DEKKING', area: [0, 108, 150, 64], sign: [10, 112],
+    ins: { x: 132, y: 136, n: 'Lt. Bakker', p: 90, k: 3 },
+    tr: [{ x: 34, y: 156, pose: 'kneel' }, { x: 62, y: 160, pose: 'kneel' }, { x: 90, y: 156, pose: 'kneel' }] },
+  vr: { name: 'VOERTUIG', area: [180, 108, 140, 64], sign: [292, 112],
+    ins: { x: 200, y: 140, n: 'Sgt. Visser', p: 108, k: 2 },
+    tr: [{ x: 216, y: 164, pose: 'stand' }, { x: 240, y: 168, pose: 'stand' }, { x: 264, y: 165, pose: 'stand' }] },
+};
+const ST_ORDER = ['sb', 'eh', 'dk', 'vr'];
+const CALLSIGNS = ['Бобер', 'Кіт', 'Сокіл', 'Лис', 'Грім', 'Малий', 'Дід', 'Шаман', 'Тайфун', 'Козак', 'Борщ', 'Ведмідь', 'Їжак'];
+const SKINS = ['#f1c7a0', '#e0b088', '#c98f62', '#a8724a', '#f5d2b5', '#d9a77a'];
+const NPC = {}, GROUP = {};
+{
+  let cs = 0;
+  for (const st of ST_ORDER) {
+    const d = ST[st];
+    const add = (id, o) => {
+      const h = o.pose === 'prone' ? 4 : o.pose === 'kneel' ? 10 : 13;
+      o.cx = o.x; o.cy = o.pose === 'prone' ? o.y : o.y - (o.pose === 'kneel' ? 5 : 7); o.top = o.pose === 'prone' ? o.y - 3 : o.y - h;
+      o.id = id; o.st = st; NPC[id] = o;
+    };
+    add(st + '.I', { role: 'I', x: d.ins.x, y: d.ins.y, pose: 'stand', name: d.ins.n, pitch: d.ins.p, skin: SKINS[d.ins.k] });
+    let gx = 0, gy = 0;
+    d.tr.forEach((t, j) => {
+      add(st + '.' + j, { role: 'T', x: t.x, y: t.y, pose: t.pose, name: CALLSIGNS[cs], pitch: 150 + (cs * 37) % 90, skin: SKINS[(cs * 5 + 2) % SKINS.length] });
+      cs++; gx += NPC[st + '.' + j].cx; gy += NPC[st + '.' + j].cy;
+    });
+    GROUP[st] = { x: gx / d.tr.length, y: gy / d.tr.length };
+  }
+}
+const trainees = (st) => ST[st].tr.map((t, j) => st + '.' + j);
+function tgtPos(t) { const [st, w] = t.split('.'); return w === 'G' ? GROUP[st] : { x: NPC[t].cx, y: NPC[t].cy }; }
+function tgtName(t) { const [st, w] = t.split('.'); return w === 'G' ? 'TRAINEES ' + ST[st].name : NPC[t].name; }
+// things you can't walk through: tent, truck, sandbags, table, berm
+const OBST = [[234, 20, 72, 19], [232, 116, 72, 28], [16, 129, 100, 9], [148, 95, 24, 9], [0, 18, 7, 74]];
+
+/* ---------------------------------------------------------------- the days */
+const DAYS = [
+  { name: 'DAG 1', sub: 'Schietbaan en EHBO', st: 2, dur: 115, rate: 0.13, burst: 0.06, w: { i: 6, s: 1, q: 2.5, p: 1.6 }, spd: 1.0, rain: 0 },
+  { name: 'DAG 2', sub: 'Er komt dekking bij', st: 3, dur: 135, rate: 0.16, burst: 0.10, w: { i: 5, s: 1.5, q: 3, p: 1.6 }, spd: 1.0, rain: 0.35 },
+  { name: 'DAG 3', sub: 'Alle posten open', st: 4, dur: 150, rate: 0.185, burst: 0.14, w: { i: 5, s: 1.7, q: 3.2, p: 1.6 }, spd: 1.04, rain: 0 },
+  { name: 'DAG 4', sub: 'Drukke dag, veel vragen', st: 4, dur: 165, rate: 0.2, burst: 0.18, w: { i: 4.5, s: 2, q: 4, p: 1.4 }, spd: 1.08, rain: 0.7 },
+  { name: 'DAG 5', sub: 'Eindoefening', st: 4, dur: 180, rate: 0.215, burst: 0.22, w: { i: 4.5, s: 2.6, q: 4, p: 1.2 }, spd: 1.12, rain: 1 },
+];
+const RANKS = [[0, 'Verdwaalde stagiair'], [0.35, 'Tolk in opleiding'], [0.55, 'Veldtolk'], [0.72, 'Ervaren tolk'], [0.86, 'Meestertolk']];
+const rankOf = (acc) => RANKS.filter((r) => acc >= r[0]).pop()[1];
+
+/* =====================================================================================
+   SIMULATION  (runs on the host only; everyone else draws S as it arrives)
+   ===================================================================================== */
+let S = null;
+const LP = { x: 160, y: 118, f: 1, mv: false, wp: 0, init: false };
+
+function newState() {
+  return { v: 1, gid: Math.random().toString(36).slice(2, 9), phase: 'lobby', day: 0, t: 0, dur: 0, it: 0, trust: 100, combo: 0, best: 0, next: 3,
+    uid: 0, iid: 0, fxn: 0, fx: [], sp: {}, players: {}, stations: [], rain: 0, cof: { on: false, t: 18 }, recent: [], done: [],
+    stats: { ok: 0, bad: 0, miss: 0, inc: 0, tot: 0 }, ds: null, diff: CFG.diff, host: '' };
+}
+function addPlayer(id, name) {
+  if (S.players[id]) { if (name) S.players[id].n = name; return; }
+  const used = Object.values(S.players).map((p) => p.c);
+  let c = 0; while (used.includes(c)) c++;
+  const n = Object.keys(S.players).length;
+  S.players[id] = { n: (name || 'TOLK').slice(0, 12), c: c % 4, x: 152 + n * 9, y: 120, f: 1, mem: [], pts: 0, ok: 0, bad: 0, miss: 0, cd: 0, boost: 0, fol: '' };
+}
+function fx(f) { f.id = ++S.fxn; S.fx.push(f); if (S.fx.length > 32) S.fx.shift(); }
+function startDay(d) {
+  const D = DAYS[d - 1];
+  S.day = d; S.t = 0; S.dur = D.dur; S.phase = 'intro'; S.it = 3.4; S.sp = {}; S.next = 2.2; S.recent = []; S.done = [];
+  if (d > 1) S.trust = Math.min(100, S.trust + 35);
+  const np = Math.max(1, Object.keys(S.players).length);
+  S.stations = ST_ORDER.slice(0, Math.min(4, D.st + np - 1));
+  S.rain = D.rain; S.cof = { on: false, t: 16 };
+  S.ds = { ok: 0, bad: 0, miss: 0, inc: 0, tot: 0, pts0: totalPts() };
+  for (const id in S.players) { const p = S.players[id]; p.mem = []; p.cd = 0; p.boost = 0; }
+  fx({ k: 'dayin' });
+}
+const totalPts = () => Object.values(S.players).reduce((a, p) => a + p.pts, 0);
+function newGame() {
+  const keep = S ? S.players : null;
+  const host = S ? S.host : Net.me;
+  S = newState(); S.host = host;
+  if (keep) for (const id in keep) { addPlayer(id, keep[id].n); S.players[id].c = keep[id].c; S.players[id].x = keep[id].x; S.players[id].y = keep[id].y; }
+  else addPlayer(Net.me, myName());
+}
+
+function followOf(x, y) {
+  let best = '', bd = LISTEN_R;
+  for (const id in S.sp) {
+    const s = S.sp[id];
+    if (s.s !== 'talk' || s.pz > 0) continue;
+    const n = NPC[id], d = hyp(x, y, n.cx, n.cy);
+    if (d <= bd) { bd = d; best = id; }
+  }
+  return best;
+}
+function speakerFree(id) { return !S.sp[id]; }
+function weighted(opts) { let sum = 0; for (const o of opts) sum += o[1]; let r = Math.random() * sum; for (const o of opts) { r -= o[1]; if (r <= 0) return o[0]; } return opts[0][0]; }
+function tryEvent(st, D, trainOnly) {
+  const ins = st + '.I';
+  const insFree = !trainOnly && speakerFree(ins);
+  const trFree = trainees(st).filter(speakerFree);
+  const opts = [];
+  if (insFree) opts.push(['i', D.w.i], ['s', D.w.s], ['p', D.w.p]);
+  if (trFree.length) opts.push(['q', D.w.q], ['pq', D.w.p * 0.6]);
+  if (!opts.length) return false;
+  const k = weighted(opts);
+  let pool = PH.filter((ph) => ph.k === k && (ph.st === st || ph.st === '*') && !S.recent.includes(ph.i));
+  if (!pool.length) pool = PH.filter((ph) => ph.k === k && (ph.st === st || ph.st === '*'));
+  if (!pool.length) return false;
+  const ph = pick(pool);
+  begin(fromNL(k) ? ins : pick(trFree), ph, D);
+  S.recent.push(ph.i); if (S.recent.length > 16) S.recent.shift();
+  return true;
+}
+function spawnEvent(D) {
+  const sts = shuffle(S.stations.slice());
+  for (const st of sts) {
+    if (!tryEvent(st, D)) continue;
+    if (Math.random() < D.burst) {           // two at once: another post, or a second voice at the same post
+      const other = sts.find((x) => x !== st);
+      if (other && Math.random() < 0.55) tryEvent(other, D) || tryEvent(st, D, true);
+      else tryEvent(st, D, true) || (other && tryEvent(other, D));
+    }
+    return;
+  }
+}
+function begin(id, ph, D) {
+  const L = srcOf(ph).length, safe = ph.k === 's';
+  const dur = (1.05 + L * 0.064) * (safe ? 0.75 : 1) / D.spd;
+  S.sp[id] = { s: 'prep', ph: ph.i, k: ph.k, t: 0, dur: +dur.toFixed(2), pr: safe ? 0.8 : 1.5, pz: 0, pzd: 0, h: {}, pc: 0, uid: ++S.uid, rep: 0, rt: 0 };
+  S.stats.tot++; S.ds.tot++;
+  fx({ k: safe ? 'prepS' : 'prep', sp: id });
+}
+function resolve(uid) { S.done.push(uid); if (S.done.length > 60) S.done.shift(); }
+function penalty(k, st, x, y, txt) {
+  const K = KIND[k];
+  S.trust = Math.max(0, S.trust - K.miss);
+  if (K.miss) { S.combo = 0; S.stats.miss++; S.ds.miss++; }
+  fx({ k: 'txt', x, y, t: txt, c: K.miss ? '#ff5a4d' : '#9a9a9a', snd: K.miss ? 'miss' : '' });
+  if (k === 's') { S.stats.inc++; S.ds.inc++; fx({ k: 'inc', st }); }
+}
+function endSpeech(id, s) {
+  const ph = PH[s.ph], L = srcOf(ph).length, n = NPC[id];
+  const tgt = fromNL(ph.k) ? n.st + '.G' : n.st + '.I';
+  const max = Math.round(((ph.k === 's' ? 9 : 14) - (S.day - 1) * 0.4) * 10) / 10;
+  let any = false;
+  for (const pid in s.h) {
+    const p = S.players[pid]; if (!p) continue;
+    const ones = s.h[pid].split('1').length - 1, q = ones / L;
+    if (q >= 0.6) {
+      if (p.mem.length >= MEM_MAX) { fx({ k: 'txt', x: p.x, y: p.y - 18, t: 'HOOFD VOL!', c: '#ff5a4d', pid, snd: 'full' }); continue; }
+      p.mem.push({ id: ++S.iid, uid: s.uid, ph: s.ph, k: ph.k, sp: id, tgt, life: max, max, hold: 0, q: +q.toFixed(2), m: s.h[pid] });
+      p.pts += 5; any = true;
+      fx({ k: 'txt', x: n.cx, y: n.top - 6, t: 'GEHOORD ' + Math.round(q * 100) + '%', c: '#39ff7a', pid, snd: 'cap', cap: 1 });
+    } else if (q > 0.12) fx({ k: 'txt', x: n.cx, y: n.top - 6, t: 'MAAR ' + Math.round(q * 100) + '% GEHOORD', c: '#ffd23f', pid });
+  }
+  if (any) { s.s = 'rest'; s.rt = 1.6; }
+  else { s.s = 'rep'; s.rt = 4; fx({ k: 'rep', sp: id }); }
+}
+function step(dt) {
+  const D = DAYS[S.day - 1];
+  S.t += dt;
+  const np = Math.max(1, Object.keys(S.players).length);
+  for (const pid in S.players) {
+    const p = S.players[pid];
+    p.cd = Math.max(0, p.cd - dt); p.boost = Math.max(0, p.boost - dt);
+    p.fol = followOf(p.x, p.y - 6);
+  }
+  if (S.t < S.dur) {
+    S.next -= dt;
+    if (S.next <= 0) {
+      spawnEvent(D);
+      S.next = 1 / (D.rate * S.diff * (1 + 0.55 * (np - 1))) * rand(0.65, 1.35);
+    }
+  }
+  for (const id in S.sp) {
+    const s = S.sp[id];
+    if (s.s === 'rest') { s.rt -= dt; if (s.rt <= 0) delete S.sp[id]; continue; }
+    if (s.s === 'rep') {
+      s.rt -= dt;
+      if (s.rt <= 0) {
+        const n = NPC[id];
+        if (!S.done.includes(s.uid)) { resolve(s.uid); penalty(s.k, n.st, n.cx, n.top - 6, KIND[s.k].miss ? 'GEMIST!' : 'gemist'); }
+        s.s = 'rest'; s.rt = 1.2;
+      }
+      continue;
+    }
+    if (s.pz > 0) { s.pz -= dt; continue; }
+    if (s.s === 'prep') { s.pr -= dt; if (s.pr <= 0) { s.s = 'talk'; s.t = 0; s.pc = 0; } continue; }
+    if (s.s === 'talk') {
+      s.t += dt;
+      const L = srcOf(PH[s.ph]).length;
+      const cur = s.t >= s.dur ? L : Math.min(L, Math.floor(s.t / s.dur * L));
+      if (cur > s.pc) {
+        for (const pid in S.players) {
+          if (S.players[pid].fol !== id) continue;
+          const h = s.h[pid] || '0'.repeat(L);
+          s.h[pid] = h.slice(0, s.pc) + '1'.repeat(cur - s.pc) + h.slice(cur);
+        }
+        s.pc = cur;
+      }
+      if (s.t >= s.dur) endSpeech(id, s);
+    }
+  }
+  for (const pid in S.players) {
+    const p = S.players[pid];
+    for (let i = p.mem.length - 1; i >= 0; i--) {
+      const it = p.mem[i];
+      if (it.hold > 0) { it.hold -= dt; continue; }
+      it.life -= dt;
+      if (it.life > 0) continue;
+      p.mem.splice(i, 1);
+      const others = Object.values(S.players).some((o) => o.mem.some((m) => m.uid === it.uid));
+      if (!others && !S.done.includes(it.uid)) {
+        resolve(it.uid); p.miss++;
+        const tp = tgtPos(it.tgt);
+        penalty(it.k, it.tgt.split('.')[0], tp.x, tp.y - 14, 'VERGETEN!');
+      }
+    }
+  }
+  // coffee on the table in the middle
+  if (!S.cof.on) { S.cof.t -= dt; if (S.cof.t <= 0) S.cof.on = true; }
+  else for (const pid in S.players) {
+    const p = S.players[pid];
+    if (hyp(p.x, p.y, 160, 104) < 14) { S.cof.on = false; S.cof.t = rand(30, 45); p.boost = 10; fx({ k: 'txt', x: 160, y: 88, t: 'KOFFIE! SNELLER', c: '#ffd23f', snd: 'coffee' }); break; }
+  }
+  if (S.trust <= 0) { S.phase = 'over'; fx({ k: 'over' }); return; }
+  if (S.t >= S.dur) {
+    const busy = Object.values(S.sp).some((s) => s.s === 'prep' || s.s === 'talk' || s.s === 'rep');
+    const held = Object.values(S.players).some((p) => p.mem.length);
+    if ((!busy && !held) || S.t > S.dur + 18) endDay();
+  }
+}
+function endDay() {
+  for (const p of Object.values(S.players)) p.mem = [];
+  S.sp = {};
+  S.ds.pts = totalPts() - S.ds.pts0;
+  S.phase = S.day >= DAYS.length ? 'done' : 'report';
+  fx({ k: S.phase === 'done' ? 'done' : 'dayend' });
+}
+// an action from a player (the host's own actions come straight here)
+function handleAct(pid, m) {
+  if (!S || !m) return;
+  const p = S.players[pid];
+  if (m.a === 'start' && pid === Net.host && (S.phase === 'lobby' || S.phase === 'over' || S.phase === 'done')) {
+    if (S.phase !== 'lobby') newGame();
+    S.diff = CFG.diff; startDay(1); return;
+  }
+  if (m.a === 'next' && pid === Net.host && S.phase === 'report') { startDay(S.day + 1); return; }
+  if (m.a === 'lobby' && pid === Net.host) { newGame(); return; }
+  if (!p || S.phase !== 'play') return;
+  if (m.a === 'hold') { const it = p.mem.find((x) => x.id === m.id); if (it) it.hold = 9; return; }
+  if (m.a === 'deliver') {
+    const it = p.mem.find((x) => x.id === m.id);
+    if (!it) { fx({ k: 'txt', x: p.x, y: p.y - 18, t: 'TE LAAT', c: '#ffd23f', pid }); return; }
+    const tp = tgtPos(it.tgt);
+    if (hyp(p.x, p.y - 6, tp.x, tp.y) > DELIVER_R + 14) { it.hold = 0; fx({ k: 'txt', x: p.x, y: p.y - 18, t: 'TE VER WEG', c: '#ffd23f', pid }); return; }
+    for (const o of Object.values(S.players)) o.mem = o.mem.filter((x) => x.uid !== it.uid);
+    resolve(it.uid);
+    const K = KIND[it.k], st = it.tgt.split('.')[0];
+    if (m.ok) {
+      S.combo++; S.best = Math.max(S.best, S.combo);
+      const pts = Math.round(K.base * (0.55 + 0.45 * it.q) * (1 + 0.1 * Math.min(S.combo, 10)) * (m.arc ? 0.8 : 1) + 40 * clamp(it.life / it.max, 0, 1));
+      p.pts += pts; p.ok++; S.stats.ok++; S.ds.ok++;
+      S.trust = Math.min(100, S.trust + K.gain);
+      fx({ k: 'txt', x: tp.x, y: tp.y - 16, t: '+' + pts + (S.combo > 1 ? '  x' + S.combo : ''), c: '#39ff7a', snd: 'ok', ok: 1, pid });
+    } else {
+      p.bad++; S.stats.bad++; S.ds.bad++; S.combo = 0;
+      S.trust = Math.max(0, S.trust - K.wrong);
+      fx({ k: 'txt', x: tp.x, y: tp.y - 16, t: 'VERKEERD VERTAALD!', c: '#ff5a4d', snd: 'bad', pid });
+      if (it.k === 's') { S.stats.inc++; S.ds.inc++; fx({ k: 'inc', st }); }
+    }
+    return;
+  }
+  if (m.a === 'rep') {
+    const s = S.sp[m.sp], n = NPC[m.sp];
+    if (!s || s.s !== 'rep' || hyp(p.x, p.y - 6, n.cx, n.cy) > LISTEN_R + 14) return;
+    s.s = 'prep'; s.pr = 0.8; s.t = 0; s.pc = 0; s.h = {}; s.rep++; s.pzd = 0;
+    S.trust = Math.max(0, S.trust - 2);
+    fx({ k: 'txt', x: n.cx, y: n.top - 6, t: 'NOG EEN KEER...', c: '#ffd23f', snd: 'rep2' });
+    return;
+  }
+  if (m.a === 'wacht') {
+    if (p.cd > 0) return;
+    const fol = followOf(p.x, p.y - 6);
+    let any = 0;
+    for (const id in S.sp) {
+      const s = S.sp[id], n = NPC[id];
+      if (id === fol || s.pzd || (s.s !== 'prep' && s.s !== 'talk')) continue;
+      if (hyp(p.x, p.y - 6, n.cx, n.cy) > WACHT_R) continue;
+      s.pz = 4.5; s.pzd = 1; any++;
+    }
+    if (any) { p.cd = 12; fx({ k: 'txt', x: p.x, y: p.y - 20, t: 'MOMENT! ✋', c: '#ffd23f', snd: 'wacht', pid, wacht: 1 }); }
+    else fx({ k: 'txt', x: p.x, y: p.y - 20, t: 'niemand om te laten wachten', c: '#9a9a9a', pid, me: 1 });
+  }
+}
+
+/* =====================================================================================
+   NETWORK
+   ===================================================================================== */
+const Net = { mode: 'solo', me: 'local', host: 'local', room: null, list: [], peers: {}, code: '', lastSt: 0, lastPos: 0, sentPos: '', ok: false };
+const isHost = () => Net.me === Net.host;
+function toHost(m) {
+  if (isHost()) handleAct(Net.me, m);
+  else if (Net.room) Net.room.sendTo(Net.host, { t: 'act', m });
+}
+function myName() { return (GameLab.playerName() || 'TOLK').toUpperCase().slice(0, 12); }
+function pickHost() {
+  if (!Net.list.length) return;
+  Net.list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+  const was = Net.host;
+  Net.host = Net.list[0].id;
+  if (isHost()) {
+    if (!S) { S = newState(); }
+    S.host = Net.me;
+    for (const pl of Net.list) addPlayer(pl.id, pl.id === Net.me ? myName() : String(pl.name || 'TOLK').toUpperCase());
+    for (const id in S.players) if (!Net.list.find((p) => p.id === id)) delete S.players[id];
+    if (was && was !== Net.me && Net.ok) toast('Jij bent nu de host');
+  }
+}
+function goSolo() {
+  leaveRoom();
+  Net.mode = 'solo'; Net.me = 'local'; Net.host = 'local';
+  S = null; newGame();
+  LP.x = S.players.local.x; LP.y = S.players.local.y; LP.init = true;
+  startDay(1); scr = null; renderUI(true);
+}
+function leaveRoom() {
+  if (Net.room) { const r = Net.room; Net.room = null; try { r.close(); } catch (e) {} }
+  Net.ok = false; Net.list = []; Net.peers = {};
+}
+function joinRoom(code) {
+  leaveRoom();
+  code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (code.length < 3) { toast('Code te kort'); return; }
+  Net.mode = 'room'; Net.code = code; Net.host = ''; Net.me = ''; S = null; LP.init = false;
+  try { history.replaceState(null, '', location.pathname + '?room=' + code); } catch (e) {}
+  scr = 'connecting'; renderUI(true);
+  const room = GameLab.joinRoom(GAME, code, {
+    name: myName(),
+    onOpen(me, players) {
+      Net.me = me; Net.ok = true;
+      Net.list = (players || []).slice();
+      if (!Net.list.find((p) => p.id === me)) Net.list.push({ id: me, name: myName(), joinedAt: Date.now() });
+      pickHost();
+      if (isHost()) { LP.x = S.players[me].x; LP.y = S.players[me].y; LP.init = true; }
+      scr = null; renderUI(true);
+      setOnline();
+    },
+    onJoin(pl) {
+      if (!Net.list.find((p) => p.id === pl.id)) Net.list.push(pl);
+      pickHost();
+      if (isHost()) { addPlayer(pl.id, String(pl.name || 'TOLK').toUpperCase()); sendState(true); }
+      toast(String(pl.name || 'Iemand').toUpperCase() + ' doet mee');
+    },
+    onLeave(id) {
+      const pl = Net.list.find((p) => p.id === id);
+      Net.list = Net.list.filter((p) => p.id !== id);
+      delete Net.peers[id];
+      pickHost();
+      if (isHost() && S) delete S.players[id];
+      if (pl) toast(String(pl.name || 'Iemand').toUpperCase() + ' is weg');
+    },
+    onMessage(d, from) {
+      if (!d || typeof d !== 'object') return;
+      if (d.t === 'st' && from === Net.host && !isHost()) {
+        S = d.s;
+        const mine = S.players[Net.me];
+        if (mine && !LP.init) { LP.x = mine.x; LP.y = mine.y; LP.init = true; }
+        if (mine) { mine.x = LP.x; mine.y = LP.y; }
+      } else if (d.t === 'pos') {
+        const pr = Net.peers[from] || (Net.peers[from] = { x: d.x, y: d.y, tx: d.x, ty: d.y });
+        pr.tx = d.x; pr.ty = d.y; pr.f = d.f; pr.mv = d.m; pr.at = performance.now();
+        if (isHost() && S && S.players[from]) { S.players[from].x = d.x; S.players[from].y = d.y; S.players[from].f = d.f; }
+      } else if (d.t === 'act' && isHost()) handleAct(from, d.m);
+    },
+    onError(msg) { toast('Fout: ' + msg); },
+    onClose() {
+      if (Net.room !== room) return;
+      Net.room = null; Net.ok = false;
+      scr = 'lost'; renderUI(true);
+    },
+  });
+  Net.room = room;
+}
+function sendState(force) {
+  if (!Net.room || !isHost() || !S) return;
+  const now = performance.now();
+  if (!force && now - Net.lastSt < 125) return;
+  Net.lastSt = now;
+  Net.room.send({ t: 'st', s: S });
+}
+function sendPos() {
+  if (!Net.room || !Net.ok) return;
+  const now = performance.now();
+  const key = Math.round(LP.x) + ',' + Math.round(LP.y);
+  if (now - Net.lastPos < 80 || (key === Net.sentPos && now - Net.lastPos < 600)) return;
+  Net.lastPos = now; Net.sentPos = key;
+  Net.room.send({ t: 'pos', x: Math.round(LP.x * 10) / 10, y: Math.round(LP.y * 10) / 10, f: LP.f, m: LP.mv ? 1 : 0 });
+}
+function setOnline() {
+  const det = !S ? '' : S.phase === 'play' || S.phase === 'intro' ? DAYS[S.day - 1].name : S.phase === 'lobby' ? 'lobby ' + Net.code : '';
+  window.errorOnline = Object.assign({}, window.errorOnline, { name: myName(), detail: (Net.mode === 'room' ? 'SAMEN ' : '') + det });
+  window.ErrorOnline && ErrorOnline.update && ErrorOnline.update();
+}
+
+/* =====================================================================================
+   AUDIO  (all made on the spot, no files)
+   ===================================================================================== */
+const AU = {
+  c: null, out: null, nb: null, rainG: null,
+  init() {
+    if (this.c) { if (this.c.state === 'suspended') this.c.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const c = this.c = new AC();
+    this.out = c.createGain(); this.out.gain.value = CFG.snd ? 0.8 : 0; this.out.connect(c.destination);
+    const n = c.sampleRate, b = c.createBuffer(1, n, n), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    this.nb = b;
+    const src = c.createBufferSource(); src.buffer = b; src.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.5;
+    const g = c.createGain(); g.gain.value = 0; src.connect(bp); bp.connect(g); g.connect(this.out); src.start();
+    this.rainG = g;
+  },
+  vol() { if (this.out) this.out.gain.value = CFG.snd ? 0.8 : 0; },
+  dest(p) {
+    if (p && this.c.createStereoPanner) { const s = this.c.createStereoPanner(); s.pan.value = clamp(p, -1, 1); s.connect(this.out); return s; }
+    return this.out;
+  },
+  tone(f, d, type, v, p, f2, delay) {
+    const c = this.c; if (!c || !CFG.snd) return;
+    const t = c.currentTime + (delay || 0);
+    const o = c.createOscillator(); o.type = type || 'square'; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, v || 0.1), t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(this.dest(p)); o.start(t); o.stop(t + d + 0.03);
+  },
+  noise(d, v, freq, p, delay, type) {
+    const c = this.c; if (!c || !CFG.snd) return;
+    const t = c.currentTime + (delay || 0);
+    const s = c.createBufferSource(); s.buffer = this.nb;
+    const f = c.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq || 1200;
+    const g = c.createGain(); g.gain.setValueAtTime(Math.max(0.0002, v), t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    s.connect(f); f.connect(g); g.connect(this.dest(p)); s.start(t, Math.random() * 0.5); s.stop(t + d + 0.03);
+  },
+};
+const SND = {
+  cap() { AU.tone(660, 0.08, 'square', 0.07); AU.tone(990, 0.12, 'square', 0.07, 0, null, 0.08); },
+  ok() { [523, 659, 784, 1047].forEach((f, i) => AU.tone(f, 0.1, 'square', 0.06, 0, null, i * 0.065)); },
+  bad() { AU.tone(150, 0.4, 'sawtooth', 0.11, 0, 80); },
+  miss() { AU.tone(440, 0.32, 'triangle', 0.12, 0, 170); },
+  inc() { for (let i = 0; i < 5; i++) AU.tone(i % 2 ? 880 : 620, 0.17, 'square', 0.06, 0, null, i * 0.17); },
+  full() { AU.tone(220, 0.1, 'square', 0.07); AU.tone(165, 0.16, 'square', 0.07, 0, null, 0.11); },
+  wacht() { AU.noise(0.09, 0.2, 1700); AU.tone(330, 0.14, 'square', 0.07, 0, 250); },
+  whistle(p) { AU.tone(2150, 0.09, 'sine', 0.08, p); AU.tone(2500, 0.16, 'sine', 0.08, p, null, 0.11); },
+  prep(p) { AU.tone(392, 0.06, 'triangle', 0.05, p); AU.tone(523, 0.07, 'triangle', 0.05, p, null, 0.07); },
+  rep(p) { AU.tone(480, 0.1, 'triangle', 0.06, p, 720); },
+  rep2() { AU.tone(600, 0.06, 'square', 0.05); AU.tone(500, 0.08, 'square', 0.05, 0, null, 0.07); },
+  coffee() { AU.noise(0.3, 0.07, 800); AU.tone(700, 0.12, 'sine', 0.06, 0, 1150, 0.25); },
+  day() { [392, 523, 659, 784].forEach((f, i) => AU.tone(f, 0.17, 'square', 0.06, 0, null, i * 0.12)); },
+  over() { [392, 330, 262, 196].forEach((f, i) => AU.tone(f, 0.28, 'triangle', 0.1, 0, null, i * 0.22)); },
+  done() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => AU.tone(f, 0.16, 'square', 0.06, 0, null, i * 0.11)); },
+  tick() { AU.tone(880, 0.03, 'square', 0.035); },
+  sel() { AU.tone(660, 0.05, 'square', 0.045); AU.tone(1320, 0.06, 'square', 0.035, 0, null, 0.05); },
+  shot(p, v) { AU.noise(0.12, v, 1000, p, 0, 'lowpass'); AU.tone(95, 0.07, 'sine', v * 0.5, p, 50); },
+};
+
+/* =====================================================================================
+   INPUT
+   ===================================================================================== */
+const keys = {};
+const joy = { on: false, id: -1, ox: 0, oy: 0, dx: 0, dy: 0 };
+let gpPrev = [], gpAxes = [0, 0], usedTouch = false;
+addEventListener('keydown', (e) => {
+  AU.init();
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') { if (e.key === 'Enter') { const b = $('[data-enter]'); b && b.click(); } if (e.key === 'Escape') document.activeElement.blur(); return; }
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (!keys[k] && !e.repeat) onPress(k);
+  keys[k] = true;
+  if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+});
+addEventListener('keyup', (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+function onPress(k) {
+  if (scr === 'boot') { bootT = 9; return; }
+  if (S && S.phase === 'lobby' && !scr && Net.mode === 'room' && k === 'Enter') { if (isHost()) toHost({ a: 'start' }); return; }
+  if (panel.classList.contains('side') && (k === 'Escape')) { act('leave'); return; }
+  if (panelOpen()) {
+    if (k === 'ArrowDown' || k === 's') return moveSel(1);
+    if (k === 'ArrowUp' || k === 'w') return moveSel(-1);
+    if (k === 'Enter' || k === ' ') return clickSel();
+    if (k === 'Escape' || k === 'Backspace') return backKey();
+    return;
+  }
+  if (Q) {
+    if (k === '1' || k === '2' || k === '3') return answer(+k - 1);
+    if (k === 'ArrowDown' || k === 's') return quizSel(1);
+    if (k === 'ArrowUp' || k === 'w') return quizSel(-1);
+    if (k === 'Enter' || k === ' ') return answer(Q.sel);
+    return;
+  }
+  if (k === ' ' || k === 'Enter' || k === 'f') return pressTolk();
+  if (k === 'e' || k === 'Shift' || k === 'q') return pressWacht();
+  if (k === 'Escape' || k === 'p') return openPause();
+  if (k === 'm') { CFG.snd = !CFG.snd; saveCfg(); AU.vol(); toast(CFG.snd ? 'Geluid aan' : 'Geluid uit'); }
+}
+function backKey() {
+  const b = $('#panel [data-back]');
+  if (b) b.click();
+}
+
+// touch: stick on the left, buttons on the right
+const touchEl = $('#touch'), stickEl = $('#stick'), knobEl = $('#knob');
+function showTouch() { if (!usedTouch) { usedTouch = true; touchEl.classList.remove('hidden'); layoutTouch(); } }
+addEventListener('pointerdown', (e) => {
+  AU.init();
+  if (e.pointerType === 'touch') showTouch();
+  if (scr === 'boot') bootT = 9;
+  if (e.pointerType !== 'touch' || panelOpen() || Q) return;
+  if (e.target.closest('.btn')) return;
+  if (e.clientX > innerWidth * 0.55) return;
+  joy.on = true; joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = joy.dy = 0;
+  stickEl.style.display = 'block'; stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px';
+  knobEl.style.transform = '';
+}, { passive: true });
+addEventListener('pointermove', (e) => {
+  if (!joy.on || e.pointerId !== joy.id) return;
+  let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
+  const l = Math.hypot(dx, dy), R = 44;
+  if (l > R) { dx = dx / l * R; dy = dy / l * R; }
+  joy.dx = dx / R; joy.dy = dy / R;
+  knobEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+}, { passive: true });
+function joyEnd(e) { if (e.pointerId !== joy.id) return; joy.on = false; joy.dx = joy.dy = 0; stickEl.style.display = 'none'; }
+addEventListener('pointerup', joyEnd); addEventListener('pointercancel', joyEnd);
+function btn(el, fn) {
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AU.init(); el.classList.add('on'); fn(); });
+  const off = () => el.classList.remove('on');
+  el.addEventListener('pointerup', off); el.addEventListener('pointerleave', off); el.addEventListener('pointercancel', off);
+}
+btn($('#bTolk'), () => { if (!Q && !panelOpen()) pressTolk(); });
+btn($('#bWacht'), () => { if (!Q && !panelOpen()) pressWacht(); });
+btn($('#bPause'), () => { if (!panelOpen()) openPause(); });
+
+function pollPad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null; for (const p of pads) if (p && p.connected) { gp = p; break; }
+  if (!gp) { gpAxes = [0, 0]; return; }
+  const b = gp.buttons.map((x) => x.pressed);
+  const edge = (i) => b[i] && !gpPrev[i];
+  let ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  if (Math.hypot(ax, ay) < 0.22) ax = ay = 0;
+  if (b[14]) ax = -1; if (b[15]) ax = 1; if (b[12]) ay = -1; if (b[13]) ay = 1;
+  gpAxes = [ax, ay];
+  if (edge(0) || edge(1) || edge(2) || edge(3) || edge(9) || edge(12) || edge(13)) AU.init();
+  if (panelOpen()) {
+    if (edge(13)) moveSel(1); if (edge(12)) moveSel(-1);
+    if (edge(0)) clickSel(); if (edge(1)) backKey();
+  } else if (Q) {
+    if (edge(13)) quizSel(1); if (edge(12)) quizSel(-1);
+    if (edge(0)) answer(Q.sel);
+  } else {
+    if (edge(0)) pressTolk();
+    if (edge(2) || edge(1) || edge(5)) pressWacht();
+    if (edge(9)) openPause();
+  }
+  gpPrev = b;
+}
+
+/* =====================================================================================
+   PLAYING: moving, TOLK, WACHT, the quiz
+   ===================================================================================== */
+let Q = null, speak = null;   // the quiz that's open / arcade "speaking" timer
+function me() { return S && S.players[Net.me]; }
+const canMove = () => S && (S.phase === 'play' || S.phase === 'intro' || S.phase === 'lobby') && !Q && !speak && !panelOpen();
+
+function movePlayer(dt) {
+  let dx = 0, dy = 0;
+  if (keys.ArrowLeft || keys.a) dx -= 1; if (keys.ArrowRight || keys.d) dx += 1;
+  if (keys.ArrowUp || keys.w) dy -= 1; if (keys.ArrowDown || keys.s) dy += 1;
+  dx += joy.dx + gpAxes[0]; dy += joy.dy + gpAxes[1];
+  const l = Math.hypot(dx, dy);
+  LP.mv = false;
+  if (!canMove() || l < 0.15) return;
+  if (l > 1) { dx /= l; dy /= l; }
+  const p = me();
+  const sp = SPEED * (p && p.boost > 0 ? 1.4 : 1) * dt;
+  const nx = clamp(LP.x + dx * sp, 5, W - 5), ny = clamp(LP.y + dy * sp, 24, BOT - 2);
+  if (!blocked(nx, LP.y)) LP.x = nx;
+  if (!blocked(LP.x, ny)) LP.y = ny;
+  if (Math.abs(dx) > 0.1) LP.f = dx > 0 ? 1 : -1;
+  LP.mv = true; LP.wp += dt;
+}
+function blocked(x, y) {
+  for (const [ox, oy, ow, oh] of OBST) if (x + 3 > ox && x - 3 < ox + ow && y + 1 > oy && y - 2 < oy + oh) return true;
+  return false;
+}
+function pressTolk() {
+  const p = me();
+  if (!p || S.phase !== 'play' || Q || speak) return;
+  const px = LP.x, py = LP.y - 6;
+  const near = p.mem.filter((it) => { const t = tgtPos(it.tgt); return hyp(px, py, t.x, t.y) <= DELIVER_R; });
+  if (near.length) {
+    near.sort((a, b) => a.life / a.max - b.life / b.max);
+    const it = near[0];
+    if (CFG.mode === 'arcade') { speak = { it, t: 0.7 }; toHost({ a: 'hold', id: it.id }); }
+    else openQuiz(it);
+    return;
+  }
+  let rep = '', bd = LISTEN_R + 6;
+  for (const id in S.sp) { const s = S.sp[id], n = NPC[id]; if (s.s !== 'rep') continue; const d = hyp(px, py, n.cx, n.cy); if (d < bd) { bd = d; rep = id; } }
+  if (rep) { toHost({ a: 'rep', sp: rep }); return; }
+  if (p.mem.length) local('Breng het naar ' + tgtName(p.mem[0].tgt).toLowerCase().replace('trainees ', 'de trainees bij ') + ' (pijl)');
+  else local('Hier valt niets te tolken');
+}
+function pressWacht() {
+  const p = me();
+  if (!p || S.phase !== 'play' || Q || speak) return;
+  if (p.cd > 0) { local('WACHT kan weer over ' + Math.ceil(p.cd) + ' s'); return; }
+  toHost({ a: 'wacht' });
+}
+function makeOptions(it) {
+  const ph = PH[it.ph], nl = fromNL(ph.k);
+  const opts = [{ t: nl ? ph.uk : ph.nl, g: nl ? ph.nl : '', ok: true }];
+  if (ph.bad) opts.push(nl ? { t: ph.bad[0], g: ph.bad[1], ok: false } : { t: ph.bad, g: '', ok: false });
+  const pool = shuffle(PH.filter((q) => q.i !== ph.i && fromNL(q.k) === nl));
+  pool.sort((a, b) => (b.st === ph.st) - (a.st === ph.st));
+  for (const q of pool) {
+    if (opts.length >= 3) break;
+    const t = nl ? q.uk : q.nl;
+    if (opts.some((o) => o.t === t)) continue;
+    if (Math.random() < 0.35) continue;
+    opts.push({ t, g: nl ? q.nl : '', ok: false });
+  }
+  for (const q of pool) { if (opts.length >= 3) break; const t = nl ? q.uk : q.nl; if (!opts.some((o) => o.t === t)) opts.push({ t, g: nl ? q.nl : '', ok: false }); }
+  return shuffle(opts);
+}
+function maskText(txt, m) {
+  let s = '';
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt[i];
+    s += (m[i] === '1' || c === ' ') ? esc(c) : '<span class="x">·</span>';
+  }
+  return s;
+}
+function openQuiz(it) {
+  const ph = PH[it.ph];
+  Q = { it, opts: makeOptions(it), sel: 0, t: 7.5, max: 7.5, done: false };
+  toHost({ a: 'hold', id: it.id });
+  const src = srcOf(ph);
+  const tl = isCyr(src) && CFG.tr ? '<div class="tl">' + esc(translit(src)) + (it.q < 1 ? ' <span class="d">(' + Math.round(it.q * 100) + '% gehoord)</span>' : '') + '</div>' : (it.q < 1 ? '<div class="tl">' + Math.round(it.q * 100) + '% gehoord</div>' : '');
+  const toWho = tgtName(it.tgt);
+  const lang = fromNL(ph.k) ? 'NL → UA' : 'UA → NL';
+  let h = '<div class="hd"><span>TOLK ' + lang + ' · ' + esc(KIND[it.k].tag) + '</span><span>→ ' + esc(toWho) + '</span></div>';
+  h += '<div class="heard">„' + maskText(src, it.m) + '”</div>' + tl;
+  Q.opts.forEach((o, i) => {
+    let sub = '';
+    if (isCyr(o.t) && CFG.tr) sub += esc(translit(o.t));
+    if (CFG.mode === 'hulp' && o.g) sub += (sub ? ' · ' : '') + '(' + esc(o.g) + ')';
+    h += '<button data-i="' + i + '"' + (i === 0 ? ' class="on"' : '') + '><span class="n">' + (i + 1) + '</span><span>' + esc(o.t) + (sub ? '<small>' + sub + '</small>' : '') + '</span></button>';
+  });
+  h += '<div class="tm" id="qtm"></div>';
+  const el = $('#quiz');
+  el.innerHTML = h; el.classList.remove('hidden');
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); AU.init(); answer(+b.dataset.i); }));
+  SND.tick();
+}
+function quizSel(d) {
+  if (!Q || Q.done) return;
+  Q.sel = (Q.sel + d + Q.opts.length) % Q.opts.length;
+  $('#quiz').querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === Q.sel));
+  SND.tick();
+}
+function answer(i) {
+  if (!Q || Q.done) return;
+  Q.done = true;
+  const o = Q.opts[i], ok = !!(o && o.ok);
+  const bs = $('#quiz').querySelectorAll('button');
+  Q.opts.forEach((x, j) => { if (x.ok) bs[j].classList.add('good'); else if (j === i) bs[j].classList.add('wrong'); });
+  toHost({ a: 'deliver', id: Q.it.id, ok });
+  if (!tutDone.quiz) { tutDone.quiz = 1; }
+  const keep = Q;
+  setTimeout(() => { if (Q === keep) closeQuiz(); }, ok ? 450 : 1300);
+}
+function closeQuiz() { Q = null; $('#quiz').classList.add('hidden'); }
+function quizTick(dt) {
+  if (!Q) return;
+  if (!Q.done) {
+    Q.t -= dt;
+    const tm = $('#qtm'); if (tm) tm.style.transform = 'scaleX(' + clamp(Q.t / Q.max, 0, 1) + ')';
+    if (Q.t <= 0) answer(-1);
+    const p = me();
+    if (!p || S.phase !== 'play' || !p.mem.some((x) => x.id === Q.it.id)) { if (S && S.phase === 'play') local('Te laat: iemand anders tolkte het al, of het is weg'); closeQuiz(); }
+  }
+}
+function speakTick(dt) {
+  if (!speak) return;
+  speak.t -= dt;
+  if (speak.t <= 0) { toHost({ a: 'deliver', id: speak.it.id, ok: true, arc: 1 }); speak = null; }
+}
+
+/* =====================================================================================
+   LOCAL EFFECTS: floating text, shake, sounds from the shared fx list, hints
+   ===================================================================================== */
+const floats = [], banners = [];
+let lastFx = 0, fxGid = '', shake = 0, redFlash = {}, muzzle = {}, nextShot = 1;
+const tutDone = {};
+function fxReset() { floats.length = 0; banners.length = 0; for (const k in tutDone) delete tutDone[k]; closeQuiz(); speak = null; }
+function local(t, c) { banners.push({ t, c: c || '#ffd23f', age: 0, dur: 2.6 }); if (banners.length > 3) banners.shift(); }
+function toast(t) { local(t, '#4dd4ff'); }
+function hint(key, t) {
+  if (tutDone[key] || !S || S.day !== 1) return;
+  tutDone[key] = 1;
+  banners.length = 0;
+  banners.push({ t, c: '#39ff7a', age: 0, dur: 6, tut: 1 });
+}
+function spPan(id) { const n = NPC[id]; return n ? clamp((n.cx - 160) / 170, -1, 1) : 0; }
+function spVol(id) { const n = NPC[id]; if (!n) return 0.5; return clamp(1 - hyp(LP.x, LP.y - 6, n.cx, n.cy) / 190, 0.12, 1); }
+function processFx() {
+  if (!S) return;
+  if (fxGid !== S.gid) { fxGid = S.gid; lastFx = isHost() ? 0 : S.fxn; fxReset(); }
+  for (const f of S.fx) {
+    if (f.id <= lastFx) continue;
+    lastFx = f.id;
+    const mine = !f.pid || f.pid === Net.me;
+    if (f.k === 'txt') {
+      if (f.me && !mine) continue;
+      let fy = f.y;
+      for (let k = 0; k < 4 && floats.some((o) => o.age < 0.8 && Math.abs(o.x - f.x) < 40 && Math.abs((o.y - o.age * 10) - fy) < 7); k++) fy -= 8;
+      floats.push({ x: f.x, y: fy, t: f.t, c: f.c, age: 0 });
+      if (f.snd && SND[f.snd] && (mine || ['ok', 'bad', 'miss', 'coffee'].includes(f.snd))) SND[f.snd]();
+      if (f.cap && mine) hint('cap', usedTouch ? 'Onthouden! Loop naar de pijl en druk op TOLK' : 'Onthouden! Loop naar de pijl en druk SPATIE (TOLK)');
+      if (f.ok && mine) hint('ok', usedTouch ? 'Goed! Praten er twee tegelijk? WACHT laat de rest even wachten' : 'Goed! Praten er twee tegelijk? E (WACHT) laat de rest even wachten');
+    } else if (f.k === 'prep' || f.k === 'prepS') {
+      const v = spVol(f.sp);
+      if (f.k === 'prepS') SND.whistle(spPan(f.sp)); else AU.tone(392, 0.06, 'triangle', 0.05 * v, spPan(f.sp));
+      hint('prep', 'Iemand gaat praten (!). Loop erheen en blijf in de cirkel om te luisteren');
+    } else if (f.k === 'rep') {
+      if (spVol(f.sp) > 0.5) SND.rep(spPan(f.sp));
+      hint('rep', 'Gemist? Druk TOLK bij de spreker met het vraagteken: hij herhaalt het');
+    } else if (f.k === 'inc') {
+      shake = 0.5; redFlash[f.st] = 0.9; SND.inc();
+      floats.push({ x: ST[f.st].area[0] + ST[f.st].area[2] / 2, y: ST[f.st].area[1] + 20, t: 'INCIDENT!', c: '#ff3b30', age: 0, big: 1 });
+    } else if (f.k === 'dayin') { /* the intro card shows it */ }
+    else if (f.k === 'day') SND.day();
+    else if (f.k === 'over') SND.over();
+    else if (f.k === 'done') SND.done();
+    else if (f.k === 'dayend') SND.day();
+  }
+}
+const voiceT = {};
+function audioTick(dt) {
+  if (!AU.c || !S) return;
+  if (AU.rainG) AU.rainG.gain.value = CFG.snd ? (S.phase === 'play' || S.phase === 'intro' ? S.rain * 0.05 : 0) : 0;
+  if (S.phase !== 'play') return;
+  const fol = myFollow();
+  for (const id in S.sp) {
+    const s = S.sp[id];
+    if (s.s !== 'talk' || s.pz > 0) continue;
+    voiceT[id] = (voiceT[id] || 0) - dt;
+    if (voiceT[id] > 0) continue;
+    const n = NPC[id], ins = n.role === 'I', safe = s.k === 's';
+    voiceT[id] = rand(0.07, 0.13) * (safe ? 0.8 : 1);
+    let v = (ins ? 0.07 : 0.055) * spVol(id) * (safe ? 1.7 : 1) * (fol === id ? 1.5 : 1);
+    const f = (ins ? n.pitch * 2 : n.pitch * 2.2) * rand(0.88, 1.28);
+    AU.tone(f, rand(0.04, 0.07), safe ? 'sawtooth' : ins ? 'square' : 'triangle', v, spPan(id));
+  }
+  // the range: shots now and then
+  if (S.stations.includes('sb')) {
+    nextShot -= dt;
+    if (nextShot <= 0) {
+      nextShot = rand(0.7, 2.6);
+      const j = Math.floor(Math.random() * 4), id = 'sb.' + j;
+      if (!S.sp[id] && !(S.sp['sb.I'] && S.sp['sb.I'].k === 's')) { muzzle[j] = 0.09; SND.shot(-0.8, 0.12 * spVol(id)); }
+    }
+  }
+}
+function myFollow() {
+  if (!S || S.phase !== 'play') return '';
+  let best = '', bd = LISTEN_R;
+  for (const id in S.sp) { const s = S.sp[id]; if (s.s !== 'talk' || s.pz > 0) continue; const n = NPC[id], d = hyp(LP.x, LP.y - 6, n.cx, n.cy); if (d <= bd) { bd = d; best = id; } }
+  return best;
+}
+
+/* =====================================================================================
+   DRAWING
+   ===================================================================================== */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let DPR = 1, CW = 0, CH = 0, sc = 1, sd = 1, ox = 0, oy = 0, portrait = false, fieldImg = null, fieldKey = '';
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  CW = innerWidth; CH = innerHeight;
+  cv.width = Math.round(CW * DPR); cv.height = Math.round(CH * DPR);
+  portrait = CH > CW * 1.15;
+  sc = portrait ? CW / W : Math.min(CW / W, CH / H);
+  sd = sc * DPR;
+  ox = Math.round((CW - W * sc) / 2 * DPR);
+  oy = Math.round((portrait ? Math.max(8, CH * 0.06) : (CH - H * sc) / 2) * DPR);
+  layCache.clear();
+  layoutTouch();
+}
+addEventListener('resize', resize);
+function layoutTouch() {
+  if (!usedTouch) return;
+  const t = $('#bTolk'), w = $('#bWacht'), pz = $('#bPause');
+  const fieldBot = (oy / DPR) + H * sc;
+  if (portrait) {
+    const y = Math.min(CH - 120, fieldBot + (CH - fieldBot) / 2 - 48);
+    t.style.left = (CW - 120) + 'px'; t.style.top = y + 'px';
+    w.style.left = (CW - 200) + 'px'; w.style.top = (y + 40) + 'px';
+  } else {
+    const side = (CW - W * sc) / 2;
+    const cx = side >= 100 ? CW - side / 2 : CW - 66;
+    t.style.left = (cx - 48) + 'px'; t.style.top = (CH - 124) + 'px';
+    w.style.left = (cx - 33) + 'px'; w.style.top = (CH - 216) + 'px';
+  }
+  pz.style.left = (CW - 52) + 'px'; pz.style.top = (portrait ? 10 : 8) + 'px';
+}
+// world rect, snapped to device pixels so neighbours never leave seams
+function R(x, y, w, h, c) {
+  const X = Math.round(ox + x * sd), Y = Math.round(oy + y * sd);
+  ctx.fillStyle = c; ctx.fillRect(X, Y, Math.round(ox + (x + w) * sd) - X, Math.round(oy + (y + h) * sd) - Y);
+}
+const WX = (x) => ox + x * sd, WY = (y) => oy + y * sd;
+
+// ---------- sprites
+const HEADS = { helmet: ['.hhhhh.', 'hhhhhhh'], beret: ['..hhhh.', '.hhhhhh'], cap: ['.hhhhh.', 'hhhhhhh'], hair: ['..hhh..', '.hhhhh.'] };
+const BODY = {
+  stand: ['..kkk..', '..eke..', '..kmk..', '.uuvuu.', 'auvuuvy', 'uuvuuvu', 'k.uvu.k', '..vuv..', '..u.u..', '..v.v..', '..b.b..'],
+  walk: ['..kkk..', '..eke..', '..kmk..', '.uuvuu.', 'auvuuvy', 'uuvuuvu', 'k.uvu.k', '..vuv..', '..u.u..', '.v...v.', '.b...b.'],
+  kneel: ['..kkk..', '..eke..', '..kmk..', '.uuvuu.', 'auvuuvy', 'k.uvu.k', '.uvuuvb', '.bvv.bb'],
+};
+const PRONE = ['....hhhh..........', 'gggghhhhhuuvuuvuu.', '....kkkauvuuvuuvbb', '.....k..uuvuuvu.bb'];
+const sprCache = new Map();
+function sprite(rows, pal, key) {
+  let c = sprCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas'); c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((r, y) => { for (let x = 0; x < r.length; x++) { const col = pal[r[x]]; if (col) { g.fillStyle = col; g.fillRect(x, y, 1, 1); } } });
+  sprCache.set(key, c);
+  return c;
+}
+function palette(kind, skin, talk, accent) {
+  const nl = kind !== 'tr';
+  return {
+    h: kind === 'ins' ? '#7a1f2b' : kind === 'tr' ? '#4f5634' : accent,
+    k: skin, e: '#1b1410', m: talk ? '#5a1e14' : skin,
+    u: nl ? '#5c6b3c' : '#6e6c49', v: nl ? '#3d4a27' : '#4c4a31',
+    a: kind === 'ins' ? '#ff8a1e' : kind === 'tr' ? '#2f6fd6' : accent,
+    y: kind === 'ins' ? '#ff8a1e' : kind === 'tr' ? '#ffd23f' : accent,
+    b: '#241e14', g: '#1a1a1a',
+  };
+}
+function drawPerson(x, y, kind, pose, skin, talk, walk, accent) {
+  const pal = palette(kind, skin, talk, accent);
+  const key = kind + pose + skin + (talk ? 1 : 0) + (walk ? 1 : 0) + (accent || '');
+  ctx.imageSmoothingEnabled = false;
+  if (pose === 'prone') {
+    const img = sprite(PRONE, pal, key);
+    ctx.drawImage(img, Math.round(WX(x - 9)), Math.round(WY(y - 2)), Math.round(18 * sd), Math.round(4 * sd));
+    return;
+  }
+  const head = HEADS[kind === 'ins' ? 'beret' : kind === 'tr' ? 'helmet' : 'cap'];
+  const rows = head.concat(BODY[pose === 'kneel' ? 'kneel' : walk ? 'walk' : 'stand']);
+  const img = sprite(rows, pal, key);
+  const bob = walk ? 0 : 0;
+  ctx.drawImage(img, Math.round(WX(x - 3)), Math.round(WY(y - rows.length - bob)), Math.round(7 * sd), Math.round(rows.length * sd));
+}
+
+// ---------- the field, painted once into a 320x200 picture
+function buildField() {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), r = mulberry(1337);
+  const B = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const P = (x, y, col) => { g.fillStyle = col; g.fillRect(x | 0, y | 0, 1, 1); };
+  B(0, 0, W, H, '#000');
+  B(0, TOP, W, BOT - TOP, '#3e6a2c');
+  for (let y = TOP; y < BOT; y++) for (let x = 0; x < W; x++) { const v = r(); if (v < 0.085) P(x, y, '#4b7b34'); else if (v < 0.14) P(x, y, '#345d25'); else if (v < 0.1425) P(x, y, '#c8cf5a'); }
+  for (let i = 0; i < 70; i++) { const x = r() * W, y = TOP + 4 + r() * (BOT - TOP - 6); P(x, y, '#5a8c3a'); P(x + 1, y - 1, '#5a8c3a'); P(x - 1, y - 1, '#4b7b34'); }
+  const mud = (x0, y0, x1, y1, w) => {
+    const n = Math.ceil(hyp(x0, y0, x1, y1));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, cx = x0 + (x1 - x0) * t + Math.sin(t * 7) * 1.5, cy = y0 + (y1 - y0) * t;
+      for (let dy = -w; dy <= w; dy++) for (let dx = -w; dx <= w; dx++) {
+        if (dx * dx + dy * dy > w * w + r() * 3) continue;
+        const v = r(); P(cx + dx, cy + dy, v < 0.15 ? '#86704c' : v < 0.3 ? '#5a4830' : '#6e5a3c');
+      }
+    }
+  };
+  mud(160, 106, 104, 66, 4); mud(160, 106, 262, 92, 4); mud(160, 106, 120, 140, 4); mud(160, 106, 206, 150, 4);
+  for (let a = 0; a < 6.3; a += 0.03) for (let rr = 0; rr < 15; rr++) { const v = r(); if (v < 0.6) P(160 + Math.cos(a) * rr, 104 + Math.sin(a) * rr * 0.7, v < 0.1 ? '#86704c' : v < 0.2 ? '#5a4830' : '#6e5a3c'); }
+  for (let x = 196; x < W; x++) { if (r() < 0.8) P(x, 150 + Math.sin(x / 13), '#4f3f2a'); if (r() < 0.8) P(x, 156 + Math.sin(x / 13), '#4f3f2a'); }
+  // fence along the top
+  B(0, TOP, W, 1, '#6b5233'); B(0, TOP + 3, W, 1, '#6b5233');
+  for (let x = 2; x < W; x += 10) B(x, TOP - 1, 1, 6, '#4f3a22');
+  // ---- SCHIETBAAN
+  for (let y = 20; y < 88; y++) for (let x = 7; x < 74; x++) { const v = r(); P(x, y, v < 0.12 ? '#b09a68' : v < 0.22 ? '#8a7548' : '#9c8656'); }
+  B(0, 18, 7, 72, '#4f3f28'); B(6, 18, 1, 72, '#6e5a3c');
+  for (let y = 20; y < 90; y += 3) P(2 + (y % 4), y, '#6a5636');
+  for (const ly of [36, 52, 68]) for (let x = 7; x < 74; x += 2) P(x, ly, '#d8cca0');
+  for (const ty of [28, 44, 60, 76]) {
+    B(10, ty + 2, 1, 5, '#5a3d22'); B(13, ty + 2, 1, 5, '#5a3d22');
+    B(8, ty - 6, 7, 9, '#ece4c6'); B(10, ty - 5, 3, 2, '#3c5a2c'); B(9, ty - 3, 5, 5, '#3c5a2c'); P(11, ty - 1, '#ece4c6');
+  }
+  for (let y = 20; y < 88; y += 2) P(73, y, (y / 2) % 2 ? '#e8e8e8' : '#d0302a');
+  B(78, 80, 9, 5, '#45542a'); B(78, 80, 9, 1, '#5e6e38'); B(82, 81, 1, 3, '#2e3a1a');
+  B(112, 22, 1, 20, '#bbbbbb');
+  // ---- EHBO
+  B(236, 20, 70, 6, '#334a24'); B(234, 26, 74, 14, '#4f6b36');
+  for (let x = 236; x < 306; x += 7) B(x, 26, 1, 14, '#41592c');
+  B(266, 30, 12, 10, '#1d2814'); B(265, 29, 14, 1, '#334a24');
+  B(240, 28, 16, 9, '#f4f4ee'); B(247, 29, 2, 7, '#1f9a3a'); B(244, 31, 8, 2, '#1f9a3a');
+  B(228, 58, 26, 1, '#6b4a2a'); B(228, 62, 26, 1, '#6b4a2a'); B(229, 59, 24, 3, '#6b7a44');
+  B(232, 58, 4, 4, '#f0a05a'); B(236, 59, 14, 3, '#e8742a'); B(248, 58, 4, 1, '#e8742a'); B(248, 62, 4, 1, '#e8742a');
+  B(268, 60, 7, 5, '#2e6a3a'); B(270, 61, 3, 3, '#e8e8e8'); B(271, 60, 1, 5, '#e8e8e8');
+  // ---- DEKKING
+  for (let x = 16; x < 118; x++) { const y = 120 + ((x % 6) < 3 ? (x % 3) : 2 - (x % 3)); P(x, y, '#9a9a9a'); }
+  for (let x = 16; x < 118; x += 12) B(x, 118, 1, 6, '#6b5233');
+  for (let y = 139; y < 162; y++) for (let x = 14; x < 118; x++) { const v = r(); P(x, y, v < 0.12 ? '#5a4630' : v < 0.3 ? '#33281a' : '#3f3222'); }
+  B(14, 139, 104, 1, '#6e5a3c'); B(14, 161, 104, 1, '#5a4630');
+  for (let row = 0; row < 3; row++) for (let x = 16 + (row % 2) * 3; x < 114; x += 6) {
+    const y = 129 + row * 3;
+    B(x, y, 6, 3, '#7d6a42'); B(x + 1, y, 4, 2, '#b49c66'); P(x + 1, y, '#c8b07a');
+  }
+  // ---- VOERTUIG
+  B(234, 138, 70, 4, '#262620');
+  B(258, 114, 46, 24, '#55663a'); B(258, 114, 46, 2, '#66784a');
+  for (let x = 262; x < 304; x += 8) B(x, 116, 1, 22, '#45552e');
+  B(258, 136, 46, 2, '#3a4626');
+  B(240, 122, 18, 16, '#4a5a2e'); B(240, 122, 18, 1, '#5e703a'); B(243, 125, 9, 6, '#9fb6b8'); B(244, 126, 3, 2, '#d6e6e8');
+  B(234, 130, 7, 8, '#4a5a2e'); B(232, 136, 4, 3, '#1e1e1e'); B(233, 131, 2, 2, '#ffe6a0');
+  for (const wx of [246, 272, 292]) for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+    const d = dx * dx + dy * dy; if (d <= 17) P(wx + dx, 143 + dy, d <= 3 ? '#6a6a6a' : '#141414');
+  }
+  B(206, 147, 12, 6, '#5a4a2a'); B(206, 147, 12, 1, '#6e5a34'); B(208, 142, 8, 5, '#3b4a2a'); P(210, 144, '#c8d35a'); P(213, 144, '#c8d35a');
+  B(215, 126, 1, 16, '#9a9a9a');
+  // ---- the middle: table with coffee, two flagpoles
+  B(150, 97, 20, 2, '#8f6b40'); B(150, 99, 20, 4, '#7a5a34'); B(151, 103, 1, 3, '#5a3d22'); B(168, 103, 1, 3, '#5a3d22');
+  B(146, 70, 1, 30, '#c8c8c8'); B(174, 70, 1, 30, '#c8c8c8'); P(146, 69, '#ffd23f'); P(174, 69, '#ffd23f');
+  // a few puddles (it's the Netherlands)
+  for (const [px, py, pw] of [[150, 128, 7], [118, 96, 5], [196, 64, 6], [270, 100, 8]]) { B(px, py, pw, 2, '#41606a'); B(px + 1, py - 1, pw - 2, 1, '#41606a'); P(px + 1, py, '#7aa0aa'); }
+  // hedge along the bottom
+  for (let x = 0; x < W; x++) { const h = 2 + Math.round(r() * 2); B(x, BOT - h, 1, h, r() < 0.5 ? '#2a4a1e' : '#22401a'); }
+  return c;
+}
+
+// ---------- text layout cache (per char positions so revealed text never jumps)
+const layCache = new Map();
+function layout(str, font, maxW) {
+  const key = font + '|' + maxW + '|' + str;
+  let L = layCache.get(key);
+  if (L) return L;
+  ctx.font = font;
+  const words = str.split(' '), lines = [];
+  let cur = '', start = 0, pos = 0;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i], test = cur ? cur + ' ' + w : w;
+    if (cur && ctx.measureText(test).width > maxW) { lines.push({ s: start, txt: cur }); start = pos; cur = w; }
+    else cur = test;
+    pos += w.length + 1;
+  }
+  lines.push({ s: start, txt: cur });
+  let mw = 0;
+  for (const l of lines) {
+    l.xs = []; for (let i = 0; i <= l.txt.length; i++) l.xs.push(ctx.measureText(l.txt.slice(0, i)).width);
+    l.w = l.xs[l.txt.length]; mw = Math.max(mw, l.w);
+  }
+  L = { lines, w: mw };
+  if (layCache.size > 400) layCache.clear();
+  layCache.set(key, L);
+  return L;
+}
+function text(t, x, y, size, col, align, font, alpha) {
+  ctx.font = Math.round(size * sd) + 'px ' + (font || F_UI);
+  ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  ctx.fillStyle = col; ctx.fillText(t, WX(x), WY(y));
+  ctx.globalAlpha = 1;
+}
+function textW(t, size, font) { ctx.font = Math.round(size * sd) + 'px ' + (font || F_UI); return ctx.measureText(t).width / sd; }
+const fsSay = () => Math.max(6.6, 11.5 / sc);
+
+let T = 0;
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!fieldImg) fieldImg = buildField();
+  const sx = shake > 0 ? Math.round((Math.random() - 0.5) * 4 * sd) : 0, sy = shake > 0 ? Math.round((Math.random() - 0.5) * 3 * sd) : 0;
+  ox += sx; oy += sy;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(fieldImg, ox, oy, Math.round(W * sd), Math.round(H * sd));
+  const st = !S || S.phase === 'lobby' ? ST_ORDER : S.stations;
+  const play = S && (S.phase === 'play' || S.phase === 'intro');
+  // flags waving
+  for (let i = 0; i < 9; i++) {
+    const w1 = Math.round(Math.sin(T * 5 + i * 0.8) * 0.7), w2 = Math.round(Math.sin(T * 5 + i * 0.8 + 1) * 0.7);
+    R(147 + i, 70 + w1, 1, 2, '#ae1c28'); R(147 + i, 72 + w1, 1, 2, '#ffffff'); R(147 + i, 74 + w1, 1, 2, '#21468b');
+    R(175 + i, 70 + w2, 1, 3, '#0057b7'); R(175 + i, 73 + w2, 1, 3, '#ffd700');
+  }
+  for (let i = 0; i < 6; i++) R(113 + i, 22 + Math.round(Math.sin(T * 6 + i) * 0.7), 1, 4, '#d0302a');
+  R(215, 125, 1, 1, Math.sin(T * 6) > 0 ? '#ff3b30' : '#5a1410');
+  if (S && S.cof.on) { R(154, 92, 3, 5, '#c03030'); R(154, 92, 3, 1, '#e05050'); R(159, 95, 2, 2, '#eeeeee'); R(163, 95, 2, 2, '#eeeeee'); if (Math.sin(T * 3) > 0) R(160, 92, 1, 2, 'rgba(255,255,255,.5)'); }
+  // closed posts
+  for (const k of ST_ORDER) {
+    const a = ST[k].area, on = st.includes(k);
+    if (!on) { R(a[0], a[1], a[2], a[3], 'rgba(0,0,0,.45)'); text('GESLOTEN', a[0] + a[2] / 2, a[1] + a[3] / 2 + 3, 9, '#6a6a6a', 'center'); }
+    if (redFlash[k] > 0) R(a[0], a[1], a[2], a[3], 'rgba(255,40,30,' + (redFlash[k] * 0.35).toFixed(2) + ')');
+  }
+  // post signs
+  for (const k of ST_ORDER) {
+    const s = ST[k], on = st.includes(k);
+    const w = textW(s.name, 7) + 4, x = k === 'vr' ? s.sign[0] - w : s.sign[0];
+    R(x, s.sign[1] - 6, w, 8, on ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.3)');
+    text(s.name, x + 2, s.sign[1], 7, on ? '#e8e2c8' : '#666', 'left');
+  }
+  const fol = myFollow();
+  const mine = me();
+  // listening circles
+  if (S && S.phase === 'play') {
+    for (const id in S.sp) {
+      const s = S.sp[id], n = NPC[id];
+      if (s.s !== 'talk' && s.s !== 'prep') continue;
+      const isF = fol === id;
+      ctx.beginPath(); ctx.arc(WX(n.cx), WY(n.cy), LISTEN_R * sd, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1, sd * (isF ? 0.9 : 0.6));
+      ctx.setLineDash(isF ? [] : [3 * sd, 3 * sd]);
+      const full = mine && mine.mem.length >= MEM_MAX;
+      ctx.strokeStyle = isF ? (full ? 'rgba(255,90,77,.9)' : 'rgba(57,255,122,.9)') : s.k === 's' ? 'rgba(255,59,48,.55)' : 'rgba(255,210,63,.4)';
+      ctx.stroke(); ctx.setLineDash([]);
+      if (isF) { ctx.beginPath(); ctx.moveTo(WX(LP.x), WY(LP.y - 7)); ctx.lineTo(WX(n.cx), WY(n.cy)); ctx.strokeStyle = 'rgba(57,255,122,.45)'; ctx.stroke(); }
+    }
+    // where my words have to go
+    if (mine) mine.mem.forEach((it, i) => {
+      const t = tgtPos(it.tgt), inR = hyp(LP.x, LP.y - 6, t.x, t.y) <= DELIVER_R;
+      ctx.beginPath(); ctx.arc(WX(t.x), WY(t.y), DELIVER_R * sd, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1, sd * 0.7); ctx.setLineDash(inR ? [] : [2 * sd, 4 * sd]);
+      ctx.strokeStyle = inR ? 'rgba(57,255,122,.85)' : 'rgba(57,255,122,.35)'; ctx.stroke(); ctx.setLineDash([]);
+    });
+  }
+  // people, back to front
+  const ents = [];
+  for (const id in NPC) { const n = NPC[id]; if (st.includes(n.st)) ents.push({ y: n.y, npc: n }); }
+  if (S) for (const pid in S.players) {
+    const p = S.players[pid];
+    let x = p.x, y = p.y, mv = false, f = p.f;
+    if (pid === Net.me) { x = LP.x; y = LP.y; mv = LP.mv; }
+    else { const pr = Net.peers[pid]; if (pr && performance.now() - pr.at < 2000) { x = pr.x; y = pr.y; mv = pr.mv; } }
+    ents.push({ y, pl: p, pid, x, mv, f });
+  }
+  ents.sort((a, b) => a.y - b.y);
+  for (const e of ents) {
+    if (e.npc) {
+      const n = e.npc, s = S && S.sp[n.id];
+      const talk = s && s.s === 'talk' && s.pz <= 0 && Math.sin(T * 26 + n.cx) > 0;
+      drawPerson(n.x, n.y, n.role === 'I' ? 'ins' : 'tr', n.pose, n.skin, talk, false);
+      if (n.pose === 'prone' && muzzle[+n.id.split('.')[1]] > 0) { R(n.x - 11, n.y - 1, 2, 1, '#ffe14a'); R(n.x - 12, n.y - 2, 1, 1, '#fff6b0'); }
+    } else {
+      const col = PCOL[e.pl.c] || PCOL[0], isMe = e.pid === Net.me;
+      ctx.beginPath(); ctx.ellipse(WX(e.x), WY(e.y), 5 * sd, 2 * sd, 0, 0, Math.PI * 2);
+      ctx.fillStyle = isMe ? 'rgba(57,255,122,.35)' : 'rgba(0,0,0,.3)'; ctx.fill();
+      drawPerson(e.x, e.y, 'ply', 'stand', '#e8b48c', false, e.mv && Math.floor(T * 7) % 2 === 0, col);
+      if (isMe) { const by = e.y - 17 + Math.round(Math.sin(T * 5)); R(e.x - 1, by, 3, 1, col); R(e.x, by + 1, 1, 1, col); }
+      if (Net.mode === 'room') text(e.pl.n, e.x, e.y - (isMe ? 19 : 16), 6.5, col, 'center');
+      if (e.pl.boost > 0) R(e.x + 4, e.y - 12, 2, 2, '#c03030');
+    }
+  }
+  // speech bubbles
+  if (S && S.phase === 'play') {
+    const order = Object.keys(S.sp).sort((a, b) => (a === fol) - (b === fol));
+    for (const id of order) bubble(id, S.sp[id], id === fol);
+    if (mine) mine.mem.forEach((it, i) => {
+      const t = tgtPos(it.tgt), top = it.tgt.endsWith('.G') ? t.y - 16 : NPC[it.tgt].top - 2;
+      const y = top - 4 + Math.round(Math.sin(T * 5 + i) * 1.5), x = t.x + (i - (mine.mem.length - 1) / 2) * 9;
+      const c = KIND[it.k].col;
+      R(x - 3, y - 4, 7, 2, c); R(x - 2, y - 2, 5, 1, c); R(x - 1, y - 1, 3, 1, c); R(x, y, 1, 1, c);
+      text(String(i + 1), x + 0.3, y - 5, 7, c, 'center');
+    });
+  }
+  // rain
+  if (S && S.rain > 0 && play) {
+    ctx.fillStyle = 'rgba(170,200,230,.5)';
+    const n = Math.round(70 * S.rain);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 37.7 + T * 40) % W, y = TOP + ((i * 53.3 + T * 160) % (BOT - TOP));
+      ctx.fillRect(Math.round(WX(x)), Math.round(WY(y)), Math.max(1, Math.round(sd * 0.5)), Math.round(sd * 3));
+    }
+  }
+  // floating texts
+  for (const f of floats) {
+    const a = clamp(1.6 - f.age, 0, 1);
+    const sz = f.big ? 12 : 7.5, y = f.y - f.age * 10;
+    text(f.t, f.x + 0.5, y + 0.5, sz, '#000', 'center', F_UI, a);
+    text(f.t, f.x, y, sz, f.c, 'center', F_UI, a);
+  }
+  hud();
+  ox -= sx; oy -= sy;
+}
+
+function bubble(id, s, isF) {
+  const n = NPC[id], ph = PH[s.ph], K = KIND[s.k], src = srcOf(ph);
+  const ins = n.role === 'I';
+  const fs = fsSay(), lh = fs * 1.15, pad = 2.5;
+  const border = s.k === 's' ? '#ff3b30' : (s.k === 'p' || s.k === 'pq') ? '#9a9a9a' : ins ? '#ff8a1e' : '#2f6fd6';
+  const ax = n.cx, ay = n.top - 2;
+  let held = false;
+  if (s.s === 'rest') {
+    for (const pid in S.players) if (S.players[pid].mem.some((m) => m.sp === id && m.uid === s.uid)) held = true;
+    if (!held) return;
+  }
+  const box = (x, y, w, h, bg) => {
+    x = clamp(x, 1, W - w - 1);
+    const b = Math.max(0.6, 1 / sd);
+    R(x - b, y - b, w + 2 * b, h + 2 * b, border); R(x, y, w, h, bg || '#f4f1e6');
+    return x;
+  };
+  const tail = (x, y) => { R(ax - 1, y, 3, 1, border); R(ax, y + 1, 1, 1, border); };
+  if (s.s === 'prep') {
+    const on = Math.sin(T * 14) > -0.2, c = s.k === 's' ? '#ff3b30' : '#ff8a1e';
+    const w = s.k === 's' ? 12 : 8, x = box(ax - w / 2, ay - 12, w, 9, on ? '#fff' : '#f4f1e6');
+    text(s.k === 's' ? '!!' : '!', x + w / 2, ay - 4.6, 9, c, 'center');
+    tail(ax, ay - 3);
+    if (s.pz > 0) text('WACHT', ax, ay - 14, 6.5, '#ffd23f', 'center');
+    return;
+  }
+  if (s.s === 'rep') {
+    const x = box(ax - 5, ay - 12, 10, 9);
+    text('?', x + 5, ay - 4.5, 9.5, '#c03030', 'center');
+    tail(ax, ay - 3);
+    if (hyp(LP.x, LP.y - 6, n.cx, n.cy) < LISTEN_R + 6) text('TOLK = herhalen', ax, ay - 14, 6.5, '#ffd23f', 'center');
+    return;
+  }
+  if (s.s === 'rest') {
+    const x = box(ax - 7, ay - 9, 14, 6, '#d8d4c6');
+    text('...', x + 7, ay - 4.3, 7, '#555', 'center');
+    return;
+  }
+  // talking
+  const h = s.h[Net.me];
+  const L = src.length, cur = Math.min(L, Math.floor(s.t / s.dur * L));
+  if (!isF && !h) {
+    const x = box(ax - 11, ay - 13, 22, 10);
+    const dots = Math.floor(T * 6) % 4;
+    for (let i = 0; i < 3; i++) R(x + 5 + i * 5, ay - 8, 2, 2, i < dots ? '#333' : '#bbb');
+    R(x, ay - 4, 22 * (1 - s.t / s.dur), 1, border);
+    tail(ax, ay - 2);
+    if (s.k === 's') text('!', x + 23.5, ay - 10, 8, '#ff3b30', 'left');
+    if (s.pz > 0) text('WACHT ' + Math.ceil(s.pz), ax, ay - 15, 6.5, '#ffd23f', 'center');
+    return;
+  }
+  const font = Math.round(fs * sd) + 'px ' + F_SAY;
+  const maxW = Math.round(104 * (fs / 6.6) * sd);
+  const Ly = layout(src, font, maxW);
+  const hdr = (ins ? n.name : n.name + (CFG.tr ? ' (' + translit(n.name) + ')' : '')) + '  ' + K.tag;
+  const hw = textW(hdr, 6.2, F_SAY) + (h ? textW('100%', 6.2) + 6 : 4);
+  const tw = Math.max(Ly.w / sd + pad * 2, hw, 30);
+  const th = Ly.lines.length * lh + pad * 2 + 6;
+  let bx = ax - tw / 2, by = ay - th - 3;
+  if (by < TOP + 1) by = TOP + 1;
+  bx = box(bx, by, tw, th);
+  R(bx, by, tw, 6, border);
+  text(hdr, bx + 2, by + 4.8, 6.2, '#fff', 'left', F_SAY);
+  if (h) {
+    const q = Math.round((h.split('1').length - 1) / L * 100);
+    text(q + '%', bx + tw - 2, by + 4.8, 6.2, q >= 60 ? '#b6ffcf' : '#ffd0c8', 'right');
+  }
+  ctx.font = font; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  Ly.lines.forEach((l, li) => {
+    const yy = WY(by + 6 + pad + (li + 0.82) * lh);
+    for (let i = 0; i < l.txt.length; i++) {
+      const gi = l.s + i, ch = l.txt[i];
+      if (ch === ' ') continue;
+      const xx = WX(bx + pad) + l.xs[i];
+      if (h && h[gi] === '1') { ctx.fillStyle = '#141414'; ctx.fillText(ch, xx, yy); }
+      else if (gi < cur) { ctx.fillStyle = '#c0392b'; ctx.fillText('·', xx + (l.xs[i + 1] - l.xs[i]) / 2 - ctx.measureText('·').width / 2, yy); }
+    }
+  });
+  R(bx, by + th - 1.2, tw * (1 - s.t / s.dur), 1.2, border);
+  if (s.pz > 0) text('WACHT ' + Math.ceil(s.pz), bx + tw / 2, by - 1.5, 6.5, '#ffd23f', 'center');
+  if (by + th + 3 <= ay + 1) tail(ax, by + th + 0.5);
+}
+
+function hud() {
+  // top bar
+  R(0, 0, W, TOP - 1, '#000'); R(0, TOP - 1, W, 0.6, '#1b7a3c');
+  if (!S) return;
+  const g = '#39ff7a', dim = '#1b7a3c';
+  let hx = 3;
+  if (S.day) {
+    const D = DAYS[S.day - 1];
+    text(D.name, hx, 10, 10, g); hx += textW(D.name, 10) + 5;
+    const mins = 8 * 60 + Math.floor(clamp(S.t / S.dur, 0, 1) * 8 * 60);
+    const clock = String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+    text(clock, hx, 10, 10, S.t > S.dur - 15 && S.phase === 'play' ? '#ffd23f' : g); hx += textW(clock, 10) + 6;
+    text('VERTROUWEN', hx, 9.5, 7, dim); hx += textW('VERTROUWEN', 7) + 3;
+    const tw = 46, tx = hx;
+    R(tx, 4, tw, 6, '#062010');
+    const tr = clamp(S.trust / 100, 0, 1);
+    R(tx, 4, tw * tr, 6, tr < 0.3 ? (Math.sin(T * 10) > 0 ? '#ff3b30' : '#7a1410') : tr < 0.55 ? '#ffd23f' : g);
+    for (let i = 1; i < 10; i++) R(tx + i * tw / 10, 4, 0.5, 6, '#000');
+    hx += tw + 6;
+  }
+  const pts = Net.mode === 'room' ? totalPts() : (me() ? me().pts : 0);
+  const stx = (Net.mode === 'room' ? 'TEAM ' : 'SCORE ') + String(pts).padStart(6, '0');
+  text(stx, W - 3, 10, 10, g, 'right');
+  if (S.combo > 1) text('x' + S.combo, W - 3 - textW(stx, 10) - 4, 10, 10, '#ffd23f', 'right');
+  if (Net.mode === 'room') {
+    for (const pid in S.players) { const p = S.players[pid]; R(hx, 4, 4, 6, PCOL[p.c]); hx += 6; }
+    if (Net.code && hx < 200) text(Net.code, hx + 2, 10, 8, dim);
+  }
+  // bottom: what's in my head
+  R(0, BOT, W, H - BOT, '#000'); R(0, BOT, W, 0.6, '#1b7a3c');
+  const p = me();
+  for (let i = 0; i < MEM_MAX; i++) {
+    const x = 3 + i * 96, y = BOT + 3, w = 92, h = 23;
+    const it = p && p.mem[i];
+    R(x, y, w, h, it ? '#04140a' : '#020804');
+    const bc = it ? KIND[it.k].col : '#0d3a1c';
+    R(x, y, w, 0.6, bc); R(x, y + h - 0.6, w, 0.6, bc); R(x, y, 0.6, h, bc); R(x + w - 0.6, y, 0.6, h, bc);
+    text(String(i + 1), x + 3, y + 8.5, 9, it ? KIND[it.k].col : dim);
+    if (!it) { text('— leeg —', x + w / 2 + 3, y + 14, 8, '#0f4a24', 'center'); continue; }
+    const ph = PH[it.ph], src = srcOf(ph);
+    let s = ''; for (let j = 0; j < src.length; j++) s += it.m[j] === '1' || src[j] === ' ' ? src[j] : '·';
+    let fsz = 6.6, max = w - 12;
+    while (s.length > 3 && textW(s, fsz, F_SAY) > max) s = s.slice(0, -2) + '…';
+    text(s, x + 10, y + 8.5, fsz, '#ffffff', 'left', F_SAY);
+    const tp = tgtPos(it.tgt), inR = hyp(LP.x, LP.y - 6, tp.x, tp.y) <= DELIVER_R;
+    text(inR ? '▶ NU TOLKEN!' : '→ ' + tgtName(it.tgt), x + 10, y + 16, 6.6, inR ? '#39ff7a' : '#7fbf95');
+    const f = clamp(it.life / it.max, 0, 1);
+    R(x + 10, y + 19, (w - 13) * f, 2, f < 0.3 ? (Math.sin(T * 12) > 0 ? '#ff3b30' : '#7a1410') : f < 0.55 ? '#ffd23f' : '#39ff7a');
+  }
+  // WACHT gauge
+  const cd = p ? p.cd : 0;
+  const wx = 292, wy = BOT + 3;
+  R(wx, wy, 25, 23, '#020804');
+  text('✋', wx + 12.5, wy + 12, 10, cd > 0 ? '#5a4a10' : '#ffd23f', 'center');
+  if (cd > 0) { R(wx + 2, wy + 19, 21 * (1 - cd / 12), 2, '#ffd23f'); text(Math.ceil(cd) + 's', wx + 12.5, wy + 18, 6.5, '#ffd23f', 'center'); }
+  else text(usedTouch ? 'WACHT' : 'E', wx + 12.5, wy + 20, 6.5, '#ffd23f', 'center');
+  // banners (hints, messages)
+  let by = TOP + 9;
+  for (const b of banners) {
+    const a = clamp(Math.min(b.age * 5, (b.dur - b.age) * 2), 0, 1);
+    const tw = textW(b.t, 8) + 8;
+    ctx.globalAlpha = a; R(W / 2 - tw / 2, by - 7, tw, 9.5, 'rgba(0,0,0,.78)'); ctx.globalAlpha = 1;
+    text(b.t, W / 2, by, 8, b.c, 'center', F_UI, a);
+    by += 11;
+  }
+  if (S.phase === 'play' && S.t > S.dur && Math.sin(T * 4) > 0) text('EINDE VAN DE DAG - MAAK AF WAT JE HEBT', W / 2, BOT - 4, 7.5, '#ffd23f', 'center');
+}
+
+/* =====================================================================================
+   MENUS (ERROR-DOS style panels)
+   ===================================================================================== */
+let lobbySig = '', scr = 'boot', uiKey = '', uiTimer = 0, selIdx = 0, bootT = 0;
+const panel = $('#panel');
+const panelOpen = () => !panel.classList.contains('hidden') && !panel.classList.contains('side') && panel.querySelector('.mi');
+function setPanel(html, cls) {
+  panel.className = 'panel' + (cls ? ' ' + cls : '');
+  panel.innerHTML = html;
+  panel.classList.remove('hidden');
+  const items = [...panel.querySelectorAll('.mi')];
+  selIdx = Math.min(selIdx, Math.max(0, items.length - 1));
+  items.forEach((b, i) => {
+    b.classList.toggle('on', i === selIdx);
+    b.addEventListener('mouseenter', () => { selIdx = i; items.forEach((x, j) => x.classList.toggle('on', j === i)); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); AU.init(); SND.sel(); act(b.dataset.a, b); });
+  });
+}
+function hidePanel() { panel.classList.add('hidden'); panel.innerHTML = ''; }
+function moveSel(d) {
+  const items = [...panel.querySelectorAll('.mi')]; if (!items.length) return;
+  selIdx = (selIdx + d + items.length) % items.length;
+  items.forEach((x, j) => x.classList.toggle('on', j === selIdx));
+  items[selIdx].scrollIntoView({ block: 'nearest' });
+  SND.tick();
+}
+function clickSel() { const items = [...panel.querySelectorAll('.mi')]; if (items[selIdx]) items[selIdx].click(); }
+const LOGO = [
+  ' _____ _   _ ___ ___ ___ _  _   ___  ___   _    ___ _  _ ___ ___ ___ ',
+  '|_   _| | | / __/ __| __| \\| | |   \\| __| | |  |_ _| \\| |_ _| __/ __|',
+  '  | | | |_| \\__ \\__ \\ _|| .` | | |) | _|  | |__ | || .` || || _|\\__ \\',
+  '  |_|  \\___/|___/___/___|_|\\_| |___/|___| |____|___|_|\\_|___|___|___/',
+].join('\n');
+const mi = (a, label, key) => '<button class="mi" data-a="' + a + '">' + (key ? '<span class="k">' + key + '</span> ' : '') + label + '</button>';
+
+function renderUI(force) {
+  const key = scr + '|' + (S ? S.phase + S.day + S.gid : '') + '|' + Net.mode + '|' + (isHost() ? 'h' : 'c');
+  if (!force && key === uiKey) return;
+  uiKey = key;
+  const prevScr = panel.dataset.scr;
+  if (prevScr !== scr) selIdx = 0;
+  panel.dataset.scr = scr || (S ? S.phase : '');
+  const tb = $('#bPause'); tb.classList.toggle('hidden', !S || !!scr);
+  if (scr === 'boot') return bootScreen();
+  if (scr === 'main') return mainMenu();
+  if (scr === 'how') return howScreen();
+  if (scr === 'set') return setScreen();
+  if (scr === 'scores') return scoreScreen();
+  if (scr === 'online') return onlineScreen();
+  if (scr === 'connecting') return setPanel('<h2>VERBINDEN...</h2><p>Kamer <span class="a">' + esc(Net.code) + '</span></p><div class="bar"></div>' + mi('menu', 'ANNULEREN', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+  if (scr === 'lost') return setPanel('<h2 class="r">VERBINDING VERBROKEN</h2><p>De kamer is niet meer bereikbaar.</p><div class="bar"></div>' + mi('rejoin', 'OPNIEUW VERBINDEN', '1') + mi('menu', 'NAAR HET MENU', '2'));
+  if (scr === 'pause') return pauseScreen();
+  if (!S) return hidePanel();
+  if (S.phase === 'lobby') return lobbyPanel();
+  if (S.phase === 'intro') return introCard();
+  if (S.phase === 'report') return reportScreen();
+  if (S.phase === 'over' || S.phase === 'done') return endScreen();
+  hidePanel();
+}
+function bootScreen() {
+  const lines = [
+    'C:\\GAMES> LINIES.EXE',
+    '',
+    'TUSSEN DE LINIES  v1.0   (c) error.blue 2026',
+    'Laden tolken.dat .............. OK',
+    'Laden oefenterrein.map ........ OK',
+    'Woordenboek NL ⇄ UA ........... ' + PH.length + ' zinnen',
+    'Werkgeheugen ................... 3 slots vrij',
+  ];
+  const n = Math.min(lines.length, Math.floor(bootT * 9));
+  setPanel('<pre>' + esc(lines.slice(0, n).join('\n')) + (n < lines.length ? '' : '\n\n<span class="blink">_</span>') + '</pre>');
+  if (n >= lines.length && bootT > 1.3) { scr = 'main'; renderUI(true); }
+}
+function mainMenu() {
+  const p = new URLSearchParams(location.search).get('room');
+  setPanel('<div class="d" style="font-size:18px">C:\\GAMES\\LINIES.EXE</div><h1 class="title">TUSSEN DE LINIES</h1>' +
+    '<h2>Een spel over De Tolk</h2>' +
+    '<p class="d" style="margin-top:-4px">Nederlandse instructeurs, Oekraïense trainees, en jij ertussen.</p>' +
+    (portrait ? '<p class="a">Tip: draai je telefoon voor het beste beeld.</p>' : '') +
+    '<div class="bar"></div>' +
+    mi('solo', 'SOLO  · opleiding van 5 dagen', '1') +
+    mi('online', 'SAMEN · online, 2 tot 4 tolken' + (p ? ' (kamer ' + esc(p.toUpperCase()) + ')' : ''), '2') +
+    mi('how', 'HOE SPEEL JE?', '3') +
+    mi('set', 'INSTELLINGEN', '4') +
+    mi('scores', 'TOPTOLKEN', '5') +
+    mi('dos', 'TERUG NAAR ERROR-DOS', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+function howScreen() {
+  const k = usedTouch;
+  setPanel('<h2>HOE SPEEL JE?</h2>' +
+    '<p>Jij bent <span class="a">de tolk</span> op het oefenterrein. Instructeurs praten Nederlands, trainees Oekraïens. Niemand begrijpt elkaar zonder jou.</p>' +
+    '<p><span class="a">1. LUISTER.</span> Een <span class="a">!</span> boven iemand: die gaat praten. Sta in zijn <span class="a">cirkel</span> terwijl hij praat. Je hoort alleen wat er gezegd wordt terwijl jij dichtbij bent: kom je te laat, dan mis je het begin (<span class="r">·</span>). Minstens 60% gehoord = onthouden.</p>' +
+    '<p><span class="a">2. ONTHOUD.</span> Je hoofd heeft 3 plekken (onderin). Woorden vervagen: wacht niet te lang.</p>' +
+    '<p><span class="a">3. TOLK.</span> Loop naar de <span class="a">pijl</span> (trainees of instructeur) en druk <span class="a">' + (k ? 'TOLK' : 'SPATIE') + '</span>. Kies de juiste vertaling. Een foute vertaling kost vertrouwen, en bij een veiligheidscommando gaat het mis.</p>' +
+    '<p><span class="a">WACHT (' + (k ? 'knop' : 'E') + ').</span> Steek je hand op: wie in de buurt praat of wil praten, wacht 4 seconden. Daarna 12 s afkoelen.</p>' +
+    '<p><span class="a">GEMIST?</span> Bij een <span class="r">?</span> kun je TOLK drukken: hij herhaalt het (kost een beetje vertrouwen).</p>' +
+    '<p><span class="r">VEILIGHEID!</span> (rood) gaat voor alles. <span class="b">VRAAG</span> (blauw) komt van trainees. PRAATJE (grijs) mag je laten liggen. Koffie op de tafel maakt je even sneller.</p>' +
+    '<p class="d">Toetsen: pijltjes/WASD lopen · SPATIE tolk · E wacht · 1-3 kiezen · P pauze · M geluid. Gamepad: stick, A = tolk, X = wacht.</p>' +
+    '<div class="bar"></div>' + mi('back', 'TERUG', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+function setScreen() {
+  const md = { quiz: 'QUIZ (echte vertaling kiezen)', hulp: 'QUIZ + HULP (betekenis erbij)', arcade: 'ARCADE (geen quiz)' };
+  const df = { 0.75: 'TRAINING', 1: 'NORMAAL', 1.3: 'ZWAAR' };
+  setPanel('<h2>INSTELLINGEN</h2>' +
+    mi('s-mode', 'Vertalen: <span class="a">' + md[CFG.mode] + '</span>', '1') +
+    mi('s-tr', 'Latijnse letters onder Oekraïens: <span class="a">' + (CFG.tr ? 'AAN' : 'UIT') + '</span>', '2') +
+    mi('s-diff', 'Drukte: <span class="a">' + (df[CFG.diff] || 'NORMAAL') + '</span>', '3') +
+    mi('s-snd', 'Geluid: <span class="a">' + (CFG.snd ? 'AAN' : 'UIT') + '</span>', '4') +
+    mi('s-crt', 'Beeldbuis (scanlijnen): <span class="a">' + (CFG.crt ? 'AAN' : 'UIT') + '</span>', '5') +
+    '<div class="bar"></div>' + mi('back', 'TERUG', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+let backTo = 'main';
+async function scoreScreen() {
+  setPanel('<h2>TOPTOLKEN</h2><p class="d">laden...</p><div class="bar"></div>' + mi('back', 'TERUG', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+  let rows = '';
+  try {
+    const top = await GameLab.topScores(GAME, 10);
+    rows = top.length ? '<table class="t">' + top.map((s, i) => '<tr><td class="d">' + (i + 1) + '.</td><td>' + esc(s.name) + '</td><td class="n a">' + s.score + '</td></tr>').join('') + '</table>' : '<p class="d">Nog niemand. Wees de eerste!</p>';
+  } catch (e) { rows = '<p class="r">Offline: geen scores.</p>'; }
+  if (scr === 'scores') setPanel('<h2>TOPTOLKEN</h2>' + rows + '<div class="bar"></div>' + mi('back', 'TERUG', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+function onlineScreen() {
+  const pre = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
+  setPanel('<h2>SAMEN TOLKEN</h2>' +
+    '<p class="d">Speel met 2 tot 4 tolken op hetzelfde terrein. Meer tolken = meer posten en meer drukte. De score is van het team.</p>' +
+    '<p>Je naam</p><input class="dos" id="inName" maxlength="12" value="' + esc(myName() === 'TOLK' ? '' : myName()) + '" placeholder="TOLK">' +
+    '<div class="bar"></div>' +
+    mi('mk', 'NIEUWE KAMER MAKEN', '1') +
+    '<p>Of doe mee met een code</p><input class="dos" id="inCode" maxlength="8" value="' + esc(pre) + '" placeholder="ABCD">' +
+    '<button class="mi" data-a="join" data-enter><span class="k">2</span> MEEDOEN</button>' +
+    '<div class="bar"></div>' + mi('back', 'TERUG', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+function readName() { const el = $('#inName'); if (el) { const v = el.value.trim(); if (v) GameLab.setPlayerName(v.toUpperCase()); } }
+function lobbyPanel() {
+  if (Net.mode !== 'room') return hidePanel();
+  const url = location.origin + location.pathname + '?room=' + Net.code;
+  const ps = Object.entries(S.players).map(([id, p]) => '<span style="color:' + PCOL[p.c] + '">■ ' + esc(p.n) + (id === Net.host ? ' (host)' : '') + (id === Net.me ? ' ←' : '') + '</span>').join('<br>');
+  setPanel('<div class="d">KAMER</div><div class="big">' + esc(Net.code) + '</div>' +
+    '<p class="d" style="font-size:16px;word-break:break-all">' + esc(url) + '</p>' +
+    '<p>' + ps + '</p>' +
+    '<p class="d">Loop alvast rond. ' + (isHost() ? 'Start als iedereen er is.' : 'De host start het spel.') + '</p>' +
+    (isHost() ? mi('mstart', 'START DAG 1', '1') : '') +
+    mi('share', 'LINK DELEN / KOPIËREN', '2') +
+    mi('leave', 'KAMER VERLATEN', 'ESC').replace('class="mi"', 'class="mi" data-back'), 'side');
+}
+function introCard() {
+  const D = DAYS[S.day - 1];
+  const names = S.stations.map((k) => ST[k].name).join(' · ');
+  panel.className = 'panel'; panel.classList.remove('hidden');
+  panel.innerHTML = '<div style="text-align:center"><div class="d">08:00 · OEFENTERREIN</div><h1>' + D.name + '</h1><h2>' + esc(D.sub) + '</h2><p>' + esc(names) + '</p>' +
+    (S.day === 1 ? '<p class="d">Luister in de cirkel · onthoud · breng het naar de pijl · tolk</p>' : '') + '</div>';
+}
+function statsTable() {
+  const ps = Object.values(S.players).sort((a, b) => b.pts - a.pts);
+  if (ps.length < 2) return '';
+  return '<table class="t">' + ps.map((p) => '<tr><td style="color:' + PCOL[p.c] + '">■ ' + esc(p.n) + '</td><td class="n">' + p.ok + ' goed</td><td class="n d">' + p.bad + ' fout</td><td class="n a">' + p.pts + '</td></tr>').join('') + '</table><div class="bar"></div>';
+}
+function reportScreen() {
+  const d = S.ds, done = d.ok + d.bad + d.miss;
+  const acc = done ? d.ok / done : 0;
+  const host = isHost();
+  setPanel('<h2>DAGRAPPORT ' + DAYS[S.day - 1].name + '</h2>' +
+    '<table class="t"><tr><td>Goed getolkt</td><td class="n">' + d.ok + '</td></tr><tr><td>Fout vertaald</td><td class="n r">' + d.bad + '</td></tr>' +
+    '<tr><td>Gemist of vergeten</td><td class="n r">' + d.miss + '</td></tr><tr><td>Incidenten</td><td class="n r">' + d.inc + '</td></tr>' +
+    '<tr><td>Punten vandaag</td><td class="n a">' + d.pts + '</td></tr><tr><td>Vertrouwen</td><td class="n">' + Math.round(S.trust) + '%  <span class="d">(+35 morgen)</span></td></tr></table>' +
+    '<p>Beoordeling: <span class="a">' + rankOf(acc) + '</span> <span class="d">(' + Math.round(acc * 100) + '% goed)</span></p>' +
+    '<div class="bar"></div>' + statsTable() +
+    '<p class="d">Morgen: ' + esc(DAYS[S.day].name + ' · ' + DAYS[S.day].sub) + '</p>' +
+    (host ? mi('next', 'VOLGENDE DAG', '1') : '<p class="a">Wachten tot de host doorgaat...</p>') +
+    mi(Net.mode === 'room' ? 'leave' : 'menu', 'STOPPEN', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+}
+let submitted = '';
+function endScreen() {
+  const st = S.stats, done = st.ok + st.bad + st.miss, acc = done ? st.ok / done : 0;
+  const p = me(), won = S.phase === 'done';
+  const myPts = p ? p.pts : 0;
+  setPanel((won ? '<h2>OPLEIDING VOLTOOID</h2><p>De trainees vertrekken naar huis, met een tolk om nooit te vergeten.</p>'
+    : '<h2 class="r">TERUG NAAR DE KAZERNE</h2><p>Het vertrouwen is op. De instructeurs zoeken een andere tolk... voor nu.</p>') +
+    '<table class="t"><tr><td>Dagen</td><td class="n">' + S.day + ' / ' + DAYS.length + '</td></tr>' +
+    '<tr><td>Goed / fout / gemist</td><td class="n">' + st.ok + ' / <span class="r">' + st.bad + '</span> / <span class="r">' + st.miss + '</span></td></tr>' +
+    '<tr><td>Langste reeks</td><td class="n">x' + S.best + '</td></tr>' +
+    '<tr><td>' + (Net.mode === 'room' ? 'Jouw punten' : 'Score') + '</td><td class="n a">' + myPts + '</td></tr>' +
+    (Net.mode === 'room' ? '<tr><td>Team</td><td class="n a">' + totalPts() + '</td></tr>' : '') + '</table>' +
+    '<p>Rang: <span class="a">' + rankOf(acc) + '</span></p>' +
+    '<div class="bar"></div>' + statsTable() +
+    '<p id="subm" class="d">' + (submitted === S.gid ? 'Score opgeslagen bij TOPTOLKEN.' : myPts > 0 ? 'Score opslaan...' : '') + '</p>' +
+    ((Net.mode === 'solo' || isHost()) ? mi('again', 'NOG EEN KEER', '1') : '<p class="a">De host kan opnieuw starten.</p>') +
+    mi('scores', 'TOPTOLKEN', '2') +
+    mi(Net.mode === 'room' ? 'leave' : 'menu', 'NAAR HET MENU', 'ESC').replace('class="mi"', 'class="mi" data-back'));
+  if (submitted !== S.gid && myPts > 0) {
+    submitted = S.gid;
+    const nm = myName();
+    GameLab.submitScore(GAME, nm, myPts).then((r) => { const el = $('#subm'); if (el) el.textContent = 'Opgeslagen als ' + nm + (r && r.rank ? ': plek ' + r.rank : '') + '.'; })
+      .catch(() => { const el = $('#subm'); if (el) el.textContent = 'Score niet opgeslagen (offline).'; });
+  }
+}
+function pauseScreen() {
+  const solo = Net.mode === 'solo';
+  setPanel('<h2>' + (solo ? 'PAUZE' : 'MENU') + '</h2>' + (solo ? '' : '<p class="d">Het spel loopt door voor de anderen.</p>') +
+    mi('resume', 'VERDER', 'ESC').replace('class="mi"', 'class="mi" data-back') +
+    mi('setp', 'INSTELLINGEN', '2') +
+    mi('how', 'HOE SPEEL JE?', '3') +
+    (solo ? mi('restart', 'OPNIEUW BEGINNEN', '4') : '') +
+    mi(solo ? 'menu' : 'leave', solo ? 'STOPPEN (naar menu)' : 'KAMER VERLATEN', '5'));
+}
+function openPause() {
+  if (!S || scr) return;
+  if (S.phase !== 'play' && S.phase !== 'intro' && S.phase !== 'lobby') return;
+  closeQuiz(); scr = 'pause'; renderUI(true);
+}
+function act(a) {
+  if (a === 'solo') { goSolo(); return; }
+  if (a === 'back') { scr = backTo; backTo = 'main'; renderUI(true); return; }
+  if (a === 'online') { backTo = 'main'; scr = 'online'; renderUI(true); setTimeout(() => { const el = $('#inName'); if (el && !usedTouch) el.focus(); }, 30); return; }
+  if (a === 'how' || a === 'set' || a === 'setp' || a === 'scores') { backTo = scr; scr = a === 'setp' ? 'set' : a; renderUI(true); return; }
+  if (a === 'pause') { scr = 'pause'; renderUI(true); return; }
+  if (a === 'dos') { try { sessionStorage.setItem('errordos-ran', document.title); } catch (e) {} location.href = '/'; return; }
+  if (a === 'menu') { leaveRoom(); Net.mode = 'solo'; Net.me = Net.host = 'local'; S = null; closeQuiz(); scr = 'main'; renderUI(true); return; }
+  if (a === 'resume') { scr = null; renderUI(true); return; }
+  if (a === 'restart') { goSolo(); return; }
+  if (a === 'again') { if (Net.mode === 'solo') goSolo(); else { toHost({ a: 'start' }); } return; }
+  if (a === 'next') { toHost({ a: 'next' }); return; }
+  if (a === 'mstart') { toHost({ a: 'start' }); return; }
+  if (a === 'mk') { readName(); joinRoom(GameLab.newRoomCode()); return; }
+  if (a === 'join') { readName(); const c = ($('#inCode') || {}).value || ''; if (c.trim().length < 3) { toast('Typ eerst een code'); $('#inCode') && $('#inCode').focus(); return; } joinRoom(c); return; }
+  if (a === 'rejoin') { joinRoom(Net.code); return; }
+  if (a === 'leave') { leaveRoom(); Net.mode = 'solo'; Net.me = Net.host = 'local'; S = null; closeQuiz(); try { history.replaceState(null, '', location.pathname); } catch (e) {} scr = 'main'; renderUI(true); return; }
+  if (a === 'share') {
+    const url = location.origin + location.pathname + '?room=' + Net.code;
+    if (navigator.share) navigator.share({ title: 'Tussen de Linies', text: 'Kom tolken! Kamer ' + Net.code, url }).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => toast('Link gekopieerd'), () => toast(url));
+    return;
+  }
+  if (a === 's-mode') { CFG.mode = { quiz: 'hulp', hulp: 'arcade', arcade: 'quiz' }[CFG.mode]; }
+  if (a === 's-tr') CFG.tr = !CFG.tr;
+  if (a === 's-diff') CFG.diff = CFG.diff === 1 ? 1.3 : CFG.diff === 1.3 ? 0.75 : 1;
+  if (a === 's-snd') { CFG.snd = !CFG.snd; AU.vol(); }
+  if (a === 's-crt') { CFG.crt = !CFG.crt; applyCrt(); }
+  if (a.startsWith('s-')) { saveCfg(); renderUI(true); }
+}
+function applyCrt() { $('#crt').classList.toggle('off', !CFG.crt); $('#vig').classList.toggle('off', !CFG.crt); }
+panel.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+/* =====================================================================================
+   MAIN LOOP
+   ===================================================================================== */
+let last = performance.now(), lastFrame = performance.now();
+function hostTick(dt) {
+  if (!S || !isHost()) return;
+  const p = S.players[Net.me];
+  if (p) { p.x = LP.x; p.y = LP.y; p.f = LP.f; }
+  if (Net.mode === 'solo' && scr) return;           // paused / in a menu
+  if (S.phase === 'intro') { S.it -= dt; if (S.it <= 0) { S.phase = 'play'; fx({ k: 'day' }); } }
+  if (S.phase === 'play') { let left = dt; while (left > 0) { const h = Math.min(left, 0.05); step(h); left -= h; if (S.phase !== 'play') break; } }
+}
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; lastFrame = now;
+  T += dt;
+  if (scr === 'boot') { bootT += dt; renderUI(true); }
+  pollPad();
+  movePlayer(dt);
+  hostTick(dt);
+  if (S && !isHost()) { const m = S.players[Net.me]; if (m) { m.x = LP.x; m.y = LP.y; } }
+  sendPos(); sendState();
+  processFx(); audioTick(dt); quizTick(dt); speakTick(dt);
+  for (const id in Net.peers) { const p = Net.peers[id]; p.x += (p.tx - p.x) * Math.min(1, dt * 14); p.y += (p.ty - p.y) * Math.min(1, dt * 14); }
+  for (let i = floats.length - 1; i >= 0; i--) { floats[i].age += dt; if (floats[i].age > 1.6) floats.splice(i, 1); }
+  for (let i = banners.length - 1; i >= 0; i--) { banners[i].age += dt; if (banners[i].age > banners[i].dur) banners.splice(i, 1); }
+  for (const k in redFlash) redFlash[k] = Math.max(0, redFlash[k] - dt);
+  for (const k in muzzle) muzzle[k] -= dt;
+  shake = Math.max(0, shake - dt);
+  uiTimer -= dt;
+  if (uiTimer <= 0) {
+    uiTimer = 0.5; setOnline();
+    if (S && S.phase === 'lobby' && !scr) { const sig = Net.host + Object.keys(S.players).join() + Object.values(S.players).map((p) => p.n).join(); if (sig !== lobbySig) { lobbySig = sig; renderUI(true); } }
+  }
+  renderUI();
+  render();
+  requestAnimationFrame(frame);
+}
+// a host in a background tab still has to run the game for the others
+setInterval(() => {
+  const now = performance.now();
+  if (now - lastFrame < 400 || !S || !isHost() || Net.mode !== 'room') return;
+  const dt = Math.min(1, (now - last) / 1000); last = now;
+  hostTick(dt); sendState(true);
+}, 250);
+
+resize(); applyCrt();
+if (matchMedia('(pointer: coarse)').matches) showTouch();
+if (document.fonts && document.fonts.load) {
+  Promise.all([document.fonts.load('16px VT323'), document.fonts.load('16px "Pixelify Sans"', 'Тест'), document.fonts.load('16px "Pixelify Sans"', 'Test')])
+    .then(() => { layCache.clear(); }).catch(() => {});
+}
+{
+  const room = new URLSearchParams(location.search).get('room');
+  if (room) { scr = 'online'; bootT = 9; }
+}
+renderUI(true);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

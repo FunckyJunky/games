@@ -29,6 +29,17 @@
     "added": "2026-11-16T21:00"
   },
   {
+    "id": "tussen-de-linies",
+    "title": "Tussen de Linies",
+    "dos": "LINIES",
+    "description": "Jij bent De Tolk op het oefenterrein: Nederlandse instructeurs, Oekraïense trainees. Sta op tijd bij wie praat, onthoud het en kies de juiste vertaling. Praten er twee tegelijk? Steek je hand op. Solo (5 dagen) of samen met 2-4 tolken.",
+    "path": "games/tussen-de-linies/",
+    "folder": "games",
+    "logo": "tolk",
+    "scores": true,
+    "added": "2026-11-20T23:30"
+  },
+  {
     "id": "mistwalkers",
     "title": "Mistwalkers",
     "dos": "MISTWALK",
