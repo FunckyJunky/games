@@ -77,6 +77,9 @@ ERROR-CHAT here and on the board is the same chat as <a href="/apps/error-chat/"
 <tr><td>circ(x,y,r,c) ring(x,y,r,c)</td><td>filled / outlined circle</td></tr>
 <tr><td>text(s,x,y,c[,scale])</td><td>5x7 letters, returns the width; textw(s[,scale]) measures</td></tr>
 <tr><td>glitch(n)</td><td>shake the picture like a bad tape, 0..10</td></tr>
+<tr><td>cam3(x,y,z,yaw,pitch,roll[,f,cx,cy])</td><td>3D: the camera (f = zoom, cx/cy = screen centre)</td></tr>
+<tr><td>xf3(x,y,z,turn,scale)</td><td>3D: where the next lines' object is, turned around its up axis</td></tr>
+<tr><td>line3(x0,y0,z0,x1,y1,z1,c) proj3(x,y,z)</td><td>3D: a line (cut at the camera) / a point on the screen [x, y, depth] or null</td></tr>
 <tr><td>btn() btnp() btnr()</td><td>button held / just pressed / just released</td></tr>
 <tr><td>key()</td><td>a typed key: "a", " ", "ENTER", "BACK", "UP", "DOWN", "LEFT", "RIGHT"... or ""</td></tr>
 <tr><td>motion() ax() ay() az()</td><td>0 = no motion sensor, 1 = keys pretend one, 2 = real; ax/ay/az = which way is up (sensor axes)</td></tr>
@@ -160,6 +163,30 @@ const G = {
       for (let y = y0; y < Math.min(H, y0 + h); y++) { row.set(px.subarray(y * W, y * W + W)); for (let x = 0; x < W; x++) { const s = x - dx; px[y * W + x] = s >= 0 && s < W ? row[s] : 0xff000000; } } }
     if (n >= 3) { const w = 10 + (Math.random() * 40 | 0), h = 2 + (Math.random() * 6 | 0), sx = Math.random() * (W - w) | 0, sy = Math.random() * (H - h) | 0, tx = Math.random() * (W - w) | 0, ty = Math.random() * (H - h) | 0;
       for (let y = 0; y < h; y++) px.copyWithin((ty + y) * W + tx, (sy + y) * W + sx, (sy + y) * W + sx + w); } },
+};
+// 3D lines (the board does these in C)
+const P3 = { x: 0, y: 0, z: 0, cy: 1, sy: 0, cp: 1, sp: 0, cr: 1, sr: 0, f: 80, cx: 80, cyy: 43, ox: 0, oy: 0, oz: 0, oc: 1, os: 0, ok: 1, X: 0, Y: 0, Z: 0 };
+const N3 = v => typeof v === 'number' ? v : 0;
+const D3 = {
+  cam3(x, y, z, yaw, pitch, roll, f, cx, cy) {
+    Object.assign(P3, { x: N3(x), y: N3(y), z: N3(z), cy: Math.cos(N3(yaw)), sy: Math.sin(N3(yaw)), cp: Math.cos(N3(pitch)), sp: Math.sin(N3(pitch)),
+      cr: Math.cos(N3(roll)), sr: Math.sin(N3(roll)), f: typeof f === 'number' ? f : 80, cx: typeof cx === 'number' ? cx : 80, cyy: typeof cy === 'number' ? cy : 43,
+      ox: 0, oy: 0, oz: 0, oc: 1, os: 0, ok: 1 }); },
+  xf3(x, y, z, a, k) { P3.ox = N3(x); P3.oy = N3(y); P3.oz = N3(z); P3.oc = Math.cos(N3(a)); P3.os = Math.sin(N3(a)); P3.ok = typeof k === 'number' ? k : 1; },
+  tc(x, y, z) {
+    const lx = x * P3.oc + z * P3.os, lz = z * P3.oc - x * P3.os;
+    const dx = P3.ox + lx * P3.ok - P3.x, dy = P3.oy + y * P3.ok - P3.y, dz = P3.oz + lz * P3.ok - P3.z;
+    const x1 = dx * P3.cy - dz * P3.sy, z1 = dx * P3.sy + dz * P3.cy, y2 = dy * P3.cp - z1 * P3.sp;
+    P3.Z = dy * P3.sp + z1 * P3.cp; P3.X = x1 * P3.cr - y2 * P3.sr; P3.Y = x1 * P3.sr + y2 * P3.cr;
+  },
+  line3(ax, ay, az, bx, by, bz, c) {
+    D3.tc(N3(ax), N3(ay), N3(az)); let X0 = P3.X, Y0 = P3.Y, Z0 = P3.Z; D3.tc(N3(bx), N3(by), N3(bz)); let X1 = P3.X, Y1 = P3.Y, Z1 = P3.Z, f;
+    if (Z0 < 1 && Z1 < 1) return;
+    if (Z0 < 1) { f = (1 - Z0) / (Z1 - Z0); X0 += (X1 - X0) * f; Y0 += (Y1 - Y0) * f; Z0 = 1; }
+    else if (Z1 < 1) { f = (1 - Z1) / (Z0 - Z1); X1 += (X0 - X1) * f; Y1 += (Y0 - Y1) * f; Z1 = 1; }
+    G.line(P3.cx + X0 * P3.f / Z0, P3.cyy - Y0 * P3.f / Z0, P3.cx + X1 * P3.f / Z1, P3.cyy - Y1 * P3.f / Z1, c);
+  },
+  proj3(x, y, z) { D3.tc(N3(x), N3(y), N3(z)); return P3.Z < 0.05 ? null : [P3.cx + P3.X * P3.f / P3.Z, P3.cyy - P3.Y * P3.f / P3.Z, P3.Z]; },
 };
 function present() {
   octx.putImageData(img, 0, 0);
@@ -249,7 +276,8 @@ function showMsg(t, m) { cur = null; setLed(0); msgTitle = t; msg = m; mode = 'm
 let startT = 0, frameN = 0, appExit = false, holdExit = true, wantRun = -1, wantSetup = false;
 function start(src, id, as) {
   const names = ['cls', 'pset', 'rect', 'box', 'line', 'tri', 'circ', 'ring', 'text', 'textw', 'glitch', 'btn', 'btnp', 'btnr', 'key', 'rnd', 'irnd', 't', 'frame',
-    'save', 'load', 'led', 'exit', 'print', 'motion', 'ax', 'ay', 'az', 'holdexit', 'get', 'post', 'apps', 'run', 'sys', 'setup', 'W', 'H'];
+    'save', 'load', 'led', 'exit', 'print', 'motion', 'ax', 'ay', 'az', 'holdexit', 'get', 'post', 'apps', 'run', 'sys', 'setup',
+    'cam3', 'xf3', 'line3', 'proj3', 'W', 'H'];
   const k = n => 'pocket.' + id + '.' + n;
   const http = (method, path, body, cb) => {
     if (typeof path !== 'string' || path[0] !== '/' || path.indexOf('..') >= 0) return false;
@@ -270,7 +298,7 @@ function start(src, id, as) {
     (p, cb) => http('GET', p, null, cb), (p, d, cb) => http('POST', p, d, cb),
     () => apps.map(a => ({ id: a.id, name: a.name, info: a.info, icon: a.icon, color: a.color, cached: true })),
     i => { wantRun = i | 0; }, () => ({ online: true, wifi: '', ip: '', rssi: -50, bt: false, ver: '1.1', last: lastApp, web: true }),
-    () => { wantSetup = true; }, W, H];
+    () => { wantSetup = true; }, D3.cam3, D3.xf3, D3.line3, D3.proj3, W, H];
   try {
     const f = new Function(...names, src + '\n;return {init: typeof init === "function" ? init : null, update: typeof update === "function" ? update : null, draw: typeof draw === "function" ? draw : null};');
     startT = performance.now(); frameN = 0; appExit = false; holdExit = true; wantRun = -1; wantSetup = false; keyQ.length = 0;

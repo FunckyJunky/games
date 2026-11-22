@@ -6,8 +6,31 @@ var gl = 0, nextGl = 90, boot = 0;
 var BG = 0x031208, FG = 0x39ff7a, DIM = 0x1b7a3c, HI = 0xb8ffd0, DARK = 0x0a2a14, DEEP = 0x0e3a1c;
 // the camera and the carousel
 var F = 70, D = 96, R = 46, CYS = 37, SC = 12;
-// the icon being drawn: where, how big, turned how much, which colour
-var ox = 0, oy = 0, oz = 0, os = 1, oc = 1, osn = 0, ocol = FG;
+var ocol = FG;                                   // the colour of the icon being drawn
+// 3D lines are drawn by the board itself (cam3/xf3/line3/proj3); older boards: the same in JavaScript
+if (typeof line3 != 'function') {
+  var P3 = { x: 0, y: 0, z: 0, cy: 1, sy: 0, cp: 1, sp: 0, cr: 1, sr: 0, f: 80, cx: 80, cyy: 43, ox: 0, oy: 0, oz: 0, oc: 1, os: 0, ok: 1, X: 0, Y: 0, Z: 0 };
+  cam3 = function (x, y, z, yaw, pitch, roll, f, cx, cy) {
+    P3.x = x; P3.y = y; P3.z = z; P3.cy = Math.cos(yaw || 0); P3.sy = Math.sin(yaw || 0); P3.cp = Math.cos(pitch || 0); P3.sp = Math.sin(pitch || 0);
+    P3.cr = Math.cos(roll || 0); P3.sr = Math.sin(roll || 0); P3.f = f || 80; P3.cx = cx === undefined ? 80 : cx; P3.cyy = cy === undefined ? 43 : cy;
+    P3.ox = P3.oy = P3.oz = 0; P3.oc = 1; P3.os = 0; P3.ok = 1;
+  };
+  xf3 = function (x, y, z, a, k) { P3.ox = x || 0; P3.oy = y || 0; P3.oz = z || 0; P3.oc = Math.cos(a || 0); P3.os = Math.sin(a || 0); P3.ok = k === undefined ? 1 : k; };
+  var tc3 = function (x, y, z) {
+    var lx = x * P3.oc + z * P3.os, lz = z * P3.oc - x * P3.os;
+    var dx = P3.ox + lx * P3.ok - P3.x, dy = P3.oy + y * P3.ok - P3.y, dz = P3.oz + lz * P3.ok - P3.z;
+    var x1 = dx * P3.cy - dz * P3.sy, z1 = dx * P3.sy + dz * P3.cy, y2 = dy * P3.cp - z1 * P3.sp;
+    P3.Z = dy * P3.sp + z1 * P3.cp; P3.X = x1 * P3.cr - y2 * P3.sr; P3.Y = x1 * P3.sr + y2 * P3.cr;
+  };
+  line3 = function (ax, ay, az, bx, by, bz, c) {
+    tc3(ax, ay, az); var X0 = P3.X, Y0 = P3.Y, Z0 = P3.Z; tc3(bx, by, bz); var X1 = P3.X, Y1 = P3.Y, Z1 = P3.Z, f;
+    if (Z0 < 1 && Z1 < 1) return;
+    if (Z0 < 1) { f = (1 - Z0) / (Z1 - Z0); X0 += (X1 - X0) * f; Y0 += (Y1 - Y0) * f; Z0 = 1; }
+    else if (Z1 < 1) { f = (1 - Z1) / (Z0 - Z1); X1 += (X0 - X1) * f; Y1 += (Y0 - Y1) * f; Z1 = 1; }
+    line(P3.cx + X0 * P3.f / Z0, P3.cyy - Y0 * P3.f / Z0, P3.cx + X1 * P3.f / Z1, P3.cyy - Y1 * P3.f / Z1, c);
+  };
+  proj3 = function (x, y, z) { tc3(x, y, z); return P3.Z < 0.05 ? null : [P3.cx + P3.X * P3.f / P3.Z, P3.cyy - P3.Y * P3.f / P3.Z, P3.Z]; };
+}
 
 function init() {
   holdexit(false);
@@ -21,14 +44,7 @@ function init() {
 }
 
 // ------------------------------------------------------------------ 3D
-function seg(ax, ay, az, bx, by, bz) {
-  // turn around the icon's own up axis, scale, put it on the carousel, look at it
-  var x0 = ax * oc + az * osn, z0 = az * oc - ax * osn, x1 = bx * oc + bz * osn, z1 = bz * oc - bx * osn;
-  var X0 = ox + x0 * os, Y0 = oy + ay * os, Z0 = oz + z0 * os + D;
-  var X1 = ox + x1 * os, Y1 = oy + by * os, Z1 = oz + z1 * os + D;
-  if (Z0 < 5 || Z1 < 5) return;
-  line(80 + X0 * F / Z0, CYS - Y0 * F / Z0, 80 + X1 * F / Z1, CYS - Y1 * F / Z1, ocol);
-}
+function seg(ax, ay, az, bx, by, bz) { line3(ax, ay, az, bx, by, bz, ocol); }
 function box(x, y, z, w, h, d) {
   var a = x - w, b = x + w, c = y - h, e = y + h, f = z - d, g = z + d;
   seg(a, c, f, b, c, f); seg(b, c, f, b, e, f); seg(b, e, f, a, e, f); seg(a, e, f, a, c, f);
@@ -184,12 +200,12 @@ function draw() {
   else if (!S.online) text('OFFLINE', W - 12 - textw('OFFLINE'), 1, BG);
   else { var w = S.wifi.length > 12 ? S.wifi.substr(0, 12) : S.wifi; text(w, W - 13 - textw(w), 1, BG); }
   if (!S.web) wifiBars(W - 10, 1);
-  // the floor of the carousel: a dotted ring
-  ocol = DEEP; os = 1; oc = 1; osn = 0; ox = 0; oy = 0; oz = 0;
+  // the camera looks at the carousel; its floor is a dotted ring
+  cam3(0, 0, -D, 0, 0, 0, F, 80, CYS);
   var rot = -pos * 6.2832 / N;
   for (i = 0; i < 28; i++) {
-    var a = rot + i * 6.2832 / 28, x = Math.sin(a) * R, z = -Math.cos(a) * R + D;
-    pset(80 + x * F / z | 0, CYS + 17 * F / z | 0, z < D ? DIM : DEEP);
+    var a = rot + i * 6.2832 / 28, x = Math.sin(a) * R, z = -Math.cos(a) * R;
+    line3(x, -17, z, x, -17, z, z < 0 ? DIM : DEEP);
   }
   // the icons, the far ones first
   var order = [];
@@ -201,10 +217,8 @@ function draw() {
   for (i = 0; i < order.length; i++) {
     var o = order[i], front = o.i == sel && o.c > 0.9;
     if (o.c < -0.55) continue;                     // the ones at the back are hidden anyway
-    ox = o.x; oy = 0; oz = -R * o.c;               // the front of the ring is nearest the camera
     var spin = front ? t * 1.3 : t * 0.4 + o.i * 1.7;
-    oc = Math.cos(spin); osn = Math.sin(spin);
-    os = SC * (front ? 1.05 + (launch >= 0 ? launchT * 0.12 : 0) : 1);
+    xf3(o.x, 0, -R * o.c, spin, SC * (front ? 1.05 + (launch >= 0 ? launchT * 0.12 : 0) : 1));   // the front is nearest
     ocol = front ? (launch >= 0 && launchT & 2 ? HI : FG) : o.c > 0.3 ? DIM : DEEP;
     var f = ICONS[A[o.i].icon] || ICONS[A[o.i].id] || ICONS.cube;
     f(t + o.i);

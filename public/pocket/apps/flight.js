@@ -14,6 +14,31 @@ var F = 80, camX = 0, camY = 0, camZ = 0, cyw = 1, syw = 0, cp = 1, sp = 0, cr =
 // the world
 var RINGS = [], TOW = [], STARS = [], MNT = [], NR = 8, RR0 = 135, RAD = 9;
 
+// 3D lines are drawn by the board itself (cam3/xf3/line3/proj3); older boards: the same in JavaScript
+if (typeof line3 != 'function') {
+  var P3 = { x: 0, y: 0, z: 0, cy: 1, sy: 0, cp: 1, sp: 0, cr: 1, sr: 0, f: 80, cx: 80, cyy: 43, ox: 0, oy: 0, oz: 0, oc: 1, os: 0, ok: 1, X: 0, Y: 0, Z: 0 };
+  cam3 = function (x, y, z, yaw, pitch, roll, f, cx, cy) {
+    P3.x = x; P3.y = y; P3.z = z; P3.cy = Math.cos(yaw || 0); P3.sy = Math.sin(yaw || 0); P3.cp = Math.cos(pitch || 0); P3.sp = Math.sin(pitch || 0);
+    P3.cr = Math.cos(roll || 0); P3.sr = Math.sin(roll || 0); P3.f = f || 80; P3.cx = cx === undefined ? 80 : cx; P3.cyy = cy === undefined ? 43 : cy;
+    P3.ox = P3.oy = P3.oz = 0; P3.oc = 1; P3.os = 0; P3.ok = 1;
+  };
+  xf3 = function (x, y, z, a, k) { P3.ox = x || 0; P3.oy = y || 0; P3.oz = z || 0; P3.oc = Math.cos(a || 0); P3.os = Math.sin(a || 0); P3.ok = k === undefined ? 1 : k; };
+  var tc3 = function (x, y, z) {
+    var lx = x * P3.oc + z * P3.os, lz = z * P3.oc - x * P3.os;
+    var dx = P3.ox + lx * P3.ok - P3.x, dy = P3.oy + y * P3.ok - P3.y, dz = P3.oz + lz * P3.ok - P3.z;
+    var x1 = dx * P3.cy - dz * P3.sy, z1 = dx * P3.sy + dz * P3.cy, y2 = dy * P3.cp - z1 * P3.sp;
+    P3.Z = dy * P3.sp + z1 * P3.cp; P3.X = x1 * P3.cr - y2 * P3.sr; P3.Y = x1 * P3.sr + y2 * P3.cr;
+  };
+  line3 = function (ax, ay, az, bx, by, bz, c) {
+    tc3(ax, ay, az); var X0 = P3.X, Y0 = P3.Y, Z0 = P3.Z; tc3(bx, by, bz); var X1 = P3.X, Y1 = P3.Y, Z1 = P3.Z, f;
+    if (Z0 < 1 && Z1 < 1) return;
+    if (Z0 < 1) { f = (1 - Z0) / (Z1 - Z0); X0 += (X1 - X0) * f; Y0 += (Y1 - Y0) * f; Z0 = 1; }
+    else if (Z1 < 1) { f = (1 - Z1) / (Z0 - Z1); X1 += (X0 - X1) * f; Y1 += (Y0 - Y1) * f; Z1 = 1; }
+    line(P3.cx + X0 * P3.f / Z0, P3.cyy - Y0 * P3.f / Z0, P3.cx + X1 * P3.f / Z1, P3.cyy - Y1 * P3.f / Z1, c);
+  };
+  proj3 = function (x, y, z) { tc3(x, y, z); return P3.Z < 0.05 ? null : [P3.cx + P3.X * P3.f / P3.Z, P3.cyy - P3.Y * P3.f / P3.Z, P3.Z]; };
+}
+
 function h2(i, j) { var s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); }
 
 function init() {
@@ -177,34 +202,13 @@ function cam() {
   camX = x - Math.sin(yaw) * c * 12; camZ = z - Math.cos(yaw) * c * 12; camY = y - Math.sin(pit) * 12 + 2.5;
   cyw = Math.cos(yaw); syw = Math.sin(yaw); cp = Math.cos(pit * 0.8); sp = Math.sin(pit * 0.8);
   cr = Math.cos(rol * 0.6); sr = Math.sin(rol * 0.6);
+  cam3(camX, camY, camZ, yaw, pit * 0.8, rol * 0.6, F, 80, 43);
 }
 function tc(px, py, pz) {                                // world -> camera (qx, qy, qz)
   var dx = px - camX, dy = py - camY, dz2 = pz - camZ;
   var x1 = dx * cyw - dz2 * syw, z1 = dx * syw + dz2 * cyw;
   var y2 = dy * cp - z1 * sp; qz = dy * sp + z1 * cp;
   qx = x1 * cr - y2 * sr; qy = x1 * sr + y2 * cr;
-}
-function td(dx, dy, dz2) {                               // a direction (far away things) -> camera
-  var x1 = dx * cyw - dz2 * syw, z1 = dx * syw + dz2 * cyw;
-  var y2 = dy * cp - z1 * sp; qz = dy * sp + z1 * cp;
-  qx = x1 * cr - y2 * sr; qy = x1 * sr + y2 * cr;
-}
-function l3(ax1, ay1, az1, bx, by, bz, c) {              // a 3D line, cut where it goes behind the camera
-  tc(ax1, ay1, az1); var X0 = qx, Y0 = qy, Z0 = qz;
-  tc(bx, by, bz);
-  var X1 = qx, Y1 = qy, Z1 = qz;
-  if (Z0 < 1 && Z1 < 1) return;
-  if (Z0 < 1) { var f = (1 - Z0) / (Z1 - Z0); X0 += (X1 - X0) * f; Y0 += (Y1 - Y0) * f; Z0 = 1; }
-  else if (Z1 < 1) { f = (1 - Z1) / (Z0 - Z1); X1 += (X0 - X1) * f; Y1 += (Y0 - Y1) * f; Z1 = 1; }
-  line(80 + X0 * F / Z0, 43 - Y0 * F / Z0, 80 + X1 * F / Z1, 43 - Y1 * F / Z1, c);
-}
-var TX = [], TY = [], TZ = [], TE = [0, 4, 1, 5, 2, 6, 3, 7, 4, 5, 5, 6, 6, 7, 7, 4];
-function e2(i, j, c) {                                   // a line between two turned corners
-  var X0 = TX[i], Y0 = TY[i], Z0 = TZ[i], X1 = TX[j], Y1 = TY[j], Z1 = TZ[j];
-  if (Z0 < 1 && Z1 < 1) return;
-  if (Z0 < 1) { var f = (1 - Z0) / (Z1 - Z0); X0 += (X1 - X0) * f; Y0 += (Y1 - Y0) * f; Z0 = 1; }
-  else if (Z1 < 1) { f = (1 - Z1) / (Z0 - Z1); X1 += (X0 - X1) * f; Y1 += (Y0 - Y1) * f; Z1 = 1; }
-  line(80 + X0 * F / Z0, 43 - Y0 * F / Z0, 80 + X1 * F / Z1, 43 - Y1 * F / Z1, c);
 }
 function gf(X, Y) { var u = (X - 80) / F, v = (43 - Y) / F; return (-sr * u + cr * v) * cp + sp; }   // < 0: ground
 function ground() {
@@ -226,40 +230,35 @@ function draw() {
   cam();
   cls(0x06021a);
   var i, k;
-  for (i = 0; i < STARS.length; i += 3) { td(STARS[i], STARS[i + 1], STARS[i + 2]); if (qz > 0.05) pset(80 + qx * F / qz, 43 - qy * F / qz, i % 9 ? 5 : 6); }
-  td(0, 0.13, 0.99);                                      // the sun, low in the north
-  if (qz > 0.05) { var X = 80 + qx * F / qz, Y = 43 - qy * F / qz; circ(X, Y, 15, 0xff3a8a); circ(X, Y, 12, 9); circ(X, Y - 2, 8, 10); }
-  var X0 = 0, Y0 = 0, Z0 = 0, fx = 0, fy = 0, fz = 0;   // mountains all around, far away
-  for (i = 0; i <= MNT.length; i += 3) {
-    k = i % MNT.length;
-    td(MNT[k], MNT[k + 1], MNT[k + 2]);
-    if (i && Z0 > 0.1 && qz > 0.1) line(80 + X0 * F / Z0, 43 - Y0 * F / Z0, 80 + qx * F / qz, 43 - qy * F / qz, 0x8a1a8a);
-    X0 = qx; Y0 = qy; Z0 = qz;
+  // far away things: stars, the sun, mountains all around (always 600 away)
+  for (i = 0; i < STARS.length; i += 3) { var sx3 = camX + STARS[i] * 600, sy3 = camY + STARS[i + 1] * 600, sz3 = camZ + STARS[i + 2] * 600; line3(sx3, sy3, sz3, sx3, sy3, sz3, i % 9 ? 5 : 6); }
+  var sun = proj3(camX, camY + 0.13 * 600, camZ + 0.99 * 600);
+  if (sun) { circ(sun[0], sun[1], 15, 0xff3a8a); circ(sun[0], sun[1], 12, 9); circ(sun[0], sun[1] - 2, 8, 10); }
+  for (i = 0; i < MNT.length; i += 3) {
+    k = (i + 3) % MNT.length;
+    line3(camX + MNT[i] * 600, camY + MNT[i + 1] * 600, camZ + MNT[i + 2] * 600, camX + MNT[k] * 600, camY + MNT[k + 1] * 600, camZ + MNT[k + 2] * 600, 0x8a1a8a);
   }
   ground();
   // the grid on the ground, around the plane
   var gx = Math.round(x / 30) * 30, gz = Math.round(z / 30) * 30;
   for (i = -5; i <= 5; i++) {
-    l3(gx + i * 30, 0, gz - 150, gx + i * 30, 0, gz + 150, 0x4a0a6a);
-    l3(gx - 150, 0, gz + i * 30, gx + 150, 0, gz + i * 30, 0x4a0a6a);
+    line3(gx + i * 30, 0, gz - 150, gx + i * 30, 0, gz + 150, 0x4a0a6a);
+    line3(gx - 150, 0, gz + i * 30, gx + 150, 0, gz + i * 30, 0x4a0a6a);
   }
   // the towers: each corner turned once, then the 4 sides and the roof
   for (i = 0; i < TOW.length; i++) {
     var t = TOW[i], ddx = t.x - camX, ddz = t.z - camZ;
     var fwd = ddx * syw + ddz * cyw, lat = ddx * cyw - ddz * syw;     // ahead / to the side
     if (fwd < -t.w || fwd > 150 || Math.abs(lat) > fwd * 1.3 + t.w * 2) continue;
-    var a = t.x - t.w, b = t.x + t.w, c = t.z - t.w, d = t.z + t.w;
-    for (k = 0; k < 8; k++) {
-      tc(k == 0 || k == 3 || k == 4 || k == 7 ? a : b, k < 4 ? 0 : t.h, k < 2 || k == 4 || k == 5 ? c : d);
-      TX[k] = qx; TY[k] = qy; TZ[k] = qz;
-    }
-    for (k = 0; k < 16; k += 2) e2(TE[k], TE[k + 1], t.c);
+    var a = t.x - t.w, b = t.x + t.w, c = t.z - t.w, d = t.z + t.w, h = t.h, tcol = t.c;
+    line3(a, 0, c, a, h, c, tcol); line3(b, 0, c, b, h, c, tcol); line3(b, 0, d, b, h, d, tcol); line3(a, 0, d, a, h, d, tcol);
+    line3(a, h, c, b, h, c, tcol); line3(b, h, c, b, h, d, tcol); line3(b, h, d, a, h, d, tcol); line3(a, h, d, a, h, c, tcol);
   }
   // the next two rings
   for (k = 1; k >= 0; k--) {
     var r = RINGS[(ringI + k) % NR], p = r.p, col = k ? 0x5a4a10 : ((T >> 2) & 1 ? 10 : 9);
     if (ST == 0) col = 0x5a4a10;
-    for (i = 0; i < 36; i += 3) { var j = (i + 3) % 36; l3(p[i], p[i + 1], p[i + 2], p[j], p[j + 1], p[j + 2], col); }
+    for (i = 0; i < 36; i += 3) { var j = (i + 3) % 36; line3(p[i], p[i + 1], p[i + 2], p[j], p[j + 1], p[j + 2], col); }
   }
   if (ST == 0) { drawTitle(); return; }
   if (ST == 1) { drawCalib(); return; }
