@@ -99,7 +99,7 @@
   {
     "id": "pocket-dos",
     "title": "pocket.DOS",
-    "description": "One-button games for a tiny ESP32 screen board. Play them here, or on the board itself: it loads them from this page over WiFi.",
+    "description": "A tiny ERROR-DOS for an ESP32 screen board: NEON FLIGHT, ERROR-CHAT and one-button games, on a 3D menu. Play them here, or on the board itself: it loads them from this page over WiFi.",
     "path": "pocket/",
     "folder": "apps",
     "logo": "pocket",

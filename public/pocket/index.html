@@ -1,44 +1,46 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>pocket.DOS · error.blue</title>
-<meta name="description" content="pocket.DOS: one-button games for a tiny ESP32-S3 screen board. Play them here, or on the board.">
-<meta name="theme-color" content="#05030f">
+<title>POCKET.DOS · error.blue</title>
+<meta name="description" content="pocket.DOS: a tiny ERROR-DOS for an ESP32-S3 screen board. One-button games, NEON FLIGHT, ERROR-CHAT. Play them here, or on the board.">
+<meta name="theme-color" content="#031208">
 <style>
-:root{--bg:#05030f;--cy:#22f0ff;--pk:#ff2bd6;--dim:#6a6a90;--yel:#ffd23a}
+:root{--fg:#39ff7a;--dim:#1b7a3c;--bg:#031208;--hi:#b8ffd0;--glow:rgba(57,255,122,.55)}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:#cfd3ff;font:15px/1.5 ui-monospace,Consolas,Menlo,monospace}
-body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 12px 40px}
-a{color:var(--cy)}
-header{width:100%;max-width:760px;display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
-h1{margin:0;font-size:22px;color:var(--pk);text-shadow:0 0 10px var(--pk)}h1 b{color:var(--cy);text-shadow:0 0 10px var(--cy)}
-header a{font-size:13px;color:var(--dim)}
-/* the board */
-.board{position:relative;width:min(760px,100%);background:linear-gradient(160deg,#1b1d2a,#0d0e16);border:1px solid #2c2f44;border-radius:18px;
- padding:5.5% 9% 5.5% 6%;box-shadow:0 20px 60px #000a,inset 0 1px 0 #ffffff14}
-.usb{position:absolute;left:-3.2%;top:50%;width:4.2%;height:26%;transform:translateY(-50%);background:linear-gradient(90deg,#8a8fa6,#c9cde0);border-radius:6px 0 0 6px;border:1px solid #555}
-.screen{position:relative;background:#000;border-radius:6px;padding:1.6%;box-shadow:0 0 0 2px #000,0 0 0 3px #2a2d40}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 ui-monospace,Consolas,Menlo,monospace;text-shadow:0 0 6px var(--glow)}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:12px 12px 40px}
+body:after{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+a{color:var(--hi)}
+header{width:100%;max-width:760px;display:flex;justify-content:space-between;align-items:center;background:var(--fg);color:var(--bg);text-shadow:none;padding:2px 8px;margin-bottom:12px}
+h1{margin:0;font-size:17px;letter-spacing:1px}
+header a{font-size:13px;color:var(--bg);text-decoration:none}
+h1.g{animation:gl .25s steps(2) 1}
+@keyframes gl{0%{transform:translate(4px,0);clip-path:inset(0 0 50% 0)}50%{transform:translate(-5px,0);clip-path:inset(40% 0 0 0)}100%{transform:none;clip-path:none}}
+.board{position:relative;width:min(760px,100%);background:linear-gradient(160deg,#10160f,#060906);border:1px solid #1b3a22;border-radius:16px;
+ padding:5.5% 9% 5.5% 6%;box-shadow:0 20px 60px #000c,0 0 30px rgba(57,255,122,.08),inset 0 1px 0 #ffffff10}
+.usb{position:absolute;left:-3.2%;top:50%;width:4.2%;height:26%;transform:translateY(-50%);background:linear-gradient(90deg,#6f7480,#b9bdc8);border-radius:6px 0 0 6px;border:1px solid #444}
+.screen{position:relative;background:#000;border-radius:6px;padding:1.6%;box-shadow:0 0 0 2px #000,0 0 0 3px #1b3a22,0 0 24px rgba(57,255,122,.18)}
 canvas{display:block;width:100%;image-rendering:pixelated;image-rendering:crisp-edges;aspect-ratio:320/172;cursor:pointer}
-.led{position:absolute;right:3.6%;top:12%;width:2.2%;aspect-ratio:1;border-radius:50%;background:#222;transition:background .05s,box-shadow .05s}
-.btn{position:absolute;right:2.6%;bottom:12%;width:5%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 40% 35%,#3a3d52,#16171f);
- border:2px solid #444a66;box-shadow:0 3px 0 #000;cursor:pointer;touch-action:none}
-.btn.on{transform:translateY(2px);box-shadow:0 1px 0 #000;background:radial-gradient(circle at 40% 35%,#22f0ff,#0a5a66)}
-.lbl{position:absolute;right:1.4%;bottom:4%;font-size:10px;color:#7a7fa0;letter-spacing:1px}
-.big{margin:16px 0 4px;width:min(760px,100%);display:flex;gap:10px}
-.big button{flex:1;padding:18px 10px;font:bold 17px ui-monospace,Consolas,monospace;background:var(--cy);color:var(--bg);border:0;border-radius:10px;touch-action:none;user-select:none;-webkit-user-select:none}
-.big button.on{background:#fff}
-.big button.b2{flex:0 0 28%;background:none;color:var(--cy);border:1px solid var(--cy)}
-.hint{color:var(--dim);font-size:13px;width:min(760px,100%);margin:4px 0 0}
-section{width:min(760px,100%);margin-top:26px}
-h2{font-size:15px;color:var(--bg);background:var(--cy);display:inline-block;padding:3px 10px;margin:0 0 10px}
+.led{position:absolute;right:3.6%;top:12%;width:2.2%;aspect-ratio:1;border-radius:50%;background:#1a221a;transition:background .05s,box-shadow .05s}
+.btn{position:absolute;right:2.6%;bottom:12%;width:5%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 40% 35%,#2a3a2c,#0e140f);
+ border:2px solid #2f5a3a;box-shadow:0 3px 0 #000;cursor:pointer;touch-action:none}
+.btn.on{transform:translateY(2px);box-shadow:0 1px 0 #000;background:radial-gradient(circle at 40% 35%,#39ff7a,#0a5a26)}
+.lbl{position:absolute;right:1.4%;bottom:4%;font-size:10px;color:var(--dim);letter-spacing:1px;text-shadow:none}
+.big{margin:14px 0 4px;width:min(760px,100%);display:flex;gap:10px}
+.big button{flex:1;padding:18px 10px;font:bold 17px ui-monospace,Consolas,monospace;background:var(--fg);color:var(--bg);border:0;border-radius:4px;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 0 14px var(--glow)}
+.big button.on{background:var(--hi)}
+.big button.b2{flex:0 0 28%;background:none;color:var(--fg);border:1px solid var(--fg);box-shadow:none}
+.hint{color:var(--dim);font-size:13px;width:min(760px,100%);margin:4px 0 0;text-shadow:none}
+section{width:min(760px,100%);margin-top:24px}
+h2{font-size:15px;color:var(--bg);background:var(--fg);display:inline-block;padding:2px 10px;margin:0 0 10px;text-shadow:none}
 p{margin:8px 0}
-code,pre{color:#fff}
-pre{background:#0c0a24;border:1px solid #2a2a50;padding:12px;overflow:auto;font-size:13px;line-height:1.45}
-details summary{cursor:pointer;color:var(--yel)}
-table{border-collapse:collapse;font-size:13px}td{padding:3px 10px 3px 0;vertical-align:top}td:first-child{color:#fff;white-space:nowrap}
+code,pre{color:var(--hi)}
+pre{background:#020b05;border:1px solid var(--dim);padding:12px;overflow:auto;font-size:13px;line-height:1.45}
+details summary{cursor:pointer;color:var(--hi)}
+table{border-collapse:collapse;font-size:13px}td{padding:3px 10px 3px 0;vertical-align:top}td:first-child{color:var(--hi);white-space:nowrap}
 </style></head>
 <body>
-<header><h1>pocket<b>.DOS</b></h1><a href="/">&larr; ERROR-DOS</a></header>
+<header><h1 id="h1">C:\&gt;POCKET.DOS</h1><a href="/">&larr; ERROR-DOS</a></header>
 
 <div class="board" id="board">
   <div class="usb"></div>
@@ -47,18 +49,19 @@ table{border-collapse:collapse;font-size:13px}td{padding:3px 10px 3px 0;vertical
   <div class="btn" id="btn" title="the BOOT button"></div><div class="lbl">BOOT</div>
 </div>
 <div class="big"><button id="bigbtn">BUTTON</button><button id="menubtn" class="b2">MENU</button></div>
-<p class="hint">Menu: tap = next, hold = play (or click a game). In a game: the button is everything. Hold 3 s, ESC or MENU = back.
-Keys: SPACE / ENTER / &uarr; = the button.</p>
+<p class="hint">Menu: tap = next, hold = open (or arrows + ENTER, or click an app). In an app the button is everything,
+SPACE / ENTER work too. Hold 3 s, ESC or MENU = back. NEON FLIGHT: the arrow keys tilt (on a phone: tilt the phone), SPACE = gas.</p>
 
 <section>
 <h2>WHAT IS THIS</h2>
-<p><b>pocket.DOS</b> is a tiny game system for the ESP32-S3 board with the 1.47" colour LCD and one button.
-After its welcome screen it joins your WiFi. When it finds no WiFi it knows, it makes its own WiFi
-<b>pocket.DOS</b>: join it with your phone and a setup page opens, where you scan and pick your WiFi and can pair a
-Bluetooth keyboard or mouse. Online, the board loads the menu you see above from <b>error.blue/pocket</b>.
-Games you played are kept on the board, so they work without WiFi too.</p>
-<p>Every game here is one small JavaScript file in <code>/pocket/apps/</code>, listed in <a href="apps.json">apps.json</a>.
-The board runs exactly the same file (with the Duktape JavaScript engine), so what plays here plays there.</p>
+<p><b>POCKET.DOS</b> is a tiny ERROR-DOS for the ESP32-S3 board with the 1.47" colour LCD, one button and a motion sensor.
+After its DOS boot it joins your WiFi. When it finds no WiFi it knows, it makes its own WiFi <b>pocket.DOS</b>:
+join it with your phone and a setup page opens, where you pick your WiFi and can pair a Bluetooth keyboard or mouse.
+Online, the board loads its menu and apps from <b>error.blue/pocket</b>, the page you are on. Apps you used stay on the board
+and work without WiFi too.</p>
+<p>The menu (<a href="menu.js">menu.js</a>) and every app are small JavaScript files listed in <a href="apps.json">apps.json</a>.
+The board runs exactly the same files (with the Duktape JavaScript engine), so what runs here runs there.
+ERROR-CHAT here and on the board is the same chat as <a href="/apps/error-chat/">ERROR-CHAT</a> in ERROR-DOS.</p>
 </section>
 
 <section>
@@ -67,17 +70,22 @@ The board runs exactly the same file (with the Duktape JavaScript engine), so wh
 <p>Define <code>init()</code>, <code>update()</code> and <code>draw()</code>; update + draw run 30 times a second. Write plain ES5
 (<code>var</code>, <code>function</code>; no arrow functions or <code>let</code>) so the board understands it.</p>
 <table>
-<tr><td>cls(c)</td><td>clear the screen</td></tr>
-<tr><td>pset(x,y,c)</td><td>one pixel</td></tr>
+<tr><td>cls(c) pset(x,y,c)</td><td>clear the screen / one pixel</td></tr>
 <tr><td>rect(x,y,w,h,c) box(...)</td><td>filled / outlined rectangle</td></tr>
-<tr><td>line(x0,y0,x1,y1,c)</td><td>a line</td></tr>
+<tr><td>line(x0,y0,x1,y1,c)</td><td>a line (any length, cut at the screen)</td></tr>
+<tr><td>tri(x0,y0,x1,y1,x2,y2,c)</td><td>a filled triangle</td></tr>
 <tr><td>circ(x,y,r,c) ring(x,y,r,c)</td><td>filled / outlined circle</td></tr>
 <tr><td>text(s,x,y,c[,scale])</td><td>5x7 letters, returns the width; textw(s[,scale]) measures</td></tr>
+<tr><td>glitch(n)</td><td>shake the picture like a bad tape, 0..10</td></tr>
 <tr><td>btn() btnp() btnr()</td><td>button held / just pressed / just released</td></tr>
+<tr><td>key()</td><td>a typed key: "a", " ", "ENTER", "BACK", "UP", "DOWN", "LEFT", "RIGHT"... or ""</td></tr>
+<tr><td>motion() ax() ay() az()</td><td>0 = no motion sensor, 1 = keys pretend one, 2 = real; ax/ay/az = which way is up (sensor axes)</td></tr>
+<tr><td>get(path,cb) post(path,data,cb)</td><td>error.blue's /api/...: cb(status, text); false = busy, try again</td></tr>
 <tr><td>rnd(n) irnd(n)</td><td>random 0..n / whole number 0..n-1</td></tr>
 <tr><td>t() frame()</td><td>seconds since start / frame number</td></tr>
-<tr><td>save(k,n) load(k,def)</td><td>keep a number (a high score) on the board</td></tr>
+<tr><td>save(k,v) load(k,def)</td><td>keep a number or text on the board</td></tr>
 <tr><td>led(c)</td><td>the board's colour light (0 = off)</td></tr>
+<tr><td>holdexit(false)</td><td>the 3 s hold doesn't end the app (when holding = gas)</td></tr>
 <tr><td>exit() print(s)</td><td>back to the menu / a line in the serial monitor</td></tr>
 <tr><td>W H</td><td>160, 86</td></tr>
 <tr><td>colours</td><td>0..15 = the palette below, or 0xRRGGBB</td></tr>
@@ -86,7 +94,7 @@ The board runs exactly the same file (with the Duktape JavaScript engine), so wh
 <pre>// a whole app
 var x = 80, v = 0;
 function update() { if (btnp()) v = -3; v += 0.2; x += v; if (x > 80) { x = 80; v = 0; } }
-function draw() { cls(1); circ(80, x | 0, 4, 12); text('TAP!', 2, 2, 7); }</pre>
+function draw() { cls(0x031208); circ(80, x | 0, 4, 0x39ff7a); text('TAP!', 2, 2, 0x39ff7a); }</pre>
 </details>
 </section>
 
@@ -98,38 +106,60 @@ const FONT_HEX = '0000000000000000040404040004000a0a0a00000000000a1f0a1f0a00000e
 const FONT = []; for (let i = 0; i < 95; i++) { const g = []; for (let r = 0; r < 7; r++) g.push(parseInt(FONT_HEX.substr((i * 7 + r) * 2, 2), 16)); FONT.push(g); }
 const DESC = { g: [0,0,0,0x0E,0x12,0x12,0x0E,0x02,0x0C], j: [0,0x02,0,0x02,0x02,0x02,0x02,0x12,0x0C], p: [0,0,0,0x1C,0x12,0x12,0x1C,0x10,0x10],
   q: [0,0,0,0x0E,0x12,0x12,0x0E,0x02,0x02], y: [0,0,0,0x12,0x12,0x12,0x0E,0x02,0x0C] };
+const GBG = 0x031208, GFG = 0x39ff7a, GDIM = 0x1b7a3c, GHI = 0xb8ffd0;
 
-// ---------------------------------------------------------------- the 160x86 picture (same drawing as the board's gfx.cpp)
+// ---------------------------------------------------------------- the 160x86 picture (the same drawing as the board's gfx.cpp)
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const off = document.createElement('canvas'); off.width = W; off.height = H;
 const octx = off.getContext('2d'), img = octx.createImageData(W, H), px = new Uint32Array(img.data.buffer);
 const rgb = c => (c >= 0 && c < 16) ? PAL[c] : (c & 0xffffff);
-const col = c => { const v = rgb(c | 0); // the board shows 16-bit colour: round the same way
-  const r = (v >> 16) & 0xf8, g = (v >> 8) & 0xfc, b = v & 0xf8; return 0xff000000 | (b << 16) | (g << 8) | r; };
+const col = c => { const v = rgb(c | 0); const r = (v >> 16) & 0xf8, g = (v >> 8) & 0xfc, b = v & 0xf8; return 0xff000000 | (b << 16) | (g << 8) | r; };
+const C = (c, d) => col(c === undefined ? d : c);
 const G = {
-  cls(c) { px.fill(col(c === undefined ? 0 : c)); },
-  pset(x, y, c) { x |= 0; y |= 0; if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = col(c === undefined ? 7 : c); },
+  cls(c) { px.fill(C(c, 0)); },
+  pset(x, y, c) { x |= 0; y |= 0; if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = C(c, 7); },
   rect(x, y, w, h, c) { x |= 0; y |= 0; w |= 0; h |= 0; if (x < 0) { w += x; x = 0; } if (y < 0) { h += y; y = 0; }
-    if (x + w > W) w = W - x; if (y + h > H) h = H - y; if (w <= 0 || h <= 0) return; const v = col(c === undefined ? 7 : c);
+    if (x + w > W) w = W - x; if (y + h > H) h = H - y; if (w <= 0 || h <= 0) return; const v = C(c, 7);
     for (let j = 0; j < h; j++) px.fill(v, (y + j) * W + x, (y + j) * W + x + w); },
   box(x, y, w, h, c) { x |= 0; y |= 0; w |= 0; h |= 0; if (w <= 0 || h <= 0) return; G.rect(x, y, w, 1, c); G.rect(x, y + h - 1, w, 1, c); G.rect(x, y, 1, h, c); G.rect(x + w - 1, y, 1, h, c); },
-  line(x0, y0, x1, y1, c) { x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0; const v = col(c === undefined ? 7 : c);
-    const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1; let err = dx + dy, n = 0;
-    while (n++ < 2000) { if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H) px[y0 * W + x0] = v; if (x0 === x1 && y0 === y1) break;
-      const e2 = 2 * err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; } } },
+  line(x0, y0, x1, y1, c) {
+    x0 = Math.max(-1e6, Math.min(1e6, +x0 | 0)); y0 = Math.max(-1e6, Math.min(1e6, +y0 | 0)); x1 = Math.max(-1e6, Math.min(1e6, +x1 | 0)); y1 = Math.max(-1e6, Math.min(1e6, +y1 | 0));
+    // Liang-Barsky to the screen, like the board
+    let t0 = 0, t1 = 1; const dx = x1 - x0, dy = y1 - y0, P = [-dx, dx, -dy, dy], Q = [x0, W - 1 - x0, y0, H - 1 - y0];
+    for (let i = 0; i < 4; i++) { if (P[i] === 0) { if (Q[i] < 0) return; continue; } const r = Q[i] / P[i];
+      if (P[i] < 0) { if (r > t1) return; if (r > t0) t0 = r; } else { if (r < t0) return; if (r < t1) t1 = r; } }
+    let ax = Math.round(x0 + t0 * dx), ay = Math.round(y0 + t0 * dy); const bx = Math.round(x0 + t1 * dx), by = Math.round(y0 + t1 * dy);
+    const v = C(c, 7), ddx = Math.abs(bx - ax), sx = ax < bx ? 1 : -1, ddy = -Math.abs(by - ay), sy = ay < by ? 1 : -1; let err = ddx + ddy, n = 0;
+    while (n++ < 400) { if (ax >= 0 && ax < W && ay >= 0 && ay < H) px[ay * W + ax] = v; if (ax === bx && ay === by) break;
+      const e2 = 2 * err; if (e2 >= ddy) { err += ddy; ax += sx; } if (e2 <= ddx) { err += ddx; ay += sy; } } },
+  tri(x0, y0, x1, y1, x2, y2, c) {
+    let P = [[x0 | 0, y0 | 0], [x1 | 0, y1 | 0], [x2 | 0, y2 | 0]].sort((a, b) => a[1] - b[1]);
+    const [[ax, ay], [bx, by], [cx, cy]] = P; if (cy < 0 || ay >= H || ay === cy) return; const v = C(c, 7);
+    for (let y = Math.max(0, ay); y <= Math.min(H - 1, cy); y++) {
+      const fy = y + 0.5; let xa = ax + (cx - ax) * (fy - ay) / (cy - ay), xb;
+      if (fy < by) xb = by === ay ? bx : ax + (bx - ax) * (fy - ay) / (by - ay); else xb = cy === by ? bx : bx + (cx - bx) * (fy - by) / (cy - by);
+      if (xa > xb) [xa, xb] = [xb, xa];
+      const l = Math.max(0, Math.round(xa)), r = Math.min(W - 1, Math.round(xb - 1));
+      if (r >= l) px.fill(v, y * W + l, y * W + r + 1);
+    } },
   circ(cx, cy, r, c) { cx |= 0; cy |= 0; r |= 0; if (r < 0 || r > 400) return;
     for (let y = -r; y <= r; y++) { let w = 0; while ((w + 1) * (w + 1) + y * y <= r * r + r) w++; G.rect(cx - w, cy + y, 2 * w + 1, 1, c); } },
   ring(cx, cy, r, c) { cx |= 0; cy |= 0; r |= 0; if (r < 0 || r > 400) return; let x = r, y = 0, err = 1 - r;
     while (x >= y) { for (const [a, b] of [[x, y], [-x, y], [x, -y], [-x, -y], [y, x], [-y, x], [y, -x], [-y, -x]]) G.pset(cx + a, cy + b, c);
       y++; if (err < 0) err += 2 * y + 1; else { x--; err += 2 * (y - x) + 1; } } },
   textw(s, k) { s = String(s); k = k ? Math.max(1, Math.min(8, k | 0)) : 1; return s.length ? s.length * 6 * k - k : 0; },
-  text(s, x, y, c, k) { s = String(s); x |= 0; y |= 0; k = k ? Math.max(1, Math.min(8, k | 0)) : 1; const v = col(c === undefined ? 7 : c);
+  text(s, x, y, c, k) { s = String(s); x |= 0; y |= 0; k = k ? Math.max(1, Math.min(8, k | 0)) : 1; const v = C(c, 7);
     for (let i = 0; i < s.length; i++) { let ch = s.charCodeAt(i); if (ch < 32 || ch > 126) ch = 63;
       const rows = DESC[s[i]] || FONT[ch - 32], gx0 = x + i * 6 * k;
       for (let gy = 0; gy < rows.length; gy++) { const bits = rows[gy]; if (!bits) continue;
         for (let gx = 0; gx < 5; gx++) if (bits & (16 >> gx))
           for (let sy = 0; sy < k; sy++) for (let sx = 0; sx < k; sx++) { const X = gx0 + gx * k + sx, Y = y + gy * k + sy; if (X >= 0 && X < W && Y >= 0 && Y < H) px[Y * W + X] = v; } } }
     return s.length ? s.length * 6 * k - k : 0; },
+  glitch(n) { n = Math.max(0, Math.min(10, n | 0)); if (!n) return; const row = new Uint32Array(W);
+    for (let b = 0; b < n; b++) { const y0 = Math.random() * H | 0, h = 1 + (Math.random() * 4 | 0); let dx = (Math.random() * 17 | 0) - 8; if (!dx) dx = 3;
+      for (let y = y0; y < Math.min(H, y0 + h); y++) { row.set(px.subarray(y * W, y * W + W)); for (let x = 0; x < W; x++) { const s = x - dx; px[y * W + x] = s >= 0 && s < W ? row[s] : 0xff000000; } } }
+    if (n >= 3) { const w = 10 + (Math.random() * 40 | 0), h = 2 + (Math.random() * 6 | 0), sx = Math.random() * (W - w) | 0, sy = Math.random() * (H - h) | 0, tx = Math.random() * (W - w) | 0, ty = Math.random() * (H - h) | 0;
+      for (let y = 0; y < h; y++) px.copyWithin((ty + y) * W + tx, (sy + y) * W + sx, (sy + y) * W + sx + w); } },
 };
 function present() {
   octx.putImageData(img, 0, 0);
@@ -140,20 +170,20 @@ function present() {
 }
 const ledEl = document.getElementById('led');
 function setLed(c) {
-  if (!c) { ledEl.style.background = '#222'; ledEl.style.boxShadow = 'none'; return; }
+  if (!c) { ledEl.style.background = '#1a221a'; ledEl.style.boxShadow = 'none'; return; }
   const h = '#' + rgb(c).toString(16).padStart(6, '0'); ledEl.style.background = h; ledEl.style.boxShadow = '0 0 14px 4px ' + h;
 }
 
-// ---------------------------------------------------------------- the button
-let down = false, downAt = 0, waitRelease = false, keyTap = 0, held = false, prevHeld = false;
-let tapEv = false, holdEv = false, holdUsed = false, wantMenu = false;
+// ---------------------------------------------------------------- the button, the keys, the tilt
+let down = false, downAt = 0, waitRelease = false, held = false, prevHeld = false, tapEv = false, wantMenu = false;
+const keyQ = [], arrows = { ArrowUp: 0, ArrowDown: 0, ArrowLeft: 0, ArrowRight: 0 };
 function press(on) {
   if (on === down) return;
   down = on; const now = performance.now();
   document.getElementById('btn').classList.toggle('on', on);
   document.getElementById('bigbtn').classList.toggle('on', on);
-  if (on) { downAt = now; holdUsed = false; }
-  else { if (!waitRelease && !holdUsed && now - downAt < 450) tapEv = true; waitRelease = false; }
+  if (on) { downAt = now; askMotion(); }
+  else { if (!waitRelease && now - downAt < 450) tapEv = true; waitRelease = false; }
 }
 for (const id of ['btn', 'bigbtn']) {
   const el = document.getElementById(id);
@@ -163,109 +193,122 @@ for (const id of ['btn', 'bigbtn']) {
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
 document.getElementById('menubtn').onclick = () => { wantMenu = true; };
-const BTN_KEYS = [' ', 'Enter', 'ArrowUp', 'z', 'x'];
+const KEYNAME = { Enter: 'ENTER', Backspace: 'BACK', Delete: 'DEL', Tab: 'TAB', ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT' };
 addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') { wantMenu = true; return; }
-  if (mode === 'menu' && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) { e.preventDefault(); sel = (sel + 1) % Math.max(1, apps.length); return; }
-  if (mode === 'menu' && (e.key === 'ArrowLeft' || (e.key === 'ArrowUp'))) { e.preventDefault(); sel = (sel + apps.length - 1) % Math.max(1, apps.length); return; }
-  if (mode === 'menu' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (!e.repeat) openApp(sel); return; }
-  if (BTN_KEYS.includes(e.key)) { e.preventDefault(); if (!e.repeat) press(true); }
+  if (!(mode === 'app' || mode === 'menu')) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) press(true); } return; }
+  if (e.key in arrows) arrows[e.key] = 1;
+  const k = KEYNAME[e.key] || (e.key.length === 1 ? e.key : '');
+  if (k) { e.preventDefault(); if (keyQ.length < 16) keyQ.push(k); }
+  if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) press(true);
 });
-addEventListener('keyup', e => { if (BTN_KEYS.includes(e.key)) { e.preventDefault(); press(false); } });
+addEventListener('keyup', e => {
+  if (e.key in arrows) arrows[e.key] = 0;
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); press(false); }
+});
+// tilt: a phone's motion sensor, or the arrow keys pretending to tilt the board
+let motionKind = 1, realUp = [0, 0, 1], vr = 0, vp = 0;
+addEventListener('devicemotion', e => {
+  const g = e.accelerationIncludingGravity; if (!g || g.x === null) return;
+  const l = Math.hypot(g.x, g.y, g.z) || 1; realUp = [g.x / l, g.y / l, g.z / l]; motionKind = 2;
+});
+let asked = false;
+function askMotion() { if (asked) return; asked = true; try { if (typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) DeviceMotionEvent.requestPermission().catch(() => {}); } catch (e) {} }
+function upNow() {
+  if (motionKind === 2) return realUp;
+  return [Math.sin(vr), Math.sin(vp), Math.cos(vr) * Math.cos(vp)];
+}
+function tiltTick() {                                      // arrows: right = bank right, up = nose down
+  const tr = (arrows.ArrowRight - arrows.ArrowLeft) * 0.6, tp = (arrows.ArrowUp - arrows.ArrowDown) * 0.6;
+  vr += (tr - vr) * 0.15; vp += (tp - vp) * 0.15;
+}
 
-// ---------------------------------------------------------------- the menu (like the board's shell.cpp)
-let mode = 'boot', modeAt = performance.now(), apps = [], sel = 0, cur = null, msg = null;
-const BG = 0x05030f, CY = 12, PK = 14, DIM = 0x5a5a80, YEL = 10, RED = 8;
+// ---------------------------------------------------------------- apps
+let mode = 'boot', modeAt = performance.now(), apps = [], cur = null, msg = null, msgTitle = '', lastApp = -1, menuSrc = '';
 const ctext = (s, y, c, k) => G.text(s, ((W - G.textw(s, k || 1)) / 2) | 0, y, c, k || 1);
-function header(right, rc) {
-  G.rect(0, 0, W, 10, 0x0c0a24); G.rect(0, 10, W, 1, 0x3a2a7a);
-  const w = G.text('pocket', 3, 2, PK); G.text('.DOS', 3 + w + 1, 2, CY);
-  if (right) G.text(right, W - 3 - G.textw(right), 2, rc);
-}
-function footer(s) { G.rect(0, H - 10, W, 10, 0x0c0a24); ctext(s, H - 8, DIM); }
-function stars(ms) { for (let i = 0; i < 26; i++) { const x = (i * 61 + 7) % W, y = 12 + (i * 37 + 3) % (H - 24); if (((ms / 300 | 0) + i * 7) % 11) G.pset(x, y, i % 3 ? 0x2a2a50 : 0x4a4a80); } }
-function drawBoot(ms) {
-  G.cls(BG); stars(ms);
-  const name = 'pocket.DOS', shown = Math.max(0, Math.min(10, ((ms - 300) / 70) | 0)), k = 2, w = G.textw(name, k), x0 = ((W - w) / 2) | 0;
-  for (let i = 0; i < shown; i++) { G.text(name[i], x0 + i * 12 + 1, 13, i < 6 ? 0x4a0a40 : 0x0a3a4a, k); G.text(name[i], x0 + i * 12, 12, i < 6 ? PK : CY, k); }
-  if (ms > 1000) { const lw = Math.min(w, ((ms - 1000) / 3) | 0); G.rect(((W - lw) / 2) | 0, 29, lw, 1, PK); G.rect(((W - lw / 2) / 2) | 0, 31, (lw / 2) | 0, 1, CY); }
-  const lines = ['BROWSER EDITION', 'SCREEN 320X172', 'APPS FROM ERROR.BLUE'];
-  lines.forEach((l, i) => { const at = 1300 + i * 300; if (ms < at) return; G.text(l, 10, 40 + i * 10, 0x9a9ab0); G.text(ms > at + 200 ? 'OK' : '..', W - 10 - 11, 40 + i * 10, ms > at + 200 ? 11 : DIM); });
-}
-function drawMenu(ms) {
-  G.cls(BG); stars(ms); header(apps.length ? apps.length + ' APPS' : '', DIM);
-  if (!apps.length) { ctext(msg || 'LOADING...', 36, msg ? RED : 7); footer('ERROR.BLUE/POCKET'); return; }
-  const top = 13, small = 11, big = 23, room = H - 11 - top, fit = ((room - big) / small | 0) + 1;
-  let first = Math.max(0, Math.min(sel - (fit >> 1), apps.length - fit));
-  const hold = down && !waitRelease && !holdUsed ? Math.max(0, (performance.now() - downAt - 150) / 550) : 0;
-  let y = top; rows = [];
-  for (let i = first; i < apps.length; i++) {
-    const a = apps[i], h = i === sel ? big : small; if (y + h - 2 > top + room) break;
-    rows.push([i, y, h]);
-    if (i === sel) {
-      G.rect(4, y, W - 8, big - 2, 0x14123a); if (hold > 0) G.rect(4, y, ((W - 8) * Math.min(1, hold)) | 0, big - 2, 0x2a1a5a);
-      G.box(4, y, W - 8, big - 2, a.c); G.text('>', 8 + (((ms / 120) | 0) % 3 === 0 ? 1 : 0), y + 3, a.c); G.text(a.name, 16, y + 3, 7);
-      G.text(String(a.info || '').slice(0, 22), 16, y + 11, DIM);
-    } else { G.rect(9, y + 2, 4, 4, a.c); G.text(a.name, 16, y + 1, 0x9a9ab0); }
-    y += h;
-  }
-  if (first > 0) G.text('^', W - 9, top, DIM);
-  if (first + fit < apps.length) G.text('v', W - 9, H - 19, DIM);
-  footer('TAP: NEXT   HOLD: PLAY');
-}
-let rows = [];
-function drawMessage(title, text) {
-  G.cls(BG); header(); ctext(title, 16, RED, G.textw(title, 2) <= W - 6 ? 2 : 1);
-  const words = String(text).split(' '); let line = '', n = 0;
-  for (const w of words) { if ((line + ' ' + w).trim().length > 25 && line) { G.text(line, 6, 36 + n * 9, 7); n++; line = w; } else line = (line + ' ' + w).trim(); if (n >= 4) break; }
-  if (line && n < 4) G.text(line, 6, 36 + n * 9, 7);
-  footer('TAP: OK');
-}
-cv.addEventListener('click', e => {                         // click a game in the menu = play it
-  if (mode !== 'menu') return;
-  const r = cv.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * H;
-  for (const [i, ry, h] of rows) if (y >= ry && y < ry + h) { if (i === sel) openApp(i); else sel = i; }
-});
-
-async function loadMenu() {
+async function loadAll() {
   try {
     const j = await fetch('apps.json', { cache: 'no-cache' }).then(r => r.json());
-    apps = j.apps.map(a => ({ id: a.id, name: a.name, info: a.info, file: a.file, c: typeof a.color === 'string' ? parseInt(a.color.slice(1), 16) : a.color }));
-    const want = location.hash.slice(1), i = apps.findIndex(a => a.id === want); if (i >= 0) sel = i;
-  } catch (e) { msg = 'COULD NOT LOAD THE MENU'; }
+    apps = j.apps.map(a => ({ id: a.id, name: a.name, info: a.info, icon: a.icon || a.id, file: a.file, color: typeof a.color === 'string' ? parseInt(a.color.slice(1), 16) : a.color }));
+    menuSrc = await fetch('menu.js', { cache: 'no-cache' }).then(r => r.text());
+    const want = location.hash.slice(1), i = apps.findIndex(a => a.id === want); if (i >= 0) lastApp = i;
+  } catch (e) { msg = 'COULD NOT LOAD ERROR.BLUE/POCKET'; msgTitle = 'NO APPS'; }
 }
 const srcCache = {};
 async function openApp(i) {
   const a = apps[i]; if (!a) return;
   try {
     const src = srcCache[a.id] || (srcCache[a.id] = await fetch(a.file, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }));
-    startApp(a, src);
-  } catch (e) { msg = 'COULD NOT LOAD ' + a.name + ': ' + e.message; mode = 'message'; }
+    lastApp = i; location.hash = a.id;
+    start(src, a.id, 'app');
+  } catch (e) { showMsg('APP ERROR', 'COULD NOT LOAD ' + a.name + ': ' + e.message); }
 }
+function showMsg(t, m) { cur = null; setLed(0); msgTitle = t; msg = m; mode = 'message'; modeAt = performance.now(); }
 
-// ---------------------------------------------------------------- running an app (the same API as the board)
-let startT = 0, frameN = 0, appExit = false;
-function startApp(a, src) {
-  const names = ['cls', 'pset', 'rect', 'box', 'line', 'circ', 'ring', 'text', 'textw', 'btn', 'btnp', 'btnr', 'rnd', 'irnd', 't', 'frame', 'save', 'load', 'led', 'exit', 'print', 'W', 'H'];
-  const key = k => 'pocket.' + a.id + '.' + k;
-  const api = [G.cls, G.pset, G.rect, G.box, G.line, G.circ, G.ring, G.text, G.textw,
-    () => held, () => held && !prevHeld, () => !held && prevHeld,
+let startT = 0, frameN = 0, appExit = false, holdExit = true, wantRun = -1, wantSetup = false;
+function start(src, id, as) {
+  const names = ['cls', 'pset', 'rect', 'box', 'line', 'tri', 'circ', 'ring', 'text', 'textw', 'glitch', 'btn', 'btnp', 'btnr', 'key', 'rnd', 'irnd', 't', 'frame',
+    'save', 'load', 'led', 'exit', 'print', 'motion', 'ax', 'ay', 'az', 'holdexit', 'get', 'post', 'apps', 'run', 'sys', 'setup', 'W', 'H'];
+  const k = n => 'pocket.' + id + '.' + n;
+  const http = (method, path, body, cb) => {
+    if (typeof path !== 'string' || path[0] !== '/' || path.indexOf('..') >= 0) return false;
+    const me = cur;
+    fetch(path, method === 'POST' ? { method, headers: { 'Content-Type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) } : {})
+      .then(r => r.text().then(t => [r.status, t])).catch(() => [-1, ''])
+      .then(([s, t]) => { if (cur === me && typeof cb === 'function') { try { cb(s, t); } catch (e) { fail(e); } } });
+    return true;
+  };
+  const api = [G.cls, G.pset, G.rect, G.box, G.line, G.tri, G.circ, G.ring, G.text, G.textw, G.glitch,
+    () => held, () => held && !prevHeld, () => !held && prevHeld, () => keyQ.shift() || '',
     n => Math.random() * (n === undefined ? 1 : n), n => (n |= 0) > 0 ? Math.floor(Math.random() * n) : 0,
     () => (performance.now() - startT) / 1000, () => frameN,
-    (k, v) => { try { localStorage.setItem(key(k), String(+v)); } catch (e) {} },
-    (k, d) => { try { const v = localStorage.getItem(key(k)); return v === null ? (d === undefined ? 0 : d) : +v; } catch (e) { return d === undefined ? 0 : d; } },
-    c => setLed(c | 0), () => { appExit = true; }, s => console.log('[' + a.id + ']', s), W, H];
+    (n, v) => { try { localStorage.setItem(k(n), typeof v === 'string' ? 's' + v : 'n' + (+v)); } catch (e) {} },
+    (n, d) => { try { const v = localStorage.getItem(k(n)); if (v === null) return d === undefined ? 0 : d; return v[0] === 's' ? v.slice(1) : +v.slice(v[0] === 'n' ? 1 : 0); } catch (e) { return d === undefined ? 0 : d; } },
+    c => setLed(c | 0), () => { appExit = true; }, s => console.log('[' + id + ']', s),
+    () => motionKind, () => upNow()[0], () => upNow()[1], () => upNow()[2], on => { holdExit = !!on; },
+    (p, cb) => http('GET', p, null, cb), (p, d, cb) => http('POST', p, d, cb),
+    () => apps.map(a => ({ id: a.id, name: a.name, info: a.info, icon: a.icon, color: a.color, cached: true })),
+    i => { wantRun = i | 0; }, () => ({ online: true, wifi: '', ip: '', rssi: -50, bt: false, ver: '1.1', last: lastApp, web: true }),
+    () => { wantSetup = true; }, W, H];
   try {
-    const f = new Function(...names, src +
-      '\n;return {init: typeof init === "function" ? init : null, update: typeof update === "function" ? update : null, draw: typeof draw === "function" ? draw : null};');
-    startT = performance.now(); frameN = 0; appExit = false;
-    cur = f(...api); cur.id = a.id; cur.name = a.name;
+    const f = new Function(...names, src + '\n;return {init: typeof init === "function" ? init : null, update: typeof update === "function" ? update : null, draw: typeof draw === "function" ? draw : null};');
+    startT = performance.now(); frameN = 0; appExit = false; holdExit = true; wantRun = -1; wantSetup = false; keyQ.length = 0;
+    cur = f(...api); cur.id = id;
     if (cur.init) cur.init();
-    mode = 'app'; waitRelease = down; held = prevHeld = false;
-    location.hash = a.id;
-  } catch (e) { cur = null; msg = 'START: ' + e.message; mode = 'message'; }
+    mode = as; waitRelease = down; held = prevHeld = false;
+  } catch (e) { fail(e); }
 }
-function stopApp() { cur = null; setLed(0); mode = 'menu'; waitRelease = down; history.replaceState(null, '', location.pathname); }
+function fail(e) { const m = (e && e.message) || String(e); console.error(e); showMsg('APP ERROR', m); }
+function toMenu() {
+  setLed(0); cur = null; waitRelease = down; history.replaceState(null, '', location.pathname);
+  if (menuSrc) start(menuSrc, 'menu', 'menu'); else { mode = 'message'; msgTitle = 'NO MENU'; msg = 'COULD NOT LOAD MENU.JS'; }
+}
+cv.addEventListener('click', () => { askMotion(); if (mode === 'menu' && keyQ.length < 16) keyQ.push('ENTER'); });
+
+// ---------------------------------------------------------------- the boot (like the board's)
+function drawBoot(ms) {
+  G.cls(GBG);
+  const shown = Math.max(0, Math.min(10, ((ms - 200) / 60) | 0)), x0 = ((W - G.textw('POCKET.DOS', 2)) / 2) | 0, part = 'POCKET.DOS'.slice(0, shown);
+  G.text(part, x0 + 1, 6, 0x0a2a14, 2); G.text(part, x0, 5, GFG, 2);
+  if (shown < 10) G.rect(x0 + shown * 12, 5, 10, 14, GFG);
+  if (ms > 900) ctext('BIOS 1.1  ERROR.BLUE', 22, GDIM);
+  ['CPU BROWSER', 'SCREEN 320X172', 'APPS ERROR.BLUE', 'C:\\>POCKET'].forEach((l, i) => {
+    const at = 1200 + i * 330; if (ms < at) return; const y = 34 + i * 10;
+    G.text(l, 6, y, i === 3 ? GHI : GFG);
+    if (i < 3) { for (let x = 10 + G.textw(l); x < W - 20; x += 4) G.pset(x, y + 6, GDIM); G.text(ms > at + 220 ? 'OK' : '..', W - 6 - 11, y, ms > at + 220 ? GHI : GDIM); }
+    else if ((ms / 400 | 0) & 1) G.rect(8 + G.textw(l), y + 6, 5, 1, GFG);
+  });
+  if ((ms > 180 && ms < 320) || (ms > 2400 && ms < 2520)) G.glitch(6);
+}
+function drawMessage() {
+  G.cls(GBG); G.rect(0, 0, W, 9, GFG); G.text('POCKET.DOS', 2, 1, GBG); G.text('ERROR', W - 2 - G.textw('ERROR'), 1, GBG);
+  ctext(msgTitle, 14, 0xffb43a, G.textw(msgTitle, 2) <= W - 6 ? 2 : 1);
+  const words = String(msg).split(' '); let line = '', n = 0;
+  for (const w of words) { if ((line + ' ' + w).trim().length > 25 && line) { G.text(line, 5, 34 + n * 9, GFG); n++; line = w; } else line = (line + ' ' + w).trim(); if (n >= 4) break; }
+  if (line && n < 4) G.text(line, 5, 34 + n * 9, GFG);
+  G.rect(0, H - 9, W, 1, GDIM); ctext('TAP: OK', H - 7, GDIM);
+}
 
 // ---------------------------------------------------------------- 30 frames a second
 let last = performance.now(), acc = 0;
@@ -274,39 +317,36 @@ function tick(now) {
   acc += Math.min(200, now - last); last = now;
   if (acc < 1000 / 30) return;
   acc %= 1000 / 30;
-  const ms = now - modeAt;
-  const holdNow = down && !waitRelease && !holdUsed && now - downAt > 700;
-  if (holdNow) { holdUsed = true; holdEv = true; }
+  tiltTick();
   if (mode === 'boot') {
     drawBoot(now - modeAt);
-    if ((now - modeAt > 3000 && apps.length) || (tapEv && now - modeAt > 400) || (msg && now - modeAt > 3000)) { mode = 'menu'; }
-  } else if (mode === 'menu') {
-    if (tapEv && apps.length) sel = (sel + 1) % apps.length;
-    if (holdEv && apps.length) openApp(sel);
-    drawMenu(now);
+    if ((now - modeAt > 3000 || (tapEv && now - modeAt > 400)) && (menuSrc || msg)) { if (msg) mode = 'message'; else toMenu(); }
   } else if (mode === 'message') {
-    drawMessage('APP ERROR', msg);
-    if (tapEv || wantMenu) { msg = null; mode = 'menu'; }
-  } else if (mode === 'app' && cur) {
-    if (wantMenu || (down && !waitRelease && now - downAt > 3000)) stopApp();
+    drawMessage();
+    if ((tapEv || wantMenu) && now - modeAt > 300) { msg = null; toMenu(); }
+  } else if (cur) {
+    const isApp = mode === 'app';
+    if (isApp && (wantMenu || (holdExit && down && !waitRelease && now - downAt > 3000))) toMenu();
     else {
       held = down && !waitRelease;
-      try { if (cur.update) cur.update(); if (cur.draw) cur.draw(); }
-      catch (e) { const m = (e && e.message) || String(e); stopApp(); msg = m; mode = 'message'; }
+      try { if (cur.update) cur.update(); if (cur.draw) cur.draw(); } catch (e) { fail(e); }
       prevHeld = held; frameN++;
-      if (appExit) stopApp();
-      else if (down && !waitRelease && now - downAt > 1000) {        // the hold-to-exit bar
+      if (mode === 'menu' && cur && (wantRun >= 0 || wantSetup)) {
+        if (wantSetup) showMsg('SETUP', 'ON THE BOARD THIS OPENS ITS OWN WIFI: PICK A WIFI OR PAIR A KEYBOARD FROM YOUR PHONE.');
+        else openApp(wantRun);
+      } else if (cur && appExit) toMenu();
+      else if (isApp && cur && holdExit && down && !waitRelease && now - downAt > 1000) {        // the hold-to-exit bar
         const p = Math.min(1, (now - downAt - 1000) / 2000);
-        G.rect(0, 0, W, 11, 0); G.rect(0, 0, (W * p) | 0, 11, 0x5a0a2a); G.rect(0, 11, W, 1, PK); ctext('HOLD TO EXIT', 2, 7);
+        G.rect(0, 0, W, 10, GBG); G.rect(0, 0, (W * p) | 0, 10, GFG); ctext('HOLD TO EXIT', 2, p > 0.5 ? GBG : GFG);
       }
     }
   }
-  tapEv = holdEv = wantMenu = false;
+  tapEv = false; wantMenu = false;
   present();
+  if (Math.random() < 0.004) { const h = document.getElementById('h1'); h.classList.remove('g'); void h.offsetWidth; h.classList.add('g'); }
 }
-// the palette in the docs
-document.getElementById('pal').innerHTML = PAL.map((c, i) => '<span title="' + i + '" style="display:inline-block;width:30px;height:22px;margin:1px;background:#' + c.toString(16).padStart(6, '0') + ';color:' + (i < 6 ? '#fff' : '#000') + ';font-size:11px;text-align:center;line-height:22px">' + i + '</span>').join('');
-loadMenu();
+document.getElementById('pal').innerHTML = PAL.map((c, i) => '<span title="' + i + '" style="display:inline-block;width:30px;height:22px;margin:1px;background:#' + c.toString(16).padStart(6, '0') + ';color:' + (i < 6 ? '#fff' : '#000') + ';font-size:11px;text-align:center;line-height:22px;text-shadow:none">' + i + '</span>').join('');
+loadAll();
 requestAnimationFrame(tick);
 </script>
 </body></html>
