@@ -143,6 +143,16 @@ var ICONS = {
       }
     }
   },
+  walk: function (t) {
+    var p = t * 5, s = Math.sin(p) * 0.22, b = Math.abs(Math.cos(p)) * 0.05;
+    box(-0.6, -0.15, -0.5, 0.28, 0.85, 0.28);           // a tall house and a low one
+    box(0.55, -0.45, -0.5, 0.32, 0.55, 0.28);
+    poly(0, 0.22 + b, 0.45, 0.13, 6, 1, 0);            // someone walking past
+    seg(0, 0.09 + b, 0.45, 0, -0.42 + b, 0.45);
+    seg(0, -0.42 + b, 0.45, s, -1, 0.45); seg(0, -0.42 + b, 0.45, -s, -1, 0.45);
+    seg(0, -0.02 + b, 0.45, -s, -0.4 + b, 0.45); seg(0, -0.02 + b, 0.45, s, -0.4 + b, 0.45);
+    for (var i = 0; i < 4; i++) { var z = 0.9 - ((t * 0.6 + i * 0.25) % 1) * 1.8; seg(-0.06, -1, z, 0.06, -1, z); }
+  },
   cube: function (t) { box(0, Math.sin(t * 2) * 0.15, 0, 0.6, 0.6, 0.6); }
 };
 

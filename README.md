@@ -69,6 +69,12 @@ public/                 the website
                         connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and
                         saved spots, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE> and the live link.
                         Edit public/hud/ directly (index.html, sw.js, manifest.webmanifest, icons)
+  pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
+                        (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
+                        apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:
+                        draw at 3 px per dot, then black lines over the gaps). Raycaster with walls of different heights,
+                        tilt to walk/turn (calibration like NEON FLIGHT), TAP = map, find 8 places (saved on the board).
+                        Lowers its own detail when the board can't keep up
 lib/online.js         "I'm in this game" beacon for the who's-online list (GET /api/online); game pages under
                         /games/, /voyage and /music3d get it from the server, other pages load it themselves
 esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online in which game and does ERROR-CHAT
