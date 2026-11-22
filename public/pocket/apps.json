@@ -1,0 +1,11 @@
+{
+  "name": "pocket.DOS",
+  "about": "One-button web apps for pocket.DOS (ESP32-S3 1.47in LCD). Each app is one small JavaScript file: see /pocket/ for the API.",
+  "apps": [
+    { "id": "bird",   "name": "NEON BIRD",  "file": "apps/bird.js",   "v": "1", "color": "#22f0ff", "info": "TAP TO FLAP THROUGH" },
+    { "id": "runner", "name": "NEON RUN",   "file": "apps/runner.js", "v": "1", "color": "#ff2bd6", "info": "TAP JUMP, HOLD HIGHER" },
+    { "id": "stack",  "name": "NEON STACK", "file": "apps/stack.js",  "v": "1", "color": "#a05bff", "info": "DROP BLOCKS, GO HIGH" },
+    { "id": "flip",   "name": "NEON FLIP",  "file": "apps/flip.js",   "v": "1", "color": "#ffd23a", "info": "TAP FLIPS GRAVITY" },
+    { "id": "orbit",  "name": "NEON ORBIT", "file": "apps/orbit.js",  "v": "1", "color": "#39ff7a", "info": "SWITCH RINGS, GET GEMS" }
+  ]
+}
