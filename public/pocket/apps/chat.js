@@ -1,12 +1,21 @@
 // ERROR-CHAT for pocket.DOS - the error.blue chat, on the little screen.
 // One button: TAP = next, HOLD = choose / send a quick message. A Bluetooth keyboard (or the PC keyboard
 // in the browser): type, ENTER = send, UP/DOWN = scroll. Same channels as error.blue/apps/error-chat.
+// When someone in the channel shares their camera (in the browser), WATCH it here: the picture comes
+// as tiny 4-bit grey frames, drawn in the screen colour.
 var BG = 0x031208, FG = 0x39ff7a, DIM = 0x1b7a3c, HI = 0xb8ffd0, DARK = 0x0a2a14, WARN = 0xffb43a;
+(function () {                                           // the colours chosen in SETUP
+  var s = typeof sys == 'function' ? sys() : null, t = s && s.theme;
+  if (t) { FG = t.fg; DIM = t.dim; BG = t.bg; HI = t.hi; DARK = t.dark; }
+})();
 var ST = 0, T = 0, sel = 0, items = [], name = '', code = '';
 var pick = '', pickFor = '', pickI = 0;                  // entering a code / name letter by letter
 var lines = [], last = 0, who = [], pollAt = 0, busy = false, err = '', scroll = 0;
 var typed = '', phrase = 0, sent = '', sentT = 0;
 var downAt = -1, holdDone = false, keyT = -99;
+var cams = [], camId = '', camName = '', fr = null, frBusy = false, frAt = 0, half = false, frN = 0, fps = 0, fpsT = 0;
+var frMsg = '', offT = 0, sub = '', subT = 0, watchT = -999;
+var FAST = typeof img4 != 'function';                    // no img4 (older pocket.DOS): small pictures, drawn in JS
 var ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 var PHRASES = ['HI!', 'HELLO FROM POCKET.DOS', 'OK', 'YES', 'NO', 'LOL', 'GG', 'BRB', 'WHO IS HERE?', '<3', ':)', 'BYE'];
 // Cyrillic letters -> Latin (the little font only has Latin)
@@ -36,7 +45,7 @@ function lobby() {
 function newCode() { var s = ''; for (var i = 0; i < 5; i++) s += ABC.charAt(irnd(26)); return s; }
 function join(c) {
   code = c; save('code', code);
-  ST = 2; lines = []; last = 0; who = []; err = ''; scroll = 0; pollAt = 0; typed = '';
+  ST = 2; lines = []; last = 0; who = []; err = ''; scroll = 0; pollAt = 0; typed = ''; cams = []; phrase = 0;
   add('*', 'CHANNEL #' + code + ' - SHARE THE CODE');
 }
 
@@ -65,16 +74,86 @@ function poll() {
     for (var i = m.length - 1; i >= 0; i--) {             // they come newest first
       var x = m[i];
       if (x.id <= last) continue;
-      if (x.kind == 'msg') add(x.name, x.text);
+      if (x.kind == 'msg') { add(x.name, x.text); if (last) { sub = latin(x.name) + ': ' + latin(x.text); subT = 120; } }
       else if (x.kind == 'join' || x.kind == 'leave') add('*', x.name + (x.kind == 'join' ? ' IS HERE' : ' LEFT'));
       if (x.kind == 'msg' && x.name != name && last) { led(FG); ledT = 4; }
     }
     if (j.last) last = Math.max(last, j.last);
     who = j.who || who;
+    if (j.cams) setCams(j.cams);
   });
   if (!busy) err = 'BUSY...';
 }
 var ledT = 0;
+// cameras in the channel: they come first in the TAP list
+function setCams(c) {
+  for (var i = 0; i < c.length; i++) {
+    var known = false;
+    for (var k = 0; k < cams.length; k++) if (cams[k].id == c[i].id) known = true;
+    if (!known && ST == 2) {
+      add('*', c[i].name + ' SHARES A CAMERA - HOLD TO WATCH');
+      phrase = i; led(FG); ledT = 10;
+    }
+  }
+  var had = cams.length;
+  cams = c;
+  if (ST == 2) {
+    if (phrase >= cams.length && phrase < had) phrase = cams.length;   // a camera went away
+    if (phrase >= cams.length + PHRASES.length) phrase = 0;
+  }
+}
+function choice(i) { return i < cams.length ? '[WATCH ' + latin(cams[i].name).toUpperCase() + ']' : PHRASES[i - cams.length]; }
+function choices() { return cams.length + PHRASES.length; }
+
+// ------------------------------------------------------------------ watching a camera
+function watch(c) {
+  ST = 3; camId = c.id; camName = latin(c.name).toUpperCase(); fr = null; frMsg = 'CONNECTING...'; offT = 0;
+  frN = 0; fps = 0; fpsT = T; sub = ''; subT = 0; half = FAST; watchT = T; glitch(6);
+}
+function pollFrame() {
+  if (frBusy) return;
+  var path = '/api/chat/' + code + '/frame?id=' + camId + '&name=' + encodeURIComponent(name) + (half ? '&s=2' : '');
+  frBusy = get(path, function (status, text) {
+    frBusy = false; frAt = T + 1;
+    if (status != 200) { frMsg = status < 0 ? 'NO CONNECTION' : 'ERROR ' + status; frAt = T + 30; return; }
+    var j; try { j = JSON.parse(text); } catch (e) { frMsg = 'BAD PICTURE'; return; }
+    if (j.cams) cams = j.cams;
+    if (j.off) { frMsg = 'CAMERA OFF'; fr = null; if (!offT) offT = T; frAt = T + 15; return; }
+    offT = 0;
+    if (j.name) camName = latin(j.name).toUpperCase();
+    if (j.id) camId = j.id;
+    if (j.wait) { frMsg = 'WAITING FOR ' + camName + '...'; frAt = T + 8; return; }
+    if (!fr || j.seq != fr.seq) frN++;
+    fr = j; frMsg = '';
+  });
+  if (!frBusy) frAt = T + 4;
+}
+// img4 in JS (older pocket.DOS): 4-bit pixels as k x k boxes
+var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function img4js(s, x0, y0, w, h, k) {
+  var pal = [], i, acc = 0, bits = 0, px = 0, n = w * h;
+  for (i = 0; i < 16; i++) pal.push(mix(BG, FG, i / 15));
+  for (i = 0; i < s.length && px < n; i++) {
+    var v = B64.indexOf(s.charAt(i)); if (v < 0) continue;
+    acc = ((acc << 6) | v) & 0xffff; bits += 6;
+    if (bits < 8) continue;
+    bits -= 8;
+    var b = (acc >> bits) & 255;
+    rect(x0 + (px % w) * k, y0 + ((px / w) | 0) * k, k, k, pal[b >> 4]); px++;
+    if (px < n) { rect(x0 + (px % w) * k, y0 + ((px / w) | 0) * k, k, k, pal[b & 15]); px++; }
+  }
+}
+function mix(a, b, f) {
+  var r = (a >> 16) & 255, g = (a >> 8) & 255, l = a & 255;
+  return (Math.round(r + (((b >> 16) & 255) - r) * f) << 16) | (Math.round(g + (((b >> 8) & 255) - g) * f) << 8) | Math.round(l + ((b & 255) - l) * f);
+}
+function nextCam(d) {
+  if (cams.length < 2) return;
+  var i = 0;
+  for (var k = 0; k < cams.length; k++) if (cams[k].id == camId) i = k;
+  watch(cams[(i + d + cams.length) % cams.length]);
+}
+
 function say(text) {
   text = String(text).substr(0, 200);
   if (!text) return;
@@ -131,10 +210,28 @@ function update() {
     }
     return;
   }
+  if (ST == 3) {                                          // watching a camera
+    if (T >= frAt) pollFrame();
+    if (T >= pollAt) { poll(); pollAt = T + 90; }         // new messages show at the bottom
+    if (subT > 0) subT--;
+    if (T - fpsT >= 30) { fps = frN; frN = 0; fpsT = T; }
+    if (offT && T - offT > 90) { ST = 2; add('*', 'CAMERA OFF'); return; }
+    while (k) {
+      if (k == 'ESC' || k == 'BACK' || k == 'ENTER') { ST = 2; return; }
+      if (k == 'RIGHT' || k == 'DOWN') nextCam(1);
+      if (k == 'LEFT' || k == 'UP') nextCam(-1);
+      if (k == ' ' && !FAST) half = !half;
+      k = key();
+    }
+    b = button();
+    if (b == 1) { if (cams.length > 1) nextCam(1); else if (!FAST) half = !half; }
+    if (b == 2) ST = 2;
+    return;
+  }
   // in a channel
   if (T >= pollAt) { poll(); pollAt = T + 75; }
   while (k) {
-    if (k == 'ENTER') { if (typed) { say(typed); typed = ''; } else say(PHRASES[phrase]); }
+    if (k == 'ENTER') { if (typed) { say(typed); typed = ''; } else pickChoice(); }
     else if (k == 'BACK') typed = typed.substr(0, typed.length - 1);
     else if (k == 'UP') scroll = Math.min(scroll + 1, Math.max(0, lines.length - 7));
     else if (k == 'DOWN') scroll = Math.max(0, scroll - 1);
@@ -143,8 +240,12 @@ function update() {
     k = key();
   }
   b = button();
-  if (b == 1) phrase = (phrase + 1) % PHRASES.length;
-  if (b == 2) say(PHRASES[phrase]);
+  if (b == 1) phrase = (phrase + 1) % choices();
+  if (b == 2) pickChoice();
+}
+function pickChoice() {
+  if (phrase < cams.length) watch(cams[phrase]);
+  else say(PHRASES[phrase - cams.length]);
 }
 function done() {
   if (pickFor == 'code') { if (pick.length >= 3) { join(pick); return; } }
@@ -188,6 +289,8 @@ function draw() {
     rect(0, 66, W, 1, DIM);
     ct('TAP: NEXT LETTER', 69, DIM);
     ct('HOLD: TAKE IT (OR TYPE)', 78, DIM);
+  } else if (ST == 3) {
+    drawVideo();
   } else {
     var first = Math.max(0, lines.length - 7 - scroll);
     for (var l = 0; l < 7 && first + l < lines.length; l++) {
@@ -196,12 +299,41 @@ function draw() {
     }
     if (scroll > 0) text('v', W - 7, 11, WARN);
     rect(0, 74, W, 12, DARK);
-    var c = typed ? '>' + latin(typed).slice(-24) + ((T >> 3) & 1 ? '_' : '') : '>' + PHRASES[phrase];
+    var cam = !typed && phrase < cams.length;
+    var c = typed ? '>' + latin(typed).slice(-24) + ((T >> 3) & 1 ? '_' : '') : '>' + choice(phrase);
     if (sentT > 0) c = 'SENT: ' + latin(sent).substr(0, 20);
     if (err && (T >> 4) & 1) c = err;
-    text(c, 2, 77, typed ? HI : err ? WARN : FG);
+    text(c, 2, 77, typed ? HI : err ? WARN : cam ? ((T >> 4) & 1 ? HI : WARN) : FG);
+    if (cams.length && !cam && !typed) text('CAM', W - 2 - textw('CAM'), 77, (T >> 4) & 1 ? WARN : DIM);
     if (downAt >= 0 && !holdDone) rect(0, 74, Math.min(1, (T - downAt) / 18) * W | 0, 1, HI);
     if (!typed && T < 200) { rect(14, 30, 132, 20, BG); box(14, 30, 132, 20, DIM); ct('TAP: NEXT MESSAGE', 33, FG); ct('HOLD: SEND IT', 42, FG); }
   }
   if (T < 8) glitch(8 - T);
+}
+function drawVideo() {
+  cls(BG);
+  if (fr && fr.data) {
+    var k = Math.max(1, Math.min(4, Math.floor(Math.min(W / fr.w, H / fr.h))));
+    var x = (W - fr.w * k) >> 1, y = (H - fr.h * k) >> 1;
+    if (FAST) img4js(fr.data, x, y, fr.w, fr.h, k);
+    else img4(fr.data, x, y, fr.w, fr.h, BG, FG, k);
+  } else {
+    for (var i = 0; i < 40; i++) rect(irnd(W), 9 + irnd(H - 9), 2 + irnd(14), 1, irnd(3) ? DARK : DIM);   // snow
+    ct(frMsg || 'CONNECTING...', 40, (T >> 4) & 1 ? FG : DIM);
+  }
+  // the label: who, live, how many pictures a second
+  var lab = camName.substr(0, 14);
+  rect(0, 0, textw(lab) + 5, 9, FG); text(lab, 2, 1, BG);
+  if (fr && !frMsg) {
+    var r = (half ? 'FAST ' : '') + fps + '/S';
+    rect(W - textw(r) - 12, 0, textw(r) + 12, 9, BG);
+    if ((T >> 4) & 1) circ(W - textw(r) - 7, 4, 2, WARN);
+    text(r, W - textw(r) - 2, 1, FG);
+  }
+  if (subT > 0 && sub) { rect(0, H - 10, W, 10, BG); text(sub.substr(0, 26), 2, H - 8, HI); }
+  if (T - watchT < 150) {
+    rect(0, H - 10, W, 10, BG);
+    ct(cams.length > 1 ? 'TAP: NEXT CAMERA  HOLD: BACK' : FAST ? 'HOLD: BACK TO CHAT' : 'TAP: SHARP/FAST  HOLD: BACK', H - 8, DIM);
+  }
+  if (frMsg && (T & 63) < 3) glitch(2);
 }

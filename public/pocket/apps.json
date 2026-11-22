@@ -1,11 +1,11 @@
 {
   "name": "pocket.DOS",
   "about": "The menu and apps of pocket.DOS (ESP32-S3 1.47in LCD board). Each one is a small JavaScript file: see /pocket/ for the API. Bump v to make boards download a file again.",
-  "menu": { "file": "menu.js", "v": "3" },
+  "menu": { "file": "menu.js", "v": "4" },
   "apps": [
     { "id": "walk",   "name": "DOT WALK",    "file": "apps/walk.js",   "v": "1", "icon": "walk",  "color": "#39ff7a", "info": "TILT TO WALK THE TOWN" },
     { "id": "flight", "name": "NEON FLIGHT", "file": "apps/flight.js", "v": "2", "icon": "plane", "color": "#22f0ff", "info": "TILT TO FLY, HOLD = GAS" },
-    { "id": "chat",   "name": "ERROR-CHAT",  "file": "apps/chat.js",   "v": "1", "icon": "chat",  "color": "#39ff7a", "info": "TALK ON ERROR.BLUE" },
+    { "id": "chat",   "name": "ERROR-CHAT",  "file": "apps/chat.js",   "v": "2", "icon": "chat",  "color": "#39ff7a", "info": "TALK, WATCH CAMERAS" },
     { "id": "bird",   "name": "NEON BIRD",   "file": "apps/bird.js",   "v": "1", "icon": "bird",  "color": "#22f0ff", "info": "TAP TO FLAP THROUGH" },
     { "id": "runner", "name": "NEON RUN",    "file": "apps/runner.js", "v": "1", "icon": "run",   "color": "#ff2bd6", "info": "TAP JUMP, HOLD HIGHER" },
     { "id": "stack",  "name": "NEON STACK",  "file": "apps/stack.js",  "v": "1", "icon": "stack", "color": "#a05bff", "info": "DROP BLOCKS, GO HIGH" },

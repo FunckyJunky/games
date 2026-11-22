@@ -79,6 +79,31 @@
   .err { color: var(--fg); }
   .dim { color: var(--dim); text-shadow: none; }
 
+  /* ---------- camera / microphone ---------- */
+  .bar button.on { background: var(--bg); color: var(--fg); }
+  .bar button[hidden] { display: none; }
+  #media { flex: none; display: none; gap: .4em; height: clamp(84px, 27dvh, 260px); margin-top: .35em; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  #media::-webkit-scrollbar { display: none; }
+  #media.on { display: flex; }
+  #media.big { height: clamp(150px, 58dvh, 620px); }
+  .tile { position: relative; flex: none; height: 100%; aspect-ratio: 4 / 3; box-sizing: border-box; border: 2px solid var(--fg); box-shadow: 0 0 8px var(--glow); background: var(--bg); overflow: hidden; cursor: pointer; }
+  .tile.nocam { aspect-ratio: 1; border-style: dashed; }
+  .tile video, .tile canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.3) brightness(1.15); }
+  .tile canvas { image-rendering: pixelated; filter: none; }
+  .tile.nocam video, .tile.nocam canvas, .tile.nocam .tint { visibility: hidden; }
+  .tile.self video { transform: scaleX(-1); }
+  .tile .tint { position: absolute; inset: 0; background: var(--fg); mix-blend-mode: multiply; pointer-events: none; }
+  .tile .tn { position: absolute; left: 0; top: 0; max-width: 100%; overflow: hidden; white-space: nowrap; background: var(--fg); color: var(--bg); text-shadow: none; padding: 0 .3em; font-size: 75%; }
+  .tile .big { position: absolute; inset: 0; display: grid; place-items: center; font-size: 160%; }
+  .tile:not(.nocam) .big { display: none; }
+  .tile .lv { position: absolute; left: 5px; right: 5px; bottom: 5px; height: 5px; border: 1px solid var(--fg); background: rgba(0,0,0,.5); display: none; }
+  .tile.mic .lv { display: block; }
+  .tile .lv i { display: block; height: 100%; width: 0; background: var(--fg); box-shadow: 0 0 6px var(--glow); }
+  .tile .tx { position: absolute; right: 0; top: 0; background: var(--bg); color: var(--fg); padding: 0 .3em; font-size: 70%; display: none; }
+  .tile.sending .tx { display: block; animation: blink 1.06s steps(1) infinite; }
+  .tile .msg { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 70%; color: var(--fg); background: rgba(0,0,0,.55); }
+  .tile .msg:empty { display: none; }
+
   #input { flex: none; white-space: pre-wrap; word-break: break-word; max-height: 4.6em; overflow: hidden; padding-top: .15em; border-top: 1px dashed var(--dim); }
   #input .count { color: var(--dim); float: right; text-shadow: none; }
 
@@ -135,14 +160,15 @@
 <body>
 <div id="tube">
   <div id="crt">
-    <div class="bar" id="status"><span id="stL">ERROR-CHAT 1.0</span><span class="r"><span id="stOn"></span><span id="stClock"></span></span></div>
+    <div class="bar" id="status"><span id="stL">ERROR-CHAT 1.1</span><span class="r"><button id="bCam" hidden>CAM</button><button id="bMic" hidden>MIC</button><span id="stOn"></span><span id="stClock"></span></span></div>
+    <div id="media"></div>
     <div id="main">
       <div id="lobby"></div>
       <div id="log" hidden></div>
     </div>
     <div id="input" hidden></div>
     <div id="kbd"></div>
-    <div id="hint">F1 on-screen keyboard · /help commands · Esc leaves</div>
+    <div id="hint">F1 on-screen keyboard · /help commands · /cam /mic share · Esc leaves</div>
   </div>
   <div id="scan"></div>
   <div id="roll"></div>
@@ -258,7 +284,7 @@ function cursorFor(f) { return st.focus === f ? '<span class="cur"> </span>' : '
 function drawLobby() {
   const h = st.handle, c = st.code;
   lobbyEl.innerHTML =
-    'ERROR-CHAT 1.0 <span class="dim">' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
+    'ERROR-CHAT 1.1 <span class="dim">' + esc(location.host.toUpperCase() || 'ERROR.BLUE') + ' BBS</span>\n\n' +
     '<span class="field' + (st.focus === 'handle' ? ' on' : '') + '" data-f="handle">HANDLE  : <span class="val">' + esc(h) + cursorFor('handle') + (h || st.focus === 'handle' ? '' : '<span class="dim">tap to type</span>') + '</span></span>\n' +
     '<span class="field' + (st.focus === 'code' ? ' on' : '') + '" data-f="code">CHANNEL : <span class="val">' + esc(c) + cursorFor('code') + (c || st.focus === 'code' ? '' : '<span class="dim">----</span>') + '</span></span>\n\n' +
     '<span class="btn" data-a="new">NEW CHANNEL</span><span class="btn" data-a="join">JOIN</span>\n' +
@@ -291,7 +317,7 @@ function join() {
   history.replaceState(null, '', '?c=' + st.code);
   lobbyEl.hidden = true; log.hidden = false; inputEl.hidden = false;
   log.innerHTML = '';
-  sys('ERROR-CHAT 1.0 · channel #' + st.code);
+  sys('ERROR-CHAT 1.1 · channel #' + st.code);
   sys('Share the code ' + st.code + ' or press LINK to invite.');
   sys('Connecting...');
   glitch('roll');
@@ -304,7 +330,7 @@ function connect() {
   wantOpen = true;
   clearTimeout(reconnectTimer);
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(proto + '//' + location.host + '/api/chat/' + st.code + '?name=' + encodeURIComponent(st.handle));
+  ws = new WebSocket(proto + '//' + location.host + '/api/chat/' + st.code + '?name=' + encodeURIComponent(st.handle) + (window.RTCPeerConnection ? '&rtc=1' : ''));
   ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
   ws.onopen = () => { clearInterval(ping); ping = setInterval(() => ws && ws.readyState === 1 && ws.send('{"type":"ping"}'), 25000); };
   ws.onclose = () => {
@@ -327,6 +353,7 @@ function onMsg(m) {
     if (st.lastId === 0 && fresh.length) sys('--- you are in #' + m.code + ' ---');
     sys('*** ' + whoLine());
     SND.join();
+    rtcHello(m);
   } else if (m.type === 'msg') {
     if (m.id <= st.lastId) return;
     addLine(m, false);
@@ -334,10 +361,21 @@ function onMsg(m) {
     else SND.send();
   } else if (m.type === 'join') {
     st.who = m.who || st.who; sys('*** ' + m.name + ' joined (' + st.who.length + ' online)'); SND.join();
+    rtcJoin(m);
   } else if (m.type === 'leave') {
     st.who = m.who || st.who; sys('*** ' + m.name + ' left (' + st.who.length + ' online)');
+    rtcLeave(m);
   } else if (m.type === 'nick') {
     st.who = m.who || st.who; sys('*** ' + m.from + ' is now ' + m.to);
+    rtcNick(m);
+  } else if (m.type === 'media') {
+    rtcMedia(m);
+  } else if (m.type === 'rtc') {
+    rtcSignal(m);
+  } else if (m.type === 'watch') {
+    RTC.watchUntil = performance.now() + 6000;
+  } else if (m.type === 'frame') {
+    rtcFrame(m);
   } else if (m.type === 'error') {
     sys('!!! ' + m.message); SND.err();
   }
@@ -385,10 +423,13 @@ function command(line) {
     case 'who': sys('*** ' + whoLine()); break;
     case 'clear': case 'cls': log.innerHTML = ''; break;
     case 'link': copyLink(); break;
+    case 'cam': case 'camera': case 'video': toggleCam(); break;
+    case 'mic': case 'audio': toggleMic(); break;
+    case 'hangup': case 'stop': stopMedia(true); break;
     case 'color': case 'colour': nextColor(); break;
     case 'quit': case 'exit': case 'bye': exit(); break;
     case 'help': default:
-      sys('commands: /nick NAME  /me ACTION  /who  /link  /clear  /color  /quit');
+      sys('commands: /nick NAME  /me ACTION  /who  /link  /cam  /mic  /hangup  /clear  /color  /quit');
   }
 }
 function copyLink() {
@@ -401,6 +442,7 @@ function copyLink() {
 }
 function nextColor() { S.color = (S.color + 1) % SCHEMES.length; saveSettings(); applyColors(); glitch('static'); }
 function exit() {
+  stopMedia(false);
   wantOpen = false;
   if (ws) try { ws.close(1000, 'bye'); } catch (e) {}
   try { sessionStorage.setItem('errordos-ran', 'ERRORC~1'); } catch (e) {}
@@ -416,8 +458,17 @@ function drawInput() {
 function drawStatus() {
   const d = new Date(), p = x => String(x).padStart(2, '0');
   $('stClock').textContent = p(d.getHours()) + ':' + p(d.getMinutes());
-  $('stL').textContent = st.screen === 'chat' ? 'ERROR-CHAT #' + st.code : 'ERROR-CHAT 1.0';
+  $('stL').textContent = st.screen === 'chat' ? 'ERROR-CHAT #' + st.code : 'ERROR-CHAT 1.1';
   $('stOn').textContent = st.screen === 'chat' ? st.who.length + ' ON' : '';
+  // camera and microphone: once someone else is here (or while sharing)
+  const can = st.screen === 'chat' && (st.who.length >= 2 || RTC.cam || RTC.mic);
+  $('bCam').hidden = $('bMic').hidden = !can;
+  $('bCam').classList.toggle('on', RTC.cam); $('bMic').classList.toggle('on', RTC.mic);
+  $('bCam').textContent = RTC.cam ? '[CAM]' : 'CAM'; $('bMic').textContent = RTC.mic ? '[MIC]' : 'MIC';
+  kbd.querySelectorAll('.k[data-k="CAM"],.k[data-k="MIC"]').forEach(b => {
+    b.style.opacity = can ? '' : '.35';
+    b.classList.toggle('send', b.dataset.k === 'CAM' ? RTC.cam : RTC.mic);
+  });
 }
 
 // ---------- typing ----------
@@ -443,7 +494,7 @@ function enter() {
 // ---------- the on-screen keyboard ----------
 const LAYOUT = {
   abc: [
-    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CLR', 'fn clr'], ['COL', 'fn col']],
+    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CAM', 'fn cam'], ['MIC', 'fn mic'], ['CLR', 'fn clr'], ['COL', 'fn col']],
     '1234567890'.split(''),
     'qwertyuiop'.split(''),
     'asdfghjkl?'.split(''),
@@ -451,7 +502,7 @@ const LAYOUT = {
     [['SYM', 'w15 sm sym'], ',', ['SPACE', 'w5 sm space'], '.', ['SEND', 'w2 sm send']],
   ],
   sym: [
-    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CLR', 'fn clr'], ['COL', 'fn col']],
+    [['EXIT', 'fn exit'], ['LINK', 'fn link'], ['WHO', 'fn who'], ['CAM', 'fn cam'], ['MIC', 'fn mic'], ['CLR', 'fn clr'], ['COL', 'fn col']],
     '!@#$%&*()='.split(''),
     '-_+/\\:;"\'~'.split(''),
     '<>[]{}^|`?'.split(''),
@@ -461,6 +512,7 @@ const LAYOUT = {
 };
 let layer = 'abc', shift = false, caps = false, lastShiftTap = 0;
 function buildKbd() {
+  setTimeout(drawStatus);
   kbd.innerHTML = '';
   for (const row of LAYOUT[layer]) {
     const r = document.createElement('div'); r.className = 'krow';
@@ -511,6 +563,8 @@ function pressKey(k, el) {
   if (k === 'WHO') { SND.key(); if (st.screen === 'chat') sys('*** ' + whoLine()); return; }
   if (k === 'CLR') { SND.key(); if (st.screen === 'chat') log.innerHTML = ''; return; }
   if (k === 'COL') { SND.key(); nextColor(); return; }
+  if (k === 'CAM') { SND.key(); toggleCam(); return; }
+  if (k === 'MIC') { SND.key(); toggleMic(); return; }
   const up = shift || caps;
   typeText(isLetter ? (up ? k.toUpperCase() : k.toLowerCase()) : k);
   SND.key();
@@ -571,6 +625,344 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { st
 
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 
+// ---------- camera and microphone ----------
+// Browsers send camera/microphone straight to each other (WebRTC; the chat room only passes the
+// handshake along). Someone who can't do that - pocket.DOS, or a browser that can't get through -
+// watches a camera as tiny 4-bit grey pictures, sent a few times a second while somebody watches.
+const ICE = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+const FW = 160, FH = 86;                       // the tiny picture: pocket.DOS screen size
+const RTC = {
+  me: '', peers: new Map(),                    // id -> {id, name, cam, mic, rtc, pc, tile, ...}
+  local: null, cam: false, mic: false, facing: 'user', busy: false,
+  watchUntil: 0, selfTile: null,
+};
+const mediaEl = $('media');
+function peerOf(id, name) {
+  let p = RTC.peers.get(id);
+  if (!p) { p = { id, name: name || '?', cam: false, mic: false, rtc: true, pc: null, since: 0 }; RTC.peers.set(id, p); }
+  if (name) p.name = name;
+  return p;
+}
+function signal(to, data) { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'rtc', to, data })); }
+function sendMedia() { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'media', cam: RTC.cam, mic: RTC.mic })); }
+const sharing = () => RTC.cam || RTC.mic;
+
+// one connection per person, only while one of the two shares something
+function ensurePc(p) {
+  if (p.pc) return p.pc;
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  p.pc = pc; p.polite = RTC.me > p.id; p.makingOffer = false; p.ignoreOffer = false; p.pcAt = performance.now();
+  pc.onnegotiationneeded = async () => {
+    try { p.makingOffer = true; await pc.setLocalDescription(); signal(p.id, { sdp: pc.localDescription }); }
+    catch (e) { console.warn('rtc offer', e); }
+    finally { p.makingOffer = false; }
+  };
+  pc.onicecandidate = e => { if (e.candidate) signal(p.id, { ice: e.candidate }); };
+  pc.ontrack = e => {
+    if (!p.stream) p.stream = new MediaStream();
+    p.stream.addTrack(e.track);
+    e.track.onended = () => { try { p.stream.removeTrack(e.track); } catch (er) {} };
+    if (e.streams[0]) e.streams[0].onremovetrack = ev => { try { p.stream.removeTrack(ev.track); } catch (er) {} };
+    drawTile(p, true);
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed') { try { pc.restartIce(); } catch (e) {} }
+    drawTile(p);
+  };
+  if (RTC.local) for (const t of RTC.local.getTracks()) pc.addTrack(t, RTC.local);
+  return pc;
+}
+function closePc(p) {
+  if (p.pc) { try { p.pc.close(); } catch (e) {} }
+  p.pc = null; p.stream = null; p.relay = false;
+}
+// nobody of the two shares anything any more: hang up (both sides decide the same way)
+function tidy(p) { if (!sharing() && !p.cam && !p.mic) closePc(p); drawTile(p); }
+
+async function rtcSignal(m) {
+  if (!m.from || m.from === RTC.me) return;
+  const p = peerOf(m.from, m.name), d = m.data || {};
+  const pc = d.sdp ? ensurePc(p) : p.pc;
+  if (!pc) return;
+  try {
+    if (d.sdp) {
+      const collision = d.sdp.type === 'offer' && (p.makingOffer || pc.signalingState !== 'stable');
+      p.ignoreOffer = !p.polite && collision;
+      if (p.ignoreOffer) return;
+      await pc.setRemoteDescription(d.sdp);
+      if (d.sdp.type === 'offer') { await pc.setLocalDescription(); signal(p.id, { sdp: pc.localDescription }); }
+    } else if (d.ice) {
+      try { await pc.addIceCandidate(d.ice); } catch (e) { if (!p.ignoreOffer) console.warn('rtc ice', e); }
+    }
+  } catch (e) { console.warn('rtc', e); }
+}
+function rtcHello(m) {
+  // (re)connected: a new id, so start over with everyone
+  for (const p of RTC.peers.values()) { closePc(p); removeTile(p); }
+  RTC.peers.clear();
+  RTC.me = m.id || '';
+  for (const x of m.peers || []) { const p = peerOf(x.id, x.name); Object.assign(p, { cam: x.cam, mic: x.mic, rtc: x.rtc, since: performance.now() }); }
+  if (sharing()) { sendMedia(); for (const p of RTC.peers.values()) if (p.rtc) ensurePc(p); }
+  for (const p of RTC.peers.values()) drawTile(p);
+  const on = [...RTC.peers.values()].filter(p => p.cam || p.mic);
+  if (on.length) sys('*** sharing now: ' + on.map(p => p.name + ' (' + [p.cam && 'camera', p.mic && 'mic'].filter(Boolean).join(' + ') + ')').join(', '));
+  drawMedia();
+}
+function rtcJoin(m) {
+  if (!m.peer || m.peer.id === RTC.me) return;
+  const p = peerOf(m.peer.id, m.peer.name);
+  Object.assign(p, { cam: false, mic: false, rtc: m.peer.rtc });
+  if (sharing() && p.rtc) ensurePc(p);       // I share: the newcomer gets it too
+}
+function rtcLeave(m) {
+  const p = m.id && RTC.peers.get(m.id);
+  if (!p) return;
+  closePc(p); removeTile(p); RTC.peers.delete(p.id); drawMedia();
+}
+function rtcNick(m) { const p = m.id && RTC.peers.get(m.id); if (p) { p.name = m.to; drawTile(p); } }
+function rtcMedia(m) {
+  if (m.id === RTC.me) return;
+  const p = peerOf(m.id, m.name), was = [p.cam, p.mic];
+  p.cam = !!m.cam; p.mic = !!m.mic;
+  if (p.cam && !was[0]) { p.since = performance.now(); p.relay = false; sys('*** ' + p.name + ' shares the camera'); glitch('rgb'); }
+  if (p.mic && !was[1]) { p.since = performance.now(); p.late = false; sys('*** ' + p.name + ' shares the microphone'); }
+  if (!p.cam && !p.mic && (was[0] || was[1])) sys('*** ' + p.name + ' stopped sharing');
+  tidy(p); drawMedia();
+}
+
+// ---------- my camera / microphone ----------
+async function setMedia(cam, mic) {
+  if (RTC.busy) return;
+  if (st.screen !== 'chat') return;
+  if ((cam || mic) && st.who.length < 2 && !sharing()) { sys('*** camera and mic open when someone else is in #' + st.code + '. Press LINK to invite.'); SND.err(); return; }
+  if ((cam || mic) && !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { sys('!!! this browser can\'t share camera/mic here (it needs https)'); SND.err(); return; }
+  RTC.busy = true;
+  try {
+    if (!RTC.local) RTC.local = new MediaStream();
+    const want = { video: cam && !RTC.cam, audio: mic && !RTC.mic };
+    if (want.video || want.audio) {
+      const got = await navigator.mediaDevices.getUserMedia({
+        video: want.video ? { facingMode: RTC.facing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } } : false,
+        audio: want.audio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
+      });
+      for (const t of got.getTracks()) addLocal(t);
+    }
+    if (!cam && RTC.cam) dropLocal('video');
+    if (!mic && RTC.mic) dropLocal('audio');
+    RTC.cam = cam; RTC.mic = mic;
+    sendMedia();
+    if (sharing()) for (const p of RTC.peers.values()) if (p.rtc) ensurePc(p);
+    for (const p of RTC.peers.values()) tidy(p);
+    if (want.video) { sys('*** your camera is on' + (st.who.some(n => /^POCKET/i.test(n)) ? ' (pocket.DOS can watch it too)' : '')); glitch('roll'); }
+    if (want.audio) sys('*** your microphone is on');
+    if (!sharing()) sys('*** you stopped sharing');
+  } catch (e) {
+    const why = e && e.name === 'NotAllowedError' ? 'not allowed (check the browser permission)' : e && e.name === 'NotFoundError' ? 'none found' : (e && e.message) || e;
+    sys('!!! ' + (cam && !RTC.cam ? 'camera' : 'microphone') + ': ' + why); SND.err(); glitch('static');
+  }
+  RTC.busy = false;
+  drawMedia(); drawStatus();
+}
+function addLocal(t) {
+  RTC.local.addTrack(t);
+  for (const p of RTC.peers.values()) if (p.pc) p.pc.addTrack(t, RTC.local);
+}
+function dropLocal(kind) {
+  for (const t of RTC.local.getTracks().filter(x => x.kind === kind)) {
+    t.stop(); RTC.local.removeTrack(t);
+    for (const p of RTC.peers.values()) {
+      if (!p.pc) continue;
+      for (const s of p.pc.getSenders()) if (s.track === t) { try { p.pc.removeTrack(s); } catch (e) {} }
+    }
+  }
+}
+function toggleCam() { unlock(); setMedia(!RTC.cam, RTC.mic); }
+function toggleMic() { unlock(); setMedia(RTC.cam, !RTC.mic); }
+function stopMedia(say) {
+  if (!RTC.local) return;
+  const was = sharing();
+  for (const t of RTC.local.getTracks()) t.stop();
+  RTC.local = null; RTC.cam = RTC.mic = false;
+  for (const p of RTC.peers.values()) closePc(p);
+  if (was) { sendMedia(); if (say) sys('*** you stopped sharing'); }
+  for (const p of RTC.peers.values()) drawTile(p);
+  drawMedia(); drawStatus();
+}
+// tap your own picture: the other camera (phones)
+async function flipCam() {
+  if (!RTC.cam || RTC.busy) return;
+  RTC.busy = true;
+  try {
+    const facing = RTC.facing === 'user' ? 'environment' : 'user';
+    const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: facing }, width: { ideal: 640 }, height: { ideal: 480 } } });
+    const nt = got.getVideoTracks()[0], old = RTC.local.getVideoTracks()[0];
+    for (const p of RTC.peers.values()) if (p.pc) for (const s of p.pc.getSenders()) if (s.track === old) await s.replaceTrack(nt);
+    if (old) { old.stop(); RTC.local.removeTrack(old); }
+    RTC.local.addTrack(nt); RTC.facing = facing;
+    sys('*** ' + (facing === 'user' ? 'front' : 'back') + ' camera');
+  } catch (e) { sys('*** no other camera'); }
+  RTC.busy = false;
+  drawMedia();
+}
+
+// ---------- tiles ----------
+function makeTile(id, self) {
+  const t = document.createElement('div');
+  t.className = 'tile' + (self ? ' self' : '');
+  t.dataset.id = id;
+  t.innerHTML = '<video playsinline autoplay' + (self ? ' muted' : '') + '></video><canvas width="' + FW + '" height="' + FH + '" hidden></canvas><div class="tint"></div><div class="big"></div><div class="tn"></div><div class="tx">TX</div><div class="msg"></div><div class="lv"><i></i></div>';
+  t.addEventListener('pointerdown', e => {
+    e.preventDefault(); unlock();
+    const v = t.querySelector('video');
+    if (v.paused && v.srcObject) { v.play().catch(() => {}); t.querySelector('.msg').textContent = ''; return; }
+    if (self) flipCam(); else { mediaEl.classList.toggle('big'); log.scrollTop = log.scrollHeight; }
+  });
+  return t;
+}
+function setStream(tile, stream, sound) {
+  const v = tile.querySelector('video');
+  // a track came or went: give the stream to the video again (not every browser follows by itself)
+  const key = stream ? stream.getTracks().map(t => t.id).join() : '';
+  if (v.srcObject !== stream || tile.dataset.tracks !== key) {
+    tile.dataset.tracks = key;
+    v.srcObject = null;
+    v.srcObject = stream || null;
+    if (stream) v.play().catch(() => { if (sound) tile.querySelector('.msg').textContent = 'TAP FOR SOUND'; });
+  }
+  meterFor(tile, stream);
+}
+function drawTile(p, fresh) {
+  const show = p.cam || p.mic;
+  if (!show) { removeTile(p); return; }
+  if (!p.tile) { p.tile = makeTile(p.id, false); mediaEl.appendChild(p.tile); }
+  const t = p.tile, connected = p.pc && p.pc.connectionState === 'connected';
+  t.classList.toggle('nocam', !p.cam);
+  t.classList.toggle('mic', p.mic);
+  t.querySelector('.tn').textContent = p.name + (p.mic ? ' ♪' : '');
+  t.querySelector('.big').textContent = p.name.slice(0, 2).toUpperCase();
+  const useRelay = p.cam && p.relay && !connected;
+  t.querySelector('canvas').hidden = !useRelay;
+  t.querySelector('video').style.visibility = useRelay ? 'hidden' : '';
+  let msg = t.querySelector('.msg').textContent;
+  if (msg !== 'TAP FOR SOUND') msg = connected ? '' : useRelay ? 'TINY PICTURE MODE' : p.late ? 'NO DIRECT LINE' : p.pc ? 'CONNECTING...' : 'WAITING...';
+  t.querySelector('.msg').textContent = msg;
+  if (p.stream || fresh) setStream(t, p.stream, p.mic);
+  drawMedia();
+}
+function removeTile(p) { if (p.tile) { meterFor(p.tile, null); p.tile.remove(); p.tile = null; } }
+function drawMedia() {
+  if (sharing()) {
+    if (!RTC.selfTile) { RTC.selfTile = makeTile('me', true); mediaEl.prepend(RTC.selfTile); }
+    const t = RTC.selfTile;
+    t.classList.toggle('nocam', !RTC.cam);
+    t.classList.toggle('mic', RTC.mic);
+    t.classList.toggle('self', RTC.facing === 'user');
+    t.querySelector('.tn').textContent = 'YOU' + (RTC.mic ? ' ♪' : '');
+    t.querySelector('.big').textContent = 'ME';
+    setStream(t, RTC.local, false);
+  } else if (RTC.selfTile) { meterFor(RTC.selfTile, null); RTC.selfTile.remove(); RTC.selfTile = null; }
+  mediaEl.classList.toggle('on', mediaEl.children.length > 0);
+  if (!mediaEl.children.length) mediaEl.classList.remove('big');
+}
+
+// ---------- microphone meters ----------
+let meterAc = null;
+const meters = new Map();                       // tile -> {an, src, buf, bar}
+function meterFor(tile, stream) {
+  const m = meters.get(tile);
+  const track = stream && stream.getAudioTracks()[0];
+  if (m && m.track === track) return;
+  if (m) { try { m.src.disconnect(); } catch (e) {} meters.delete(tile); }
+  if (!track) return;
+  try {
+    if (!meterAc) meterAc = new (window.AudioContext || window.webkitAudioContext)();
+    if (meterAc.state === 'suspended') meterAc.resume();
+    const src = meterAc.createMediaStreamSource(new MediaStream([track])), an = meterAc.createAnalyser();
+    an.fftSize = 256; src.connect(an);
+    meters.set(tile, { an, src, track, buf: new Uint8Array(an.fftSize), bar: tile.querySelector('.lv i'), lv: 0 });
+  } catch (e) {}
+}
+function drawMeters() {
+  for (const m of meters.values()) {
+    m.an.getByteTimeDomainData(m.buf);
+    let s = 0;
+    for (let i = 0; i < m.buf.length; i++) { const v = (m.buf[i] - 128) / 128; s += v * v; }
+    const lv = Math.min(1, Math.sqrt(s / m.buf.length) * 4);
+    m.lv = Math.max(lv, m.lv * 0.85);
+    m.bar.style.width = (m.lv * 100).toFixed(1) + '%';
+  }
+}
+
+// ---------- tiny pictures (for pocket.DOS, and browsers that can't connect directly) ----------
+let fcv = null, fctx = null;
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function grabFrame() {
+  const v = RTC.selfTile && RTC.selfTile.querySelector('video');
+  if (!v || v.readyState < 2 || !v.videoWidth) return null;
+  if (!fcv) { fcv = document.createElement('canvas'); fcv.width = FW; fcv.height = FH; fctx = fcv.getContext('2d', { willReadFrequently: true }); }
+  const vw = v.videoWidth, vh = v.videoHeight, a = FW / FH;
+  let sw = vw, sh = vw / a;
+  if (sh > vh) { sh = vh; sw = vh * a; }
+  fctx.drawImage(v, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, FW, FH);
+  const d = fctx.getImageData(0, 0, FW, FH).data, n = FW * FH, g = new Uint8Array(n), hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) { const y = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8; g[i] = y; hist[y]++; }
+  let lo = 0, hi = 255, acc = 0;                          // stretch: 2% darkest -> 0, 2% brightest -> 15
+  while (lo < 254 && (acc += hist[lo]) < n * 0.02) lo++;
+  acc = 0;
+  while (hi > lo + 1 && (acc += hist[hi]) < n * 0.02) hi--;
+  if (hi - lo < 40) { const mid = (hi + lo) / 2; lo = mid - 20; hi = mid + 20; }
+  const k = 15 / (hi - lo), out = new Uint8Array(n >> 1);
+  for (let y = 0, i = 0; y < FH; y++)
+    for (let x = 0; x < FW; x++, i++) {
+      let q = Math.floor((g[i] - lo) * k + (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16);
+      q = q < 0 ? 0 : q > 15 ? 15 : q;
+      out[i >> 1] |= i & 1 ? q : q << 4;
+    }
+  let s = '';
+  for (let i = 0; i < out.length; i++) s += String.fromCharCode(out[i]);
+  return btoa(s);
+}
+function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+function rtcFrame(m) {
+  const p = m.id && RTC.peers.get(m.id);
+  if (!p || !p.tile || !m.data) return;
+  const cv = p.tile.querySelector('canvas'), w = m.w, h = m.h;
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const c = cv.getContext('2d'), img = c.createImageData(w, h), bin = atob(m.data);
+  const sc = SCHEMES[S.color % SCHEMES.length], A = hexRgb(sc.bg), B = hexRgb(sc.fg);
+  for (let i = 0; i < w * h; i++) {
+    const b = bin.charCodeAt(i >> 1), q = (i & 1 ? b & 15 : b >> 4) / 15;
+    img.data[i * 4] = A[0] + (B[0] - A[0]) * q; img.data[i * 4 + 1] = A[1] + (B[1] - A[1]) * q;
+    img.data[i * 4 + 2] = A[2] + (B[2] - A[2]) * q; img.data[i * 4 + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+}
+let lastFrameSent = 0, lastRelayAsk = 0;
+function mediaTick(now) {
+  drawMeters();
+  if (RTC.selfTile) RTC.selfTile.classList.toggle('sending', RTC.cam && now < RTC.watchUntil);
+  // someone watches my tiny pictures: about 5 a second
+  if (RTC.cam && now < RTC.watchUntil && now - lastFrameSent > 200 && ws && ws.readyState === 1 && ws.bufferedAmount < 40000) {
+    lastFrameSent = now;
+    const data = grabFrame();
+    if (data) ws.send(JSON.stringify({ t: 'frame', w: FW, h: FH, data }));
+  }
+  // cameras I can't get directly after 9 seconds: watch the tiny pictures instead
+  if (now - lastRelayAsk > 300 && ws && ws.readyState === 1) {
+    lastRelayAsk = now;
+    for (const p of RTC.peers.values()) {
+      const ok = p.pc && p.pc.connectionState === 'connected', late = !ok && now - Math.max(p.since || 0, p.pcAt || 0) > 9000;
+      if (late !== !!p.late) { p.late = late; if (p.tile) drawTile(p); }
+      if (!p.cam) continue;
+      if (!ok && !p.relay && now - Math.max(p.since || 0, p.pcAt || 0) > 9000) { p.relay = true; drawTile(p); }
+      if (ok && p.relay) { p.relay = false; drawTile(p); }
+      if (p.relay && !ok) ws.send(JSON.stringify({ t: 'getframe', id: p.id }));
+    }
+  }
+}
+$('bCam').addEventListener('pointerdown', e => { e.preventDefault(); toggleCam(); });
+$('bMic').addEventListener('pointerdown', e => { e.preventDefault(); toggleMic(); });
+
 // ---------- start ----------
 applyColors();
 buildKbd();
@@ -583,6 +975,7 @@ if (st.handle && st.code) join();
 scheduleGlitch(performance.now());
 (function loop(now) {
   drawStatic(now);
+  mediaTick(now);
   if (now > nextGlitch) { glitch(); scheduleGlitch(now); }
   requestAnimationFrame(loop);
 })(performance.now());

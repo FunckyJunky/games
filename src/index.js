@@ -11,6 +11,7 @@
 //   GET  /api/chat/<CODE>                      ERROR-CHAT channel (WebSocket)
 //   GET  /api/chat/<CODE>/log?after=ID&name=X  ERROR-CHAT without a WebSocket (ERROR-OLED): new messages + who
 //   POST /api/chat/<CODE>/say {name, text}     ERROR-CHAT without a WebSocket: say something
+//   GET  /api/chat/<CODE>/frame?id=X&name=N&s=2  ERROR-CHAT camera as a tiny 4-bit picture (pocket.DOS)
 //   GET  /api/online                           who is online, in which game (ERROR-OLED's WHO screen)
 //   POST /api/online {sid, path, name, detail} "I'm in this game" from /lib/online.js every 25 s ({sid, bye} = gone)
 //   GET  /api/tusa?char=VITO                   Туса У Берліні: the shared Hoongy (WebSocket)
@@ -935,7 +936,7 @@ export default {
 
       if (path === "/api/online") return await handleOnline(request, env, url);
 
-      m = path.match(/^\/api\/chat\/([^/]+)\/(log|say)$/);
+      m = path.match(/^\/api\/chat\/([^/]+)\/(log|say|frame)$/);
       if (m) {
         const code = m[1].toUpperCase();
         if (!ROOM_RE.test(code)) return json({ error: "bad channel code" }, 400);
@@ -1255,6 +1256,39 @@ const CHAT_COOLDOWN_MS = 350;
 const CHAT_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000;
 // someone reading over HTTP (ERROR-OLED) stays in the who list this long after their last read
 const CHAT_HTTP_TTL = 45 * 1000;
+// camera and microphone: browsers send them to each other directly (WebRTC - the room only passes
+// the handshake along). Who can't do WebRTC (pocket.DOS) watches a camera as a tiny 4-bit grey
+// picture: the sharing browser sends one a few times a second, only while somebody watches.
+const CHAT_MSG_MAX = 24000;            // one WebSocket message (WebRTC offers and pictures are big)
+const CHAT_FRAME_MAX = 20000;          // base64 of one picture
+const CHAT_FRAME_OLD = 6000;           // a picture older than this is not shown
+const CHAT_WATCH_EVERY = 2000;         // tell the sharer "someone watches" at most this often
+
+function chatId() {
+  const b = new Uint8Array(6);
+  crypto.getRandomValues(b);
+  return Array.from(b, (x) => "abcdefghijkmnpqrstuvwxyz23456789"[x & 31]).join("");
+}
+
+// a 4-bit picture (2 pixels per byte, base64) at half the size: 4x fewer bytes for slow screens
+function halfFrame(f) {
+  if (f.half) return f.half;
+  const bin = atob(f.data), w = f.w, W2 = f.w >> 1, H2 = f.h >> 1;
+  const px = (x, y) => {
+    const i = y * w + x, b = bin.charCodeAt(i >> 1);
+    return i & 1 ? b & 15 : b >> 4;
+  };
+  const out = new Uint8Array(Math.ceil((W2 * H2) / 2));
+  for (let y = 0; y < H2; y++)
+    for (let x = 0; x < W2; x++) {
+      const v = (px(2 * x, 2 * y) + px(2 * x + 1, 2 * y) + px(2 * x, 2 * y + 1) + px(2 * x + 1, 2 * y + 1) + 2) >> 2;
+      const i = y * W2 + x;
+      out[i >> 1] |= i & 1 ? v : v << 4;
+    }
+  let s = "";
+  for (const b of out) s += String.fromCharCode(b);
+  return (f.half = { w: W2, h: H2, data: btoa(s) });
+}
 
 export class ChatRoom extends DurableObject {
   constructor(ctx, env) {
@@ -1273,6 +1307,42 @@ export class ChatRoom extends DurableObject {
     // people who read the channel over HTTP instead of a WebSocket (ERROR-OLED)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS http_who (name TEXT PRIMARY KEY, seen INTEGER NOT NULL)`);
     this.lastSay = new Map();
+    this.frames = new Map();             // sharer id -> the newest little picture
+    this.watched = new Map();            // sharer id -> when we last told them someone watches
+  }
+
+  // everyone on a WebSocket, with what they share
+  peers(except) {
+    return this.openSockets(except)
+      .map((ws) => ws.deserializeAttachment())
+      .filter((a) => a && a.name && !a.left)
+      .map((a) => ({ id: a.id, name: a.name, cam: !!a.cam, mic: !!a.mic, rtc: !!a.rtc }));
+  }
+
+  cams() {
+    return this.peers().filter((p) => p.cam).map((p) => ({ id: p.id, name: p.name }));
+  }
+
+  socketById(id) {
+    if (!id) return null;
+    return this.openSockets().find((ws) => ws.deserializeAttachment()?.id === id) || null;
+  }
+
+  // the newest picture of a camera (or of the first camera); asks the sharer to keep sending
+  frameFor(id, half) {
+    const cams = this.cams();
+    const cam = cams.find((c) => c.id === id) || cams[0];
+    if (!cam) return { off: true, cams };
+    const now = Date.now();
+    if (now - (this.watched.get(cam.id) || 0) > CHAT_WATCH_EVERY) {
+      this.watched.set(cam.id, now);
+      const sharer = this.socketById(cam.id);
+      try { sharer && sharer.send('{"type":"watch"}'); } catch {}
+    }
+    const f = this.frames.get(cam.id);
+    if (!f || now - f.at > CHAT_FRAME_OLD) return { wait: true, id: cam.id, name: cam.name, cams };
+    const p = half ? halfFrame(f) : f;
+    return { id: cam.id, name: cam.name, w: p.w, h: p.h, seq: f.seq, at: f.at, data: p.data, cams };
   }
 
   httpNames() {
@@ -1302,8 +1372,14 @@ export class ChatRoom extends DurableObject {
   }
 
   // GET /http/log/<CODE>?after=ID&name=X&limit=N   POST /http/say/<CODE> {name, text}
+  // GET /http/frame/<CODE>?id=SHARER&name=X&s=2
   async httpChat(request, url, kind, code) {
     this.sweepHttp();
+    if (kind === "frame") {
+      const name = cleanName(url.searchParams.get("name"));
+      if (name && this.seeHttp(name)) await this.planAlarm(false);
+      return json(this.frameFor(url.searchParams.get("id") || "", url.searchParams.get("s") === "2"));
+    }
     if (kind === "say") {
       let b;
       try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
@@ -1328,7 +1404,7 @@ export class ChatRoom extends DurableObject {
       .toArray()
       .reverse();
     const last = this.sql.exec(`SELECT MAX(id) AS id FROM msgs`).one().id || 0;
-    return json({ code, now: Date.now(), last, msgs, who: this.who() });
+    return json({ code, now: Date.now(), last, msgs, who: this.who(), cams: this.cams() });
   }
 
   // an HTTP reader is here (again)
@@ -1375,7 +1451,7 @@ export class ChatRoom extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
     const code = (url.pathname.split("/").pop() || "").toUpperCase();
-    const hm = url.pathname.match(/^\/http\/(log|say)\//);
+    const hm = url.pathname.match(/^\/http\/(log|say|frame)\//);
     if (hm) return this.httpChat(request, url, hm[1], code);
     const name = cleanName(url.searchParams.get("name")) || "guest";
 
@@ -1389,18 +1465,19 @@ export class ChatRoom extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
 
-    server.serializeAttachment({ name, last: 0 });
+    const me = { name, last: 0, id: chatId(), rtc: url.searchParams.get("rtc") === "1", cam: false, mic: false };
+    server.serializeAttachment(me);
     const history = this.sql
       .exec(`SELECT id, at, kind, name, text FROM msgs ORDER BY id DESC LIMIT ?`, CHAT_HISTORY)
       .toArray()
       .reverse();
-    server.send(JSON.stringify({ type: "hello", code, name, history, who: this.who() }));
-    this.broadcast({ type: "join", name, who: this.who() }, server);
+    server.send(JSON.stringify({ type: "hello", code, name, id: me.id, history, who: this.who(), peers: this.peers(server) }));
+    this.broadcast({ type: "join", name, id: me.id, peer: { id: me.id, name, cam: false, mic: false, rtc: me.rtc }, who: this.who() }, server);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws, message) {
-    if (typeof message !== "string" || message.length > 2048) return;
+    if (typeof message !== "string" || message.length > CHAT_MSG_MAX) return;
     let d;
     try {
       d = JSON.parse(message);
@@ -1432,7 +1509,28 @@ export class ChatRoom extends DurableObject {
       const from = me.name;
       me.name = to;
       ws.serializeAttachment(me);
-      this.broadcast({ type: "nick", from, to, who: this.who() });
+      this.broadcast({ type: "nick", from, to, id: me.id, who: this.who() });
+    } else if (d.t === "media") {                   // I share my camera / microphone (or stop)
+      const cam = !!d.cam, mic = !!d.mic;
+      if (cam === !!me.cam && mic === !!me.mic) return;
+      me.cam = cam;
+      me.mic = mic;
+      ws.serializeAttachment(me);
+      if (!cam) this.frames.delete(me.id);
+      this.broadcast({ type: "media", id: me.id, name: me.name, cam, mic });
+    } else if (d.t === "rtc") {                     // WebRTC handshake: pass it to that one person
+      const to = this.socketById(String(d.to || ""));
+      if (!to || to === ws || d.data == null) return;
+      try { to.send(JSON.stringify({ type: "rtc", from: me.id, name: me.name, data: d.data })); } catch {}
+    } else if (d.t === "frame") {                   // a little picture of my camera
+      if (!me.cam) return;
+      const w = d.w | 0, h = d.h | 0, data = String(d.data ?? "");
+      if (w < 8 || h < 8 || w > 320 || h > 240) return;
+      if (data.length > CHAT_FRAME_MAX || data.length !== 4 * Math.ceil(Math.ceil((w * h) / 2) / 3)) return;
+      const old = this.frames.get(me.id);
+      this.frames.set(me.id, { w, h, data, at: Date.now(), seq: (old ? old.seq : 0) + 1 });
+    } else if (d.t === "getframe") {                // watch a camera as little pictures (no direct line)
+      ws.send(JSON.stringify({ type: "frame", ...this.frameFor(String(d.id || ""), !!d.half) }));
     }
   }
 
@@ -1453,7 +1551,8 @@ export class ChatRoom extends DurableObject {
     const me = ws.deserializeAttachment();
     if (!me || me.left) return;
     ws.serializeAttachment({ ...me, left: true });
-    this.broadcast({ type: "leave", name: me.name, who: this.who(ws) }, ws);
+    this.frames.delete(me.id);
+    this.broadcast({ type: "leave", name: me.name, id: me.id, who: this.who(ws) }, ws);
   }
 
   // 7 days without a message: forget the channel. Also: HTTP readers who went away.

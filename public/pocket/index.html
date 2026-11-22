@@ -61,7 +61,9 @@ Online, the board loads its menu and apps from <b>error.blue/pocket</b>, the pag
 and work without WiFi too.</p>
 <p>The menu (<a href="menu.js">menu.js</a>) and every app are small JavaScript files listed in <a href="apps.json">apps.json</a>.
 The board runs exactly the same files (with the Duktape JavaScript engine), so what runs here runs there.
-ERROR-CHAT here and on the board is the same chat as <a href="/apps/error-chat/">ERROR-CHAT</a> in ERROR-DOS.</p>
+ERROR-CHAT here and on the board is the same chat as <a href="/apps/error-chat/">ERROR-CHAT</a> in ERROR-DOS.
+When someone there shares their camera (CAM, once two people are in a channel), pocket.DOS can watch it: TAP to
+<b>[WATCH NAME]</b> and HOLD.</p>
 </section>
 
 <section>
@@ -77,6 +79,8 @@ ERROR-CHAT here and on the board is the same chat as <a href="/apps/error-chat/"
 <tr><td>circ(x,y,r,c) ring(x,y,r,c)</td><td>filled / outlined circle</td></tr>
 <tr><td>text(s,x,y,c[,scale])</td><td>5x7 letters, returns the width; textw(s[,scale]) measures</td></tr>
 <tr><td>glitch(n)</td><td>shake the picture like a bad tape, 0..10</td></tr>
+<tr><td>img4(b64,x,y,w,h,c0,c1[,k])</td><td>a picture of 4-bit shades (base64, 2 pixels a byte), from colour c0 to c1, k times bigger</td></tr>
+<tr><td>sys()</td><td>{online, wifi, ip, rssi, bt, ver, last, web, theme: {fg, dim, bg, hi, dark}} - theme = the SETUP colours</td></tr>
 <tr><td>cam3(x,y,z,yaw,pitch,roll[,f,cx,cy])</td><td>3D: the camera (f = zoom, cx/cy = screen centre)</td></tr>
 <tr><td>xf3(x,y,z,turn,scale)</td><td>3D: where the next lines' object is, turned around its up axis</td></tr>
 <tr><td>line3(x0,y0,z0,x1,y1,z1,c) proj3(x,y,z)</td><td>3D: a line (cut at the camera) / a point on the screen [x, y, depth] or null</td></tr>
@@ -109,7 +113,17 @@ const FONT_HEX = '0000000000000000040404040004000a0a0a00000000000a1f0a1f0a00000e
 const FONT = []; for (let i = 0; i < 95; i++) { const g = []; for (let r = 0; r < 7; r++) g.push(parseInt(FONT_HEX.substr((i * 7 + r) * 2, 2), 16)); FONT.push(g); }
 const DESC = { g: [0,0,0,0x0E,0x12,0x12,0x0E,0x02,0x0C], j: [0,0x02,0,0x02,0x02,0x02,0x02,0x12,0x0C], p: [0,0,0,0x1C,0x12,0x12,0x1C,0x10,0x10],
   q: [0,0,0,0x0E,0x12,0x12,0x0E,0x02,0x02], y: [0,0,0,0x12,0x12,0x12,0x0E,0x02,0x0C] };
-const GBG = 0x031208, GFG = 0x39ff7a, GDIM = 0x1b7a3c, GHI = 0xb8ffd0;
+// the colours of SETUP > COLOR (the same as the board's)
+const THEMES = [['GREEN', 0x39ff7a, 0x1b7a3c, 0x031208], ['AMBER', 0xffb43a, 0x8a5a12, 0x120a02], ['WHITE', 0xe9f0ff, 0x6b7080, 0x08090d],
+  ['DOS BLUE', 0xf2f2ff, 0x8d98ff, 0x0019a6], ['CYAN', 0x45f0ff, 0x157a85, 0x021014]];
+const mixc = (a, b, f) => { let o = 0; for (const sh of [16, 8, 0]) { const x = (a >> sh) & 255, y = (b >> sh) & 255; o |= Math.round(x + (y - x) * f) << sh; } return o; };
+let themeI = 0, GBG = 0x031208, GFG = 0x39ff7a, GDIM = 0x1b7a3c, GHI = 0xb8ffd0, GDARK = 0x0a2a14;
+function setTheme(i) {
+  themeI = ((i | 0) % THEMES.length + THEMES.length) % THEMES.length;
+  const t = THEMES[themeI]; GFG = t[1]; GDIM = t[2]; GBG = t[3]; GHI = mixc(GFG, 0xffffff, 0.6); GDARK = mixc(GBG, GFG, 0.12);
+  try { localStorage.setItem('pocket.theme', String(themeI)); } catch (e) {}
+}
+try { setTheme(+localStorage.getItem('pocket.theme') || 0); } catch (e) {}
 
 // ---------------------------------------------------------------- the 160x86 picture (the same drawing as the board's gfx.cpp)
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -158,6 +172,17 @@ const G = {
         for (let gx = 0; gx < 5; gx++) if (bits & (16 >> gx))
           for (let sy = 0; sy < k; sy++) for (let sx = 0; sx < k; sx++) { const X = gx0 + gx * k + sx, Y = y + gy * k + sy; if (X >= 0 && X < W && Y >= 0 && Y < H) px[Y * W + X] = v; } } }
     return s.length ? s.length * 6 * k - k : 0; },
+  // img4(b64, x, y, w, h, c0, c1[, k]): 4-bit shades (2 pixels a byte, high half first), c0 -> c1, k x k each
+  img4(s, x0, y0, w, h, c0, c1, k) {
+    s = String(s); x0 |= 0; y0 |= 0; w |= 0; h |= 0; k = Math.max(1, Math.min(4, (k | 0) || 1));
+    if (w <= 0 || h <= 0 || w > 640 || h > 640) return;
+    const a = rgb(c0 === undefined ? 0 : c0 | 0), b = rgb(c1 === undefined ? 7 : c1 | 0), pal = [];
+    for (let i = 0; i < 16; i++) pal.push(col(mixc(a, b, i / 15)));
+    let bin; try { bin = atob(s.replace(/[^A-Za-z0-9+/]/g, '')); } catch (e) { return; }
+    for (let p = 0; p < w * h && (p >> 1) < bin.length; p++) {
+      const byte = bin.charCodeAt(p >> 1), v = pal[p & 1 ? byte & 15 : byte >> 4], X = x0 + (p % w) * k, Y = y0 + ((p / w) | 0) * k;
+      for (let dy = 0; dy < k; dy++) { if (Y + dy < 0 || Y + dy >= H) continue; for (let dx = 0; dx < k; dx++) if (X + dx >= 0 && X + dx < W) px[(Y + dy) * W + X + dx] = v; }
+    } },
   glitch(n) { n = Math.max(0, Math.min(10, n | 0)); if (!n) return; const row = new Uint32Array(W);
     for (let b = 0; b < n; b++) { const y0 = Math.random() * H | 0, h = 1 + (Math.random() * 4 | 0); let dx = (Math.random() * 17 | 0) - 8; if (!dx) dx = 3;
       for (let y = y0; y < Math.min(H, y0 + h); y++) { row.set(px.subarray(y * W, y * W + W)); for (let x = 0; x < W; x++) { const s = x - dx; px[y * W + x] = s >= 0 && s < W ? row[s] : 0xff000000; } } }
@@ -224,6 +249,7 @@ const KEYNAME = { Enter: 'ENTER', Backspace: 'BACK', Delete: 'DEL', Tab: 'TAB', 
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') { wantMenu = true; return; }
+  if (mode === 'setup') { const k = KEYNAME[e.key]; if (k) { e.preventDefault(); keyQ.push(k); } return; }
   if (!(mode === 'app' || mode === 'menu')) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) press(true); } return; }
   if (e.key in arrows) arrows[e.key] = 1;
   const k = KEYNAME[e.key] || (e.key.length === 1 ? e.key : '');
@@ -277,7 +303,7 @@ let startT = 0, frameN = 0, appExit = false, holdExit = true, wantRun = -1, want
 function start(src, id, as) {
   const names = ['cls', 'pset', 'rect', 'box', 'line', 'tri', 'circ', 'ring', 'text', 'textw', 'glitch', 'btn', 'btnp', 'btnr', 'key', 'rnd', 'irnd', 't', 'frame',
     'save', 'load', 'led', 'exit', 'print', 'motion', 'ax', 'ay', 'az', 'holdexit', 'get', 'post', 'apps', 'run', 'sys', 'setup',
-    'cam3', 'xf3', 'line3', 'proj3', 'W', 'H'];
+    'cam3', 'xf3', 'line3', 'proj3', 'img4', 'W', 'H'];
   const k = n => 'pocket.' + id + '.' + n;
   const http = (method, path, body, cb) => {
     if (typeof path !== 'string' || path[0] !== '/' || path.indexOf('..') >= 0) return false;
@@ -297,8 +323,9 @@ function start(src, id, as) {
     () => motionKind, () => upNow()[0], () => upNow()[1], () => upNow()[2], on => { holdExit = !!on; },
     (p, cb) => http('GET', p, null, cb), (p, d, cb) => http('POST', p, d, cb),
     () => apps.map(a => ({ id: a.id, name: a.name, info: a.info, icon: a.icon, color: a.color, cached: true })),
-    i => { wantRun = i | 0; }, () => ({ online: true, wifi: '', ip: '', rssi: -50, bt: false, ver: '1.1', last: lastApp, web: true }),
-    () => { wantSetup = true; }, D3.cam3, D3.xf3, D3.line3, D3.proj3, W, H];
+    i => { wantRun = i | 0; }, () => ({ online: true, wifi: '', ip: '', rssi: -50, bt: false, ver: '1.2', last: lastApp, web: true,
+      theme: { fg: GFG, dim: GDIM, bg: GBG, hi: GHI, dark: GDARK } }),
+    () => { wantSetup = true; }, D3.cam3, D3.xf3, D3.line3, D3.proj3, G.img4, W, H];
   try {
     const f = new Function(...names, src + '\n;return {init: typeof init === "function" ? init : null, update: typeof update === "function" ? update : null, draw: typeof draw === "function" ? draw : null};');
     startT = performance.now(); frameN = 0; appExit = false; holdExit = true; wantRun = -1; wantSetup = false; keyQ.length = 0;
@@ -318,9 +345,9 @@ cv.addEventListener('click', () => { askMotion(); if (mode === 'menu' && keyQ.le
 function drawBoot(ms) {
   G.cls(GBG);
   const shown = Math.max(0, Math.min(10, ((ms - 200) / 60) | 0)), x0 = ((W - G.textw('POCKET.DOS', 2)) / 2) | 0, part = 'POCKET.DOS'.slice(0, shown);
-  G.text(part, x0 + 1, 6, 0x0a2a14, 2); G.text(part, x0, 5, GFG, 2);
+  G.text(part, x0 + 1, 6, GDARK, 2); G.text(part, x0, 5, GFG, 2);
   if (shown < 10) G.rect(x0 + shown * 12, 5, 10, 14, GFG);
-  if (ms > 900) ctext('BIOS 1.1  ERROR.BLUE', 22, GDIM);
+  if (ms > 900) ctext('BIOS 1.2  ERROR.BLUE', 22, GDIM);
   ['CPU BROWSER', 'SCREEN 320X172', 'APPS ERROR.BLUE', 'C:\\>POCKET'].forEach((l, i) => {
     const at = 1200 + i * 330; if (ms < at) return; const y = 34 + i * 10;
     G.text(l, 6, y, i === 3 ? GHI : GFG);
@@ -328,6 +355,38 @@ function drawBoot(ms) {
     else if ((ms / 400 | 0) & 1) G.rect(8 + G.textw(l), y + 6, 5, 1, GFG);
   });
   if ((ms > 180 && ms < 320) || (ms > 2400 && ms < 2520)) G.glitch(6);
+}
+// SETUP in the browser: only the colour works here, the rest is on the board
+const SETUP = ['COLOR', 'PHONE LINK', 'BLUETOOTH', 'MOUSE', 'BACK'];
+let setupSel = 0, setupInfo = '';
+function drawSetup(now) {
+  G.cls(GBG); G.rect(0, 0, W, 9, GFG); G.text('SETUP.EXE', 2, 1, GBG); G.text('BROWSER', W - 2 - G.textw('BROWSER'), 1, GBG);
+  SETUP.forEach((it, i) => {
+    const y = 12 + i * 10, on = i === setupSel, v = i === 0 ? THEMES[themeI][0] : i < 4 ? 'ON THE BOARD' : '';
+    if (on) G.rect(2, y - 1, W - 4, 9, GFG);
+    if (on && down && !waitRelease) G.rect(2, y - 1, (Math.min(1, (now - downAt) / 600) * (W - 4)) | 0, 9, GHI);
+    G.text(it, 6, y, on ? GBG : GFG); if (v) G.text(v, W - 6 - G.textw(v), y, on ? GBG : i === 0 ? GHI : GDIM);
+  });
+  G.rect(0, H - 12, W, 1, GDIM);
+  ctext(setupInfo || 'TAP: NEXT   HOLD: CHANGE', H - 9, GDIM);
+}
+let setupHoldDone = false;
+function setupTick(now) {
+  while (keyQ.length) {
+    const k = keyQ.shift();
+    if (k === 'DOWN' || k === 'RIGHT') setupSel = (setupSel + 1) % SETUP.length;
+    else if (k === 'UP' || k === 'LEFT') setupSel = (setupSel + SETUP.length - 1) % SETUP.length;
+    else if (k === 'ENTER') setupDo();
+  }
+  if (down && !waitRelease && !setupHoldDone && now - downAt > 600) { setupHoldDone = true; waitRelease = true; setupDo(); }
+  if (!down) setupHoldDone = false;
+  if (tapEv) setupSel = (setupSel + 1) % SETUP.length;
+  if (wantMenu) toMenu();
+}
+function setupDo() {
+  if (setupSel === 0) { setTheme(themeI + 1); setupInfo = ''; G.glitch(5); }
+  else if (setupSel === 4) { setupInfo = ''; toMenu(); }
+  else setupInfo = 'THAT ONE IS ON THE BOARD';
 }
 function drawMessage() {
   G.cls(GBG); G.rect(0, 0, W, 9, GFG); G.text('POCKET.DOS', 2, 1, GBG); G.text('ERROR', W - 2 - G.textw('ERROR'), 1, GBG);
@@ -349,6 +408,9 @@ function tick(now) {
   if (mode === 'boot') {
     drawBoot(now - modeAt);
     if ((now - modeAt > 3000 || (tapEv && now - modeAt > 400)) && (menuSrc || msg)) { if (msg) mode = 'message'; else toMenu(); }
+  } else if (mode === 'setup') {
+    setupTick(now);
+    if (mode === 'setup') drawSetup(now);
   } else if (mode === 'message') {
     drawMessage();
     if ((tapEv || wantMenu) && now - modeAt > 300) { msg = null; toMenu(); }
@@ -360,7 +422,7 @@ function tick(now) {
       try { if (cur.update) cur.update(); if (cur.draw) cur.draw(); } catch (e) { fail(e); }
       prevHeld = held; frameN++;
       if (mode === 'menu' && cur && (wantRun >= 0 || wantSetup)) {
-        if (wantSetup) showMsg('SETUP', 'ON THE BOARD THIS OPENS ITS OWN WIFI: PICK A WIFI OR PAIR A KEYBOARD FROM YOUR PHONE.');
+        if (wantSetup) { cur = null; mode = 'setup'; modeAt = now; setupSel = 0; setupInfo = ''; waitRelease = down; }
         else openApp(wantRun);
       } else if (cur && appExit) toMenu();
       else if (isApp && cur && holdExit && down && !waitRelease && now - downAt > 1000) {        // the hold-to-exit bar

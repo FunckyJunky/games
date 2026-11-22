@@ -15,7 +15,7 @@ public/                 the website
     pixel-hop/          one folder per game (index.html + music, images...)
     pixel-party/
   apps/
-    error-chat/         ERROR-CHAT: text chat by channel code
+    error-chat/         ERROR-CHAT: text chat by channel code; with 2+ people in a channel: CAM / MIC (/cam /mic /hangup)
   tusa/                 Туса У Берліні
   music3d/              STUDIO 3D (the FunKey game, as WebAssembly), at error.blue/music3d
   vgadai/               Вгадай що?! (quiz show)
@@ -570,3 +570,22 @@ the Worker as they are served.
 `GET /api/chat/<CODE>/log?after=ID&name=X&limit=20` returns the messages after ID and who is in the channel.
 `POST /api/chat/<CODE>/say {name, text}` sends a message. Whoever reads with a name shows up in the channel's who-list
 (web users see "X joined") and leaves 45 s after their last read. `&bg=1` reads without joining.
+The log also lists `cams: [{id, name}]`, who shares a camera right now.
+
+## ERROR-CHAT camera and microphone
+
+With two or more people in a channel, CAM and MIC appear in the top bar (and on the on-screen keyboard).
+Browsers send camera and microphone straight to each other with WebRTC (STUN only, no TURN): the ChatRoom
+Durable Object only passes the handshake along. WebSocket messages (client -> room):
+- `{t:'media', cam, mic}` - what I share now; everyone gets `{type:'media', id, name, cam, mic}`.
+  Every socket has an `id`: in `hello` (`id`, `peers: [{id, name, cam, mic, rtc}]`), `join` (`peer`), `leave` and `nick`.
+  Pages that can do WebRTC connect with `&rtc=1`.
+- `{t:'rtc', to: ID, data}` - offer/answer/ICE for one person; they get `{type:'rtc', from, name, data}`.
+- `{t:'frame', w, h, data}` - a tiny picture of my camera: 4-bit grey, 2 pixels a byte (high half first), base64.
+  The page sends 160 x 86 about 5 a second, only for 6 s after the room said `{type:'watch'}`.
+- `{t:'getframe', id}` - a browser that can't get a direct line watches those pictures instead (`{type:'frame', ...}`).
+
+`GET /api/chat/<CODE>/frame?id=ID&name=X&s=2` gives the newest picture of that camera (or the first one):
+`{id, name, w, h, seq, at, data, cams}`, `{wait:true}` while none came yet, `{off:true}` when nobody shares.
+`s=2` = half size (80 x 43, a quarter of the bytes). Asking tells the sharer someone watches. pocket.DOS
+ERROR-CHAT shows `[WATCH NAME]` in its TAP list and draws the pictures with `img4()` in its screen colour.

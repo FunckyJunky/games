@@ -39,6 +39,12 @@ function init() {
   A.push({ id: 'setup', name: 'SETUP', info: 'WIFI + BLUETOOTH', icon: 'setup', cached: true, sys: true });
   N = A.length;
   S = sys();
+  var t = S.theme;                                       // the colours chosen in SETUP
+  if (t) {
+    FG = t.fg; DIM = t.dim; BG = t.bg; HI = t.hi; DARK = t.dark;
+    var f = 0.22;                                        // like the board: between the background and the colour
+    DEEP = ((BG >> 16 & 255) + ((FG >> 16 & 255) - (BG >> 16 & 255)) * f << 16) | ((BG >> 8 & 255) + ((FG >> 8 & 255) - (BG >> 8 & 255)) * f << 8) | ((BG & 255) + ((FG & 255) - (BG & 255)) * f);
+  }
   if (S.last >= 0 && S.last < N) sel = S.last;
   pos = sel;
 }
