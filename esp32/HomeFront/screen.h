@@ -7,7 +7,7 @@
 
 enum { IX_T = 0, IX_V = 16, IX_U = 32, IX_BLACK = 48, IX_RED = 49, IX_WHITE = 50, IX_PLANE = 255 };   // 255 = colour picture
 // the ETA train scene (real colours): yellow and blue train, glass, rails, dark grey, brick, lamps, platform
-enum { IX_NSY = 51, IX_NSB, IX_GLASS, IX_RAIL, IX_DARK, IX_BRICK, IX_LAMP, IX_PLAT };
+enum { IX_NSY = 51, IX_NSB, IX_GLASS, IX_RAIL, IX_DARK, IX_BRICK, IX_LAMP, IX_PLAT, IX_ROOF, IX_LEAF, IX_LEAFD, IX_TRUNK, IX_CREAM };   // 51-63
 enum Anim : uint8_t { A_STATIC, A_SCROLL, A_RISE, A_TYPE, A_BLINK, A_WAVE, A_GLITCH, A_PULSE };
 enum Mode : uint8_t { M_TEXT, M_VIDEO, M_BOTH, M_PHOTO };
 #define NOFILTER 4                // vpal / ppal 4 = no filter, real colours

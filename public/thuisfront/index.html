@@ -195,7 +195,7 @@
       <div class="row"><button class="btn big" id="eDone" data-t="here">I'M HERE</button><button class="btn red" id="eClear" data-t="clear">CLEAR</button></div>
       <div class="h" data-t="lang">LANGUAGE ON THE SCREEN</div><div class="chips" id="elangs"></div>
       <div class="h" data-t="colour">COLOUR</div><div class="chips" id="epals"></div>
-      <p class="dimt small" data-t="note">The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station.</p>
+      <p class="dimt small" data-t="note">The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station; a car (CAR, AUTO, АВТІВКА, АВТІВКОЮ, МАШИНА) or a taxi (TAXI, ТАКСІ) drives home instead.</p>
     </div>
 
     <div class="sec" id="pClock" hidden>
@@ -666,8 +666,8 @@ function etaText(v) {
 const ETA_UI = {
   in: ['I ARRIVE IN', 'БУДУ ЧЕРЕЗ'], at: ['OR AT', 'АБО О'], set: ['SET', 'ОК'], desc: ['DESCRIPTION', 'ОПИС'], here: ["I'M HERE", 'Я НА МІСЦІ'],
   clear: ['CLEAR', 'ОЧИСТИТИ'], lang: ['LANGUAGE ON THE SCREEN', 'МОВА НА ЕКРАНІ'], colour: ['COLOUR', 'КОЛІР'],
-  note: ['The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station.',
-    'Екран рахує сам, навіть коли ця сторінка закрита. Латиниця і кирилиця (також українські літери), цифри і знаки. Потяг в описі (ПОТЯГ, ПОТЯЗІ, ПОЇЗД, TRAIN, TREIN) — і замість смужки потяг їде до станції.'],
+  note: ['The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station; a car (CAR, AUTO, АВТІВКА, АВТІВКОЮ, МАШИНА) or a taxi (TAXI, ТАКСІ) drives home instead.',
+    'Екран рахує сам, навіть коли ця сторінка закрита. Латиниця і кирилиця (також українські літери), цифри і знаки. Потяг в описі (ПОТЯГ, ПОТЯЗІ, ПОЇЗД, TRAIN, TREIN) — і замість смужки потяг їде до станції; автівка (АВТІВКА, АВТІВКОЮ, МАШИНА, АВТО, CAR) або таксі (ТАКСІ, TAXI) — їде додому.'],
   min: ['MIN', 'ХВ'], h: ['H', 'ГОД'], arrives: ['ARRIVES', 'БУДУ О'], arrived: ['ARRIVED', 'НА МІСЦІ О'], notset: ['NOT SET', 'НЕ ЗАДАНО'], ph: ['ON THE TRAIN', 'У ПОТЯЗІ'],
 };
 const eui = (k) => ETA_UI[k][E.lang === 1 ? 1 : 0];

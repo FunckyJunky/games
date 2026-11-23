@@ -59,8 +59,9 @@ void scrBegin() {
   for (int v = 0; v < 16; v++) { level(PALS[0], PALS[0].bg, v, c); lutSet(IX_U + v, c); }
   const float bk[3] = { 0, 0, 0 }, red[3] = { 255, 40, 40 }, wh[3] = { 255, 255, 255 };
   lutSet(IX_BLACK, bk); lutSet(IX_RED, red); lutSet(IX_WHITE, wh);
-  static const float SCENE[8][3] = { { 255, 201, 23 }, { 0, 48, 130 }, { 24, 34, 52 }, { 150, 150, 160 }, { 52, 52, 58 }, { 156, 70, 48 }, { 255, 236, 160 }, { 112, 112, 118 } };
-  for (int i = 0; i < 8; i++) lutSet(IX_NSY + i, SCENE[i]);
+  static const float SCENE[13][3] = { { 255, 201, 23 }, { 0, 48, 130 }, { 24, 34, 52 }, { 150, 150, 160 }, { 52, 52, 58 }, { 156, 70, 48 }, { 255, 236, 160 }, { 112, 112, 118 },
+    { 150, 52, 36 }, { 56, 158, 64 }, { 28, 100, 46 }, { 110, 74, 44 }, { 232, 220, 190 } };   // the same as SCENE in render.js
+  for (int i = 0; i < 13; i++) lutSet(IX_NSY + i, SCENE[i]);
   setTextRamp(0, 0, 1); setVideoRamp(0);
 }
 void scrFlush(bool scanlines, const uint16_t* plane) { lcdPush(FB, lut, scanlines ? lutDim : nullptr, plane); }
@@ -420,20 +421,33 @@ static int wrapWords(const uint16_t* t, int len, int max, GLine* out, int keep) 
   if (ll) push(line, ll);
   return n;
 }
-// a description about a train -> the progress bar is a train going to the station (as isTrain in render.js)
-static const char* const TRAIN_WORDS[] = { "TRAIN", "TREIN", "SPRINTER", "INTERCITY", "ПОТЯГ", "ПОТЯЗ", "ПОЇЗД", "ПОЕЗД", "ЕЛЕКТРИЧК", "ЭЛЕКТРИЧК" };
+// a description about a train or a car -> the progress bar is a little scene: 1 = a train going to the station,
+// 2 = a car driving home, 3 = a taxi. Whole words ("CAR") or word starts ("TRAIN*"); the first word that matches
+// decides (as sceneOf / SCENE_WORDS in render.js). Each list starts with its kind.
+static const char* const SCENE_TRAIN[] = { "TRAIN*", "TREIN*", "SPRINTER*", "INTERCITY*", "ПОТЯГ*", "ПОТЯЗ*", "ПОЇЗД*", "ПОЕЗД*", "ЕЛЕКТРИЧК*", "ЭЛЕКТРИЧК*" };
+static const char* const SCENE_TAXI[] = { "TAXI*", "ТАКСІ*", "ТАКСИ*" };
+static const char* const SCENE_CAR[] = { "CAR", "CARS", "AUTO", "AUTOS", "AUTOMOBIL*", "АВТО", "АВТОМОБІЛ*", "АВТОМОБИЛ*", "АВТІВК*", "МАШИН*" };
 static uint16_t upper(uint16_t g) { return g >= 'a' && g <= 'z' ? g - 32 : g; }   // Cyrillic glyphs are capitals already
-static bool isTrain(const uint16_t* t, int len) {
-  for (const char* w : TRAIN_WORDS) {
-    uint16_t k[16]; int kn = 0;
-    for (const char* p = w; kn < 16;) { int g = nextChar(p); if (!g) break; k[kn++] = g; }
-    for (int i = 0; i + kn <= len; i++) {
-      int j = 0;
-      while (j < kn && upper(t[i + j]) == k[j]) j++;
-      if (j == kn) return true;
-    }
+static bool isLetter(uint16_t g) { return (g >= 'A' && g <= 'Z') || g >= 0x100; }
+static bool wordIs(const uint16_t* t, int n, const char* w) {     // t = one word (glyphs, capitals), n long
+  uint16_t k[16]; int kn = 0; bool pre = false;
+  for (const char* q = w; kn < 16;) { int g = nextChar(q); if (!g) break; if (g == '*') { pre = true; break; } k[kn++] = upper(g); }
+  if (pre ? n < kn : n != kn) return false;
+  for (int i = 0; i < kn; i++) if (t[i] != k[i]) return false;
+  return true;
+}
+static int sceneOf(const uint16_t* t0, int len) {
+  uint16_t t[64]; if (len > 64) len = 64;
+  for (int i = 0; i < len; i++) t[i] = upper(t0[i]);
+  for (int i = 0; i < len;) {
+    if (!isLetter(t[i])) { i++; continue; }
+    int j = i; while (j < len && isLetter(t[j])) j++;
+    for (const char* w : SCENE_TRAIN) if (wordIs(t + i, j - i, w)) return 1;
+    for (const char* w : SCENE_TAXI) if (wordIs(t + i, j - i, w)) return 3;
+    for (const char* w : SCENE_CAR) if (wordIs(t + i, j - i, w)) return 2;
+    i = j;
   }
-  return false;
+  return 0;
 }
 static void trainCar(int x, int y, int len, bool cab, int wheel) {
   scrFill(x + 1, y + 8, len - 2, 1, IX_DARK);
@@ -456,20 +470,84 @@ static void trainCar(int x, int y, int len, bool cab, int wheel) {
     scrFill(x + 9, y + 1, 7, 1, IX_RAIL);
   }
 }
+// overhead wire, a platform under a canopy with a clock and a sign, the station with its clock tower, a buffer stop,
+// and the train: at p = 0 on the left, at p = 1 at the buffer stop (as drawTrainScene in render.js)
 static void trainScene(int y, double p, int wheel) {
-  const int sx = 282;
-  scrFill(262, y + 21, W - 262, 2, IX_PLAT);
-  scrFill(sx, y + 7, 34, 14, IX_BRICK);
-  scrFill(sx - 2, y + 5, 38, 2, IX_DARK); scrFill(sx + 2, y + 3, 30, 2, IX_DARK); scrFill(sx + 6, y + 1, 22, 2, IX_DARK);
-  scrFill(sx + 4, y + 11, 6, 5, IX_LAMP); scrFill(sx + 24, y + 11, 6, 5, IX_LAMP);
-  scrFill(sx + 14, y + 12, 6, 9, IX_NSB);
-  scrFill(sx + 11, y + 7, 12, 3, IX_NSB); scrFill(sx + 13, y + 8, 8, 1, IX_WHITE);
-  scrFill(0, y + 24, W, 1, IX_RAIL);
-  for (int x = 2; x < W; x += 6) scrFill(x, y + 25, 3, 2, IX_DARK);
-  const int L = 66, span = sx - 8 - L, front = 4 + L + (int)floor(p * span);
+  scrFill(0, y, 196, 1, IX_RAIL);
+  for (int mx : { 40, 104, 168 }) { scrFill(mx, y, 1, 22, IX_PLAT); scrFill(mx - 3, y + 1, 7, 1, IX_PLAT); }
+  scrFill(190, y + 20, 94, 3, IX_PLAT);
+  for (int cx : { 198, 230, 262 }) scrFill(cx, y + 4, 2, 16, IX_PLAT);
+  const int bx = 284;
+  scrFill(bx, y + 8, W - bx, 16, IX_BRICK);
+  scrFill(bx + 1, y + 5, W - bx - 1, 1, IX_DARK); scrFill(bx - 1, y + 6, W - bx + 1, 2, IX_DARK);
+  scrFill(bx, y + 8, W - bx, 1, IX_CREAM);
+  scrFill(bx + 4, y + 10, 28, 3, IX_NSB);
+  for (int x = bx + 6; x < bx + 30; x += 4) scrFill(x, y + 11, 3, 1, IX_WHITE);
+  for (int wx : { bx + 3, bx + 9, bx + 23, bx + 29 }) { scrFill(wx + 1, y + 14, 1, 1, IX_LAMP); scrFill(wx, y + 15, 3, 6, IX_LAMP); }
+  scrFill(bx + 15, y + 15, 6, 1, IX_CREAM); scrFill(bx + 15, y + 16, 6, 8, IX_GLASS);
+  scrFill(bx + 13, y + 1, 10, 7, IX_BRICK);
+  scrFill(bx + 15, y, 6, 1, IX_DARK); scrFill(bx + 12, y + 1, 12, 1, IX_DARK);
+  scrFill(bx + 16, y + 2, 4, 1, IX_WHITE); scrFill(bx + 15, y + 3, 6, 3, IX_WHITE); scrFill(bx + 16, y + 6, 4, 1, IX_WHITE);
+  scrFill(bx + 17, y + 3, 1, 2, IX_BLACK); scrFill(bx + 18, y + 4, 2, 1, IX_BLACK);
+  scrFill(279, y + 14, 5, 5, IX_RED);
+  scrFill(279, y + 15, 5, 1, IX_WHITE); scrFill(279, y + 17, 5, 1, IX_WHITE);
+  scrFill(280, y + 19, 2, 5, IX_DARK);
+  scrFill(0, y + 24, bx, 1, IX_RAIL);
+  for (int x = 2; x < bx; x += 6) scrFill(x, y + 25, 3, 2, IX_DARK);
+  const int L = 66, front = 4 + L + (int)floor(p * (278 - 4 - L));
   trainCar(front - L, y, 30, false, wheel);
   scrFill(front - L + 30, y + 15, 2, 2, IX_DARK);
   trainCar(front - 34, y, 34, true, wheel);
+  scrFill(194, y + 1, 90, 2, IX_DARK); scrFill(194, y + 3, 90, 1, IX_PLAT);
+  scrFill(214, y + 4, 1, 1, IX_RAIL);
+  scrFill(213, y + 5, 3, 1, IX_WHITE); scrFill(212, y + 6, 5, 2, IX_WHITE); scrFill(213, y + 8, 3, 1, IX_WHITE);
+  scrFill(214, y + 6, 1, 2, IX_BLACK);
+  scrFill(244, y + 4, 1, 1, IX_RAIL); scrFill(239, y + 5, 11, 3, IX_NSB); scrFill(241, y + 6, 7, 1, IX_WHITE);
+}
+// a car (or a taxi) from the side, x = its left end, 32 long, driving right; phase -1 = standing still (as car() in render.js)
+static void carDraw(int x, int y, bool taxi, int phase) {
+  const uint8_t body = taxi ? IX_NSY : IX_RED;
+  scrFill(x + 10, y + 9, 12, 1, body);
+  scrFill(x + 9, y + 10, 15, 1, body); scrFill(x + 8, y + 11, 17, 1, body); scrFill(x + 7, y + 12, 19, 1, body);
+  scrFill(x + 10, y + 10, 6, 1, IX_GLASS); scrFill(x + 17, y + 10, 6, 1, IX_GLASS);
+  scrFill(x + 9, y + 11, 7, 2, IX_GLASS); scrFill(x + 17, y + 11, 7, 2, IX_GLASS); scrFill(x + 24, y + 12, 1, 1, IX_GLASS);
+  scrFill(x + 1, y + 13, 30, 1, body); scrFill(x, y + 14, 32, 2, body);
+  scrFill(x, y + 16, 4, 3, body); scrFill(x + 11, y + 16, 11, 3, body); scrFill(x + 29, y + 16, 3, 3, body);
+  if (taxi) {
+    scrFill(x + 13, y + 7, 6, 2, IX_WHITE); scrFill(x + 14, y + 8, 4, 1, IX_BLACK);
+    for (int i = 0; i < 13; i++) scrFill(x + 3 + i * 2, y + 14 + (i & 1), 2, 1, IX_BLACK);
+  }
+  scrFill(x + 16, y + 13, 1, 5, IX_DARK);
+  scrFill(x + 13, y + 15, 2, 1, IX_DARK); scrFill(x + 19, y + 15, 2, 1, IX_DARK);
+  scrFill(x + 30, y + 14, 2, 2, IX_LAMP);
+  scrFill(x, y + 14, 1, 2, taxi ? IX_RED : IX_ROOF);
+  scrFill(x + 1, y + 19, 3, 1, IX_DARK); scrFill(x + 11, y + 19, 11, 1, IX_DARK); scrFill(x + 29, y + 19, 2, 1, IX_DARK);
+  for (int cx : { x + 7, x + 25 }) {
+    scrFill(cx - 1, y + 16, 3, 1, IX_DARK); scrFill(cx - 2, y + 17, 5, 3, IX_DARK); scrFill(cx - 1, y + 20, 3, 1, IX_DARK);
+    scrFill(cx - 1, y + 17, 3, 3, IX_PLAT); scrFill(cx, y + 18, 1, 1, IX_RAIL);
+    int sp = phase > 0 ? 1 : 0;
+    scrFill(sp ? cx + 1 : cx - 1, y + 17, 1, 1, IX_DARK); scrFill(sp ? cx - 1 : cx + 1, y + 19, 1, 1, IX_DARK);
+  }
+  if (phase >= 0) { scrFill(x - 3 - phase * 2, y + 18, 2, 1, IX_RAIL); scrFill(x - 7 - phase * 3, y + 16, 2, 2, IX_PLAT); }
+}
+// a road with lamp posts and a tree, a house with lit windows, and the car: p = 0 on the left, 1 at the house
+static void carScene(int y, double p, int phase, bool taxi) {
+  for (int lx : { 66, 186 }) { scrFill(lx, y + 4, 1, 18, IX_PLAT); scrFill(lx, y + 3, 4, 1, IX_PLAT); scrFill(lx + 2, y + 4, 3, 1, IX_LAMP); }
+  scrFill(125, y + 12, 3, 10, IX_TRUNK);
+  scrFill(122, y + 1, 9, 1, IX_LEAF); scrFill(120, y + 2, 13, 2, IX_LEAF); scrFill(119, y + 4, 15, 6, IX_LEAF);
+  scrFill(120, y + 10, 13, 2, IX_LEAF); scrFill(122, y + 12, 9, 1, IX_LEAF);
+  scrFill(128, y + 6, 5, 4, IX_LEAFD); scrFill(126, y + 10, 6, 2, IX_LEAFD); scrFill(121, y + 3, 2, 1, IX_LEAFD);
+  const int hx = 284;
+  scrFill(hx + 25, y, 3, 6, IX_BRICK); scrFill(hx + 24, y, 5, 1, IX_DARK);
+  for (int r = 0; r < 9; r++) scrFill(hx + 15 - 2 * r, y + r, 4 + 4 * r, 1, IX_ROOF);
+  scrFill(hx + 1, y + 9, 32, 13, IX_BRICK);
+  scrFill(hx + 15, y + 4, 4, 3, IX_LAMP); scrFill(hx + 17, y + 4, 1, 3, IX_DARK);
+  for (int wx : { hx + 3, hx + 24 }) { scrFill(wx, y + 12, 7, 5, IX_LAMP); scrFill(wx + 3, y + 12, 1, 5, IX_DARK); scrFill(wx, y + 14, 7, 1, IX_DARK); scrFill(wx, y + 17, 7, 1, IX_CREAM); }
+  scrFill(hx + 14, y + 13, 6, 9, IX_LEAFD); scrFill(hx + 18, y + 17, 1, 1, IX_LAMP);
+  scrFill(0, y + 22, W, 1, IX_PLAT);
+  scrFill(0, y + 23, W, 4, IX_DARK);
+  for (int x = 4; x < W; x += 14) scrFill(x, y + 24, 7, 1, IX_CREAM);
+  carDraw(4 + (int)floor(p * (279 - 4 - 32)), y + 1, taxi, phase);
 }
 // the words on the ETA screen: 0 = English, 1 = Ukrainian (the same as ETA_TXT in render.js)
 static const char* const ETA_TXT[2][11] = {
@@ -491,8 +569,8 @@ void scrEta(const EtaSet& e, int64_t now, bool known, const struct tm* toT, cons
   int k = 2, n = wrapWords(txt, tl, 19, lines, 3);
   if (n > 2) { k = 1; n = wrapWords(txt, tl, 38, lines, 3); if (n > 3) n = 3; }
   int lh = k == 2 ? 18 : 11, descH = n * lh, gap = n ? 6 : 0;
-  bool train = isTrain(txt, tl);
-  int barH = train ? 28 : 12;
+  int scene = sceneOf(txt, tl);
+  int barH = scene ? 28 : 12;
   int total = descH + gap + 54 + 10 + barH + 12 + 8;
   int y = 12 + max(4, rnd((160 - total) / 2.0f));
   for (int i = 0; i < n; i++) {
@@ -530,7 +608,9 @@ void scrEta(const EtaSet& e, int64_t now, bool known, const struct tm* toT, cons
     matrix(str, rnd((W - (cols * 8 - 2)) / 2.0f), y, 8, 6, IX_T + 15, IX_T + 2, colon ? blink : true);
   } else scrText(L[3], (W - scrTextW(L[3], 4)) / 2, y + 11, 4, IX_T + 15);
   y += 54 + 10;
-  if (train) trainScene(y, e.to ? p : 0, running && scrEffects ? (ms / 250) % 2 : 0);
+  int phase = running && scrEffects ? (int)((ms / 250) % 2) : -1;
+  if (scene == 1) trainScene(y, e.to ? p : 0, phase < 0 ? 0 : phase);
+  else if (scene) carScene(y, e.to ? p : 0, phase, scene == 3);
   else {
     int filled = (int)floor(p * 50);
     for (int i = 0; i < 50; i++) {

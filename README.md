@@ -625,8 +625,11 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   From 1.6: Cyrillic letters (А-Я plus Ukrainian Є І Ї Ґ and Ё; small letters show as capitals) in an 8x8 table
   next to the DOS font (CYR in render.js = CYR8 in screen.cpp, made by tools/hf-cyr.py); text goes as UTF-8.
   `lang` 0 = English, 1 = Ukrainian words on the screen (ETA_TXT) and on the phone's ETA panel.
-  A train word in the description (TRAIN, TREIN, SPRINTER, INTERCITY, ПОТЯГ, ПОТЯЗІ, ПОЇЗД, ЕЛЕКТРИЧКА; TRAIN_WORDS)
-  turns the bar into a yellow-and-blue Dutch train riding to a station (drawTrainScene / trainScene).
+  A transport word in the description turns the bar into a little scene (sceneOf + SCENE_WORDS; whole words or word
+  starts, the first one wins): a train (TRAIN, TREIN, SPRINTER, INTERCITY, ПОТЯГ, ПОТЯЗІ, ПОЇЗД, ЕЛЕКТРИЧКА) rides under
+  the overhead wire to a station with a canopy, platform clock, clock tower and buffer stop (drawTrainScene / trainScene);
+  a car (CAR, AUTO, АВТО, АВТІВКА, АВТІВКОЮ, АВТОМОБІЛЬ, МАШИНА) or a taxi (TAXI, ТАКСІ, ТАКСИ) drives along a road to a
+  house (drawCarScene / carScene, from 1.7). Scene colours 51-63 (SCENE).
 - The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
   boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
 - Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:

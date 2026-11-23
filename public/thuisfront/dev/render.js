@@ -9,8 +9,9 @@
 export const W = 320, H = 172;
 export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
 // the ETA train scene (real colours, whatever the DOS look): yellow and blue train, glass, rails, dark grey, brick, lamps, platform
-export const NSY = 51, NSB = 52, GLASS = 53, RAIL = 54, DARK = 55, BRICK = 56, LAMP = 57, PLAT = 58;
-const SCENE = [[255, 201, 23], [0, 48, 130], [24, 34, 52], [150, 150, 160], [52, 52, 58], [156, 70, 48], [255, 236, 160], [112, 112, 118]];
+export const NSY = 51, NSB = 52, GLASS = 53, RAIL = 54, DARK = 55, BRICK = 56, LAMP = 57, PLAT = 58, ROOF = 59, LEAF = 60, LEAFD = 61, TRUNK = 62, CREAM = 63;
+export const SCENE = [[255, 201, 23], [0, 48, 130], [24, 34, 52], [150, 150, 160], [52, 52, 58], [156, 70, 48], [255, 236, 160], [112, 112, 118],
+  [150, 52, 36], [56, 158, 64], [28, 100, 46], [110, 74, 44], [232, 220, 190]];
 export const NOFILTER = 4;                 // vpal / ppal 4 = no filter, real colours
 
 // the four DOS looks, for the camera filter and for the text
@@ -448,8 +449,31 @@ export function wrapWords(s, max) {
 }
 const hm = (t) => (t.h < 10 ? '0' : '') + t.h + ':' + (t.m < 10 ? '0' : '') + t.m;
 // a description about a train (English, Dutch, Ukrainian, Russian) -> the progress bar is a train going to the station
-export const TRAIN_WORDS = ['TRAIN', 'TREIN', 'SPRINTER', 'INTERCITY', 'ПОТЯГ', 'ПОТЯЗ', 'ПОЇЗД', 'ПОЕЗД', 'ЕЛЕКТРИЧК', 'ЭЛЕКТРИЧК'];
-export function isTrain(text) { const u = String(text || '').toUpperCase(); return TRAIN_WORDS.some((w) => u.includes(w)); }
+// a description about a train or a car -> the progress bar is a little scene: 1 = a train going to the station,
+// 2 = a car driving home, 3 = a taxi driving home. Words are compared whole ('CAR') or by their start ('TRAIN*');
+// the first word that matches decides. The same lists as SCENE_WORDS in screen.cpp.
+export const SCENE_WORDS = [
+  [1, 'TRAIN*', 'TREIN*', 'SPRINTER*', 'INTERCITY*', 'ПОТЯГ*', 'ПОТЯЗ*', 'ПОЇЗД*', 'ПОЕЗД*', 'ЕЛЕКТРИЧК*', 'ЭЛЕКТРИЧК*'],
+  [3, 'TAXI*', 'ТАКСІ*', 'ТАКСИ*'],
+  [2, 'CAR', 'CARS', 'AUTO', 'AUTOS', 'AUTOMOBIL*', 'АВТО', 'АВТОМОБІЛ*', 'АВТОМОБИЛ*', 'АВТІВК*', 'МАШИН*'],
+];
+const glyphUp = (cp) => { const g = glyphOf(cp); return g >= 97 && g <= 122 ? g - 32 : g; };
+const isLetter = (g) => (g >= 65 && g <= 90) || g >= 0x100;
+export function sceneOf(text) {
+  const g = Array.from(String(text || '')).map((c) => glyphUp(c.codePointAt(0)));
+  for (let i = 0; i < g.length;) {
+    if (!isLetter(g[i])) { i++; continue; }
+    let j = i; while (j < g.length && isLetter(g[j])) j++;
+    for (const [kind, ...words] of SCENE_WORDS) for (const w of words) {
+      const pre = w.endsWith('*'), k = Array.from(pre ? w.slice(0, -1) : w).map((c) => glyphUp(c.codePointAt(0)));
+      if (pre ? j - i < k.length : j - i !== k.length) continue;
+      if (k.every((v, n) => g[i + n] === v)) return kind;
+    }
+    i = j;
+  }
+  return 0;
+}
+export const isTrain = (text) => sceneOf(text) === 1;
 // one car of the train, x = its left end; the cab (front) car has a sloped nose and a pantograph
 function trainCar(fb, x, y, len, cab, wheel) {
   fill(fb, x + 1, y + 8, len - 2, 1, DARK);                       // roof
@@ -474,21 +498,87 @@ function trainCar(fb, x, y, len, cab, wheel) {
     fill(fb, x + 9, y + 1, 7, 1, RAIL);
   }
 }
-// rails, a station on the right, and the train: at p = 0 on the left, at p = 1 at the station (28 pixels high)
+// overhead wire, a platform under a canopy with a clock and a sign, the station with its clock tower, a buffer stop,
+// and the train: at p = 0 on the left, at p = 1 at the buffer stop (28 pixels high)
 export function drawTrainScene(fb, y, p, wheel) {
-  const sx = 282;
-  fill(fb, 262, y + 21, W - 262, 2, PLAT);                        // platform
-  fill(fb, sx, y + 7, 34, 14, BRICK);                             // the station
-  fill(fb, sx - 2, y + 5, 38, 2, DARK); fill(fb, sx + 2, y + 3, 30, 2, DARK); fill(fb, sx + 6, y + 1, 22, 2, DARK);
-  fill(fb, sx + 4, y + 11, 6, 5, LAMP); fill(fb, sx + 24, y + 11, 6, 5, LAMP);
-  fill(fb, sx + 14, y + 12, 6, 9, NSB);
-  fill(fb, sx + 11, y + 7, 12, 3, NSB); fill(fb, sx + 13, y + 8, 8, 1, WHITE);   // the station's sign
-  fill(fb, 0, y + 24, W, 1, RAIL);                                // rails and sleepers
-  for (let x = 2; x < W; x += 6) fill(fb, x, y + 25, 3, 2, DARK);
-  const L = 66, span = sx - 8 - L, front = 4 + L + Math.floor(p * span);
+  fill(fb, 0, y, 196, 1, RAIL);                                   // overhead wire and its masts
+  for (const mx of [40, 104, 168]) { fill(fb, mx, y, 1, 22, PLAT); fill(fb, mx - 3, y + 1, 7, 1, PLAT); }
+  fill(fb, 190, y + 20, 94, 3, PLAT);                             // the platform
+  for (const cx of [198, 230, 262]) fill(fb, cx, y + 4, 2, 16, PLAT);   // canopy columns
+  const bx = 284;                                                  // the station building
+  fill(fb, bx, y + 8, W - bx, 16, BRICK);
+  fill(fb, bx + 1, y + 5, W - bx - 1, 1, DARK); fill(fb, bx - 1, y + 6, W - bx + 1, 2, DARK);
+  fill(fb, bx, y + 8, W - bx, 1, CREAM);
+  fill(fb, bx + 4, y + 10, 28, 3, NSB);                           // the blue name board
+  for (let x = bx + 6; x < bx + 30; x += 4) fill(fb, x, y + 11, 3, 1, WHITE);
+  for (const wx of [bx + 3, bx + 9, bx + 23, bx + 29]) { fill(fb, wx + 1, y + 14, 1, 1, LAMP); fill(fb, wx, y + 15, 3, 6, LAMP); }
+  fill(fb, bx + 15, y + 15, 6, 1, CREAM); fill(fb, bx + 15, y + 16, 6, 8, GLASS);   // the door
+  fill(fb, bx + 13, y + 1, 10, 7, BRICK);                         // clock tower
+  fill(fb, bx + 15, y, 6, 1, DARK); fill(fb, bx + 12, y + 1, 12, 1, DARK);
+  fill(fb, bx + 16, y + 2, 4, 1, WHITE); fill(fb, bx + 15, y + 3, 6, 3, WHITE); fill(fb, bx + 16, y + 6, 4, 1, WHITE);
+  fill(fb, bx + 17, y + 3, 1, 2, BLACK); fill(fb, bx + 18, y + 4, 2, 1, BLACK);
+  fill(fb, 279, y + 14, 5, 5, RED);                               // buffer stop
+  fill(fb, 279, y + 15, 5, 1, WHITE); fill(fb, 279, y + 17, 5, 1, WHITE);
+  fill(fb, 280, y + 19, 2, 5, DARK);
+  fill(fb, 0, y + 24, bx, 1, RAIL);                               // rails and sleepers
+  for (let x = 2; x < bx; x += 6) fill(fb, x, y + 25, 3, 2, DARK);
+  const L = 66, front = 4 + L + Math.floor(p * (278 - 4 - L));
   trainCar(fb, front - L, y, 30, false, wheel);
   fill(fb, front - L + 30, y + 15, 2, 2, DARK);                   // the coupling
   trainCar(fb, front - 34, y, 34, true, wheel);
+  fill(fb, 194, y + 1, 90, 2, DARK); fill(fb, 194, y + 3, 90, 1, PLAT);   // the canopy (in front of the pantograph)
+  fill(fb, 214, y + 4, 1, 1, RAIL);                               // the platform clock
+  fill(fb, 213, y + 5, 3, 1, WHITE); fill(fb, 212, y + 6, 5, 2, WHITE); fill(fb, 213, y + 8, 3, 1, WHITE);
+  fill(fb, 214, y + 6, 1, 2, BLACK);
+  fill(fb, 244, y + 4, 1, 1, RAIL); fill(fb, 239, y + 5, 11, 3, NSB); fill(fb, 241, y + 6, 7, 1, WHITE);   // platform sign
+}
+// a car (or a taxi) seen from the side, x = its left end, 32 long, driving to the right; phase -1 = standing still
+function car(fb, x, y, taxi, phase) {
+  const body = taxi ? NSY : RED;
+  fill(fb, x + 10, y + 9, 12, 1, body);                           // the roof and the cabin
+  fill(fb, x + 9, y + 10, 15, 1, body); fill(fb, x + 8, y + 11, 17, 1, body); fill(fb, x + 7, y + 12, 19, 1, body);
+  fill(fb, x + 10, y + 10, 6, 1, GLASS); fill(fb, x + 17, y + 10, 6, 1, GLASS);
+  fill(fb, x + 9, y + 11, 7, 2, GLASS); fill(fb, x + 17, y + 11, 7, 2, GLASS); fill(fb, x + 24, y + 12, 1, 1, GLASS);
+  fill(fb, x + 1, y + 13, 30, 1, body); fill(fb, x, y + 14, 32, 2, body);   // the body, with arches over the wheels
+  fill(fb, x, y + 16, 4, 3, body); fill(fb, x + 11, y + 16, 11, 3, body); fill(fb, x + 29, y + 16, 3, 3, body);
+  if (taxi) {
+    fill(fb, x + 13, y + 7, 6, 2, WHITE); fill(fb, x + 14, y + 8, 4, 1, BLACK);   // the TAXI sign
+    for (let i = 0; i < 13; i++) fill(fb, x + 3 + i * 2, y + 14 + (i & 1), 2, 1, BLACK);   // checkers
+  }
+  fill(fb, x + 16, y + 13, 1, 5, DARK);                           // door line
+  fill(fb, x + 13, y + 15, 2, 1, DARK); fill(fb, x + 19, y + 15, 2, 1, DARK);   // handles
+  fill(fb, x + 30, y + 14, 2, 2, LAMP);                           // headlight
+  fill(fb, x, y + 14, 1, 2, taxi ? RED : ROOF);                   // rear light
+  fill(fb, x + 1, y + 19, 3, 1, DARK); fill(fb, x + 11, y + 19, 11, 1, DARK); fill(fb, x + 29, y + 19, 2, 1, DARK);   // sills, bumpers
+  for (const cx of [x + 7, x + 25]) {                             // wheels: grey tyre, rim, a spoke that turns
+    fill(fb, cx - 1, y + 16, 3, 1, DARK); fill(fb, cx - 2, y + 17, 5, 3, DARK); fill(fb, cx - 1, y + 20, 3, 1, DARK);
+    fill(fb, cx - 1, y + 17, 3, 3, PLAT); fill(fb, cx, y + 18, 1, 1, RAIL);
+    const sp = phase > 0 ? 1 : 0;
+    fill(fb, sp ? cx + 1 : cx - 1, y + 17, 1, 1, DARK); fill(fb, sp ? cx - 1 : cx + 1, y + 19, 1, 1, DARK);
+  }
+  if (phase >= 0) { fill(fb, x - 3 - phase * 2, y + 18, 2, 1, RAIL); fill(fb, x - 7 - phase * 3, y + 16, 2, 2, PLAT); }   // exhaust
+}
+// a road with lamp posts and a tree, a house with lit windows on the right, and the car: at p = 0 on the left,
+// at p = 1 in front of the house (28 pixels high)
+export function drawCarScene(fb, y, p, phase, taxi) {
+  for (const lx of [66, 186]) {                                   // lamp posts
+    fill(fb, lx, y + 4, 1, 18, PLAT); fill(fb, lx, y + 3, 4, 1, PLAT); fill(fb, lx + 2, y + 4, 3, 1, LAMP);
+  }
+  fill(fb, 125, y + 12, 3, 10, TRUNK);                            // a tree
+  fill(fb, 122, y + 1, 9, 1, LEAF); fill(fb, 120, y + 2, 13, 2, LEAF); fill(fb, 119, y + 4, 15, 6, LEAF);
+  fill(fb, 120, y + 10, 13, 2, LEAF); fill(fb, 122, y + 12, 9, 1, LEAF);
+  fill(fb, 128, y + 6, 5, 4, LEAFD); fill(fb, 126, y + 10, 6, 2, LEAFD); fill(fb, 121, y + 3, 2, 1, LEAFD);
+  const hx = 284;                                                  // the house
+  fill(fb, hx + 25, y, 3, 6, BRICK); fill(fb, hx + 24, y, 5, 1, DARK);   // chimney
+  for (let r = 0; r < 9; r++) fill(fb, hx + 15 - 2 * r, y + r, 4 + 4 * r, 1, ROOF);
+  fill(fb, hx + 1, y + 9, 32, 13, BRICK);
+  fill(fb, hx + 15, y + 4, 4, 3, LAMP); fill(fb, hx + 17, y + 4, 1, 3, DARK);   // attic window
+  for (const wx of [hx + 3, hx + 24]) { fill(fb, wx, y + 12, 7, 5, LAMP); fill(fb, wx + 3, y + 12, 1, 5, DARK); fill(fb, wx, y + 14, 7, 1, DARK); fill(fb, wx, y + 17, 7, 1, CREAM); }
+  fill(fb, hx + 14, y + 13, 6, 9, LEAFD); fill(fb, hx + 18, y + 17, 1, 1, LAMP);   // the green door
+  fill(fb, 0, y + 22, W, 1, PLAT);                                // the road
+  fill(fb, 0, y + 23, W, 4, DARK);
+  for (let x = 4; x < W; x += 14) fill(fb, x, y + 24, 7, 1, CREAM);
+  car(fb, 4 + Math.floor(p * (279 - 4 - 32)), y + 1, taxi, phase);
 }
 // the words on the ETA screen: 0 = English, 1 = Ukrainian (the same as ETA_TXT in screen.cpp)
 export const ETA_TXT = [
@@ -507,7 +597,7 @@ export function drawEta(fb, e, now, known, toT, fromT, fx) {
   let k = 2, lines = wrapWords(e.text, 19);
   if (lines.length > 2) { k = 1; lines = wrapWords(e.text, 38).slice(0, 3); }
   const lh = k === 2 ? 18 : 11, descH = lines.length * lh, gap = lines.length ? 6 : 0;
-  const train = isTrain(e.text), barH = train ? 28 : 12;
+  const scene = sceneOf(e.text), barH = scene ? 28 : 12;
   const total = descH + gap + 54 + 10 + barH + 12 + 8;
   let y = 12 + Math.max(4, Math.round((160 - total) / 2));
   lines.forEach((l, i) => text8(fb, l, ((W - textw(l, k)) / 2) | 0, y + i * lh, k, T + 15));
@@ -533,8 +623,10 @@ export function drawEta(fb, e, now, known, toT, fromT, fx) {
     matrix(fb, str, Math.round((W - (cols * 8 - 2)) / 2), y, 8, 6, T + 15, T + 2, colon ? blink : true);
   } else text8(fb, L[3], ((W - textw(L[3], 4)) / 2) | 0, y + 11, 4, T + 15);
   y += 54 + 10;
-  // the progress bar: 50 blocks, or a train on its way to the station
-  if (train) drawTrainScene(fb, y, e.to ? p : 0, running && fx ? Math.floor(ms / 250) % 2 : 0);
+  // the progress bar: 50 blocks, or a train on its way to the station, or a car (taxi) on its way home
+  const phase = running && fx ? Math.floor(ms / 250) % 2 : -1;
+  if (scene === 1) drawTrainScene(fb, y, e.to ? p : 0, phase < 0 ? 0 : phase);
+  else if (scene) drawCarScene(fb, y, e.to ? p : 0, phase, scene === 3);
   else {
     const filled = Math.floor(p * 50);
     for (let i = 0; i < 50; i++) {
