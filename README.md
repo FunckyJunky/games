@@ -603,13 +603,17 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
 - **error.blue/thuisfront**: the screens in a 3D carousel (swipe sideways), pick one, send it a web app.
   An optional HOME CODE (set on the screen) hides screens from phones without the same code.
 - **COMM**, the first web app: TEXT (14 fonts, size or FIT, still / scroll / rise / type / blink / wave / glitch / pulse,
-  speed, colour, background, align, style), VIDEO from the phone's camera (DOS GREEN / YELLOW / BLUE / GRAY,
-  sharp 320x172 or fast 160x86, smooth or dithered, brightness, contrast, frames per second) or TEXT+VIDEO,
-  and SCREEN ON/OFF, light, scanlines, CLOSE WEB APP. The preview on the phone is drawn with the screen's own code.
+  speed, colour, background, align, style), PHOTO with the text on top (take or pick one; fill the screen or the
+  whole photo, brightness, contrast, filter), VIDEO from the phone's camera (NONE = real colours, or DOS GREEN /
+  YELLOW / BLUE / GRAY; sharp 320x172 or fast 160x86, smooth or dithered, brightness, contrast, frames per second)
+  or VIDEO+TEXT, and SCREEN ON/OFF, light, scanlines, CLOSE WEB APP. The preview on the phone is drawn with the
+  screen's own code.
 - The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
   boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
 - Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:
   `/thuisfront/dev/ws?id=` for screens, `/api/hf/ws?id=&home=` for phones; `GET /api/hf/list?home=`, `POST /api/hf/forget`.
-  The protocol is at the top of src/homefront.js. Video frames (HFV1, 4-bit) go to a screen only after it said it
-  showed the last one, so a slow screen gets fewer frames instead of a delay.
+  The protocol is at the top of src/homefront.js. Video frames (HFV1 4-bit grey, or HFV2 a colour JPEG for NONE)
+  go to a screen only after it said it showed the last one, so a slow screen gets fewer frames instead of a delay.
+  A photo (HFP1) is a 320x172 JPEG made on the phone; the screen puts the filter on itself and keeps it in flash.
+- The board's screen chip takes its colours little-endian (RAMCTRL B0h = 00 E8), so lcdColor() does not swap bytes.
 - Changing the drawing: change dev/render.js AND esp32/HomeFront/screen.cpp the same way.

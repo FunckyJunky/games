@@ -3,10 +3,12 @@
 // the same things the same way, so the preview shows what the board shows.
 //
 // The screen is 320x172. Every pixel is an index into a 64-colour table:
-//   0-15 text levels, 16-31 video levels, 32-47 ERROR-DOS green (menus), 48 black, 49 red, 50 white.
+//   0-15 text levels, 16-31 video levels, 32-47 ERROR-DOS green (menus), 48 black, 49 red, 50 white,
+//   255 = "see the colour picture underneath" (a photo, or colour video).
 
 export const W = 320, H = 172;
-export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50;
+export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
+export const NOFILTER = 4;                 // vpal / ppal 4 = no filter, real colours
 
 // the four DOS looks, for the camera filter and for the text
 export const PALS = [
@@ -32,6 +34,27 @@ export function textRamp(pal, bg, k = 1) {
   return out;
 }
 export function videoRamp(pal) { const p = PALS[pal] || PALS[0], out = []; for (let v = 0; v < 16; v++) out.push(level(p, p.lo, v)); return out; }
+// a photo through a DOS filter: its brightness (0-255) mapped onto the look's colours, smoothly
+export function photoRamp(pal) {
+  const p = PALS[pal] || PALS[0], out = new Uint32Array(256);
+  for (let y = 0; y < 256; y++) {
+    const c = level(p, p.lo, (y * 15) / 255);
+    out[y] = 0xff000000 | (Math.round(c[2]) << 16) | (Math.round(c[1]) << 8) | Math.round(c[0]);
+  }
+  return out;
+}
+// RGBA pixels (w x h, any size) -> a 320x172 plane of colours, through a filter (NOFILTER = as they are)
+export function filterPlane(rgba, w, h, pal) {
+  const out = new Uint32Array(W * H), ramp = pal === NOFILTER ? null : photoRamp(pal);
+  for (let y = 0; y < H; y++) {
+    const sy = ((y * h) / H) | 0;
+    for (let x = 0; x < W; x++) {
+      const j = (sy * w + (((x * w) / W) | 0)) * 4, r = rgba[j], g = rgba[j + 1], b = rgba[j + 2];
+      out[y * W + x] = ramp ? ramp[(r * 77 + g * 150 + b * 29) >> 8] : 0xff000000 | (b << 16) | (g << 8) | r;
+    }
+  }
+  return out;
+}
 export function uiRamp() { const p = PALS[0], out = []; for (let v = 0; v < 16; v++) out.push(level(p, p.bg, v)); return out; }
 
 // ---------------- the 8x8 font (public domain, Daniel Hepper's font8x8_basic, characters 32-126) ----------------
@@ -233,6 +256,9 @@ export class Screen {
     this.fb = new Uint8Array(W * H);
     this.lut = new Uint32Array(64); this.dim = new Uint32Array(64);
     this.state = null; this.text = null; this.frame = null; this.frameAt = 0;
+    this.photo = null; this.photoPlane = null; this.photoKey = '';     // photo: {w, h, data RGBA}
+    this.color = null; this.colorAt = 0;                               // colour video: a plane
+    this.plane = null;
     this.t0 = performance.now(); this.textKey = '';
     this.phase = 'connecting'; this.phaseAt = performance.now();
     this.info = { name: '', wifi: '', ip: '', online: false, id: '' };
@@ -256,6 +282,8 @@ export class Screen {
   }
   setText(t) { this.text = t; this.t0 = performance.now(); }
   setFrame(f) { this.frame = f; this.frameAt = performance.now(); }
+  setPhoto(p) { this.photo = p; this.photoKey = ''; }                 // p = {w, h, data} or null
+  setColorFrame(f) { this.color = filterPlane(f.data, f.w, f.h, NOFILTER); this.colorAt = performance.now(); }
   restart() { this.t0 = performance.now(); }
 
   render(now = performance.now()) {
@@ -268,21 +296,34 @@ export class Screen {
     else if (s.app === 'comm') { this.drawComm(now); scan = !!s.scan; }
     else drawIdle(fb, now / 1000, this.info);
     if (this.offline && s && s.screen && this.phase === 'run' && Math.floor(now / 600) % 2 === 0) fill(fb, W - 7, 2, 5, 5, RED);
-    const out = this.out, fbl = this.fb;
+    const out = this.out, fbl = this.fb, P = s && s.app === 'comm' && s.screen && this.phase === 'run' ? this.plane : null;
     for (let y = 0; y < H; y++) {
-      const L = scan && (y & 1) ? this.dim : this.lut, o = y * W;
-      for (let x = 0; x < W; x++) out[o + x] = L[fbl[o + x]];
+      const dimRow = scan && (y & 1), L = dimRow ? this.dim : this.lut, o = y * W;
+      if (!P) { for (let x = 0; x < W; x++) out[o + x] = L[fbl[o + x]]; continue; }
+      for (let x = 0; x < W; x++) {
+        const i = fbl[o + x];
+        if (i !== PLANE) { out[o + x] = L[i]; continue; }
+        const c = P[o + x];
+        out[o + x] = dimRow ? 0xff000000 | ((c >> 1) & 0x7f7f7f) : c;
+      }
     }
     this.cx.putImageData(this.img, 0, 0);
   }
 
   drawComm(now) {
     const fb = this.fb, c = this.state.comm, tA = (now - this.t0) / 1000;
-    const vkey = 'v' + c.vpal;
-    if (this.lastPal !== vkey) { this.setLut(V, videoRamp(c.vpal)); this.lastPal = vkey; }
-    const fresh = this.frame && now - this.frameAt < 3000;
-    if (c.mode === 'video' || c.mode === 'both') {
-      if (fresh) drawVideo(fb, this.frame);
+    const vpal = c.vpal === NOFILTER ? 0 : c.vpal, vkey = 'v' + vpal;
+    if (this.lastPal !== vkey) { this.setLut(V, videoRamp(vpal)); this.lastPal = vkey; }
+    this.plane = null;
+    if (c.mode === 'photo') {
+      const pal = c.ppal == null ? NOFILTER : c.ppal, key = pal + '|' + (this.photo ? this.photo.data.length : 0);
+      if (this.photo && this.photoKey !== key) { this.photoPlane = filterPlane(this.photo.data, this.photo.w, this.photo.h, pal); this.photoKey = key; }
+      if (this.photo) { fb.fill(PLANE); this.plane = this.photoPlane; }
+      else { fb.fill(T); text8(fb, 'NO PHOTO YET', 4, 4, 1, U + 6); }
+    } else if (c.mode === 'video' || c.mode === 'both') {
+      const grey = this.frame && now - this.frameAt < 3000 ? this.frameAt : 0, col = this.color && now - this.colorAt < 3000 ? this.colorAt : 0;
+      if (col && col >= grey) { fb.fill(PLANE); this.plane = this.color; }
+      else if (grey) drawVideo(fb, this.frame);
       else if (c.mode === 'video') drawNoSignal(fb, now);
       else { fb.fill(T); text8(fb, 'NO VIDEO', 4, 4, 1, U + 6); }
     } else fb.fill(T);

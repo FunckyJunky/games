@@ -102,6 +102,7 @@ void loop() {
   info.online = G.wsUp;
 
   bool scan = false;
+  const uint16_t* plane = nullptr;   // the colour picture behind the screen (photo / colour video)
   int bl = 80;
   uint8_t lr = 0, lg = 0, lb = 0;
   float tNow = now / 1000.0f;
@@ -122,8 +123,8 @@ void loop() {
     String key = String(st.tb) + "|" + st.comm.anim + "|" + st.comm.speed;
     if (key != textKey) { textKey = key; t0Text = now; }
     if (G.textAt && now - G.textAt < 300) lg = 60;   // new text: a green blink
-    bool fresh = G.frame && G.frameAt && now - G.frameAt < 3000;
-    scrComm(st.comm, G.text, G.frame, G.fw, G.fh, fresh, (now - t0Text) / 1000.0f, now);
+    Media md = { G.frame, G.fw, G.fh, G.frameAt, G.color, G.colorAt, G.photo };
+    plane = scrComm(st.comm, G.text, md, (now - t0Text) / 1000.0f, now);
     scan = st.scan;
     bl = st.bright;
     if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
@@ -132,12 +133,14 @@ void loop() {
     else scrIdle(tNow, info);
     if (G.haveState) bl = st.bright;
   }
+  G.pushing = plane;
   xSemaphoreGive(G.lock);
   if (G.apOn && !setupScreen && (now / 1000) % 20 < 4) {
     char b[60]; snprintf(b, sizeof(b), "NO WIFI. SETUP: JOIN %s", G.ap); scrBanner(b);
   }
   if (infoUntil > now) { scrInfoBox(info, "HOLD BUTTON 3 S = WIFI SETUP"); if (bl == 0) bl = 60; }
-  scrFlush(scan);
+  scrFlush(scan, plane);
+  G.pushing = nullptr;
   if (bl != lastBl) { lcdBacklight(bl); lastBl = bl; }
   led(lr, lg, lb);
 

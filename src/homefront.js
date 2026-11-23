@@ -12,28 +12,33 @@
 //                      {t:"got", s}                                                 a video frame is on screen
 //   server -> device   {t:"state", state}                                           whenever it changes
 //                      binary "HFT1..."  the text picture (sent before the state that names it)
-//                      binary "HFV1..."  one video frame (only after the last one was "got")
+//                      binary "HFP1..."  the photo (a JPEG, sent before the state that names it)
+//                      binary "HFV1..." / "HFV2..."  one video frame (only after the last one was "got")
 //   controller -> server  {t:"set", p:{...}}  change the state     {t:"name", name}  rename the device
-//                         binary "HFT1..."    new text picture     binary "HFV1..."  video frame
+//                         binary "HFT1..."    new text picture     binary "HFP1..."  new photo
+//                         binary "HFV1..." / "HFV2..."  video frame
 //   server -> controller  {t:"state", state, dev}   {t:"dev", dev}   {t:"got", s}   {t:"err", msg}
 //
 // HFT1 (text): "HFT1" u16 w, u16 h, i16 x, i16 y, u16 n, u16 flags, n x (u16 x,y,w,h) letter boxes,
 //   then the w*h picture (levels 0-15) run-length coded: byte b, level b&15, count (b>>4)+1,
 //   or when b>>4 == 15: count 16 + next byte.
-// HFV1 (video): "HFV1" u16 w, u16 h, u32 seq, then w*h 4-bit levels, two per byte, high nibble first.
+// HFV1 (video, grey for the DOS filters): "HFV1" u16 w, u16 h, u32 seq, then w*h 4-bit levels, two per byte,
+//   high nibble first.  HFV2 (video in colour): "HFV2" u16 w, u16 h, u32 seq, then a JPEG.
+// HFP1 (photo): "HFP1" then a JPEG (320x172, colour; the screen applies the filter itself).
 
 import { DurableObject } from "cloudflare:workers";
 
 const ID_RE = /^(HF|WEB)-[A-F0-9]{4,12}$/;
 const HOME_RE = /^[A-Z0-9]{0,12}$/;
 const TEXT_MAX = 1000000;          // bytes of one HFT1
-const FRAME_MAX = 40000;           // bytes of one HFV1 (320x172 is 27532)
+const FRAME_MAX = 120000;          // bytes of one video frame (HFV1 320x172 is 27532, HFV2 is a JPEG)
+const PHOTO_MAX = 500000;          // bytes of one HFP1
 const CHUNK = 100000;              // HFT1 is stored in pieces this big
 const ONLINE_MS = 45000;           // no ping for this long = offline
 const FLOW_MS = 1500;              // a frame the device never "got" is given up after this
 
 const APPS = ["", "comm"];
-const MODES = ["text", "video", "both"];
+const MODES = ["text", "video", "both", "photo"];
 const ANIMS = ["static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse"];
 const STYLES = ["plain", "shadow", "outline", "bold"];
 
@@ -55,7 +60,8 @@ export function defaultState() {
   return {
     rev: 1, app: "", screen: 1, bright: 80, scan: 0,
     comm: {
-      mode: "text", tb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0,
+      mode: "text", tb: "", pb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0,
+      ppal: 4, pfit: "fill", pbri: 0, pcon: 0,
       text: "", font: "vt323", size: 0, align: "c", valign: "m", style: "plain", caps: 0,
       vq: "hi", look: "smooth", vbri: 0, vcon: 0, mirror: 1, fps: 12,
     },
@@ -77,7 +83,11 @@ function mergeState(s, p) {
     if ("anim" in c) set(o, "anim", pick(c.anim, ANIMS, o.anim));
     if ("speed" in c) set(o, "speed", int(c.speed, 1, 10, o.speed));
     if ("tpal" in c) set(o, "tpal", int(c.tpal, 0, 3, o.tpal));
-    if ("vpal" in c) set(o, "vpal", int(c.vpal, 0, 3, o.vpal));
+    if ("vpal" in c) set(o, "vpal", int(c.vpal, 0, 4, o.vpal));          // 4 = no filter, real colours
+    if ("ppal" in c) set(o, "ppal", int(c.ppal, 0, 4, o.ppal));
+    if ("pfit" in c) set(o, "pfit", pick(c.pfit, ["fill", "fit"], o.pfit));
+    if ("pbri" in c) set(o, "pbri", int(c.pbri, -50, 50, o.pbri));
+    if ("pcon" in c) set(o, "pcon", int(c.pcon, -50, 50, o.pcon));
     if ("bg" in c) set(o, "bg", int(c.bg, 0, 2, o.bg));
     if ("text" in c) set(o, "text", str(c.text, 2000));
     if ("font" in c) set(o, "font", str(c.font, 24).replace(/[^a-z0-9-]/g, ""));
@@ -121,24 +131,29 @@ export class HomeFront extends DurableObject {
     return this.states.get(id);
   }
   async saveState(id, s) { this.states.set(id, s); await this.ctx.storage.put("st:" + id, s); }
-  async loadText(id) {
-    const meta = await this.ctx.storage.get("tbm:" + id);
+  async loadText(id) { return this.loadBlob("tb", id); }
+  async saveText(id, tb, data) { return this.saveBlob("tb", id, tb, data); }
+  async loadPhoto(id) { return this.loadBlob("pb", id); }
+  async savePhoto(id, pb, data) { return this.saveBlob("pb", id, pb, data); }
+  // kind "tb" = text picture, "pb" = photo; stored as <kind>m:<id> (meta) + <kind>c:<id>:<n> (pieces)
+  async loadBlob(kind, id) {
+    const meta = await this.ctx.storage.get(kind + "m:" + id);
     if (!meta) return null;
-    const keys = []; for (let i = 0; i < meta.n; i++) keys.push("tbc:" + id + ":" + i);
+    const keys = []; for (let i = 0; i < meta.n; i++) keys.push(kind + "c:" + id + ":" + i);
     const got = await this.ctx.storage.get(keys);
     const out = new Uint8Array(meta.size);
     let o = 0;
     for (const k of keys) { const part = got.get(k); if (!part) return null; out.set(new Uint8Array(part), o); o += part.byteLength; }
     return { tb: meta.tb, data: out };
   }
-  async saveText(id, tb, data) {
-    const old = await this.ctx.storage.get("tbm:" + id);
+  async saveBlob(kind, id, tag, data) {
+    const old = await this.ctx.storage.get(kind + "m:" + id);
     const put = {};
     let n = 0;
-    for (let o = 0; o < data.length; o += CHUNK, n++) put["tbc:" + id + ":" + n] = data.slice(o, o + CHUNK).buffer;
-    put["tbm:" + id] = { tb, n, size: data.length };
+    for (let o = 0; o < data.length; o += CHUNK, n++) put[kind + "c:" + id + ":" + n] = data.slice(o, o + CHUNK).buffer;
+    put[kind + "m:" + id] = { tb: tag, n, size: data.length };
     await this.ctx.storage.put(put);
-    if (old && old.n > n) { const del = []; for (let i = n; i < old.n; i++) del.push("tbc:" + id + ":" + i); await this.ctx.storage.delete(del); }
+    if (old && old.n > n) { const del = []; for (let i = n; i < old.n; i++) del.push(kind + "c:" + id + ":" + i); await this.ctx.storage.delete(del); }
   }
 
   // ---------- sockets ----------
@@ -164,13 +179,16 @@ export class HomeFront extends DurableObject {
       mode: s.comm.mode, homeSet: !!d.home,
     };
   }
-  async pushState(id, alsoText) {
+  async pushState(id, alsoText, alsoPhoto) {
     const s = await this.state(id), d = await this.dev(id);
     const out = { ...s, name: d ? d.name : "" };
+    const t = alsoText ? await this.loadText(id) : null, p = alsoPhoto ? await this.loadPhoto(id) : null;
     for (const ws of this.socks("dev", id)) {
-      if (alsoText) { const t = await this.loadText(id); if (t && t.tb === s.comm.tb) this.send(ws, t.data); }
+      if (t && t.tb === s.comm.tb) this.send(ws, t.data);
+      if (p && p.tb === s.comm.pb) this.send(ws, p.data);
       this.send(ws, { t: "state", state: out });
     }
+    if (p && p.tb === s.comm.pb) for (const ws of this.socks("ctl", id)) this.send(ws, p.data);   // other phones see the new photo too
     this.toCtl(id, { t: "state", state: out, dev: await this.devInfo(id) });
   }
 
@@ -199,9 +217,12 @@ export class HomeFront extends DurableObject {
       if (!d) return json({ error: "no such device" }, 404);
       if ((d.home || "") !== cleanHome(b.home)) return json({ error: "wrong home code" }, 403);
       if (this.online(id)) return json({ error: "it is online" }, 409);
-      const meta = await this.ctx.storage.get("tbm:" + id);
-      const del = ["dev:" + id, "st:" + id, "tbm:" + id];
-      if (meta) for (let i = 0; i < meta.n; i++) del.push("tbc:" + id + ":" + i);
+      const del = ["dev:" + id, "st:" + id];
+      for (const kind of ["tb", "pb"]) {
+        const meta = await this.ctx.storage.get(kind + "m:" + id);
+        del.push(kind + "m:" + id);
+        if (meta) for (let i = 0; i < meta.n; i++) del.push(kind + "c:" + id + ":" + i);
+      }
       await this.ctx.storage.delete(del);
       this.devs.delete(id); this.states.delete(id);
       return json({ ok: true });
@@ -221,8 +242,9 @@ export class HomeFront extends DurableObject {
       const role = isDev ? "dev" : "ctl";
       this.ctx.acceptWebSocket(pair[1], [role + ":" + id]);
       pair[1].serializeAttachment({ role, id, seen: Date.now() });
-      if (!isDev) {
+      if (!isDev) {                             // a phone: the photo now on the screen (for its preview), then the state
         const s = await this.state(id), d = await this.dev(id);
+        if (s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(pair[1], p.data); }
         this.send(pair[1], { t: "state", state: { ...s, name: d.name }, dev: await this.devInfo(id) });
       }
       return new Response(null, { status: 101, webSocket: pair[0] });
@@ -260,6 +282,7 @@ export class HomeFront extends DurableObject {
       for (const o of this.socks("dev", id)) if (o !== ws) { try { o.close(4000, "replaced"); } catch { /* closed */ } }
       const s = await this.state(id);
       if (s.comm.tb && m.tb !== s.comm.tb) { const t = await this.loadText(id); if (t && t.tb === s.comm.tb) this.send(ws, t.data); }
+      if (s.comm.pb && m.pb !== s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(ws, p.data); }
       this.send(ws, { t: "state", state: { ...s, name: d.name } });
       this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
       return;
@@ -297,7 +320,7 @@ export class HomeFront extends DurableObject {
   // ---------- from a controller ----------
   async ctlBinary(id, u8) {
     const kind = magic(u8);
-    if (kind === "HFV1") {
+    if (kind === "HFV1" || kind === "HFV2") {
       if (u8.length < 12 || u8.length > FRAME_MAX) return;
       if (!this.sendFrame(id, u8)) this.toCtl(id, { t: "err", msg: "device offline" });
       return;
@@ -309,21 +332,30 @@ export class HomeFront extends DurableObject {
       const s = await this.state(id);
       s.comm.tb = tb; s.rev++;
       await this.saveState(id, s);
-      await this.pushState(id, true);
+      await this.pushState(id, true, false);
+    }
+    if (kind === "HFP1") {
+      if (u8.length < 100 || u8.length > PHOTO_MAX) return this.toCtl(id, { t: "err", msg: "photo too big" });
+      const pb = "p" + Date.now().toString(36);
+      await this.savePhoto(id, pb, u8);
+      const s = await this.state(id);
+      s.comm.pb = pb; s.rev++;
+      await this.saveState(id, s);
+      await this.pushState(id, false, true);
     }
   }
 
   async ctlMessage(ws, id, m) {
     if (m.t === "set") {
       const s = await this.state(id);
-      if (mergeState(s, m.p)) { s.rev++; await this.saveState(id, s); await this.pushState(id, false); }
+      if (mergeState(s, m.p)) { s.rev++; await this.saveState(id, s); await this.pushState(id, false, false); }
       return;
     }
     if (m.t === "name") {
       const d = await this.dev(id), name = cleanName(m.name);
       if (!d || !name) return;
       d.name = name; await this.saveDev(d);
-      return this.pushState(id, false);
+      return this.pushState(id, false, false);
     }
     if (m.t === "hello") this.send(ws, { t: "state", state: { ...(await this.state(id)), name: (await this.dev(id)).name }, dev: await this.devInfo(id) });
   }

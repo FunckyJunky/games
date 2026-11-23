@@ -28,7 +28,7 @@ static void lutSet(int i, const float* c) {
   lutDim[i] = lcdColor((int)(r * 0.55f), (int)(g * 0.55f), (int)(b * 0.55f));
 }
 static void lerp3(const float* a, const float* b, float f, float* o) { for (int k = 0; k < 3; k++) o[k] = a[k] + (b[k] - a[k]) * f; }
-static void level(const Pal& p, const float* from, int v, float* o) {
+static void level(const Pal& p, const float* from, float v, float* o) {
   if (v <= 12) lerp3(from, p.fg, v / 12.0f, o); else lerp3(p.fg, p.hi, (v - 12) / 3.0f, o);
 }
 static void setTextRamp(int pal, int bg, float k) {
@@ -60,7 +60,12 @@ void scrBegin() {
   lutSet(IX_BLACK, bk); lutSet(IX_RED, red); lutSet(IX_WHITE, wh);
   setTextRamp(0, 0, 1); setVideoRamp(0);
 }
-void scrFlush(bool scanlines) { lcdPush(FB, lut, scanlines ? lutDim : nullptr); }
+void scrFlush(bool scanlines, const uint16_t* plane) { lcdPush(FB, lut, scanlines ? lutDim : nullptr, plane); }
+void scrPhotoRamp(int pal, uint16_t* out256) {
+  const Pal& p = PALS[pal & 3];
+  float c[3];
+  for (int y = 0; y < 256; y++) { level(p, p.lo, y * 15.0f / 255.0f, c); out256[y] = lcdColor(rnd(c[0]), rnd(c[1]), rnd(c[2])); }
+}
 
 // ---------------- parts ----------------
 void scrFill(int x, int y, int w, int h, uint8_t c) {
@@ -255,10 +260,17 @@ static void drawNoSignal(uint32_t now) {
   scrCenter("NO SIGNAL", 78, 2, IX_U + 15);
 }
 
-void scrComm(const CommSet& c, const TextPic* t, const uint8_t* frame, int fw, int fh, bool fresh, float tA, uint32_t nowMs) {
-  setVideoRamp(c.vpal);
-  if (c.mode == M_VIDEO || c.mode == M_BOTH) {
-    if (fresh && frame) drawVideo(frame, fw, fh);
+const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, float tA, uint32_t nowMs) {
+  setVideoRamp(c.vpal == NOFILTER ? 0 : c.vpal);
+  const uint16_t* plane = nullptr;
+  if (c.mode == M_PHOTO) {
+    if (m.photo) { memset(FB, IX_PLANE, W * H); plane = m.photo; }
+    else { memset(FB, IX_T, W * H); scrText("NO PHOTO YET", 4, 4, 1, IX_U + 6); }
+  } else if (c.mode == M_VIDEO || c.mode == M_BOTH) {
+    uint32_t grey = m.gray && m.grayAt && nowMs - m.grayAt < 3000 ? m.grayAt : 0;
+    uint32_t col = m.color && m.colorAt && nowMs - m.colorAt < 3000 ? m.colorAt : 0;
+    if (col && col >= grey) { memset(FB, IX_PLANE, W * H); plane = m.color; }
+    else if (grey) drawVideo(m.gray, m.fw, m.fh);
     else if (c.mode == M_VIDEO) drawNoSignal(nowMs);
     else { memset(FB, IX_T, W * H); scrText("NO VIDEO", 4, 4, 1, IX_U + 6); }
   } else memset(FB, IX_T, W * H);
@@ -268,6 +280,7 @@ void scrComm(const CommSet& c, const TextPic* t, const uint8_t* frame, int fw, i
     else if (c.mode == M_TEXT) scrCenter("NO TEXT YET", 82, 1, IX_U + 5);
   }
   setTextRamp(c.tpal, c.mode == M_TEXT ? c.bg : 0, k);
+  return plane;
 }
 
 // ---------------- menu screens ----------------

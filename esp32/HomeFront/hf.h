@@ -12,6 +12,7 @@ struct HfState {                   // the web app's state, as error.blue sends i
   bool scan = false;
   char name[24] = "";
   char tb[20] = "";                // which text picture
+  char pb[20] = "";                // which photo
   CommSet comm;
 };
 
@@ -31,9 +32,13 @@ struct Shared {
   bool haveState = false;
   HfState st;
   TextPic* text = nullptr;
-  uint8_t* frame = nullptr;        // 4-bit packed, up to 320x172
+  uint8_t* frame = nullptr;        // grey video frame: 4-bit packed, up to 320x172
   int fw = 0, fh = 0;
   uint32_t frameAt = 0;
+  uint16_t* color = nullptr;       // colour video frame, 320x172 RGB565
+  uint32_t colorAt = 0;
+  uint16_t* photo = nullptr;       // the photo, 320x172 RGB565, filter already applied
+  const uint16_t* volatile pushing = nullptr;   // the picture being sent to the screen right now
   // requests from the screen side / the setup page to the network task
   volatile bool wantSetup = false, wantRelink = false;
   volatile bool flipChanged = false;

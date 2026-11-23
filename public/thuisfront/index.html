@@ -137,7 +137,20 @@
       <div id="pvInfo"><span id="pvL">PREVIEW</span><span id="pvR"></span></div>
     </div>
     </div>
-    <div class="tabs" id="modeTabs"><button data-m="text">TEXT</button><button data-m="video">VIDEO</button><button data-m="both">TEXT+VIDEO</button></div>
+    <div class="tabs" id="modeTabs"><button data-m="text">TEXT</button><button data-m="photo">PHOTO</button><button data-m="video">VIDEO</button><button data-m="both">VIDEO+TEXT</button></div>
+
+    <div class="sec" id="pPhoto">
+      <div class="h">PHOTO <span id="phStat" class="small"></span></div>
+      <input type="file" id="phFile" accept="image/*" hidden>
+      <div class="row"><button class="btn big" id="phPick">TAKE / PICK PHOTO</button><button class="btn" id="phSend">SEND</button></div>
+      <p class="dimt small" id="phHint">Your text goes on top of the photo. Leave the message empty for just the photo.</p>
+      <div class="h">FILTER</div><div class="chips" id="ppals"></div>
+      <div id="phEdit">
+        <div class="h">SHAPE</div><div class="chips" id="pfits"></div>
+        <div class="slider"><label>BRIGHTNESS</label><input type="range" id="pBri" min="-50" max="50" step="1"><output id="pBriO"></output></div>
+        <div class="slider"><label>CONTRAST</label><input type="range" id="pCon" min="-50" max="50" step="1"><output id="pConO"></output></div>
+      </div>
+    </div>
 
     <div class="sec" id="pText">
       <div class="h">MESSAGE <span id="tCount" class="small"></span></div>
@@ -148,7 +161,7 @@
       <div class="h">ANIMATION</div><div class="chips" id="anims"></div>
       <div class="slider"><label>SPEED</label><input type="range" id="tSpeed" min="1" max="10" step="1"><output id="tSpeedO"></output></div>
       <div class="h">TEXT COLOUR</div><div class="chips" id="tpals"></div>
-      <div class="h">BACKGROUND</div><div class="chips" id="bgs"></div>
+      <div id="bgRow"><div class="h">BACKGROUND</div><div class="chips" id="bgs"></div></div>
       <div class="h">ALIGN</div><div class="chips" id="aligns"></div>
       <div class="h">STYLE</div><div class="chips" id="styles"></div>
     </div>
@@ -170,7 +183,7 @@
       <div class="row"><button class="btn big" id="sPower">SCREEN ON</button><button class="btn" id="sScan">SCANLINES</button></div>
       <div class="slider"><label>LIGHT</label><input type="range" id="sBri" min="5" max="100" step="1"><output id="sBriO"></output></div>
       <div class="row"><button class="btn red" id="sClose">CLOSE WEB APP</button></div>
-      <p class="dimt small">The screen keeps showing your text after you close this page, also after a restart. Video only runs while this page sends it.</p>
+      <p class="dimt small">The screen keeps showing your text and photo after you close this page, also after a restart. Video only runs while this page sends it.</p>
     </div>
   </section>
 </div>
@@ -180,7 +193,7 @@
 <script src="/lib/appback.js" defer></script>
 <script src="/lib/online.js" defer></script>
 <script type="module">
-import { Screen, PALS, W, H, encodeText, encodeFrame } from './dev/render.js';
+import { Screen, PALS, W, H, NOFILTER, encodeText, encodeFrame } from './dev/render.js';
 import { FONTS, fontOf, makeText } from './text.js';
 
 const $ = (id) => document.getElementById(id);
@@ -196,13 +209,13 @@ function modal(html) { $('mbox').innerHTML = html; $('modal').classList.add('on'
 function unmodal() { $('modal').classList.remove('on'); }
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmodal(); });
 
-const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, and live video from this phone, with DOS filters.' }];
+const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' }];
 
 // =====================================================================
 // one controller connection to one screen
 // =====================================================================
 class Ctl {
-  constructor(id) { this.id = id; this.ws = null; this.on = true; this.retry = 800; this.state = null; this.dev = null; this.handlers = {}; this.open(); }
+  constructor(id) { this.id = id; this.ws = null; this.on = true; this.retry = 800; this.state = null; this.dev = null; this.photo = null; this.handlers = {}; this.open(); }
   open() {
     const u = new URL('/api/hf/ws', location.href);
     u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -211,6 +224,11 @@ class Ctl {
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => { this.retry = 800; this.emit('open'); };
     ws.onmessage = (ev) => {
+      if (typeof ev.data !== 'string') {               // binary: the screen's photo ("HFP1" + JPEG)
+        const u8 = new Uint8Array(ev.data);
+        if (u8.length > 8 && String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) === 'HFP1') { this.photo = u8; this.emit('photo', u8); }
+        return;
+      }
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.t === 'state') { this.state = m.state; if (m.dev) this.dev = m.dev; this.emit('state', m.state); if (m.dev) this.emit('dev', m.dev); }
       else if (m.t === 'dev') { this.dev = m.dev; this.emit('dev', m.dev); }
@@ -306,6 +324,7 @@ function openCtl(id) {
     ctl.onx('dev', (d) => { const i = devices.findIndex((x) => x.id === d.id); if (i >= 0) devices[i] = { ...devices[i], ...d }; if (view === 'list') drawStrip(); else commDev(d); });
     ctl.onx('state', (s) => { if (view === 'comm') commState(s); });
     ctl.onx('got', (s) => camGot(s));
+    ctl.onx('photo', (u8) => { if (view === 'comm') photoIn(u8); });
     ctl.onx('err', (m) => toast(m.toUpperCase()));
     ctl.onx('open', () => { if (view === 'comm') { commDev(ctl.dev || {}); if (unsent && liveSend && loadedFromServer) sendText(); } });
     ctl.onx('close', () => { if (view === 'comm') commDev({ online: false }); });
@@ -455,7 +474,7 @@ function drawCards(now) {
 // =====================================================================
 const pv = new Screen($('pv'));
 pv.setPhase('run');
-const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12 };
+const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0 };
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0 };
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
@@ -468,7 +487,10 @@ const swatch = (p) => `rgb(${p.fg.join(',')})`;
 chips('fonts', FONTS.map((f) => ({ v: f.id, f })), 'font', (it) => `<span class="s" style="font:${it.f.wt} 22px ${it.f.css}">Abc Їж</span><span class="n">${it.f.name}</span>`, 'font');
 chips('anims', [['static', 'STILL'], ['scroll', 'SCROLL <'], ['rise', 'RISE ^'], ['type', 'TYPE'], ['blink', 'BLINK'], ['wave', 'WAVE'], ['glitch', 'GLITCH'], ['pulse', 'PULSE']].map(([v, n]) => ({ v, n })), 'anim', (it) => it.n);
 chips('tpals', PALS.map((p, i) => ({ v: i, p })), 'tpal', (it) => `<i class="sw" style="background:${swatch(it.p)}"></i>${it.p.name}`);
-chips('vpals', PALS.map((p, i) => ({ v: i, p })), 'vpal', (it) => `<i class="sw" style="background:linear-gradient(90deg,rgb(${it.p.lo.join(',')}),${swatch(it.p)},rgb(${it.p.hi.join(',')}))"></i>${it.p.name}`);
+const FILTERS = [{ v: NOFILTER, name: 'NONE', bg: 'linear-gradient(90deg,#e33,#ec3,#3c5,#39f,#b4e)' }, ...PALS.map((p, i) => ({ v: i, name: p.name, bg: `linear-gradient(90deg,rgb(${p.lo.join(',')}),${swatch(p)},rgb(${p.hi.join(',')}))` }))];
+chips('vpals', FILTERS, 'vpal', (it) => `<i class="sw" style="background:${it.bg}"></i>${it.name}`);
+chips('ppals', FILTERS, 'ppal', (it) => `<i class="sw" style="background:${it.bg}"></i>${it.name}`);
+chips('pfits', [['fill', 'FILL THE SCREEN'], ['fit', 'WHOLE PHOTO']].map(([v, n]) => ({ v, n })), 'pfit', (it) => it.n);
 chips('bgs', [[0, 'BLACK'], [1, 'DARK TINT'], [2, 'INVERTED']].map(([v, n]) => ({ v, n })), 'bg', (it) => it.n);
 chips('aligns', [['l', 'LEFT'], ['c', 'CENTRE'], ['r', 'RIGHT']].map(([v, n]) => ({ v, n })), 'align', (it) => it.n);
 $('aligns').insertAdjacentHTML('beforeend', '<i style="flex:none;width:10px"></i>');
@@ -490,12 +512,14 @@ slider('tSpeed', 'speed', (v) => v);
 slider('vBri', 'vbri', (v) => (v > 0 ? '+' : '') + v);
 slider('vCon', 'vcon', (v) => (v > 0 ? '+' : '') + v);
 slider('vFps', 'fps', (v) => v);
+slider('pBri', 'pbri', (v) => (v > 0 ? '+' : '') + v);
+slider('pCon', 'pcon', (v) => (v > 0 ? '+' : '') + v);
 slider('sBri', 'bright', (v) => v + '%', true);
 let scrTimer = 0;
 function sendScreenSoon(key) { pv.state.bright = S.bright; clearTimeout(scrTimer); scrTimer = setTimeout(() => ctl && ctl.set({ [key]: S[key] }), 150); }
 
 function syncUI() {
-  for (const [el, key] of [['fonts', 'font'], ['anims', 'anim'], ['tpals', 'tpal'], ['vpals', 'vpal'], ['bgs', 'bg'], ['aligns', 'align'], ['styles', 'style'], ['vqs', 'vq'], ['looks', 'look']]) {
+  for (const [el, key] of [['fonts', 'font'], ['anims', 'anim'], ['tpals', 'tpal'], ['vpals', 'vpal'], ['ppals', 'ppal'], ['pfits', 'pfit'], ['bgs', 'bg'], ['aligns', 'align'], ['styles', 'style'], ['vqs', 'vq'], ['looks', 'look']]) {
     for (const b of $(el).children) if (b.dataset.v != null) b.classList.toggle('on', String(C[key]) === b.dataset.v);
   }
   for (const b of $('aligns').querySelectorAll('[data-va]')) b.classList.toggle('on', C.valign === b.dataset.va);
@@ -503,12 +527,20 @@ function syncUI() {
   const set = (id, v, f) => { $(id).value = v; $(id + 'O').textContent = f(v); };
   set('tSize', C.size, (v) => (v ? v + 'px' : 'FIT')); set('tSpeed', C.speed, (v) => v);
   set('vBri', C.vbri, (v) => (v > 0 ? '+' : '') + v); set('vCon', C.vcon, (v) => (v > 0 ? '+' : '') + v); set('vFps', C.fps, (v) => v);
+  set('pBri', C.pbri, (v) => (v > 0 ? '+' : '') + v); set('pCon', C.pcon, (v) => (v > 0 ? '+' : '') + v);
   set('sBri', S.bright, (v) => v + '%');
   if (document.activeElement !== $('tIn')) $('tIn').value = C.text;
   $('tCount').textContent = C.text.length ? C.text.length + '/2000' : '';
   for (const b of $('modeTabs').children) b.classList.toggle('on', b.dataset.m === C.mode);
   $('pText').hidden = C.mode === 'video';
-  $('pVideo').hidden = C.mode === 'text';
+  $('pVideo').hidden = C.mode === 'text' || C.mode === 'photo';
+  $('pPhoto').hidden = C.mode !== 'photo';
+  $('bgRow').hidden = C.mode !== 'text';
+  $('looks').hidden = C.vpal === NOFILTER;
+  $('phEdit').classList.toggle('dim', !ph.src); for (const el of $('phEdit').querySelectorAll('input,button')) el.disabled = !ph.src;
+  $('phSend').textContent = ph.unsent ? 'SEND >' : 'SENT'; $('phSend').classList.toggle('dim', !ph.unsent); $('phSend').disabled = !ph.src;
+  $('phStat').textContent = ph.busy ? 'SENDING...' : ph.src ? ph.name : ph.have ? 'ON THE SCREEN' : 'NONE YET';
+  $('phPick').textContent = ph.src || ph.have ? 'OTHER PHOTO' : 'TAKE / PICK PHOTO';
   $('vMirror').classList.toggle('on', !!C.mirror);
   $('tLive').textContent = 'LIVE: ' + (liveSend ? 'ON' : 'OFF'); $('tLive').classList.toggle('on', !!liveSend);
   $('tSend').textContent = unsent ? 'SEND >' : 'SENT';
@@ -526,6 +558,7 @@ function change(key, v, slide) {
   C[key] = v;
   syncUI();
   if (TEXT_KEYS.includes(key)) { remakeText(slide ? 250 : 60); return; }
+  if (PHOTO_KEYS.includes(key)) { remakePhoto(slide ? 400 : 60); return; }
   clearTimeout(change.t[key]);
   change.t[key] = setTimeout(() => ctl && ctl.set({ comm: { [key]: C[key] } }), slide ? 150 : 0);
 }
@@ -557,7 +590,91 @@ function sendText() {
 $('tIn').addEventListener('input', () => { C.text = $('tIn').value; $('tCount').textContent = C.text.length + '/2000'; remakeText(450); });
 $('tSend').onclick = () => { if (!lastBlob) remakeText(0); else sendText(); };
 $('tLive').onclick = () => { liveSend = liveSend ? 0 : 1; store.set('live', liveSend); syncUI(); if (liveSend && unsent) sendText(); };
-for (const b of $('modeTabs').children) b.onclick = () => { change('mode', b.dataset.m); if (b.dataset.m !== 'text' && !cam.on) camStart(); };
+for (const b of $('modeTabs').children) b.onclick = () => {
+  const m = b.dataset.m;
+  change('mode', m);
+  if ((m === 'video' || m === 'both') && !cam.on) camStart();
+  if (m === 'photo' && cam.on) camStop();
+  if (m === 'photo' && !ph.src && !ph.have) $('phFile').click();
+};
+
+// --- the photo: picked here, made 320x172 here (shape, brightness, contrast), the screen puts the filter on ---
+const PHOTO_KEYS = ['pfit', 'pbri', 'pcon'];
+const ph = { src: null, name: '', have: false, unsent: false, busy: false, timer: 0, again: false, cv: document.createElement('canvas'), sentLen: 0, sentAt: 0 };
+ph.cv.width = W; ph.cv.height = H;
+$('phPick').onclick = () => $('phFile').click();
+$('phFile').onchange = async () => {
+  const f = $('phFile').files[0];
+  $('phFile').value = '';
+  if (!f) return;
+  try {
+    let bm = await createImageBitmap(f, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 1600 / Math.max(bm.width, bm.height));   // big camera photos: make them smaller first
+    if (k < 1) { const nb = await createImageBitmap(bm, { resizeWidth: Math.round(bm.width * k), resizeHeight: Math.round(bm.height * k), resizeQuality: 'high' }); bm.close(); bm = nb; }
+    if (ph.src && ph.src.close) ph.src.close();
+    ph.src = bm; ph.name = (f.name || 'PHOTO').toUpperCase().slice(0, 24);
+    if (C.mode !== 'photo') { C.mode = 'photo'; if (cam.on) camStop(); }
+    remakePhoto(0, true);
+  } catch (e) { toast('CAN\'T OPEN THAT PHOTO'); }
+};
+$('phSend').onclick = () => sendPhoto();
+// draw the photo into the 320x172 canvas: fill (cut the edges) or whole (black bars), then brightness and contrast
+function photoPixels() {
+  const c = ph.cv.getContext('2d', { willReadFrequently: true }), s = ph.src, sw = s.width, sh = s.height;
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  const k = C.pfit === 'fit' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh), dw = sw * k, dh = sh * k;
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(s, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  const id = c.getImageData(0, 0, W, H);
+  if (C.pbri || C.pcon) {
+    const d = id.data, con = 1 + C.pcon / 50, bri = C.pbri * 2.2;
+    for (let i = 0; i < d.length; i += 4) for (let j = i; j < i + 3; j++) d[j] = (d[j] - 128) * con + 128 + bri;
+    c.putImageData(id, 0, 0);
+  }
+  return id;
+}
+function remakePhoto(wait, now) {
+  if (!ph.src) { syncUI(); return; }
+  clearTimeout(ph.timer);
+  ph.timer = setTimeout(() => {
+    const id = photoPixels();
+    pv.setPhoto({ w: W, h: H, data: id.data });
+    ph.unsent = true;
+    if (liveSend || now) sendPhoto(); else syncUI();
+  }, wait);
+}
+function sendPhoto() {
+  if (!ph.src || !ctl) return;
+  if (ph.busy) { ph.again = true; return; }
+  ph.busy = true; syncUI();
+  photoPixels();
+  ph.cv.toBlob(async (b) => {
+    try {
+      if (!b) throw new Error('no jpeg');
+      const j = new Uint8Array(await b.arrayBuffer()), u8 = new Uint8Array(4 + j.length);
+      u8.set([72, 70, 80, 49]); u8.set(j, 4);                   // "HFP1" + JPEG
+      ph.sentLen = u8.length; ph.sentAt = Date.now();
+      if (ctl.send(u8) && ctl.set({ comm: { mode: 'photo', ppal: C.ppal, pfit: C.pfit, pbri: C.pbri, pcon: C.pcon } })) { ph.unsent = false; ph.have = true; }
+      else toast('NOT CONNECTED: TRY AGAIN');
+    } catch { toast('PHOTO: SOMETHING WENT WRONG'); }
+    ph.busy = false;
+    if (ph.again) { ph.again = false; sendPhoto(); } else syncUI();
+  }, 'image/jpeg', 0.88);
+}
+// the screen's photo, from the server (when this page opens, or another phone sent one)
+async function photoIn(u8) {
+  ph.have = true;
+  if (ph.src && u8.length === ph.sentLen && Date.now() - ph.sentAt < 30000) { syncUI(); return; }   // our own, back again
+  try {
+    const bm = await createImageBitmap(new Blob([u8.subarray(4)], { type: 'image/jpeg' }));
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d'); x.drawImage(bm, 0, 0, W, H); bm.close();
+    if (ph.src && ph.src.close) ph.src.close();
+    ph.src = null; ph.unsent = false;                           // shape/brightness are already in it: pick it again to change those
+    pv.setPhoto({ w: W, h: H, data: x.getImageData(0, 0, W, H).data });
+  } catch { /* not a picture */ }
+  syncUI();
+}
 $('vMirror').onclick = () => change('mirror', C.mirror ? 0 : 1);
 $('sPower').onclick = () => { S.screen = S.screen ? 0 : 1; ctl && ctl.set({ screen: S.screen }); syncUI(); };
 $('sScan').onclick = () => { S.scan = S.scan ? 0 : 1; ctl && ctl.set({ scan: S.scan }); syncUI(); };
@@ -573,6 +690,8 @@ function commState(s) {
     C = { ...DEF, ...(s.comm || {}) };
     delete C.tb;
     if (s.app !== 'comm' && ctl) { ctl.set({ app: 'comm', screen: 1 }); S.app = 'comm'; }
+    ph.have = !!(s.comm && s.comm.pb);
+    if (ctl && ctl.photo) photoIn(ctl.photo);
     unsent = false;
     syncUI();
     makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });
@@ -617,7 +736,7 @@ $('vFlip').onclick = () => { cam.facing = cam.facing === 'user' ? 'environment' 
 function camGot(s) { cam.acked = Math.max(cam.acked, s); cam.got.push(performance.now()); }
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function camTick(now) {
-  if (!cam.on || cam.video.readyState < 2 || C.mode === 'text') return;
+  if (!cam.on || cam.video.readyState < 2 || C.mode === 'text' || C.mode === 'photo') return;
   if (now - cam.lastGrab < 1000 / C.fps) return;
   cam.lastGrab = now;
   const w = C.vq === 'lo' ? 160 : 320, h = C.vq === 'lo' ? 86 : 172, g = cam.g;
@@ -631,8 +750,9 @@ function camTick(now) {
   if (C.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   ctx.drawImage(cam.video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, w, h);
   ctx.restore();
-  const d = ctx.getImageData(0, 0, w, h).data, lv = new Uint8Array(w * h);
+  const id = ctx.getImageData(0, 0, w, h), d = id.data, lv = new Uint8Array(w * h);
   const con = 1 + C.vcon / 50, bri = C.vbri * 2.2, dither = C.look === 'dither';
+  if (C.vpal === NOFILTER) { camColor(now, ctx, id, w, h, con, bri); return; }
   for (let i = 0, j = 0; i < lv.length; i++, j += 4) {
     let l = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
     l = (l - 128) * con + 128 + bri;
@@ -645,6 +765,29 @@ function camTick(now) {
     ctl.send(encodeFrame(w, h, cam.seq, lv));
     cam.seq++; cam.lastSend = now; cam.sent.push(now);
   }
+}
+
+// no filter: real colours, sent as a small JPEG ("HFV2" w h seq + JPEG)
+function camColor(now, ctx, id, w, h, con, bri) {
+  if (C.vbri || C.vcon) {
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) for (let j = i; j < i + 3; j++) d[j] = (d[j] - 128) * con + 128 + bri;
+    ctx.putImageData(id, 0, 0);
+  }
+  pv.setColorFrame({ w, h, data: id.data });
+  if (cam.encoding || !ctl || !ctl.ready() || !ctl.bufferedLow() || !(cam.seq - cam.acked < 2 || now - cam.lastSend > 1500)) return;
+  cam.encoding = true;
+  const seq = cam.seq++;
+  cam.lastSend = now;
+  cam.g.toBlob(async (b) => {
+    try {
+      if (b) {
+        const j = new Uint8Array(await b.arrayBuffer()), u8 = new Uint8Array(12 + j.length), dv = new DataView(u8.buffer);
+        u8.set([72, 70, 86, 50]); dv.setUint16(4, w, true); dv.setUint16(6, h, true); dv.setUint32(8, seq, true); u8.set(j, 12);
+        if (ctl && ctl.send(u8)) cam.sent.push(performance.now());
+      }
+    } finally { cam.encoding = false; }
+  }, 'image/jpeg', w > 200 ? 0.6 : 0.7);
 }
 
 // =====================================================================
@@ -681,7 +824,7 @@ function loop(now) {
     if (Math.floor(now / 500) !== Math.floor(lastPv / 500) || !loop.n || now - loop.n > 500) {
       loop.n = now;
       cam.sent = cam.sent.filter((x) => now - x < 2000); cam.got = cam.got.filter((x) => now - x < 2000);
-      $('pvR').textContent = cam.on && C.mode !== 'text' ? `SENT ${(cam.sent.length / 2).toFixed(0)}/S · SCREEN ${(cam.got.length / 2).toFixed(0)}/S` : (S.screen ? '' : 'SCREEN IS OFF');
+      $('pvR').textContent = cam.on && (C.mode === 'video' || C.mode === 'both') ? `SENT ${(cam.sent.length / 2).toFixed(0)}/S · SCREEN ${(cam.got.length / 2).toFixed(0)}/S` : (S.screen ? '' : 'SCREEN IS OFF');
       $('vStat').textContent = cam.on ? (cam.facing === 'user' ? 'FRONT' : 'BACK') + ' · ' + (C.vq === 'lo' ? '160x86' : '320x172') : '';
     }
   }

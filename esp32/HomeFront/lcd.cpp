@@ -25,8 +25,8 @@ static void cmd1(uint8_t c, uint8_t a) { cmd(c, &a, 1); }
 
 uint16_t lcdColor(int r, int g, int b) {
   r = constrain(r, 0, 255); g = constrain(g, 0, 255); b = constrain(b, 0, 255);
-  uint16_t c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-  return (uint16_t)((c >> 8) | (c << 8));
+  // the start-up list sets RAMCTRL (B0h) to little endian (0xE8), so no byte swap here
+  return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
 // which board? The 1.47B answers on I2C 0x6B/0x6A (its motion sensor) at SDA 48 / SCL 47.
@@ -102,7 +102,7 @@ void lcdBegin(bool flip) {
   }
 }
 
-void lcdPush(const uint8_t* fb, const uint16_t* lut, const uint16_t* lutDim) {
+void lcdPush(const uint8_t* fb, const uint16_t* lut, const uint16_t* lutDim, const uint16_t* plane) {
   { const uint8_t ca[] = { 0, 0, (LCD_W - 1) >> 8, (LCD_W - 1) & 255 }; cmd(0x2A, ca, 4); }   // waits for the last frame
   { const uint8_t ra[] = { 0, LCD_ROW_OFFSET, (LCD_ROW_OFFSET + LCD_H - 1) >> 8, (LCD_ROW_OFFSET + LCD_H - 1) & 255 }; cmd(0x2B, ra, 4); }
   int b = 0;
@@ -112,9 +112,18 @@ void lcdPush(const uint8_t* fb, const uint16_t* lut, const uint16_t* lutDim) {
     uint16_t* out = bufs[b];
     for (int r = 0; r < n; r++) {
       const uint8_t* src = fb + (y + r) * LCD_W;
-      const uint16_t* L = (lutDim && ((y + r) & 1)) ? lutDim : lut;
+      bool dimRow = lutDim && ((y + r) & 1);
+      const uint16_t* L = dimRow ? lutDim : lut;
       uint16_t* o = out + r * LCD_W;
-      for (int x = 0; x < LCD_W; x += 4) { o[x] = L[src[x]]; o[x + 1] = L[src[x + 1]]; o[x + 2] = L[src[x + 2]]; o[x + 3] = L[src[x + 3]]; }
+      if (!plane) {
+        for (int x = 0; x < LCD_W; x += 4) { o[x] = L[src[x]]; o[x + 1] = L[src[x + 1]]; o[x + 2] = L[src[x + 2]]; o[x + 3] = L[src[x + 3]]; }
+      } else {
+        const uint16_t* P = plane + (y + r) * LCD_W;
+        for (int x = 0; x < LCD_W; x++) {
+          uint8_t i = src[x];
+          o[x] = i != 255 ? L[i] : dimRow ? (uint16_t)((P[x] >> 1) & 0x7BEF) : P[x];
+        }
+      }
     }
     esp_lcd_panel_io_tx_color(io, y ? 0x3C : 0x2C, out, LCD_W * n * 2);
   }

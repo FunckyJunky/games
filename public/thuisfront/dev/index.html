@@ -42,7 +42,7 @@
 <script type="module">
 import { Screen, decodeText, decodeFrame } from './render.js';
 
-const VER = 'web-1.0';
+const VER = 'web-1.1';
 const store = {
   get(k, d) { try { const v = localStorage.getItem('hfdev.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('hfdev.' + k, JSON.stringify(v)); } catch { /* full or private */ } },
@@ -69,6 +69,22 @@ if (last) {
     try { const t = decodeText(Uint8Array.from(atob(tb), (c) => c.charCodeAt(0))); if (t) { scr.setText(t); tbHave = last.comm.tb; } } catch { /* broken */ }
   }
 }
+// JPEG bytes -> {w, h, data RGBA}
+const jc = document.createElement('canvas');
+async function jpegRGBA(bytes, own) {
+  const bm = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+  const c = own ? document.createElement('canvas') : jc;
+  if (c.width !== bm.width || c.height !== bm.height) { c.width = bm.width; c.height = bm.height; }
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(bm, 0, 0); bm.close();
+  return { w: c.width, h: c.height, data: x.getImageData(0, 0, c.width, c.height).data };
+}
+const b64 = (u8) => { let b = ''; for (let i = 0; i < u8.length; i += 8192) b += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(b); };
+let pbHave = '';
+if (last && last.comm && last.comm.pb && store.get('photopb', '') === last.comm.pb) {
+  try { const j = Uint8Array.from(atob(store.get('photo', '')), (c) => c.charCodeAt(0)); jpegRGBA(j, true).then((p) => { scr.setPhoto(p); pbHave = last.comm.pb; }).catch(() => {}); } catch { /* broken */ }
+}
+let pendingPhoto = null, videoBusy = false;
 let pendingText = null, pendingRaw = null, ws = null, everConnected = false, frames = 0, fps = 0, retry = 1000, lastMsg = 0;
 
 function connect() {
@@ -80,16 +96,23 @@ function connect() {
   ws.binaryType = 'arraybuffer';
   ws.onopen = () => {
     retry = 1000; lastMsg = Date.now();
-    ws.send(JSON.stringify({ t: 'hi', id, name, kind: 'web', ver: VER, wifi: '', ip: 'BROWSER', rssi: 0, home, rename: store.get('renamed', 0), tb: tbHave, rev: (scr.state && scr.state.rev) || 0 }));
+    ws.send(JSON.stringify({ t: 'hi', id, name, kind: 'web', ver: VER, wifi: '', ip: 'BROWSER', rssi: 0, home, rename: store.get('renamed', 0), tb: tbHave, rev: (scr.state && scr.state.rev) || 0, pb: pbHave }));
   };
   ws.onmessage = (ev) => {
     lastMsg = Date.now();
     if (typeof ev.data !== 'string') {
-      const u8 = new Uint8Array(ev.data);
-      if (u8[2] === 86) {                               // HFV1: a video frame
+      const u8 = new Uint8Array(ev.data), kind = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
+      const got = (s) => { try { ws && ws.send(JSON.stringify({ t: 'got', s })); } catch { /* closed */ } };
+      if (kind === 'HFV1') {                            // a grey video frame
         const f = decodeFrame(u8);
-        if (f) { scr.setFrame(f); frames++; try { ws.send(JSON.stringify({ t: 'got', s: f.seq })); } catch { /* closed */ } }
-      } else if (u8[2] === 84) { pendingText = decodeText(u8); pendingRaw = u8; }   // HFT1: text, named by the next state
+        if (f) { scr.setFrame(f); frames++; got(f.seq); }
+      } else if (kind === 'HFV2') {                     // a colour video frame: a JPEG
+        const seq = new DataView(u8.buffer, u8.byteOffset).getUint32(8, true);
+        if (videoBusy) { got(seq); return; }
+        videoBusy = true;
+        jpegRGBA(u8.subarray(12)).then((f) => { scr.setColorFrame(f); frames++; }).catch(() => {}).finally(() => { videoBusy = false; got(seq); });
+      } else if (kind === 'HFP1') pendingPhoto = u8.slice(4);                    // a photo, named by the next state
+      else if (kind === 'HFT1') { pendingText = decodeText(u8); pendingRaw = u8; }   // text, named by the next state
       return;
     }
     let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -100,6 +123,11 @@ function connect() {
       let b = ''; for (let i = 0; i < pendingRaw.length; i += 8192) b += String.fromCharCode(...pendingRaw.subarray(i, i + 8192));
       store.set('text', btoa(b));
       pendingText = pendingRaw = null;
+    }
+    if (pendingPhoto && s.comm && s.comm.pb) {
+      const j = pendingPhoto, pb = s.comm.pb;
+      pendingPhoto = null;
+      jpegRGBA(j, true).then((p) => { scr.setPhoto(p); pbHave = pb; try { store.set('photo', b64(j)); store.set('photopb', pb); } catch { /* full */ } }).catch(() => {});
     }
     store.set('renamed', 0);
     if (s.name && s.name !== name) { name = s.name; store.set('name', name); }

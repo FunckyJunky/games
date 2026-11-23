@@ -8,6 +8,9 @@
 #include "config.h"
 #include "certs.h"
 #include "hf.h"
+extern "C" {
+#include "esp32s3/rom/tjpgd.h"     // the JPEG decoder in the chip's ROM
+}
 
 Shared G;
 
@@ -21,6 +24,13 @@ static uint8_t* pendingText = nullptr;         // an HFT1 waiting for the state 
 static size_t pendingLen = 0;
 static uint8_t* rawState = nullptr;            // the last state message, saved to flash a bit later
 static size_t rawStateLen = 0;
+static uint8_t* pendingPhoto = nullptr;        // an HFP1 waiting for the state that names it
+static size_t pendingPhotoLen = 0;
+static uint8_t* photoJpg = nullptr;            // the photo as it came (to put a new filter on it)
+static size_t photoJpgLen = 0;
+static int photoPal = -1;                      // the filter the shown photo has
+static uint16_t* photoBack = nullptr;          // decode here, then swap with G.photo
+static uint16_t* colorBack = nullptr;          // the same for colour video
 
 // ---------------- flash ----------------
 static void saveFile(const char* path, const uint8_t* d, size_t n) {
@@ -39,7 +49,7 @@ static uint8_t* loadFile(const char* path, size_t& n) {
   return d;
 }
 
-static const char* const MODES[] = { "text", "video", "both" };
+static const char* const MODES[] = { "text", "video", "both", "photo" };
 static const char* const ANIMS[] = { "static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse" };
 static uint8_t pickIdx(const char* v, const char* const* list, int n) { for (int i = 0; i < n; i++) if (v && !strcmp(v, list[i])) return i; return 0; }
 
@@ -56,14 +66,65 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.scan = (s["scan"] | 0) != 0;
   strlcpy(o.name, s["name"] | "", sizeof(o.name));
   JsonObjectConst c = s["comm"];
-  o.comm.mode = pickIdx(c["mode"] | "text", MODES, 3);
+  o.comm.mode = pickIdx(c["mode"] | "text", MODES, 4);
   o.comm.anim = pickIdx(c["anim"] | "static", ANIMS, 8);
   o.comm.speed = constrain((int)(c["speed"] | 5), 1, 10);
   o.comm.tpal = constrain((int)(c["tpal"] | 0), 0, 3);
-  o.comm.vpal = constrain((int)(c["vpal"] | 0), 0, 3);
+  o.comm.vpal = constrain((int)(c["vpal"] | 0), 0, 4);
+  o.comm.ppal = constrain((int)(c["ppal"] | NOFILTER), 0, 4);
+  strlcpy(o.pb, c["pb"] | "", sizeof(o.pb));
   o.comm.bg = constrain((int)(c["bg"] | 0), 0, 2);
   strlcpy(o.tb, c["tb"] | "", sizeof(o.tb));
   return true;
+}
+
+// ---------------- JPEG -> 320x172 RGB565 (stretched to fit), through a filter ----------------
+struct JpgJob { const uint8_t* d; size_t n, pos; uint16_t* out; int w, h; const uint16_t* ramp; };
+static UINT jpgRead(JDEC* jd, BYTE* buf, UINT len) {
+  JpgJob* j = (JpgJob*)jd->device;
+  if (j->pos + len > j->n) len = j->n - j->pos;
+  if (buf) memcpy(buf, j->d + j->pos, len);
+  j->pos += len;
+  return len;
+}
+static UINT jpgWrite(JDEC* jd, void* bitmap, JRECT* r) {
+  JpgJob* j = (JpgJob*)jd->device;
+  const uint8_t* px = (const uint8_t*)bitmap;            // RGB888
+  for (int y = r->top; y <= r->bottom; y++) {
+    int y0 = y * LCD_H / j->h, y1 = (y + 1) * LCD_H / j->h;
+    for (int x = r->left; x <= r->right; x++, px += 3) {
+      uint16_t c = j->ramp ? j->ramp[(px[0] * 77 + px[1] * 150 + px[2] * 29) >> 8] : lcdColor(px[0], px[1], px[2]);
+      int x0 = x * LCD_W / j->w, x1 = (x + 1) * LCD_W / j->w;
+      for (int yy = y0; yy < y1 && yy < LCD_H; yy++) for (int xx = x0; xx < x1 && xx < LCD_W; xx++) j->out[yy * LCD_W + xx] = c;
+    }
+  }
+  return 1;
+}
+static bool jpegToPlane(const uint8_t* d, size_t n, uint16_t* out, int pal) {
+  for (int i = 0; i < 50 && G.pushing == out; i++) vTaskDelay(1);   // the screen is still reading this one
+  static uint8_t* work = nullptr;
+  static uint16_t ramp[256];
+  if (!work) work = (uint8_t*)heap_caps_malloc(4096, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (!work || !out) return false;
+  JpgJob j = { d, n, 0, out, 0, 0, nullptr };
+  if (pal >= 0 && pal < NOFILTER) { scrPhotoRamp(pal, ramp); j.ramp = ramp; }
+  JDEC jd;
+  JRESULT r = jd_prepare(&jd, jpgRead, work, 4096, &j);
+  if (r != JDR_OK) { Serial.printf("JPEG: can't read it (%d)\n", (int)r); return false; }
+  j.w = jd.width; j.h = jd.height;
+  if (!j.w || !j.h) return false;
+  r = jd_decomp(&jd, jpgWrite, 0);
+  if (r != JDR_OK) { Serial.printf("JPEG: broken (%d)\n", (int)r); return false; }
+  return true;
+}
+// show the photo (a JPEG) with this filter; keeps the JPEG to change the filter later
+static void showPhoto(const uint8_t* jpg, size_t n, int pal) {
+  if (!photoBack) photoBack = (uint16_t*)ps_malloc(LCD_W * LCD_H * 2);
+  if (!jpegToPlane(jpg, n, photoBack, pal)) return;
+  xSemaphoreTake(G.lock, portMAX_DELAY);
+  uint16_t* t = G.photo; G.photo = photoBack; photoBack = t;
+  xSemaphoreGive(G.lock);
+  photoPal = pal;
 }
 
 void linkLoadSaved() {
@@ -78,6 +139,11 @@ void linkLoadSaved() {
     uint8_t* tx = loadFile("/text.bin", tn);
     if (tbn && tx && !strcmp((char*)tbn, st.tb)) G.text = textDecode(tx, tn);
     free(tbn); free(tx);
+    size_t pn = 0, jn = 0;
+    uint8_t* pbn = loadFile("/photo.pb", pn);
+    uint8_t* jpg = loadFile("/photo.jpg", jn);
+    if (pbn && jpg && st.pb[0] && !strcmp((char*)pbn, st.pb)) { photoJpg = jpg; photoJpgLen = jn; jpg = nullptr; showPhoto(photoJpg, photoJpgLen, st.comm.ppal); }
+    free(pbn); free(jpg);
   }
   free(d);
 }
@@ -125,6 +191,7 @@ static void sendHi() {
   d["home"] = prefGet("home"); d["wifi"] = G.wifi; d["ip"] = G.ip; d["rssi"] = WiFi.RSSI();
   xSemaphoreTake(G.lock, portMAX_DELAY);
   d["tb"] = G.text ? G.st.tb : ""; d["rev"] = G.st.rev;
+  d["pb"] = G.photo ? G.st.pb : "";
   xSemaphoreGive(G.lock);
   String s; serializeJson(d, s);
   wsText(s);
@@ -192,6 +259,14 @@ static void handleState(const uint8_t* d, size_t n) {
     }
     free(pendingText); pendingText = nullptr;
   }
+  if (pendingPhoto) {                            // a new photo
+    if (st.pb[0]) {
+      free(photoJpg); photoJpg = pendingPhoto; photoJpgLen = pendingPhotoLen; pendingPhoto = nullptr;
+      showPhoto(photoJpg, photoJpgLen, st.comm.ppal);
+      saveFile("/photo.jpg", photoJpg, photoJpgLen); saveFile("/photo.pb", (const uint8_t*)st.pb, strlen(st.pb) + 1);
+    }
+    free(pendingPhoto); pendingPhoto = nullptr;
+  } else if (photoJpg && st.comm.ppal != photoPal) showPhoto(photoJpg, photoJpgLen, st.comm.ppal);   // another filter
   xSemaphoreTake(G.lock, portMAX_DELAY);
   G.st = st; G.haveState = true;
   TextPic* old = nullptr;
@@ -220,6 +295,20 @@ static void handleMessage() {
       char b[40]; snprintf(b, sizeof(b), "{\"t\":\"got\",\"s\":%u}", (unsigned)seq);
       wsText(b);
     }
+  } else if (!memcmp(msg, "HFV2", 4)) {         // colour video: a JPEG
+    uint32_t seq = msg[8] | msg[9] << 8 | msg[10] << 16 | (uint32_t)msg[11] << 24;
+    if (!colorBack) colorBack = (uint16_t*)ps_malloc(LCD_W * LCD_H * 2);
+    if (jpegToPlane(msg + 12, msgLen - 12, colorBack, NOFILTER)) {
+      xSemaphoreTake(G.lock, portMAX_DELAY);
+      uint16_t* t = G.color; G.color = colorBack; colorBack = t; G.colorAt = millis();
+      xSemaphoreGive(G.lock);
+    }
+    char b[40]; snprintf(b, sizeof(b), "{\"t\":\"got\",\"s\":%u}", (unsigned)seq);
+    wsText(b);
+  } else if (!memcmp(msg, "HFP1", 4)) {          // a photo: a JPEG after the 4 letters
+    free(pendingPhoto);
+    pendingPhoto = (uint8_t*)ps_malloc(msgLen - 4);
+    if (pendingPhoto) { memcpy(pendingPhoto, msg + 4, msgLen - 4); pendingPhotoLen = msgLen - 4; }
   } else if (!memcmp(msg, "HFT1", 4)) {
     free(pendingText);
     pendingText = (uint8_t*)ps_malloc(msgLen);
