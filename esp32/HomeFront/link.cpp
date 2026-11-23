@@ -5,6 +5,8 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <Update.h>
 #include "config.h"
 #include "certs.h"
 #include "hf.h"
@@ -31,6 +33,11 @@ static size_t photoJpgLen = 0;
 static int photoPal = -1;                      // the filter the shown photo has
 static uint16_t* photoBack = nullptr;          // decode here, then swap with G.photo
 static uint16_t* colorBack = nullptr;          // the same for colour video
+// new firmware over WiFi (error.blue says {t:"ota", ver, url, size, md5})
+static char otaVer[16] = "", otaUrl[96] = "", otaMd5[40] = "", otaFailedVer[16] = "";
+static size_t otaSize = 0;
+static bool otaWant = false;
+static uint32_t otaFailedAt = 0;
 
 // ---------------- flash ----------------
 static void saveFile(const char* path, const uint8_t* d, size_t n) {
@@ -85,6 +92,81 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.clock.date = (k["date"] | 1) != 0;
   strlcpy(o.ptz, k["ptz"] | "", sizeof(o.ptz));
   return true;
+}
+
+// ---------------- firmware over WiFi ----------------
+static bool parseOta(const uint8_t* d, size_t n) {
+  JsonDocument doc;
+  if (deserializeJson(doc, (const char*)d, n)) return false;
+  if (strcmp(doc["t"] | "", "ota")) return false;
+  strlcpy(otaVer, doc["ver"] | "", sizeof(otaVer));
+  strlcpy(otaUrl, doc["url"] | "", sizeof(otaUrl));
+  strlcpy(otaMd5, doc["md5"] | "", sizeof(otaMd5));
+  otaSize = doc["size"] | 0;
+  if (!otaVer[0] || otaUrl[0] != '/' || otaSize < 100000 || !strcmp(otaVer, HF_VERSION)) return true;
+  if (!strcmp(otaFailedVer, otaVer) && millis() - otaFailedAt < 3600000) return true;   // it failed: not again for an hour
+  otaWant = true;
+  return true;
+}
+class OtaSink : public Stream {                  // the download goes straight into the other app slot
+ public:
+  size_t total, done = 0, calls = 0;
+  explicit OtaSink(size_t t) : total(t) {}
+  size_t write(const uint8_t* b, size_t n) override {
+    size_t w = Update.write((uint8_t*)b, n);
+    done += w;
+    G.otaPct = (int)(done * 100 / total);
+    if ((++calls & 15) == 0) vTaskDelay(1);
+    return w;
+  }
+  size_t write(uint8_t c) override { return write(&c, 1); }
+  int available() override { return 0; }
+  int read() override { return -1; }
+  int peek() override { return -1; }
+  void flush() override {}
+};
+static void doOta() {
+  Serial.printf("OTA: %s -> %s, %u bytes\n", HF_VERSION, otaVer, (unsigned)otaSize);
+  snprintf(G.otaMsg, sizeof(G.otaMsg), "%s > %s", HF_VERSION, otaVer);
+  G.otaPct = 0; G.otaAt = millis();
+  linkDrop();                                    // free the memory of the other connection first
+  bool ok = false;
+  const char* err = "";
+  {
+    WiFiClientSecure c;
+    if (insecure) c.setInsecure(); else c.setCACert(ROOT_CAS);
+    HTTPClient http;
+    http.setTimeout(20000);
+    String url = String("https://") + HF_HOST + otaUrl;
+    if (!http.begin(c, url)) err = "NO CONNECTION";
+    else {
+      int code = http.GET();
+      int len = http.getSize();
+      if (code != 200) { err = "THE SERVER SAID NO"; Serial.printf("OTA: HTTP %d\n", code); }
+      else if (len > 0 && (size_t)len != otaSize) err = "WRONG SIZE";
+      else if (!Update.begin(otaSize)) err = "NO ROOM (USB UPDATE NEEDED)";
+      else {
+        if (strlen(otaMd5) == 32) Update.setMD5(otaMd5);
+        OtaSink sink(otaSize);
+        int n = http.writeToStream(&sink);
+        if (n < 0 || sink.done != otaSize) { err = "DOWNLOAD BROKE OFF"; Update.abort(); Serial.printf("OTA: got %u of %u (%d)\n", (unsigned)sink.done, (unsigned)otaSize, n); }
+        else if (!Update.end()) err = "CHECK FAILED";
+        else ok = true;
+      }
+      http.end();
+    }
+  }
+  if (ok) {
+    Serial.println("OTA: done, restarting");
+    G.otaPct = 100; strlcpy(G.otaMsg, "DONE. RESTARTING...", sizeof(G.otaMsg));
+    delay(1200);
+    ESP.restart();
+  }
+  Serial.printf("OTA: failed: %s (%s)\n", err, Update.errorString());
+  strlcpy(otaFailedVer, otaVer, sizeof(otaFailedVer)); otaFailedAt = millis();
+  snprintf(G.otaMsg, sizeof(G.otaMsg), "FAILED: %s", err);
+  G.otaPct = -2; G.otaAt = millis();
+  nextTry = millis() + 1000;
 }
 
 // ---------------- JPEG -> 320x172 RGB565 (stretched to fit), through a filter ----------------
@@ -206,7 +288,9 @@ static bool wsText(const String& s) { return wsSend(1, (const uint8_t*)s.c_str()
 
 static void sendHi() {
   JsonDocument d;
-  d["t"] = "hi"; d["id"] = G.id; d["kind"] = "esp"; d["ver"] = HF_VERSION;
+  d["t"] = "hi"; d["id"] = G.id; d["kind"] = "esp"; d["ver"] = HF_VERSION; d["ota"] = 1;
+  d["flash"] = (int)(ESP.getFlashChipSize() >> 20);
+  if (otaFailedVer[0]) d["otafail"] = otaFailedVer;
   d["name"] = prefGet("name", G.id); d["rename"] = prefGet("renamed", "0") == "1" ? 1 : 0;
   d["home"] = prefGet("home"); d["wifi"] = G.wifi; d["ip"] = G.ip; d["rssi"] = WiFi.RSSI();
   xSemaphoreTake(G.lock, portMAX_DELAY);
@@ -275,7 +359,7 @@ static void handleState(const uint8_t* d, size_t n) {
   if (pendingText) {
     if (st.tb[0]) {
       nt = textDecode(pendingText, pendingLen);
-      if (nt && pendingLen < 400000) { saveFile("/text.bin", pendingText, pendingLen); saveFile("/text.tb", (const uint8_t*)st.tb, strlen(st.tb) + 1); }
+      if (nt && pendingLen < 150000) { saveFile("/text.bin", pendingText, pendingLen); saveFile("/text.tb", (const uint8_t*)st.tb, strlen(st.tb) + 1); }
     }
     free(pendingText); pendingText = nullptr;
   }
@@ -302,7 +386,7 @@ static void handleState(const uint8_t* d, size_t n) {
 }
 
 static void handleMessage() {
-  if (msgOp == 1) { handleState(msg, msgLen); return; }
+  if (msgOp == 1) { if (!parseOta(msg, msgLen)) handleState(msg, msgLen); return; }
   if (msgOp != 2 || msgLen < 12) return;
   if (!memcmp(msg, "HFV1", 4)) {
     int w = msg[4] | msg[5] << 8, h = msg[6] | msg[7] << 8;
@@ -377,6 +461,7 @@ void linkStep() {
     if (rawState) saveFile("/state.json", rawState, rawStateLen);
   }
   if (G.wantRelink) { G.wantRelink = false; linkDrop(); nextTry = 0; }
+  if (otaWant) { otaWant = false; doOta(); return; }
   if (!G.wsUp) {
     if ((int32_t)(now - nextTry) < 0) return;
     if (time(nullptr) < 1600000000) {             // the certificate check needs the date

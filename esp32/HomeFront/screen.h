@@ -52,6 +52,7 @@ void scrLine(int x0, int y0, int x1, int y1, uint8_t c);
 // returns the colour picture to show under the text (or nullptr)
 const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, float tA, uint32_t nowMs);
 void scrClock(const ClockSet& c, const struct tm* t, int ms);   // t = nullptr: no time yet
+void scrUpdate(float t, int pct, const char* msg);              // new firmware coming in over WiFi
 void scrIdle(float t, const ScreenInfo& in);
 void scrConnected(float t, const ScreenInfo& in);
 void scrConnecting(float t, const ScreenInfo& in);

@@ -14,6 +14,7 @@
 //                      {t:"ping", rssi, fps, heap}                                  every 15 s
 //                      {t:"got", s}                                                 a video frame is on screen
 //   server -> device   {t:"state", state}                                           whenever it changes
+//                      {t:"ota", ver, url, size, md5}   new firmware: get it over WiFi (boards that said ota:1)
 //                      binary "HFT1..."  the text picture (sent before the state that names it)
 //                      binary "HFP1..."  the photo (a JPEG, sent before the state that names it)
 //                      binary "HFV1..." / "HFV2..."  one video frame (only after the last one was "got")
@@ -33,6 +34,14 @@
 // HFP1 (photo): "HFP1" then a JPEG (320x172, colour; the screen applies the filter itself).
 
 import { DurableObject } from "cloudflare:workers";
+import { FIRMWARE } from "./hf_firmware.js";
+
+// "1.10" > "1.9": compare version numbers part by part
+function newer(a, b) {
+  const x = String(a || "").split(".").map(Number), y = String(b || "").split(".").map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; }
+  return false;
+}
 
 const ID_RE = /^(HF|WEB)-[A-F0-9]{4,12}$/;
 const HOME_RE = /^[A-Z0-9]{0,12}$/;
@@ -147,6 +156,7 @@ export class HomeFront extends DurableObject {
     this.states = new Map();   // id -> state (cache of storage "st:<id>")
     this.flow = new Map();     // id -> { busy, at, pending }   video frames on their way
     this.tries = new Map();    // id -> { n, until }   wrong passwords (in memory)
+    this.otaAt = new Map();    // id -> when it was last told to update (in memory)
   }
 
   // ---------- storage ----------
@@ -235,6 +245,7 @@ export class HomeFront extends DurableObject {
       id: d.id, name: d.name, kind: d.kind, ver: d.ver, wifi: d.wifi, ip: d.ip, rssi: a.rssi ?? d.rssi,
       fps: a.fps || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
       mode: s.comm.mode, homeSet: !!d.home, locked: !!d.pw, pwAsked: !!(d.pwAsked || d.pw),
+      ota: !!d.ota, fwNew: d.kind === "esp" && newer(FIRMWARE.ver, d.ver) ? FIRMWARE.ver : "",
     };
   }
   async pushState(id, alsoText, alsoPhoto) {
@@ -350,6 +361,7 @@ export class HomeFront extends DurableObject {
       d.kind = m.kind === "web" ? "web" : "esp";
       d.ver = str(m.ver, 16); d.wifi = str(m.wifi, 32); d.ip = str(m.ip, 40); d.rssi = int(m.rssi, -120, 0, 0);
       d.home = cleanHome(m.home); d.seen = now;
+      d.ota = m.ota ? 1 : 0;
       await this.saveDev(d);
       ws.serializeAttachment({ ...a, seen: now, rssi: d.rssi, fps: 0 });
       this.flow.delete(id);
@@ -359,6 +371,7 @@ export class HomeFront extends DurableObject {
       if (s.comm.tb && m.tb !== s.comm.tb) { const t = await this.loadText(id); if (t && t.tb === s.comm.tb) this.send(ws, t.data); }
       if (s.comm.pb && m.pb !== s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(ws, p.data); }
       this.send(ws, { t: "state", state: { ...s, name: d.name } });
+      if (m.ota) this.offerFirmware(id, ws, m.otafail === FIRMWARE.ver ? 60 * 60000 : 10 * 60000);
       this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
       return;
     }
@@ -378,6 +391,17 @@ export class HomeFront extends DurableObject {
       }
       this.toCtl(id, { t: "got", s: int(m.s, 0, 4294967295, 0) });
     }
+  }
+
+  // a board with older firmware that can update over WiFi: tell it where the new one is (not more often than "every" ms)
+  offerFirmware(id, ws, every) {
+    const d = this.devs.get(id);
+    if (!ws || !d || d.kind !== "esp" || !d.ota || !newer(FIRMWARE.ver, d.ver)) return false;
+    const now = Date.now();
+    if (now - (this.otaAt.get(id) || 0) < every) return false;
+    this.otaAt.set(id, now);
+    this.send(ws, { t: "ota", ver: FIRMWARE.ver, url: FIRMWARE.path, size: FIRMWARE.size, md5: FIRMWARE.md5 });
+    return true;
   }
 
   sendFrame(id, data) {
@@ -450,6 +474,10 @@ export class HomeFront extends DurableObject {
         }
       }
       return this.toCtl(id, { t: "dev", dev: info });
+    }
+    if (m.t === "ota") {                        // UPDATE FIRMWARE from a phone
+      const ok = this.offerFirmware(id, this.devSock(id), 0);
+      return this.send(ws, ok ? { t: "err", msg: "updating: about a minute" } : { t: "err", msg: "no update for this screen" });
     }
     if (m.t === "nopw") {
       const d = await this.dev(id);

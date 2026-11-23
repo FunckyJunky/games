@@ -407,7 +407,11 @@ function drawPanel() {
       <button class="btn${d.fx === 0 ? '' : ' on'}" id="fxB">${d.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'}</button>
       ${d.online && d.app ? '<button class="btn" id="clB">CLOSE WEB APP</button>' : ''}
       ${d.online ? '' : '<button class="btn red" id="fgB">FORGET</button>'}</div>
-    <div class="row"><button class="btn${d.locked ? ' on' : ''}" id="pwdB">${d.locked ? 'PASSWORD: ON' : 'PASSWORD: OFF'}</button></div>`;
+    <div class="row"><button class="btn${d.locked ? ' on' : ''}" id="pwdB">${d.locked ? 'PASSWORD: ON' : 'PASSWORD: OFF'}</button></div>
+    ${d.kind === 'esp' && d.fwNew ? (d.ota
+      ? `<div class="row"><button class="btn" id="otaB" ${d.online ? '' : 'disabled'}>UPDATE FIRMWARE TO v${esc(d.fwNew)}</button></div><p class="dimt small">Over WiFi, no cable. It also does this by itself when it connects.</p>`
+      : `<p class="dimt small">FIRMWARE v${esc(d.ver)} CAN'T UPDATE OVER WIFI YET. Put v${esc(d.fwNew)} on it once with a cable (error.blue/thuisfront/flash); after that it updates itself.</p>`) : ''}`;
+  if ($('otaB')) $('otaB').onclick = () => { ctl.send({ t: 'ota' }); $('otaB').disabled = true; $('otaB').textContent = 'UPDATING...'; };
   $('pwdB').onclick = () => pwModal(d);
   if ($('npSet')) $('npSet').onclick = () => pwModal(d);
   if ($('npNo')) $('npNo').onclick = () => { ctl.send({ t: 'nopw' }); d.pwAsked = true; drawStrip(); };

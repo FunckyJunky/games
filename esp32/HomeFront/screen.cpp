@@ -392,6 +392,20 @@ void scrIdle(float t, const ScreenInfo& in) {
   scrText(st, W - 4 - scrTextW(st, 1), 162, 1, in.online ? IX_U + 11 : IX_RED);
   if (((int)floorf(t / 4)) % 3 == 0 && fmodf(t, 4) < 0.12f) glitchRows((uint32_t)floorf(t * 30), 1, 14);
 }
+void scrUpdate(float t, int pct, const char* msg) {
+  memset(FB, IX_U, W * H);
+  bars("HOME FRONT", "UPDATE");
+  drawHouse(t, 268, 100, 90, IX_U + 9);
+  scrText("NEW FIRMWARE", 14, 34, 2, IX_U + 15);
+  scrText(msg, 14, 60, 1, pct == -2 ? IX_RED : IX_U + 12);
+  if (pct >= 0) {
+    scrFill(14, 82, 200, 14, IX_U + 6); scrFill(16, 84, 196, 10, IX_U + 0);
+    scrFill(16, 84, 196 * pct / 100, 10, IX_U + 13);
+    char b[8]; snprintf(b, sizeof(b), "%d%%", pct); scrText(b, 220, 85, 1, IX_U + 13);
+    scrText("OVER WIFI, NO CABLE NEEDED", 14, 112, 1, IX_U + 7);
+    scrText("DON'T TURN IT OFF", 14, 126, 1, IX_U + 10);
+  } else scrText("IT GOES ON WITH THE OLD ONE", 14, 112, 1, IX_U + 7);
+}
 void scrConnected(float t, const ScreenInfo& in) {
   memset(FB, IX_U, W * H);
   bars("HOME FRONT", in.name);

@@ -62,7 +62,7 @@ void setup() {
                                      "WATCHDOG", "DEEP SLEEP", "BROWNOUT", "SDIO", "USB", "JTAG", "EFUSE", "PWR GLITCH", "CPU LOCKUP" };
   int why = (int)esp_reset_reason();
   const char* whyS = why >= 0 && why < 16 ? WHY[why] : "UNKNOWN";
-  Serial.printf("\nHOME FRONT %s  %s  (start: %s)\n", HF_VERSION, G.id, whyS);
+  Serial.printf("\nHOME FRONT %s  %s  (start: %s, flash %u MB)\n", HF_VERSION, G.id, whyS, (unsigned)(ESP.getFlashChipSize() >> 20));
 
   lcdBegin(prefFlip());
   scrBegin();
@@ -117,7 +117,9 @@ void loop() {
   if (G.staUp && setupForcedAt && !G.apOn) setupForcedAt = 0;
   if (G.apOn) { float p = 0.5f + 0.5f * sinf(tNow * 2.5f); lb = 8 + p * 40; }
 
-  if ((int32_t)(bootUntil - now) > 0) scrBoot((now - (bootUntil - 1500)) / 1000.0f, bootPtr, bootN);
+  bool otaShow = G.otaPct >= 0 || (G.otaPct == -2 && now - G.otaAt < 6000);
+  if (otaShow) { scrUpdate(tNow, G.otaPct, G.otaMsg); bl = 80; }
+  else if ((int32_t)(bootUntil - now) > 0) scrBoot((now - (bootUntil - 1500)) / 1000.0f, bootPtr, bootN);
   else if (G.connectedAt && now - G.connectedAt < 3000) scrConnected((now - G.connectedAt) / 1000.0f, info);
   else if (setupScreen) scrSetup(tNow, info, G.setupMsg);
   else if (!G.everStaUp && G.joining && !appOn) scrJoining(tNow, info, G.joinSsid, G.joinLow);

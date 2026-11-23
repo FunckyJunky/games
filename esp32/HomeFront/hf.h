@@ -46,6 +46,10 @@ struct Shared {
   volatile bool wantSetup = false, wantRelink = false;
   volatile bool flipChanged = false;
   volatile int renderFps = 0;
+  // a firmware update over WiFi: otaPct -1 = none, 0-100 = busy, -2 = it failed (otaMsg says why, shown a few seconds)
+  volatile int otaPct = -1;
+  volatile uint32_t otaAt = 0;
+  char otaMsg[40] = "";
 };
 extern Shared G;
 
