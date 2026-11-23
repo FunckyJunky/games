@@ -381,6 +381,7 @@ export class HomeFront extends DurableObject {
       const d = await this.dev(id);
       if (d && now - (d.seen || 0) > 5 * 60 * 1000) { d.seen = now; await this.saveDev(d); }   // "last seen", now and then
       if (!wasOn || this.socks("ctl", id).length) this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
+      this.offerFirmware(id, ws, 10 * 60000);   // new firmware also reaches boards that stay connected (a deploy keeps them on)
       return;
     }
     if (m.t === "got") {
