@@ -73,7 +73,6 @@ static Net cand[MAX_NETS + 1];
 static int ncand = 0, ci = 0, pass = 0;
 static bool usedLow = false;
 static uint32_t tryStart = 0, nextScan = 0, apOffAt = 0, downSince = 0;
-static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool joinReq = false, scanReq = false, scanning = false;
 static char joinS[33], joinP[65];
 static String scanJson = "";
@@ -180,14 +179,14 @@ static void netLoop(void*) {
           JsonObject o = a.add<JsonObject>(); o["s"] = WiFi.SSID(i); o["r"] = WiFi.RSSI(i); o["l"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
         }
         String s; serializeJson(d, s);
-        portENTER_CRITICAL(&mux); scanJson = s; portEXIT_CRITICAL(&mux);
+        plock(); scanJson = s; punlock();
         WiFi.scanDelete(); scanning = false;
       } else if (n == WIFI_SCAN_FAILED) scanning = false;
     }
     if (joinReq && !scanning) {                  // the setup page asked to join a network
       joinReq = false;
       startAP();
-      Net n; portENTER_CRITICAL(&mux); strlcpy(n.s, joinS, sizeof(n.s)); strlcpy(n.p, joinP, sizeof(n.p)); portEXIT_CRITICAL(&mux);
+      Net n; plock(); strlcpy(n.s, joinS, sizeof(n.s)); strlcpy(n.p, joinP, sizeof(n.p)); punlock();
       n.low = false;
       Net saved[MAX_NETS]; int ns = netsLoad(saved);
       for (int i = 0; i < ns; i++) if (!strcmp(saved[i].s, n.s)) n.low = saved[i].low;
@@ -210,7 +209,7 @@ static void netLoop(void*) {
         break;
       case W_TRY:
         if (WiFi.status() == WL_CONNECTED) onUp();
-        else if (now - tryStart > WIFI_TRY_MS) {
+        else if (millis() - tryStart > WIFI_TRY_MS) {
           if (pass == 0) { pass = 1; beginNet(cand[ci], !cand[ci].low); }
           else if (++ci < ncand) { pass = 0; beginNet(cand[ci], cand[ci].low); }
           else { Serial.println("WIFI: no saved network worked"); setupFail(); }
@@ -294,8 +293,8 @@ static void hStatus() {
 }
 static void hScan() {
   String s;
-  portENTER_CRITICAL(&mux); s = scanJson; portEXIT_CRITICAL(&mux);
-  if (web->hasArg("new") || !s.length()) { scanReq = true; portENTER_CRITICAL(&mux); scanJson = ""; portEXIT_CRITICAL(&mux); web->send(200, "application/json", "{\"busy\":1}"); return; }
+  plock(); s = scanJson; punlock();
+  if (web->hasArg("new") || !s.length()) { scanReq = true; plock(); scanJson = ""; punlock(); web->send(200, "application/json", "{\"busy\":1}"); return; }
   web->send(200, "application/json", s);
 }
 static void hJoin() {
@@ -303,7 +302,7 @@ static void hJoin() {
   s.trim();
   if (!s.length()) { web->send(400, "application/json", "{\"error\":\"no name\"}"); return; }
   netsAdd(s.c_str(), p.c_str());
-  portENTER_CRITICAL(&mux); strlcpy(joinS, s.c_str(), sizeof(joinS)); strlcpy(joinP, p.c_str(), sizeof(joinP)); portEXIT_CRITICAL(&mux);
+  plock(); strlcpy(joinS, s.c_str(), sizeof(joinS)); strlcpy(joinP, p.c_str(), sizeof(joinP)); punlock();
   joinReq = true;
   web->send(200, "application/json", "{\"ok\":1}");
 }

@@ -12,6 +12,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <LittleFS.h>
+#include "esp_mac.h"
 #include "config.h"
 #include "lcd.h"
 #include "screen.h"
@@ -21,8 +22,8 @@ static ScreenInfo info;
 static uint32_t bootUntil = 0, infoUntil = 0, lastFrame = 0, t0Text = 0, frames = 0, fpsAt = 0, setupForcedAt = 0;
 static int lastBl = -1, lastLed = -1;
 static String textKey;
-static char bootLines[8][40];
-static const char* bootPtr[8];
+static char bootLines[10][40];
+static const char* bootPtr[10];
 static int bootN = 0;
 
 static void led(uint8_t r, uint8_t g, uint8_t b) {
@@ -52,10 +53,14 @@ void setup() {
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   G.lock = xSemaphoreCreateMutex();
   uint8_t mac[6];
-  WiFi.macAddress(mac);
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);              // the chip's own address (WiFi isn't started yet)
   snprintf(G.id, sizeof(G.id), "HF-%02X%02X%02X", mac[3], mac[4], mac[5]);
   snprintf(G.ap, sizeof(G.ap), HF_AP_PREFIX "%02X%02X", mac[4], mac[5]);
-  Serial.printf("\nHOME FRONT %s  %s\n", HF_VERSION, G.id);
+  static const char* const WHY[] = { "UNKNOWN", "POWER ON", "RESET PIN", "SOFTWARE", "CRASH", "INT WATCHDOG", "TASK WATCHDOG",
+                                     "WATCHDOG", "DEEP SLEEP", "BROWNOUT", "SDIO", "USB", "JTAG", "EFUSE", "PWR GLITCH", "CPU LOCKUP" };
+  int why = (int)esp_reset_reason();
+  const char* whyS = why >= 0 && why < 16 ? WHY[why] : "UNKNOWN";
+  Serial.printf("\nHOME FRONT %s  %s  (start: %s)\n", HF_VERSION, G.id, whyS);
 
   lcdBegin(prefFlip());
   scrBegin();
@@ -72,6 +77,7 @@ void setup() {
   snprintf(bootLines[bootN++], 40, "ID    %s", G.id);
   snprintf(bootLines[bootN++], 40, "WIFI  %d SAVED NETWORK%s", nn, nn == 1 ? "" : "S");
   snprintf(bootLines[bootN++], 40, "APP   %s", G.haveState && G.st.app ? "COMM (SAVED)" : "NONE YET");
+  snprintf(bootLines[bootN++], 40, "START %s", whyS);
   snprintf(bootLines[bootN++], 40, "C:\\>HOMEFRNT");
   for (int i = 0; i < bootN; i++) bootPtr[i] = bootLines[i];
   bootUntil = millis() + 1500;
@@ -88,8 +94,8 @@ void loop() {
   lastFrame = now;
 
   strlcpy(info.id, G.id, sizeof(info.id));
-  String nm = prefGet("name", G.id);
-  strlcpy(info.name, nm.c_str(), sizeof(info.name));
+  static uint32_t nameAt = 0;
+  if (!nameAt || now - nameAt > 1000) { nameAt = now; String nm = prefGet("name", G.id); strlcpy(info.name, nm.c_str(), sizeof(info.name)); }
   strlcpy(info.wifi, G.staUp ? G.wifi : "", sizeof(info.wifi));
   strlcpy(info.ip, G.staUp ? G.ip : "NO WIFI", sizeof(info.ip));
   strlcpy(info.ap, G.ap, sizeof(info.ap));
