@@ -415,7 +415,7 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Flowers can be picked (P, or Moves): gone for everyone (presence `pk`) and back after 12 minutes;
   tie 3+ into a bouquet held in the hand (presence `fl`), give flowers or the bouquet to someone next
   to you (presence `gift`, to their peer)
-- tents: a dome tent in your jacket colour (fly sheet over two crossing poles, open door with a rolled
+- tents: a small, cramped two-person dome tent (1.5 x 2.1 m, 1 m high) in your jacket colour (fly sheet over two crossing poles, open door with a rolled
   flap and zips, guy lines and pegs). Up to 3 per explorer (camp `ts`: [x, z, turn, lights inside],
   oldest first; `t` still carries the newest for older versions); a 4th makes the oldest go poof.
   Go inside (Camp): first-person view sitting facing the door (or lying in your sleeping bag), the
