@@ -409,6 +409,19 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   distance 255%, glow 55%, brightness +4, contrast +33, gamma 1.51. A player's own choices are kept;
   lens and quality saved automatically under the old defaults gave way once (`wt.cfgv` = 2).
   Advanced settings ends with "Copy my settings" (one line of text with everything set right now)
+- flora (Mistwalkers): flowers in drifts on open grass (daisy, buttercup, poppy, cornflower, campion),
+  mushrooms in the forest, bushes along forest edges (plain, berries, blossom), ivy up a third of the
+  trunks; placed from the world position alone (the same plants for everyone), clear of camps.
+  Flowers can be picked (P, or Moves): gone for everyone (presence `pk`) and back after 12 minutes;
+  tie 3+ into a bouquet held in the hand (presence `fl`), give flowers or the bouquet to someone next
+  to you (presence `gift`, to their peer)
+- knee-high ground fog: three drifting mist layers laid over the ground around you, thicker in fog
+  and rain, lit orange by fires, kept out of tents and fire rings; Ground fog slider in Lighting & map
+- campfire: billowing smoke puffs (noise texture, turning and swelling, lit by the flames from below);
+  the warm light on the ground is laid over the terrain (it no longer cuts into slopes in a line)
+- remembered in the browser: name, look and camp name (as before), your own camp (saved the moment it
+  changes and when the page closes), lantern, flowers in hand, tree and forest sliders, tree height
+  variation, your own lens slider values, ambient sound (starts on the first tap or key)
 - XREAL glasses (desktop only, Advanced settings): VR mode for the XREAL One / One Pro. Head tracking
   comes from the local XREAL bridge (Documents\xreal-vr\Start XREAL VR.bat, ws://localhost:8765/ws,
   28-byte samples: dt, gyro xyz rad/s, accel xyz m/s^2), fused in the page (gyro + gravity tilt
