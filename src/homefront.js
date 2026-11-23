@@ -4,7 +4,10 @@
 //   GET  /thuisfront/dev/ws?id=HF-XXXXXX&...   a device (WebSocket). Also at /api/hf/dev/ws.
 //   GET  /api/hf/ws?id=HF-XXXXXX&home=CODE     a controller for one device (WebSocket)
 //   GET  /api/hf/list?home=CODE                the devices with that home code ("" = no code)
-//   POST /api/hf/forget {id, home}             take an offline device off the list
+//   POST /api/hf/forget {id, home, key}        take an offline device off the list
+//
+// A device can have a password. Then a controller gets nothing (no state, no photo) and can change nothing
+// until it sends {t:"auth", key} with a key it got before, or {t:"auth", pw} with the password.
 //
 // Everything lives in one Durable Object ("main"). Protocol (all numbers little-endian):
 //   device -> server   {t:"hi", id, name, kind, ver, wifi, ip, rssi, home, tb, rev}   once, after connecting
@@ -14,10 +17,13 @@
 //                      binary "HFT1..."  the text picture (sent before the state that names it)
 //                      binary "HFP1..."  the photo (a JPEG, sent before the state that names it)
 //                      binary "HFV1..." / "HFV2..."  one video frame (only after the last one was "got")
-//   controller -> server  {t:"set", p:{...}}  change the state     {t:"name", name}  rename the device
+//   controller -> server  {t:"auth", key} or {t:"auth", pw}  first, always (ignored when there is no password)
+//                         {t:"setpw", pw, old}  set / change / remove ("") the password    {t:"nopw"}  "no password, thanks"
+//                         {t:"set", p:{...}}  change the state     {t:"name", name}  rename the device
 //                         binary "HFT1..."    new text picture     binary "HFP1..."  new photo
 //                         binary "HFV1..." / "HFV2..."  video frame
 //   server -> controller  {t:"state", state, dev}   {t:"dev", dev}   {t:"got", s}   {t:"err", msg}
+//                         {t:"authok", key}   {t:"locked", dev}   {t:"authfail", wait}   {t:"pwset", key}   {t:"pwfail", msg, wait}
 //
 // HFT1 (text): "HFT1" u16 w, u16 h, i16 x, i16 y, u16 n, u16 flags, n x (u16 x,y,w,h) letter boxes,
 //   then the w*h picture (levels 0-15) run-length coded: byte b, level b&15, count (b>>4)+1,
@@ -36,6 +42,8 @@ const PHOTO_MAX = 500000;          // bytes of one HFP1
 const CHUNK = 100000;              // HFT1 is stored in pieces this big
 const ONLINE_MS = 45000;           // no ping for this long = offline
 const FLOW_MS = 1500;              // a frame the device never "got" is given up after this
+const PW_ITER = 10000;             // PBKDF2 rounds for device passwords
+const KEYS_MAX = 30;               // browsers that know the password, per device
 
 const APPS = ["", "comm"];
 const MODES = ["text", "video", "both", "photo"];
@@ -54,6 +62,15 @@ const str = (v, max) => String(v == null ? "" : v).slice(0, max);
 function cleanName(v) {
   return String(v || "").replace(/[\u0000-\u001f<>"\\]/g, "").trim().slice(0, 20).toUpperCase();
 }
+const b64 = (u8) => { let s = ""; for (const c of u8) s += String.fromCharCode(c); return btoa(s); };
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const enc = (s) => new TextEncoder().encode(s);
+async function pwHash(pw, salt) {
+  const k = await crypto.subtle.importKey("raw", enc(pw), "PBKDF2", false, ["deriveBits"]);
+  return b64(new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PW_ITER }, k, 256)));
+}
+const sha = async (s) => b64(new Uint8Array(await crypto.subtle.digest("SHA-256", enc(s))));
+const cleanPw = (v) => (typeof v === "string" ? v.slice(0, 64) : "");
 const cleanHome = (v) => { const h = String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); return HOME_RE.test(h) ? h : ""; };
 
 export function defaultState() {
@@ -114,6 +131,7 @@ export class HomeFront extends DurableObject {
     this.devs = new Map();     // id -> device record (cache of storage "dev:<id>")
     this.states = new Map();   // id -> state (cache of storage "st:<id>")
     this.flow = new Map();     // id -> { busy, at, pending }   video frames on their way
+    this.tries = new Map();    // id -> { n, until }   wrong passwords (in memory)
   }
 
   // ---------- storage ----------
@@ -167,7 +185,31 @@ export class HomeFront extends DurableObject {
     return this.socks("dev", id).some((ws) => { const a = ws.deserializeAttachment() || {}; return now - (a.seen || 0) < ONLINE_MS; });
   }
   send(ws, msg) { try { ws.send(typeof msg === "string" || msg instanceof ArrayBuffer || ArrayBuffer.isView(msg) ? msg : JSON.stringify(msg)); } catch { /* gone */ } }
-  toCtl(id, msg) { const s = JSON.stringify(msg); for (const ws of this.socks("ctl", id)) this.send(ws, s); }
+  // controllers that may see this device (no password, or they gave it)
+  ctlSocks(id) { return this.socks("ctl", id).filter((ws) => (ws.deserializeAttachment() || {}).ok); }
+  toCtl(id, msg) { const s = JSON.stringify(msg); for (const ws of this.ctlSocks(id)) this.send(ws, s); }
+  // passwords: the device record has pw {salt, hash} and keys (SHA-256 of the keys handed out to browsers)
+  async keyOk(d, key) { return !d.pw || (typeof key === "string" && key.length > 10 && key.length < 80 && (d.keys || []).includes(await sha(key))); }
+  async newKey(d) {
+    const k = b64(crypto.getRandomValues(new Uint8Array(24))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    d.keys = [...(d.keys || []), await sha(k)].slice(-KEYS_MAX);
+    return k;
+  }
+  // a wrong password counts; 5 wrong ones = wait 30 s, then twice as long each time (max 15 min)
+  // (tk = the counter: the device id for typing the password to get in, id + "#set" for changing it)
+  waitFor(tk) { const t = this.tries.get(tk); return t && t.until > Date.now() ? Math.ceil((t.until - Date.now()) / 1000) : 0; }
+  async pwOk(tk, d, pw) {
+    if (await pwHash(pw, unb64(d.pw.salt)) === d.pw.hash) { this.tries.delete(tk); return true; }
+    const t = this.tries.get(tk) || { n: 0, until: 0 };
+    t.n++; if (t.n >= 5) t.until = Date.now() + Math.min(15 * 60000, 30000 * 2 ** (t.n - 5));
+    this.tries.set(tk, t);
+    return false;
+  }
+  async sendAll(ws, id) {                       // a controller that may see it: the photo (for its preview), then the state
+    const s = await this.state(id), d = await this.dev(id);
+    if (s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(ws, p.data); }
+    this.send(ws, { t: "state", state: { ...s, name: d ? d.name : "" }, dev: await this.devInfo(id) });
+  }
   async devInfo(id) {
     const d = await this.dev(id);
     if (!d) return null;
@@ -176,7 +218,7 @@ export class HomeFront extends DurableObject {
     return {
       id: d.id, name: d.name, kind: d.kind, ver: d.ver, wifi: d.wifi, ip: d.ip, rssi: a.rssi ?? d.rssi,
       fps: a.fps || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen,
-      mode: s.comm.mode, homeSet: !!d.home,
+      mode: s.comm.mode, homeSet: !!d.home, locked: !!d.pw, pwAsked: !!(d.pwAsked || d.pw),
     };
   }
   async pushState(id, alsoText, alsoPhoto) {
@@ -188,7 +230,7 @@ export class HomeFront extends DurableObject {
       if (p && p.tb === s.comm.pb) this.send(ws, p.data);
       this.send(ws, { t: "state", state: out });
     }
-    if (p && p.tb === s.comm.pb) for (const ws of this.socks("ctl", id)) this.send(ws, p.data);   // other phones see the new photo too
+    if (p && p.tb === s.comm.pb) for (const ws of this.ctlSocks(id)) this.send(ws, p.data);   // other phones see the new photo too
     this.toCtl(id, { t: "state", state: out, dev: await this.devInfo(id) });
   }
 
@@ -216,6 +258,7 @@ export class HomeFront extends DurableObject {
       const d = ID_RE.test(id) ? await this.dev(id) : null;
       if (!d) return json({ error: "no such device" }, 404);
       if ((d.home || "") !== cleanHome(b.home)) return json({ error: "wrong home code" }, 403);
+      if (!(await this.keyOk(d, b.key))) return json({ error: "it has a password: open it with the password first" }, 403);
       if (this.online(id)) return json({ error: "it is online" }, 409);
       const del = ["dev:" + id, "st:" + id];
       for (const kind of ["tb", "pb"]) {
@@ -224,7 +267,7 @@ export class HomeFront extends DurableObject {
         if (meta) for (let i = 0; i < meta.n; i++) del.push(kind + "c:" + id + ":" + i);
       }
       await this.ctx.storage.delete(del);
-      this.devs.delete(id); this.states.delete(id);
+      this.devs.delete(id); this.states.delete(id); this.tries.delete(id); this.tries.delete(id + "#set");
       return json({ ok: true });
     }
 
@@ -233,20 +276,18 @@ export class HomeFront extends DurableObject {
       if (request.headers.get("Upgrade") !== "websocket") return json({ error: "connect with a WebSocket" }, 426);
       const id = String(url.searchParams.get("id") || "").toUpperCase();
       if (!ID_RE.test(id)) return json({ error: "bad device id" }, 400);
+      let d = null;
       if (!isDev) {
-        const d = await this.dev(id);
+        d = await this.dev(id);
         if (!d) return json({ error: "no such device" }, 404);
         if ((d.home || "") !== cleanHome(url.searchParams.get("home"))) return json({ error: "wrong home code" }, 403);
       }
       const pair = new WebSocketPair();
       const role = isDev ? "dev" : "ctl";
+      const ok = isDev || !d.pw;                // a phone for a device with a password: first {t:"auth"}
       this.ctx.acceptWebSocket(pair[1], [role + ":" + id]);
-      pair[1].serializeAttachment({ role, id, seen: Date.now() });
-      if (!isDev) {                             // a phone: the photo now on the screen (for its preview), then the state
-        const s = await this.state(id), d = await this.dev(id);
-        if (s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(pair[1], p.data); }
-        this.send(pair[1], { t: "state", state: { ...s, name: d.name }, dev: await this.devInfo(id) });
-      }
+      pair[1].serializeAttachment({ role, id, seen: Date.now(), ok });
+      if (!isDev && ok) await this.sendAll(pair[1], id);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     return json({ error: "not found" }, 404);
@@ -256,11 +297,29 @@ export class HomeFront extends DurableObject {
     const a = ws.deserializeAttachment() || {};
     const id = a.id;
     if (!id) return;
-    if (typeof msg !== "string") return a.role === "ctl" ? this.ctlBinary(id, new Uint8Array(msg)) : undefined;
+    if (typeof msg !== "string") return a.role === "ctl" && a.ok ? this.ctlBinary(id, new Uint8Array(msg)) : undefined;
     let m;
     try { m = JSON.parse(msg); } catch { return; }
     if (!m || typeof m !== "object") return;
-    return a.role === "dev" ? this.devMessage(ws, a, id, m) : this.ctlMessage(ws, id, m);
+    if (a.role === "dev") return this.devMessage(ws, a, id, m);
+    if (m.t === "auth") return this.ctlAuth(ws, a, id, m);
+    if (!a.ok) return;                          // a password is needed first
+    return this.ctlMessage(ws, id, m);
+  }
+
+  // ---------- a controller and the password ----------
+  async ctlAuth(ws, a, id, m) {
+    if (a.ok) return;
+    const d = await this.dev(id);
+    if (!d) return;
+    const letIn = async (key) => { a.ok = true; ws.serializeAttachment(a); this.send(ws, { t: "authok", key: key || "" }); await this.sendAll(ws, id); };
+    if (await this.keyOk(d, m.key)) return letIn("");
+    const pw = cleanPw(m.pw);
+    if (!pw) return this.send(ws, { t: "locked", dev: await this.devInfo(id) });
+    const wait = this.waitFor(id);
+    if (wait) return this.send(ws, { t: "authfail", wait });
+    if (await this.pwOk(id, d, pw)) { const key = await this.newKey(d); await this.saveDev(d); return letIn(key); }
+    this.send(ws, { t: "authfail", wait: this.waitFor(id) });
   }
 
   // ---------- from a device ----------
@@ -346,6 +405,41 @@ export class HomeFront extends DurableObject {
   }
 
   async ctlMessage(ws, id, m) {
+    if (m.t === "setpw") {                      // set, change or remove ("") the password; changing needs the old one
+      const d = await this.dev(id);
+      if (!d) return;
+      const pw = cleanPw(m.pw);
+      if (pw && pw.length < 4) return this.send(ws, { t: "pwfail", msg: "at least 4 letters" });
+      if (d.pw) {
+        const wait = this.waitFor(id + "#set");
+        if (wait) return this.send(ws, { t: "pwfail", msg: "too many tries", wait });
+        if (!(await this.pwOk(id + "#set", d, cleanPw(m.old)))) return this.send(ws, { t: "pwfail", msg: "wrong password", wait: this.waitFor(id + "#set") });
+      }
+      d.pwAsked = true;
+      let key = "";
+      if (pw) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        d.pw = { salt: b64(salt), hash: await pwHash(pw, salt) };
+        d.keys = [];
+        key = await this.newKey(d);             // this browser stays in; every other one has to type the new password
+      } else { d.pw = null; d.keys = []; }
+      await this.saveDev(d);
+      this.send(ws, { t: "pwset", key });
+      const info = await this.devInfo(id);
+      if (pw) {
+        for (const o of this.socks("ctl", id)) {
+          if (o === ws) continue;
+          const oa = o.deserializeAttachment() || {};
+          if (oa.ok) { oa.ok = false; o.serializeAttachment(oa); this.send(o, { t: "locked", dev: info }); }
+        }
+      }
+      return this.toCtl(id, { t: "dev", dev: info });
+    }
+    if (m.t === "nopw") {
+      const d = await this.dev(id);
+      if (d && !d.pwAsked) { d.pwAsked = true; await this.saveDev(d); this.toCtl(id, { t: "dev", dev: await this.devInfo(id) }); }
+      return;
+    }
     if (m.t === "set") {
       const s = await this.state(id);
       if (mergeState(s, m.p)) { s.rev++; await this.saveState(id, s); await this.pushState(id, false, false); }

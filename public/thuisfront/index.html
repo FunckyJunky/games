@@ -65,11 +65,15 @@
   input[type=range]::-moz-range-track { height: 4px; background: var(--dim); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 26px; margin-top: -11px; background: var(--fg); box-shadow: 0 0 8px var(--glow); border: 0; }
   input[type=range]::-moz-range-thumb { width: 18px; height: 26px; background: var(--fg); border: 0; border-radius: 0; }
-  textarea, input[type=text] {
+  textarea, input[type=text], input[type=password] {
     width: 100%; background: #000; color: var(--fg); border: 2px solid var(--dim); font: inherit; font-size: 24px; padding: 8px 10px;
     text-shadow: 0 0 5px var(--glow); outline: none; resize: vertical; -webkit-user-select: text; user-select: text; border-radius: 0;
   }
-  textarea:focus, input[type=text]:focus { border-color: var(--fg); }
+  textarea:focus, input[type=text]:focus, input[type=password]:focus { border-color: var(--fg); }
+  #modal label { display: block; margin: 10px 0 2px; color: var(--dim); text-shadow: none; font-size: 18px; }
+  .msg { min-height: 1.3em; color: var(--red); text-shadow: none; font-size: 18px; }
+  .card .lk { position: absolute; top: 4px; right: 22px; font-size: 15px; border: 1px solid var(--fg); background: var(--bg); padding: 0 6px; }
+  .panel.newpw { border-color: var(--fg); box-shadow: 0 0 10px var(--glow); }
   .dimt { color: var(--dim); text-shadow: none; }
   .small { font-size: 17px; }
 
@@ -205,8 +209,12 @@ let home = store.get('home', '');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let toastT = 0;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => (t.style.display = 'none'), 2600); }
-function modal(html) { $('mbox').innerHTML = html; $('modal').classList.add('on'); }
-function unmodal() { $('modal').classList.remove('on'); }
+let ulOpen = false, pwOpen = false;            // the password boxes
+function modal(html) { $('mbox').innerHTML = html; $('modal').classList.add('on'); ulOpen = pwOpen = false; }
+function unmodal() { $('modal').classList.remove('on'); ulOpen = pwOpen = false; }
+// screens with a password: the key this browser got for it (so the password is asked only once)
+const keyOf = (id) => store.get('keys', {})[id] || '';
+function keySet(id, k) { const o = store.get('keys', {}); if (k) o[id] = k; else delete o[id]; store.set('keys', o); }
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmodal(); });
 
 const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' }];
@@ -215,14 +223,14 @@ const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big t
 // one controller connection to one screen
 // =====================================================================
 class Ctl {
-  constructor(id) { this.id = id; this.ws = null; this.on = true; this.retry = 800; this.state = null; this.dev = null; this.photo = null; this.handlers = {}; this.open(); }
+  constructor(id) { this.id = id; this.ws = null; this.on = true; this.retry = 800; this.state = null; this.dev = null; this.photo = null; this.auth = 'wait'; this.handlers = {}; this.open(); }
   open() {
     const u = new URL('/api/hf/ws', location.href);
     u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     u.search = '?id=' + encodeURIComponent(this.id) + '&home=' + encodeURIComponent(home);
     const ws = this.ws = new WebSocket(u);
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => { this.retry = 800; this.emit('open'); };
+    ws.onopen = () => { this.retry = 800; this.auth = 'wait'; this.send({ t: 'auth', key: keyOf(this.id) }); this.emit('open'); };
     ws.onmessage = (ev) => {
       if (typeof ev.data !== 'string') {               // binary: the screen's photo ("HFP1" + JPEG)
         const u8 = new Uint8Array(ev.data);
@@ -230,10 +238,15 @@ class Ctl {
         return;
       }
       let m; try { m = JSON.parse(ev.data); } catch { return; }
-      if (m.t === 'state') { this.state = m.state; if (m.dev) this.dev = m.dev; this.emit('state', m.state); if (m.dev) this.emit('dev', m.dev); }
+      if (m.t === 'state') { this.auth = 'ok'; this.state = m.state; if (m.dev) this.dev = m.dev; this.emit('state', m.state); if (m.dev) this.emit('dev', m.dev); }
       else if (m.t === 'dev') { this.dev = m.dev; this.emit('dev', m.dev); }
       else if (m.t === 'got') this.emit('got', m.s);
       else if (m.t === 'err') this.emit('err', m.msg);
+      else if (m.t === 'authok') { this.auth = 'ok'; if (m.key) keySet(this.id, m.key); this.emit('auth'); }
+      else if (m.t === 'locked') { this.auth = 'locked'; this.state = null; this.photo = null; keySet(this.id, ''); if (m.dev) this.dev = m.dev; this.emit('locked', m.dev); }
+      else if (m.t === 'authfail') this.emit('authfail', m.wait || 0);
+      else if (m.t === 'pwset') { keySet(this.id, m.key || ''); this.emit('pwset', m.key || ''); }
+      else if (m.t === 'pwfail') this.emit('pwfail', m);
     };
     ws.onclose = () => { this.ws = null; this.emit('close'); if (this.on) { setTimeout(() => this.on && this.open(), this.retry); this.retry = Math.min(10000, this.retry * 1.7); } };
   }
@@ -241,6 +254,7 @@ class Ctl {
   bufferedLow() { return this.ws && this.ws.bufferedAmount < 60000; }
   send(o) { if (this.ready()) { this.ws.send(typeof o === 'string' || o instanceof Uint8Array ? o : JSON.stringify(o)); return true; } return false; }
   set(p) { return this.send({ t: 'set', p }); }
+  unlock(pw) { return this.send({ t: 'auth', pw }); }
   close() { this.on = false; try { this.ws && this.ws.close(); } catch { /* closed */ } }
   onx(k, f) { (this.handlers[k] = this.handlers[k] || []).push(f); }
   emit(k, v) { (this.handlers[k] || []).forEach((f) => f(v)); }
@@ -276,7 +290,7 @@ function drawStrip() {
     for (const id of want) {
       const c = document.createElement('div');
       c.className = 'card'; c.dataset.id = id;
-      c.innerHTML = '<canvas></canvas><div class="nm"></div><div class="st"></div>';
+      c.innerHTML = '<canvas></canvas><div class="lk" hidden>LOCKED</div><div class="nm"></div><div class="st"></div>';
       c.onclick = () => { if (selected() === id) { if (id === '+add') addInfo(); } else c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); };
       strip.appendChild(c);
     }
@@ -286,6 +300,7 @@ function drawStrip() {
   }
   for (const c of strip.children) {
     const d = devices.find((x) => x.id === c.dataset.id);
+    c.querySelector('.lk').hidden = !(d && d.locked);
     if (!d) { c.querySelector('.nm').textContent = '+ ADD SCREEN'; c.querySelector('.st').textContent = 'ESP32-S3 OR ANY BROWSER'; continue; }
     c.querySelector('.nm').textContent = d.name || d.id;
     c.querySelector('.st').innerHTML = d.online
@@ -328,6 +343,12 @@ function openCtl(id) {
     ctl.onx('err', (m) => toast(m.toUpperCase()));
     ctl.onx('open', () => { if (view === 'comm') { commDev(ctl.dev || {}); if (unsent && liveSend && loadedFromServer) sendText(); } });
     ctl.onx('close', () => { if (view === 'comm') commDev({ online: false }); });
+    const devIn = (d) => { if (!d) return; const i = devices.findIndex((x) => x.id === d.id); if (i >= 0) devices[i] = { ...devices[i], ...d }; };
+    ctl.onx('auth', () => { if (ulOpen) { unmodal(); toast('OPEN'); } if (view === 'list') drawStrip(); });
+    ctl.onx('locked', (d) => { devIn(d); if (view === 'list') { if (!ulOpen) drawStrip(); } else if (!ulOpen) unlockModal(); });
+    ctl.onx('authfail', (w) => { if (ulOpen && $('ulMsg')) { $('ulMsg').textContent = w ? `WRONG. WAIT ${w} S BEFORE TRYING AGAIN` : 'WRONG PASSWORD'; $('ulIn').select(); } });
+    ctl.onx('pwset', (k) => { if (pwOpen) unmodal(); toast(k ? 'PASSWORD SET' : 'PASSWORD REMOVED'); const d = devices.find((x) => x.id === ctl.id); if (d) { d.locked = !!k; d.pwAsked = true; } if (view === 'list') drawStrip(); });
+    ctl.onx('pwfail', (m) => { if (pwOpen && $('pwMsg')) $('pwMsg').textContent = String(m.msg || 'NO').toUpperCase() + (m.wait ? `: WAIT ${m.wait} S` : ''); });
   }
   return ctl;
 }
@@ -346,21 +367,35 @@ function drawPanel() {
   openCtl(d.id);
   const kind = d.kind === 'web' ? 'BROWSER SCREEN' : 'ESP32-S3 BOARD';
   const info = [d.id, kind, d.ver && (/^\d/.test(d.ver) ? 'v' + d.ver : d.ver), d.wifi && 'WIFI ' + d.wifi, d.rssi ? d.rssi + ' dBm' : '', d.ip].filter(Boolean).map(esc).join(' · ');
+  if (d.locked && ctl.auth !== 'ok') {           // it has a password, and this browser doesn't know it (yet)
+    const wait = ctl.auth === 'wait';
+    p.innerHTML = `<div class="h"><b>${esc(d.name || d.id)}</b></div><div class="small dimt">${info}</div>
+      <div class="panel"><p>THIS SCREEN HAS A PASSWORD.</p><p class="small dimt">Type it once here; this phone or browser remembers it after that.</p>
+      <div class="row"><button class="btn big" id="ulB" ${wait ? 'disabled' : ''}>${wait ? 'CHECKING...' : 'ENTER PASSWORD'}</button></div></div>`;
+    if ($('ulB')) $('ulB').onclick = unlockModal;
+    return;
+  }
   p.innerHTML = `<div class="h"><b>${esc(d.name || d.id)}</b> &nbsp;<button class="btn dim" id="rnB" style="min-height:30px;padding:0 8px">RENAME</button></div>
     <div class="small dimt">${info}</div>
+    ${!d.locked && !d.pwAsked ? `<div class="panel newpw"><p><b>NEW SCREEN.</b> Give it a password, so only people who know it can see and control it from other phones and browsers.</p>
+      <div class="row"><button class="btn big" id="npSet">SET PASSWORD</button><button class="btn" id="npNo">NO PASSWORD</button></div></div>` : ''}
     <div class="h">WEB APPS FOR THIS SCREEN</div>
     ${APPS.map((a) => `<div class="app"><canvas width="88" height="56" data-icon="${a.id}"></canvas><div class="d"><div class="n">${a.name}</div><div class="x">${esc(a.what)}</div></div></div>
       <div class="row"><button class="btn big" data-send="${a.id}" ${d.online ? '' : 'disabled'}>${d.app === a.id ? 'OPEN ' + a.name + ' &gt;' : 'SEND TO SCREEN &gt;'}</button></div>`).join('')}
     ${d.online ? '' : '<p class="dimt small">THE SCREEN IS OFFLINE. IT GETS NEW ORDERS WHEN IT IS BACK.</p>'}
     <div class="row">${d.online ? `<button class="btn" id="pwB">${d.screen ? 'SCREEN OFF' : 'SCREEN ON'}</button>` : ''}
       ${d.online && d.app ? '<button class="btn" id="clB">CLOSE WEB APP</button>' : ''}
-      ${d.online ? '' : '<button class="btn red" id="fgB">FORGET</button>'}</div>`;
+      ${d.online ? '' : '<button class="btn red" id="fgB">FORGET</button>'}</div>
+    <div class="row"><button class="btn${d.locked ? ' on' : ''}" id="pwdB">${d.locked ? 'PASSWORD: ON' : 'PASSWORD: OFF'}</button></div>`;
+  $('pwdB').onclick = () => pwModal(d);
+  if ($('npSet')) $('npSet').onclick = () => pwModal(d);
+  if ($('npNo')) $('npNo').onclick = () => { ctl.send({ t: 'nopw' }); d.pwAsked = true; drawStrip(); };
   for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => { const id = b.dataset.send; if (d.app !== id) ctl.set({ app: id, screen: 1 }); location.hash = 'comm=' + d.id; };
   if ($('pwB')) $('pwB').onclick = () => { ctl.set({ screen: d.screen ? 0 : 1 }); d.screen = d.screen ? 0 : 1; drawStrip(); };
   if ($('clB')) $('clB').onclick = () => { ctl.set({ app: '' }); d.app = ''; drawStrip(); };
   if ($('fgB')) $('fgB').onclick = async () => {
     if (!confirm('FORGET ' + (d.name || d.id) + '?')) return;
-    const r = await fetch('/api/hf/forget', { method: 'POST', body: JSON.stringify({ id: d.id, home }) });
+    const r = await fetch('/api/hf/forget', { method: 'POST', body: JSON.stringify({ id: d.id, home, key: keyOf(d.id) }) });
     if (!r.ok) toast(((await r.json()).error || 'NO').toUpperCase()); else loadList();
   };
   $('rnB').onclick = () => {
@@ -368,6 +403,47 @@ function drawPanel() {
     $('rnX').onclick = unmodal;
     $('rnOk').onclick = () => { const n = $('rnIn').value.trim().toUpperCase().slice(0, 20); if (n) { ctl.send({ t: 'name', name: n }); d.name = n; drawStrip(); } unmodal(); };
   };
+}
+// the password of the open screen: type it to get in
+function unlockModal() {
+  const d = devices.find((x) => x.id === (ctl && ctl.id)) || (ctl && ctl.dev) || {};
+  modal(`<h2>PASSWORD</h2><p>${esc(d.name || d.id || 'THIS SCREEN')} has a password.</p>
+    <input type="password" id="ulIn" maxlength="64" autocomplete="current-password">
+    <p class="msg" id="ulMsg"></p>
+    <div class="row"><button class="btn big" id="ulOk">OPEN</button><button class="btn" id="ulX">CANCEL</button></div>`);
+  ulOpen = true;
+  const go = () => { const v = $('ulIn').value; if (!v) return; $('ulMsg').textContent = ctl && ctl.unlock(v) ? 'CHECKING...' : 'NOT CONNECTED: TRY AGAIN'; };
+  $('ulOk').onclick = go;
+  $('ulIn').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  $('ulX').onclick = () => { unmodal(); if (view === 'comm') location.hash = ''; };
+  setTimeout(() => $('ulIn') && $('ulIn').focus(), 60);
+}
+// set, change or remove a screen's password (only from a browser that is in)
+function pwModal(d) {
+  const has = !!d.locked;
+  modal(`<h2>${has ? 'PASSWORD' : 'SET A PASSWORD'}</h2>
+    <p class="small">${esc(d.name || d.id)}: with a password, other phones and browsers must type it before they can see or control this screen. This one stays in.${has ? ' After a change, everyone else has to type the new one.' : ''}</p>
+    ${has ? '<label>PASSWORD NOW</label><input type="password" id="pwOld" maxlength="64" autocomplete="current-password">' : ''}
+    <label>${has ? 'NEW PASSWORD' : 'PASSWORD'} (4 OR MORE)</label><input type="password" id="pwNew" maxlength="64" autocomplete="new-password">
+    <label>AGAIN</label><input type="password" id="pwNew2" maxlength="64" autocomplete="new-password">
+    <p class="msg" id="pwMsg"></p>
+    <div class="row"><button class="btn big" id="pwOk">SAVE</button>${has ? '<button class="btn red" id="pwRm">REMOVE</button>' : ''}<button class="btn" id="pwX">CANCEL</button></div>`);
+  pwOpen = true;
+  const msg = (t) => { $('pwMsg').textContent = t; };
+  const old = () => (has ? $('pwOld').value : '');
+  $('pwOk').onclick = () => {
+    const n = $('pwNew').value;
+    if (has && !old()) return msg('TYPE THE PASSWORD NOW FIRST');
+    if (n.length < 4) return msg('AT LEAST 4 LETTERS');
+    if (n !== $('pwNew2').value) return msg('THE TWO ARE NOT THE SAME');
+    msg(ctl && ctl.send({ t: 'setpw', pw: n, old: old() }) ? 'SAVING...' : 'NOT CONNECTED: TRY AGAIN');
+  };
+  if ($('pwRm')) $('pwRm').onclick = () => {
+    if (!old()) return msg('TYPE THE PASSWORD NOW FIRST');
+    msg(ctl && ctl.send({ t: 'setpw', pw: '', old: old() }) ? 'SAVING...' : 'NOT CONNECTED: TRY AGAIN');
+  };
+  $('pwX').onclick = unmodal;
+  setTimeout(() => { const f = $(has ? 'pwOld' : 'pwNew'); if (f) f.focus(); }, 60);
 }
 function addInfo() {
   modal(`<h2>ADD A SCREEN</h2>
@@ -801,7 +877,8 @@ function route() {
   if (m) {
     view = 'comm'; $('vList').hidden = true; $('vComm').hidden = false;
     openCtl(m[1]); loadedFromServer = false;
-    if (ctl.state) commState(ctl.state); else ctl.send({ t: 'hello' });
+    if (ctl.auth === 'locked') unlockModal();
+    else if (ctl.state) commState(ctl.state); else ctl.send({ t: 'hello' });
     commDev(ctl.dev || {});
     clearInterval(listTimer); wake(); scrollTo(0, 0);
     syncUI();

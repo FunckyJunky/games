@@ -602,6 +602,11 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   error.blue/thuisfront/dev (tap it for name and home code). Its id is `HF-XXXXXX` (board) or `WEB-XXXXXX` (browser).
 - **error.blue/thuisfront**: the screens in a 3D carousel (swipe sideways), pick one, send it a web app.
   An optional HOME CODE (set on the screen) hides screens from phones without the same code.
+- **Password per screen**: a new screen asks "SET PASSWORD / NO PASSWORD" in its panel (later: PASSWORD: ON/OFF).
+  With a password, another phone or browser sees the screen as LOCKED and gets nothing (no state, no text, no photo)
+  until it types the password; then it gets a key (localStorage `hf.keys`) so it is asked only once. Changing the
+  password needs the old one and locks every other browser out again. PBKDF2 on the server; 5 wrong tries = wait
+  30 s, doubling (max 15 min). FORGET needs the key too.
 - **COMM**, the first web app: TEXT (14 fonts, size or FIT, still / scroll / rise / type / blink / wave / glitch / pulse,
   speed, colour, background, align, style), PHOTO with the text on top (take or pick one; fill the screen or the
   whole photo, brightness, contrast, filter), VIDEO from the phone's camera (NONE = real colours, or DOS GREEN /
