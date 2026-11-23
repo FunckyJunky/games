@@ -784,7 +784,24 @@ function scenePocket(t, seg) {
   seg.push([[bx - 0.1, by, z - 0.06], [bx - 0.34, by + w, z - 0.06]]);
   return { yaw: Math.sin(t * 0.3) * 0.35, pitch: 0.16, dist: 7.6, ty: 1.15 };
 }
-const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket };
+function sceneHome(t, seg) {
+  // Home Front: a house with an antenna that sends, and the little screen board in front of it showing text
+  cubeEdges(0, 0.8, 0.6, 3.0, 1.6, 2.2, 0, seg);                                  // the house
+  seg.push([[-1.5, 1.6, -0.5], [0, 2.7, -0.5]], [[0, 2.7, -0.5], [1.5, 1.6, -0.5]],   // the roof
+           [[-1.5, 1.6, 1.7], [0, 2.7, 1.7]], [[0, 2.7, 1.7], [1.5, 1.6, 1.7]], [[0, 2.7, -0.5], [0, 2.7, 1.7]]);
+  seg.push([[-0.35, 0, -0.5], [-0.35, 0.9, -0.5]], [[-0.35, 0.9, -0.5], [0.35, 0.9, -0.5]], [[0.35, 0.9, -0.5], [0.35, 0, -0.5]]);   // door
+  seg.push([[0.6, 2.4, 0.6], [0.6, 3.3, 0.6]]);                                     // antenna
+  for (let k = 0; k < 3; k++) {                                                     // what it sends
+    const r = 0.25 + ((t * 0.9 + k / 3) % 1) * 1.1;
+    for (let a = -0.9; a < 0.9; a += 0.3) seg.push([[0.6 + Math.sin(a) * r, 3.3 + Math.cos(a) * r, 0.6], [0.6 + Math.sin(a + 0.3) * r, 3.3 + Math.cos(a + 0.3) * r, 0.6]]);
+  }
+  const z = -1.6;                                                                   // the board in front
+  cubeEdges(-2.3, 0.55, z, 1.9, 1.05, 0.14, 0, seg);
+  const off = (t * 0.6) % 1;
+  for (let k = 0; k < 3; k++) { const x = -1.55 - ((off + k / 3) % 1) * 1.35; seg.push([[x, 0.55, z - 0.08], [Math.max(-3.15, x - 0.35), 0.55, z - 0.08]]); }
+  return { yaw: -0.45 + Math.sin(t * 0.3) * 0.35, pitch: 0.2, dist: 9.2, ty: 1.3 };
+}
+const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket, home: sceneHome };
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);

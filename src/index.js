@@ -27,9 +27,13 @@
 //   POST /api/hud/<CODE>/ping {app, state, focus}  glasses HUD: "I'm here, in this app" (every 15 s)
 //   GET  /api/hud/<CODE>/geo                   GeoLock: settings + saved spots (more at handleGeo)
 //   GET  /api/hud/<CODE>/app/<app>             any glasses app: its settings + recent results (handleHudApp)
+//   GET  /thuisfront/dev/ws?id=HF-XXXX         HOME FRONT: a screen at home (WebSocket; more in src/homefront.js)
+//   GET  /api/hf/ws?id=HF-XXXX&home=CODE       HOME FRONT: the phone that controls one screen (WebSocket)
+//   GET  /api/hf/list?home=CODE                HOME FRONT: the screens with that home code
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
+export { HomeFront } from "./homefront.js";
 
 const GAME_RE = /^[a-z0-9-]{1,40}$/;
 const PLAYER_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -988,6 +992,8 @@ export default {
       if (path.startsWith("/api/sm/")) return await handleSm(request, env, url);
 
       if (path.startsWith("/api/hud/")) return await handleHud(request, env, url);
+
+      if (path === "/thuisfront/dev/ws" || path.startsWith("/api/hf/")) return env.HF.get(env.HF.idFromName("main")).fetch(request);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 

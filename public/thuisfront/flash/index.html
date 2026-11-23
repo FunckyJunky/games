@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOME FRONT · put it on the board</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 8l5-4 5 4v5H3z%27 fill=%27none%27 stroke=%27%2339ff7a%27 stroke-width=%271.5%27/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  body { margin: 0; min-height: 100vh; background: #031208; color: #39ff7a; font: 24px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.5); }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+  h1 { background: #39ff7a; color: #031208; text-shadow: none; font-weight: normal; font-size: 28px; margin: 0 -16px 16px; padding: 6px 16px; }
+  a { color: #b8ffd0; }
+  .dim { color: #1b7a3c; text-shadow: none; }
+  ol li { margin: 6px 0; }
+  esp-web-install-button button, .btn { font: inherit; font-size: 28px; background: #031208; color: #39ff7a; border: 2px solid #39ff7a; padding: 8px 22px; cursor: pointer;
+    box-shadow: 0 0 8px rgba(57,255,122,.5), inset 0 0 8px rgba(57,255,122,.4); }
+  esp-web-install-button { --esp-tools-button-color: #39ff7a; --esp-tools-button-text-color: #031208; --esp-tools-button-border-radius: 0; }
+  .box { border: 2px solid #1b7a3c; padding: 10px 14px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>HOME FRONT · PUT IT ON THE BOARD</h1>
+  <p>For the ESP32-S3 board with the 1.47" screen (the same board as pocket.DOS). Use Chrome or Edge on a computer.</p>
+  <ol>
+    <li>Plug the board into this computer with USB.</li>
+    <li>Press INSTALL and pick the board's port (USB JTAG / USB Serial, or COMx).</li>
+    <li>When it is done, the board restarts. With no WiFi yet it makes the WiFi <b>HOMEFRONT-XXXX</b>: join it with your phone and pick your WiFi.</li>
+  </ol>
+  <p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" class="btn">INSTALL HOME FRONT 1.0</button>
+      <span slot="unsupported">This browser can't talk to USB boards. Use Chrome or Edge on a computer.</span>
+      <span slot="not-allowed">Open this page over https.</span>
+    </esp-web-install-button>
+  </p>
+  <div class="box dim">
+    It doesn't connect? Hold the BOOT button, press and let go of RESET (or plug it in while holding BOOT), let go of BOOT, then try again.<br>
+    This replaces what is on the board now (pocket.DOS too). The sketch is in the games repo at esp32/HomeFront.
+  </div>
+  <p><a href="/thuisfront/">&lt; HOME FRONT</a></p>
+</main>
+</body>
+</html>

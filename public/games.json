@@ -104,5 +104,15 @@
     "folder": "apps",
     "logo": "pocket",
     "added": "2026-11-22T22:30"
+  },
+  {
+    "id": "home-front",
+    "title": "Home Front",
+    "dos": "HOMEFRNT",
+    "description": "Screens at home: an ESP32-S3 board (or any browser at /thuisfront/dev) shows one web app, you control it from your phone. First app COMM: big text in any font and animation, and live video in DOS green, yellow, blue or gray. Screen off, close, and it keeps your text after a restart.",
+    "path": "thuisfront/",
+    "folder": "apps",
+    "logo": "home",
+    "added": "2026-11-23T14:30"
   }
 ]

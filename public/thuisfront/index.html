@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>HOME FRONT</title>
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ERROR-DOS">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Cpath d=%27M3 8l5-4 5 4v5H3z%27 fill=%27none%27 stroke=%27%2339ff7a%27 stroke-width=%271.5%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="fontcss" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&family=Pixelify+Sans:wght@600&family=PT+Mono&family=Russo+One&family=Black+Ops+One&family=Oswald:wght@500&family=Rubik+Mono+One&family=Unbounded:wght@600&family=Orbitron:wght@700&family=Caveat:wght@600&family=Pacifico&family=PT+Serif:wght@700&display=swap">
+<style>
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); --red: #ff4b4b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; }
+  body {
+    color: var(--fg); font-family: 'VT323', ui-monospace, monospace; font-size: 22px; line-height: 1.1;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    text-shadow: 0 0 5px var(--glow); overflow-x: hidden;
+  }
+  #crt { min-height: 100dvh; background: var(--bg); max-width: 760px; margin: 0 auto; padding: 0 0 calc(18px + env(safe-area-inset-bottom)); position: relative; }
+  #crt::after { content: ''; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  button { all: unset; cursor: pointer; }
+  .bar {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
+    background: var(--fg); color: var(--bg); text-shadow: none; padding: calc(4px + env(safe-area-inset-top)) 10px 4px; white-space: nowrap; overflow: hidden;
+    box-shadow: 0 0 10px var(--glow);
+  }
+  .bar .t { flex: 1; overflow: hidden; text-overflow: ellipsis; letter-spacing: .04em; }
+  .bar a, .bar button { color: var(--bg); text-decoration: none; padding: 0 4px; }
+  .bar a:active, .bar button:active { background: var(--bg); color: var(--fg); }
+  .sec { padding: 10px 12px 0; }
+  .h { color: var(--dim); text-shadow: none; margin: 14px 0 6px; letter-spacing: .06em; }
+  .h b { color: var(--fg); font-weight: normal; text-shadow: 0 0 5px var(--glow); }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 12px; min-height: 40px;
+    border: 2px solid var(--fg); box-shadow: 0 0 6px var(--glow), inset 0 0 6px var(--glow); text-align: center;
+  }
+  .btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  .btn.big { font-size: 26px; min-height: 52px; }
+  .btn.dim { border-color: var(--dim); box-shadow: none; color: var(--dim); text-shadow: none; }
+  .btn.red { border-color: var(--red); color: var(--red); box-shadow: 0 0 6px rgba(255,75,75,.4); text-shadow: none; }
+  .btn[disabled] { opacity: .35; pointer-events: none; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .row > .btn { flex: 1 1 auto; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; scroll-snap-align: start; padding: 4px 10px; min-height: 38px; border: 2px solid var(--dim); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .chip.on { border-color: var(--fg); background: var(--fg); color: var(--bg); text-shadow: none; }
+  .chip .sw { width: 18px; height: 18px; border: 1px solid rgba(255,255,255,.4); }
+  .chip.font { flex-direction: column; align-items: flex-start; gap: 0; padding: 4px 10px 2px; }
+  .chip.font .s { font-size: 22px; line-height: 1.2; text-shadow: none; }
+  .chip.font .n { font-size: 15px; opacity: .75; }
+  .slider { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+  .slider label { width: 6.2em; color: var(--dim); text-shadow: none; flex: none; }
+  .slider output { width: 3.2em; text-align: right; flex: none; }
+  input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 30px; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--dim); }
+  input[type=range]::-moz-range-track { height: 4px; background: var(--dim); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 26px; margin-top: -11px; background: var(--fg); box-shadow: 0 0 8px var(--glow); border: 0; }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 26px; background: var(--fg); border: 0; border-radius: 0; }
+  textarea, input[type=text] {
+    width: 100%; background: #000; color: var(--fg); border: 2px solid var(--dim); font: inherit; font-size: 24px; padding: 8px 10px;
+    text-shadow: 0 0 5px var(--glow); outline: none; resize: vertical; -webkit-user-select: text; user-select: text; border-radius: 0;
+  }
+  textarea:focus, input[type=text]:focus { border-color: var(--fg); }
+  .dimt { color: var(--dim); text-shadow: none; }
+  .small { font-size: 17px; }
+
+  /* screens carousel */
+  #strip { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 18px 0 8px; perspective: 900px; }
+  #strip::-webkit-scrollbar { display: none; }
+  #strip::before, #strip::after { content: ''; flex: 0 0 calc(50% - 125px); }
+  .card { flex: 0 0 250px; scroll-snap-align: center; height: 250px; position: relative; transform-style: preserve-3d; transition: transform .08s linear, opacity .2s; }
+  .card canvas { width: 100%; height: 190px; display: block; }
+  .card .nm { text-align: center; font-size: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
+  .card .st { text-align: center; font-size: 17px; color: var(--dim); text-shadow: none; }
+  .card .st .on { color: var(--fg); text-shadow: 0 0 5px var(--glow); }
+  .card.sel .nm { background: var(--fg); color: var(--bg); text-shadow: none; margin: 0 20px; }
+  #dots { display: flex; justify-content: center; gap: 6px; min-height: 12px; }
+  #dots i { width: 8px; height: 8px; background: var(--dim); }
+  #dots i.on { background: var(--fg); box-shadow: 0 0 6px var(--glow); }
+  .panel { border: 2px solid var(--dim); padding: 8px 10px; margin-top: 10px; }
+  .app { display: flex; gap: 12px; align-items: center; border: 2px solid var(--fg); padding: 8px; box-shadow: 0 0 6px var(--glow), inset 0 0 6px var(--glow); margin: 6px 0; }
+  .app canvas { width: 88px; height: 56px; flex: none; image-rendering: pixelated; border: 1px solid var(--dim); }
+  .app .d { flex: 1; min-width: 0; }
+  .app .d .n { font-size: 26px; }
+  .app .d .x { font-size: 17px; color: var(--dim); text-shadow: none; }
+
+  /* comm app */
+  #cTop { position: sticky; top: 0; z-index: 5; background: var(--bg); }
+  #cTop .bar { position: static; }
+  #pvBox { background: var(--bg); padding: 10px 12px 6px; }
+  @media (max-height: 640px) { #pv { width: auto; height: 34dvh; margin: 0 auto; } }
+  #pv { width: 100%; aspect-ratio: 320 / 172; display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
+    border: 3px solid #161616; box-shadow: 0 0 0 2px #2a2a2a, 0 0 18px rgba(0,0,0,.8); border-radius: 4px; }
+  #pvInfo { display: flex; justify-content: space-between; font-size: 17px; color: var(--dim); text-shadow: none; padding-top: 4px; }
+  #pvInfo b { color: var(--fg); font-weight: normal; }
+  .tabs { display: flex; border-bottom: 2px solid var(--fg); margin: 4px 12px 0; }
+  .tabs button { flex: 1; text-align: center; padding: 6px 0; border: 2px solid var(--dim); border-bottom: 0; margin-right: -2px; color: var(--dim); text-shadow: none; }
+  .tabs button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .live { display: inline-flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; background: var(--red); display: inline-block; }
+  .dot.on { background: var(--fg); box-shadow: 0 0 6px var(--glow); }
+  #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--fg); color: var(--bg);
+    text-shadow: none; padding: 6px 14px; z-index: 20; display: none; max-width: 90vw; text-align: center; }
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 30; display: none; place-items: center; padding: 16px; }
+  #modal.on { display: grid; }
+  #modal .box { background: var(--bg); border: 2px solid var(--fg); box-shadow: 0 0 24px var(--glow); padding: 12px; width: min(560px, 100%); max-height: 86dvh; overflow: auto; }
+  #modal .box h2 { margin: -12px -12px 10px; background: var(--fg); color: var(--bg); text-shadow: none; font-weight: normal; font-size: 24px; padding: 4px 12px; }
+  #modal p { margin: 6px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="crt">
+  <!-- ======================= the screens ======================= -->
+  <section id="vList">
+    <div class="bar"><a class="back" href="/">&lt; DOS</a><span class="t">HOME FRONT</span><button id="homeBtn">HOME: -</button></div>
+    <div id="strip"></div>
+    <div id="dots"></div>
+    <div class="sec" id="panel"></div>
+  </section>
+
+  <!-- ======================= COMM ======================= -->
+  <section id="vComm" hidden>
+    <div id="cTop">
+    <div class="bar"><button id="cBack">&lt; SCREENS</button><span class="t" id="cName">COMM</span><span class="live"><i class="dot" id="cDot"></i><span id="cLive">OFFLINE</span></span></div>
+    <div id="pvBox">
+      <canvas id="pv" width="320" height="172"></canvas>
+      <div id="pvInfo"><span id="pvL">PREVIEW</span><span id="pvR"></span></div>
+    </div>
+    </div>
+    <div class="tabs" id="modeTabs"><button data-m="text">TEXT</button><button data-m="video">VIDEO</button><button data-m="both">TEXT+VIDEO</button></div>
+
+    <div class="sec" id="pText">
+      <div class="h">MESSAGE <span id="tCount" class="small"></span></div>
+      <textarea id="tIn" rows="3" maxlength="2000" placeholder="TYPE A MESSAGE FOR THE SCREEN"></textarea>
+      <div class="row"><button class="btn big" id="tSend">SEND &gt;</button><button class="btn" id="tLive">LIVE: ON</button></div>
+      <div class="h">FONT</div><div class="chips" id="fonts"></div>
+      <div class="slider"><label>SIZE</label><input type="range" id="tSize" min="0" max="172" step="1"><output id="tSizeO"></output></div>
+      <div class="h">ANIMATION</div><div class="chips" id="anims"></div>
+      <div class="slider"><label>SPEED</label><input type="range" id="tSpeed" min="1" max="10" step="1"><output id="tSpeedO"></output></div>
+      <div class="h">TEXT COLOUR</div><div class="chips" id="tpals"></div>
+      <div class="h">BACKGROUND</div><div class="chips" id="bgs"></div>
+      <div class="h">ALIGN</div><div class="chips" id="aligns"></div>
+      <div class="h">STYLE</div><div class="chips" id="styles"></div>
+    </div>
+
+    <div class="sec" id="pVideo">
+      <div class="h">CAMERA <span id="vStat" class="small"></span></div>
+      <div class="row"><button class="btn big" id="vStart">START CAMERA</button><button class="btn" id="vFlip">FRONT / BACK</button></div>
+      <div class="h">FILTER</div><div class="chips" id="vpals"></div>
+      <div class="h">PICTURE</div><div class="chips" id="vqs"></div>
+      <div class="chips" id="looks"></div>
+      <div class="slider"><label>BRIGHTNESS</label><input type="range" id="vBri" min="-50" max="50" step="1"><output id="vBriO"></output></div>
+      <div class="slider"><label>CONTRAST</label><input type="range" id="vCon" min="-50" max="50" step="1"><output id="vConO"></output></div>
+      <div class="slider"><label>FRAMES/S</label><input type="range" id="vFps" min="1" max="25" step="1"><output id="vFpsO"></output></div>
+      <div class="row"><button class="btn" id="vMirror">MIRROR</button></div>
+    </div>
+
+    <div class="sec">
+      <div class="h">SCREEN</div>
+      <div class="row"><button class="btn big" id="sPower">SCREEN ON</button><button class="btn" id="sScan">SCANLINES</button></div>
+      <div class="slider"><label>LIGHT</label><input type="range" id="sBri" min="5" max="100" step="1"><output id="sBriO"></output></div>
+      <div class="row"><button class="btn red" id="sClose">CLOSE WEB APP</button></div>
+      <p class="dimt small">The screen keeps showing your text after you close this page, also after a restart. Video only runs while this page sends it.</p>
+    </div>
+  </section>
+</div>
+<div id="toast"></div>
+<div id="modal"><div class="box" id="mbox"></div></div>
+
+<script src="/lib/appback.js" defer></script>
+<script src="/lib/online.js" defer></script>
+<script type="module">
+import { Screen, PALS, W, H, encodeText, encodeFrame } from './dev/render.js';
+import { FONTS, fontOf, makeText } from './text.js';
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('hf.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('hf.' + k, JSON.stringify(v)); } catch { /* private */ } },
+};
+let home = store.get('home', '');
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let toastT = 0;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => (t.style.display = 'none'), 2600); }
+function modal(html) { $('mbox').innerHTML = html; $('modal').classList.add('on'); }
+function unmodal() { $('modal').classList.remove('on'); }
+$('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmodal(); });
+
+const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, and live video from this phone, with DOS filters.' }];
+
+// =====================================================================
+// one controller connection to one screen
+// =====================================================================
+class Ctl {
+  constructor(id) { this.id = id; this.ws = null; this.on = true; this.retry = 800; this.state = null; this.dev = null; this.handlers = {}; this.open(); }
+  open() {
+    const u = new URL('/api/hf/ws', location.href);
+    u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    u.search = '?id=' + encodeURIComponent(this.id) + '&home=' + encodeURIComponent(home);
+    const ws = this.ws = new WebSocket(u);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => { this.retry = 800; this.emit('open'); };
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.t === 'state') { this.state = m.state; if (m.dev) this.dev = m.dev; this.emit('state', m.state); if (m.dev) this.emit('dev', m.dev); }
+      else if (m.t === 'dev') { this.dev = m.dev; this.emit('dev', m.dev); }
+      else if (m.t === 'got') this.emit('got', m.s);
+      else if (m.t === 'err') this.emit('err', m.msg);
+    };
+    ws.onclose = () => { this.ws = null; this.emit('close'); if (this.on) { setTimeout(() => this.on && this.open(), this.retry); this.retry = Math.min(10000, this.retry * 1.7); } };
+  }
+  ready() { return this.ws && this.ws.readyState === 1; }
+  bufferedLow() { return this.ws && this.ws.bufferedAmount < 60000; }
+  send(o) { if (this.ready()) { this.ws.send(typeof o === 'string' || o instanceof Uint8Array ? o : JSON.stringify(o)); return true; } return false; }
+  set(p) { return this.send({ t: 'set', p }); }
+  close() { this.on = false; try { this.ws && this.ws.close(); } catch { /* closed */ } }
+  onx(k, f) { (this.handlers[k] = this.handlers[k] || []).push(f); }
+  emit(k, v) { (this.handlers[k] || []).forEach((f) => f(v)); }
+}
+
+// =====================================================================
+// the screens carousel
+// =====================================================================
+let devices = [], selId = store.get('sel', ''), ctl = null, listTimer = 0;
+function ago(ms) { const s = Math.round(ms / 1000); return s < 90 ? s + ' S' : s < 5400 ? Math.round(s / 60) + ' MIN' : s < 129600 ? Math.round(s / 3600) + ' H' : Math.round(s / 86400) + ' DAYS'; }
+$('homeBtn').textContent = 'HOME: ' + (home || '-');
+$('homeBtn').onclick = () => {
+  modal(`<h2>HOME CODE</h2><p>Screens with a home code only show up, and only take orders, with the same code here. Set it on the screen's own setup page. Empty = no code.</p>
+    <input type="text" id="hmIn" maxlength="12" value="${esc(home)}" style="text-transform:uppercase"><div class="row"><button class="btn big" id="hmOk">SAVE</button><button class="btn" id="hmX">CANCEL</button></div>`);
+  $('hmX').onclick = unmodal;
+  $('hmOk').onclick = () => { home = $('hmIn').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12); store.set('home', home); $('homeBtn').textContent = 'HOME: ' + (home || '-'); unmodal(); openCtl(null); loadList(); };
+};
+
+async function loadList() {
+  try {
+    const r = await fetch('/api/hf/list?home=' + encodeURIComponent(home), { cache: 'no-store' });
+    const j = await r.json();
+    devices = j.devices || [];
+  } catch { /* keep the old list */ }
+  drawStrip();
+}
+function drawStrip() {
+  const strip = $('strip');
+  const want = devices.map((d) => d.id).concat(['+add']);
+  const have = [...strip.children].map((c) => c.dataset.id);
+  if (want.join() !== have.join()) {
+    strip.innerHTML = '';
+    for (const id of want) {
+      const c = document.createElement('div');
+      c.className = 'card'; c.dataset.id = id;
+      c.innerHTML = '<canvas></canvas><div class="nm"></div><div class="st"></div>';
+      c.onclick = () => { if (selected() === id) { if (id === '+add') addInfo(); } else c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); };
+      strip.appendChild(c);
+    }
+    $('dots').innerHTML = want.map(() => '<i></i>').join('');
+    const i = want.indexOf(selId);
+    requestAnimationFrame(() => { const el = strip.children[Math.max(0, i)]; if (el) strip.scrollLeft = el.offsetLeft - (strip.clientWidth - el.offsetWidth) / 2; onScroll(); });
+  }
+  for (const c of strip.children) {
+    const d = devices.find((x) => x.id === c.dataset.id);
+    if (!d) { c.querySelector('.nm').textContent = '+ ADD SCREEN'; c.querySelector('.st').textContent = 'ESP32-S3 OR ANY BROWSER'; continue; }
+    c.querySelector('.nm').textContent = d.name || d.id;
+    c.querySelector('.st').innerHTML = d.online
+      ? `<span class="on">&#9679; ONLINE</span> · ${d.screen ? (d.app ? esc(d.app.toUpperCase()) : 'IDLE') : 'SCREEN OFF'}`
+      : `OFFLINE · ${d.seen ? ago(Date.now() - d.seen) + ' AGO' : 'NEVER'}`;
+  }
+  drawPanel();
+}
+function selected() {
+  const strip = $('strip'), mid = strip.scrollLeft + strip.clientWidth / 2;
+  let best = null, bd = 1e9;
+  for (const c of strip.children) { const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = c.dataset.id; } }
+  return best;
+}
+function onScroll() {
+  const strip = $('strip'), mid = strip.scrollLeft + strip.clientWidth / 2;
+  [...strip.children].forEach((c, i) => {
+    const off = (c.offsetLeft + c.offsetWidth / 2 - mid) / c.offsetWidth;
+    const a = Math.max(-1.6, Math.min(1.6, off));
+    c.style.transform = `translateZ(${-Math.abs(a) * 120}px) rotateY(${-a * 38}deg) scale(${1 - Math.min(0.3, Math.abs(a) * 0.18)})`;
+    c.style.opacity = String(1 - Math.min(0.65, Math.abs(a) * 0.45));
+    const dot = $('dots').children[i]; if (dot) dot.classList.toggle('on', Math.abs(off) < 0.5);
+  });
+  const s = selected();
+  if (s && s !== selId) { selId = s; store.set('sel', s); drawPanel(); }
+  for (const c of strip.children) c.classList.toggle('sel', c.dataset.id === selId);
+}
+$('strip').addEventListener('scroll', onScroll, { passive: true });
+addEventListener('resize', onScroll);
+
+function openCtl(id) {
+  if (ctl && ctl.id === id) return ctl;
+  if (ctl) ctl.close();
+  ctl = id ? new Ctl(id) : null;
+  if (ctl) {
+    ctl.onx('dev', (d) => { const i = devices.findIndex((x) => x.id === d.id); if (i >= 0) devices[i] = { ...devices[i], ...d }; if (view === 'list') drawStrip(); else commDev(d); });
+    ctl.onx('state', (s) => { if (view === 'comm') commState(s); });
+    ctl.onx('got', (s) => camGot(s));
+    ctl.onx('err', (m) => toast(m.toUpperCase()));
+    ctl.onx('open', () => { if (view === 'comm') { commDev(ctl.dev || {}); if (unsent && liveSend && loadedFromServer) sendText(); } });
+    ctl.onx('close', () => { if (view === 'comm') commDev({ online: false }); });
+  }
+  return ctl;
+}
+
+function drawPanel() {
+  const p = $('panel');
+  if (view !== 'list') return;
+  const d = devices.find((x) => x.id === selId);
+  if (!d) {
+    openCtl(null);
+    p.innerHTML = devices.length ? '' : `<div class="panel"><p>NO SCREENS YET${home ? ' WITH HOME CODE ' + esc(home) : ''}.</p><p class="dimt small">Start a HomeFront board, or open error.blue/thuisfront/dev on any computer, tablet or old phone.</p></div>`;
+    if (selId === '+add') p.innerHTML += `<div class="row"><button class="btn big" id="addB">HOW TO ADD A SCREEN</button></div>`;
+    if ($('addB')) $('addB').onclick = addInfo;
+    return;
+  }
+  openCtl(d.id);
+  const kind = d.kind === 'web' ? 'BROWSER SCREEN' : 'ESP32-S3 BOARD';
+  const info = [d.id, kind, d.ver && (/^\d/.test(d.ver) ? 'v' + d.ver : d.ver), d.wifi && 'WIFI ' + d.wifi, d.rssi ? d.rssi + ' dBm' : '', d.ip].filter(Boolean).map(esc).join(' · ');
+  p.innerHTML = `<div class="h"><b>${esc(d.name || d.id)}</b> &nbsp;<button class="btn dim" id="rnB" style="min-height:30px;padding:0 8px">RENAME</button></div>
+    <div class="small dimt">${info}</div>
+    <div class="h">WEB APPS FOR THIS SCREEN</div>
+    ${APPS.map((a) => `<div class="app"><canvas width="88" height="56" data-icon="${a.id}"></canvas><div class="d"><div class="n">${a.name}</div><div class="x">${esc(a.what)}</div></div></div>
+      <div class="row"><button class="btn big" data-send="${a.id}" ${d.online ? '' : 'disabled'}>${d.app === a.id ? 'OPEN ' + a.name + ' &gt;' : 'SEND TO SCREEN &gt;'}</button></div>`).join('')}
+    ${d.online ? '' : '<p class="dimt small">THE SCREEN IS OFFLINE. IT GETS NEW ORDERS WHEN IT IS BACK.</p>'}
+    <div class="row">${d.online ? `<button class="btn" id="pwB">${d.screen ? 'SCREEN OFF' : 'SCREEN ON'}</button>` : ''}
+      ${d.online && d.app ? '<button class="btn" id="clB">CLOSE WEB APP</button>' : ''}
+      ${d.online ? '' : '<button class="btn red" id="fgB">FORGET</button>'}</div>`;
+  for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => { const id = b.dataset.send; if (d.app !== id) ctl.set({ app: id, screen: 1 }); location.hash = 'comm=' + d.id; };
+  if ($('pwB')) $('pwB').onclick = () => { ctl.set({ screen: d.screen ? 0 : 1 }); d.screen = d.screen ? 0 : 1; drawStrip(); };
+  if ($('clB')) $('clB').onclick = () => { ctl.set({ app: '' }); d.app = ''; drawStrip(); };
+  if ($('fgB')) $('fgB').onclick = async () => {
+    if (!confirm('FORGET ' + (d.name || d.id) + '?')) return;
+    const r = await fetch('/api/hf/forget', { method: 'POST', body: JSON.stringify({ id: d.id, home }) });
+    if (!r.ok) toast(((await r.json()).error || 'NO').toUpperCase()); else loadList();
+  };
+  $('rnB').onclick = () => {
+    modal(`<h2>RENAME SCREEN</h2><input type="text" id="rnIn" maxlength="20" value="${esc(d.name || '')}" style="text-transform:uppercase"><div class="row"><button class="btn big" id="rnOk">SAVE</button><button class="btn" id="rnX">CANCEL</button></div>`);
+    $('rnX').onclick = unmodal;
+    $('rnOk').onclick = () => { const n = $('rnIn').value.trim().toUpperCase().slice(0, 20); if (n) { ctl.send({ t: 'name', name: n }); d.name = n; drawStrip(); } unmodal(); };
+  };
+}
+function addInfo() {
+  modal(`<h2>ADD A SCREEN</h2>
+    <p><b>ESP32-S3 BOARD</b> (the 1.47" screen board, like pocket.DOS)</p>
+    <p class="small">1. Put the HomeFront firmware on it (esp32/HomeFront in the games repo).<br>2. On first start it makes its own WiFi <b>HOMEFRONT-XXXX</b>. Join it with your phone, a setup page opens (or go to 192.168.4.1), pick your WiFi.<br>3. It says CONNECTED for 3 seconds, then shows up here.</p>
+    <p><b>ANY BROWSER</b> (computer, tablet, old phone)</p>
+    <p class="small">Open <b>error.blue/thuisfront/dev</b> and leave it open. Tap it for the name and home code.</p>
+    <div class="row"><a class="btn big" href="/thuisfront/dev/" target="_blank" style="text-decoration:none;color:inherit">OPEN A SCREEN HERE</a><button class="btn" id="adX">CLOSE</button></div>`);
+  $('adX').onclick = unmodal;
+}
+
+// --- the little 3D boards ---
+const rot = (p, yaw, pitch) => {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  let x = p[0] * c + p[2] * s, z = -p[0] * s + p[2] * c, y = p[1];
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return [x, y * cp - z * sp, y * sp + z * cp];
+};
+function boxE(cx, cy, cz, sx, sy, sz, out) {
+  const v = [];
+  for (let i = 0; i < 8; i++) v.push([cx + (i & 1 ? 1 : -1) * sx / 2, cy + (i & 2 ? 1 : -1) * sy / 2, cz + (i & 4 ? 1 : -1) * sz / 2]);
+  for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) out.push([v[a], v[b]]);
+}
+function model(d, t) {
+  const seg = [], scr = [];              // scr: lines on the screen, in screen units 0-1
+  const web = d && d.kind === 'web';
+  let S;                                 // the screen rectangle in 3D: x0, y0, x1, y1, z
+  if (web) {
+    boxE(0, 1.5, 0, 4.6, 2.9, 0.22, seg); boxE(0, -0.25, 0.2, 0.5, 0.8, 0.2, seg); boxE(0, -0.7, 0.2, 2.2, 0.12, 1.2, seg);
+    S = [-2.05, 0.3, 2.05, 2.7, -0.12];
+  } else {
+    boxE(0, 1.2, 0, 4.4, 2.4, 0.3, seg); boxE(-2.55, 1.2, 0, 0.8, 1.1, 0.4, seg); boxE(1.95, 0.35, -0.2, 0.22, 0.22, 0.12, seg);
+    S = [-1.85, 0.3, 1.6, 2.1, -0.16];
+  }
+  const sq = [[S[0], S[1]], [S[2], S[1]], [S[2], S[3]], [S[0], S[3]]];
+  for (let i = 0; i < 4; i++) seg.push([[sq[i][0], sq[i][1], S[4]], [sq[(i + 1) % 4][0], sq[(i + 1) % 4][1], S[4]]]);
+  if (d && d.online && d.screen) {
+    if (d.app === 'comm' && d.mode !== 'video') {        // text going by
+      const off = (t * 0.25) % 1;
+      for (let k = 0; k < 3; k++) { const x0 = 1 - ((off + k / 3) % 1) * 1.6; scr.push([[x0, 0.5], [x0 + 0.5, 0.5]]); }
+      scr.push([[0.1, 0.3], [0.9, 0.3]], [[0.1, 0.7], [0.6, 0.7]]);
+    } else if (d.app === 'comm') {                        // video: a flickering face-ish blob
+      for (let k = 0; k < 6; k++) { const y = 0.2 + k * 0.12, w = 0.25 + Math.sin(t * 5 + k) * 0.05 + (k > 1 && k < 5 ? 0.12 : 0); scr.push([[0.5 - w, y], [0.5 + w, y]]); }
+    } else {                                              // idle: a house
+      const h = [[0.38, 0.75], [0.62, 0.75], [0.62, 0.45], [0.5, 0.28], [0.38, 0.45], [0.38, 0.75]];
+      for (let i = 0; i < h.length - 1; i++) scr.push([h[i], h[i + 1]]);
+      if (Math.floor(t * 2) % 2) scr.push([[0.7, 0.75], [0.76, 0.75]]);
+    }
+  }
+  for (const [a, b] of scr) {
+    const m = (p) => [S[0] + (S[2] - S[0]) * p[0], S[3] - (S[3] - S[1]) * p[1], S[4] - 0.01];
+    seg.push([m(a), m(b), 1]);
+  }
+  return { seg, ty: web ? 1.1 : 1.15, dist: web ? 8.2 : 7.4 };
+}
+const iconCache = {};
+function drawCards(now) {
+  const t = now / 1000;
+  const strip = $('strip');
+  for (const c of strip.children) {
+    const cv = c.querySelector('canvas'), r = cv.getBoundingClientRect();
+    if (r.right < 0 || r.left > innerWidth) continue;
+    const dpr = Math.min(2, devicePixelRatio || 1), Wc = Math.round(r.width * dpr), Hc = Math.round(r.height * dpr);
+    if (cv.width !== Wc || cv.height !== Hc) { cv.width = Wc; cv.height = Hc; }
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = 'rgba(3,18,8,0.32)'; ctx.fillRect(0, 0, Wc, Hc);   // afterglow, as in ERROR-DOS
+    const d = devices.find((x) => x.id === c.dataset.id);
+    const sel = c.dataset.id === selId, alive = d && d.online;
+    let seg, ty, dist;
+    if (!d) {                                             // the "+" card: a plus turning round
+      seg = []; boxE(0, 1.2, 0, 0.5, 2.4, 0.5, seg); boxE(0, 1.2, 0, 2.4, 0.5, 0.5, seg); ty = 1.2; dist = 7.5;
+    } else ({ seg, ty, dist } = model(d, t));
+    const ph = (c.dataset.id.charCodeAt(c.dataset.id.length - 1) || 0) * 0.7;
+    const yaw = sel && alive ? t * 0.55 + ph : Math.sin(t * 0.5 + ph) * (alive ? 0.55 : 0.25);
+    const pitch = 0.22 + Math.sin(t * 0.37 + ph) * 0.06, bob = alive ? Math.sin(t * 1.6 + ph) * 0.12 : 0;
+    const f = Hc * 1.15, cx = Wc / 2, cy = Hc * 0.55;
+    ctx.lineWidth = Math.max(1, Wc / 260); ctx.lineCap = 'round';
+    ctx.shadowBlur = alive || !d ? Wc / 45 : 0;
+    for (const s of seg) {
+      const p = [s[0], s[1]].map((q) => { const v = rot([q[0], q[1] - ty + bob, q[2]], yaw, pitch); const z = v[2] + dist; return [cx + (v[0] * f) / z, cy - (v[1] * f) / z]; });
+      const col = s[2] ? '#b8ffd0' : alive || !d ? '#39ff7a' : '#1b7a3c';
+      ctx.strokeStyle = col; ctx.shadowColor = col;
+      ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]); ctx.lineTo(p[1][0], p[1][1]); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+  // the app icons in the panel: a tiny live screen
+  for (const cv of document.querySelectorAll('canvas[data-icon]')) {
+    const s = iconCache[cv.dataset.icon] || (iconCache[cv.dataset.icon] = { scr: new Screen(document.createElement('canvas')), t: null });
+    if (!s.t) {
+      s.t = true;
+      makeText({ text: 'HOME FRONT', font: 'vt323', size: 0, align: 'c', valign: 'm', anim: 'scroll' }).then((tx) => {
+        s.scr.setState({ app: 'comm', screen: 1, scan: 1, comm: { mode: 'text', anim: 'scroll', speed: 6, tpal: 0, bg: 1, vpal: 0, tb: 'x' } });
+        s.scr.setText(tx); s.scr.setPhase('run');
+      });
+    }
+    s.scr.render(now);
+    cv.getContext('2d').drawImage(s.scr.cv, 0, 0, cv.width, cv.height);
+  }
+}
+
+// =====================================================================
+// COMM: the communication web app
+// =====================================================================
+const pv = new Screen($('pv'));
+pv.setPhase('run');
+const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12 };
+let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0 };
+let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
+const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
+
+function chips(el, list, key, label, extra) {
+  $(el).innerHTML = list.map((it) => `<button class="chip${extra ? ' ' + extra : ''}" data-v="${it.v}">${label(it)}</button>`).join('');
+  for (const b of $(el).children) b.onclick = () => { const v = typeof C[key] === 'number' ? Number(b.dataset.v) : b.dataset.v; change(key, v); };
+}
+const swatch = (p) => `rgb(${p.fg.join(',')})`;
+chips('fonts', FONTS.map((f) => ({ v: f.id, f })), 'font', (it) => `<span class="s" style="font:${it.f.wt} 22px ${it.f.css}">Abc Їж</span><span class="n">${it.f.name}</span>`, 'font');
+chips('anims', [['static', 'STILL'], ['scroll', 'SCROLL <'], ['rise', 'RISE ^'], ['type', 'TYPE'], ['blink', 'BLINK'], ['wave', 'WAVE'], ['glitch', 'GLITCH'], ['pulse', 'PULSE']].map(([v, n]) => ({ v, n })), 'anim', (it) => it.n);
+chips('tpals', PALS.map((p, i) => ({ v: i, p })), 'tpal', (it) => `<i class="sw" style="background:${swatch(it.p)}"></i>${it.p.name}`);
+chips('vpals', PALS.map((p, i) => ({ v: i, p })), 'vpal', (it) => `<i class="sw" style="background:linear-gradient(90deg,rgb(${it.p.lo.join(',')}),${swatch(it.p)},rgb(${it.p.hi.join(',')}))"></i>${it.p.name}`);
+chips('bgs', [[0, 'BLACK'], [1, 'DARK TINT'], [2, 'INVERTED']].map(([v, n]) => ({ v, n })), 'bg', (it) => it.n);
+chips('aligns', [['l', 'LEFT'], ['c', 'CENTRE'], ['r', 'RIGHT']].map(([v, n]) => ({ v, n })), 'align', (it) => it.n);
+$('aligns').insertAdjacentHTML('beforeend', '<i style="flex:none;width:10px"></i>');
+for (const [v, n] of [['t', 'TOP'], ['m', 'MIDDLE'], ['b', 'BOTTOM']]) {
+  const b = document.createElement('button'); b.className = 'chip'; b.dataset.va = v; b.textContent = n; b.onclick = () => change('valign', v); $('aligns').appendChild(b);
+}
+chips('styles', [['plain', 'PLAIN'], ['shadow', 'SHADOW'], ['outline', 'OUTLINE'], ['bold', 'BOLD']].map(([v, n]) => ({ v, n })), 'style', (it) => it.n);
+$('styles').insertAdjacentHTML('beforeend', '<button class="chip" id="capsB">ABC CAPS</button>');
+$('capsB').onclick = () => change('caps', C.caps ? 0 : 1);
+chips('vqs', [['hi', 'SHARP 320x172'], ['lo', 'FAST 160x86']].map(([v, n]) => ({ v, n })), 'vq', (it) => it.n);
+chips('looks', [['smooth', 'SMOOTH 16 SHADES'], ['dither', 'DITHER 4 SHADES']].map(([v, n]) => ({ v, n })), 'look', (it) => it.n);
+
+function slider(id, key, fmt, toS) {
+  const el = $(id), out = $(id + 'O');
+  el.oninput = () => { out.textContent = fmt(Number(el.value)); if (toS) { S[key] = Number(el.value); sendScreenSoon(key); } else change(key, Number(el.value), true); };
+}
+slider('tSize', 'size', (v) => (v ? v + 'px' : 'FIT'));
+slider('tSpeed', 'speed', (v) => v);
+slider('vBri', 'vbri', (v) => (v > 0 ? '+' : '') + v);
+slider('vCon', 'vcon', (v) => (v > 0 ? '+' : '') + v);
+slider('vFps', 'fps', (v) => v);
+slider('sBri', 'bright', (v) => v + '%', true);
+let scrTimer = 0;
+function sendScreenSoon(key) { pv.state.bright = S.bright; clearTimeout(scrTimer); scrTimer = setTimeout(() => ctl && ctl.set({ [key]: S[key] }), 150); }
+
+function syncUI() {
+  for (const [el, key] of [['fonts', 'font'], ['anims', 'anim'], ['tpals', 'tpal'], ['vpals', 'vpal'], ['bgs', 'bg'], ['aligns', 'align'], ['styles', 'style'], ['vqs', 'vq'], ['looks', 'look']]) {
+    for (const b of $(el).children) if (b.dataset.v != null) b.classList.toggle('on', String(C[key]) === b.dataset.v);
+  }
+  for (const b of $('aligns').querySelectorAll('[data-va]')) b.classList.toggle('on', C.valign === b.dataset.va);
+  $('capsB').classList.toggle('on', !!C.caps);
+  const set = (id, v, f) => { $(id).value = v; $(id + 'O').textContent = f(v); };
+  set('tSize', C.size, (v) => (v ? v + 'px' : 'FIT')); set('tSpeed', C.speed, (v) => v);
+  set('vBri', C.vbri, (v) => (v > 0 ? '+' : '') + v); set('vCon', C.vcon, (v) => (v > 0 ? '+' : '') + v); set('vFps', C.fps, (v) => v);
+  set('sBri', S.bright, (v) => v + '%');
+  if (document.activeElement !== $('tIn')) $('tIn').value = C.text;
+  $('tCount').textContent = C.text.length ? C.text.length + '/2000' : '';
+  for (const b of $('modeTabs').children) b.classList.toggle('on', b.dataset.m === C.mode);
+  $('pText').hidden = C.mode === 'video';
+  $('pVideo').hidden = C.mode === 'text';
+  $('vMirror').classList.toggle('on', !!C.mirror);
+  $('tLive').textContent = 'LIVE: ' + (liveSend ? 'ON' : 'OFF'); $('tLive').classList.toggle('on', !!liveSend);
+  $('tSend').textContent = unsent ? 'SEND >' : 'SENT';
+  $('tSend').classList.toggle('dim', !unsent);
+  $('sPower').textContent = S.screen ? 'SCREEN: ON' : 'SCREEN: OFF'; $('sPower').classList.toggle('on', !!S.screen);
+  $('sScan').classList.toggle('on', !!S.scan);
+  $('vStart').textContent = cam.on ? 'STOP CAMERA' : 'START CAMERA'; $('vStart').classList.toggle('on', cam.on);
+  pv.setState({ app: 'comm', screen: 1, scan: S.scan, bright: S.bright, comm: { ...C, tb: textKey() } });
+}
+const textKey = () => TEXT_KEYS.map((k) => C[k]).join('\u0001');
+
+// a change from the page
+function change(key, v, slide) {
+  if (C[key] === v) return;
+  C[key] = v;
+  syncUI();
+  if (TEXT_KEYS.includes(key)) { remakeText(slide ? 250 : 60); return; }
+  clearTimeout(change.t[key]);
+  change.t[key] = setTimeout(() => ctl && ctl.set({ comm: { [key]: C[key] } }), slide ? 150 : 0);
+}
+change.t = {};
+
+// the text picture: made here, shown in the preview straight away, sent when LIVE (or on SEND)
+let lastBlob = null;
+function remakeText(wait) {
+  clearTimeout(textTimer);
+  textTimer = setTimeout(async () => {
+    if (textBusy) { textAgain = true; return; }
+    textBusy = true;
+    try {
+      const t = await makeText(C);
+      pv.setText(t);
+      lastBlob = encodeText(t);
+      unsent = true;
+      if (liveSend) sendText();
+      syncUI();
+    } finally { textBusy = false; if (textAgain) { textAgain = false; remakeText(0); } }
+  }, wait);
+}
+function sendText() {
+  if (!lastBlob || !ctl) return;
+  const p = {}; for (const k of TEXT_KEYS) p[k] = C[k];
+  if (ctl.send(lastBlob) && ctl.set({ comm: p })) unsent = false; else toast('NOT CONNECTED: TRY AGAIN');
+  syncUI();
+}
+$('tIn').addEventListener('input', () => { C.text = $('tIn').value; $('tCount').textContent = C.text.length + '/2000'; remakeText(450); });
+$('tSend').onclick = () => { if (!lastBlob) remakeText(0); else sendText(); };
+$('tLive').onclick = () => { liveSend = liveSend ? 0 : 1; store.set('live', liveSend); syncUI(); if (liveSend && unsent) sendText(); };
+for (const b of $('modeTabs').children) b.onclick = () => { change('mode', b.dataset.m); if (b.dataset.m !== 'text' && !cam.on) camStart(); };
+$('vMirror').onclick = () => change('mirror', C.mirror ? 0 : 1);
+$('sPower').onclick = () => { S.screen = S.screen ? 0 : 1; ctl && ctl.set({ screen: S.screen }); syncUI(); };
+$('sScan').onclick = () => { S.scan = S.scan ? 0 : 1; ctl && ctl.set({ scan: S.scan }); syncUI(); };
+$('sClose').onclick = () => { ctl && ctl.set({ app: '' }); camStop(); location.hash = ''; toast('WEB APP CLOSED'); };
+$('cBack').onclick = () => { location.hash = ''; };
+
+// state from the server: the screen's current settings
+function commState(s) {
+  S = { app: s.app, screen: s.screen, bright: s.bright, scan: s.scan };
+  $('cName').textContent = 'COMM · ' + (s.name || (ctl && ctl.id) || '');
+  if (!loadedFromServer) {                   // the first time: take the screen's settings and redraw its text
+    loadedFromServer = true;
+    C = { ...DEF, ...(s.comm || {}) };
+    delete C.tb;
+    if (s.app !== 'comm' && ctl) { ctl.set({ app: 'comm', screen: 1 }); S.app = 'comm'; }
+    unsent = false;
+    syncUI();
+    makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });
+  } else {
+    // someone else (another phone) changed it: follow, but don't fight the text box you're typing in
+    const typing = document.activeElement === $('tIn');
+    for (const k of Object.keys(DEF)) if (!(typing && k === 'text') && s.comm && k in s.comm && s.comm[k] !== C[k]) {
+      C[k] = s.comm[k];
+      if (TEXT_KEYS.includes(k)) makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });
+    }
+    syncUI();
+  }
+  if (s.app !== 'comm' && view === 'comm') { $('pvR').textContent = 'WEB APP CLOSED ON THE SCREEN'; }
+}
+function commDev(d) {
+  const on = !!(d && d.online) && ctl && ctl.ready();
+  $('cDot').classList.toggle('on', on);
+  $('cLive').textContent = on ? 'ONLINE' : 'OFFLINE';
+}
+
+// --- the camera ---
+const cam = { on: false, stream: null, facing: 'user', video: document.createElement('video'), g: document.createElement('canvas'), seq: 1, acked: 0, lastSend: 0, lastGrab: 0, sent: [], got: [] };
+cam.video.muted = true; cam.video.playsInline = true; cam.video.setAttribute('playsinline', '');
+async function camStart() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('NO CAMERA IN THIS BROWSER'); return; }
+  camStop();
+  try {
+    cam.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam.facing, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    cam.video.srcObject = cam.stream;
+    await cam.video.play();
+    cam.on = true; wake();
+  } catch (e) { toast('CAMERA: ' + String(e.name || e).toUpperCase()); }
+  syncUI();
+}
+function camStop() {
+  if (cam.stream) cam.stream.getTracks().forEach((t) => t.stop());
+  cam.stream = null; cam.on = false; cam.video.srcObject = null;
+  syncUI();
+}
+$('vStart').onclick = () => (cam.on ? camStop() : camStart());
+$('vFlip').onclick = () => { cam.facing = cam.facing === 'user' ? 'environment' : 'user'; if (cam.on) camStart(); };
+function camGot(s) { cam.acked = Math.max(cam.acked, s); cam.got.push(performance.now()); }
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function camTick(now) {
+  if (!cam.on || cam.video.readyState < 2 || C.mode === 'text') return;
+  if (now - cam.lastGrab < 1000 / C.fps) return;
+  cam.lastGrab = now;
+  const w = C.vq === 'lo' ? 160 : 320, h = C.vq === 'lo' ? 86 : 172, g = cam.g;
+  if (g.width !== w || g.height !== h) { g.width = w; g.height = h; }
+  const ctx = g.getContext('2d', { willReadFrequently: true });
+  const vw = cam.video.videoWidth, vh = cam.video.videoHeight;
+  if (!vw || !vh) return;
+  const want = w / h; let sw = vw, sh = vh;                  // cut to the screen's shape
+  if (vw / vh > want) sw = vh * want; else sh = vw / want;
+  ctx.save();
+  if (C.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(cam.video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, w, h);
+  ctx.restore();
+  const d = ctx.getImageData(0, 0, w, h).data, lv = new Uint8Array(w * h);
+  const con = 1 + C.vcon / 50, bri = C.vbri * 2.2, dither = C.look === 'dither';
+  for (let i = 0, j = 0; i < lv.length; i++, j += 4) {
+    let l = (d[j] * 77 + d[j + 1] * 150 + d[j + 2] * 29) >> 8;
+    l = (l - 128) * con + 128 + bri;
+    l = l < 0 ? 0 : l > 255 ? 255 : l;
+    if (dither) { const x = i % w, y = (i / w) | 0, q = (l / 255) * 3, f = q - Math.floor(q); lv[i] = Math.min(3, Math.floor(q) + (f * 16 > BAYER[(y & 3) * 4 + (x & 3)] + 0.5 ? 1 : 0)) * 5; }
+    else lv[i] = Math.round((l * 15) / 255);
+  }
+  pv.setFrame({ w, h, seq: cam.seq, px: lv });
+  if (ctl && ctl.ready() && ctl.bufferedLow() && (cam.seq - cam.acked < 2 || now - cam.lastSend > 1500)) {
+    ctl.send(encodeFrame(w, h, cam.seq, lv));
+    cam.seq++; cam.lastSend = now; cam.sent.push(now);
+  }
+}
+
+// =====================================================================
+// views, wake lock, the main loop
+// =====================================================================
+let view = 'list', lock = null;
+async function wake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => (lock = null); } } catch { /* fine */ } }
+document.addEventListener('visibilitychange', () => { if (view === 'comm') wake(); });
+function route() {
+  const m = location.hash.match(/^#comm=([A-Z0-9-]+)$/);
+  if (m) {
+    view = 'comm'; $('vList').hidden = true; $('vComm').hidden = false;
+    openCtl(m[1]); loadedFromServer = false;
+    if (ctl.state) commState(ctl.state); else ctl.send({ t: 'hello' });
+    commDev(ctl.dev || {});
+    clearInterval(listTimer); wake(); scrollTo(0, 0);
+    syncUI();
+  } else {
+    view = 'list'; camStop(); $('vComm').hidden = true; $('vList').hidden = false;
+    if (lock) { lock.release().catch(() => {}); lock = null; }
+    loadList(); clearInterval(listTimer); listTimer = setInterval(loadList, 4000);
+  }
+}
+addEventListener('hashchange', route);
+route();
+
+let lastPv = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (view === 'list') drawCards(now);
+  else {
+    camTick(now);
+    if (now - lastPv > 30) { lastPv = now; pv.render(now); }
+    if (Math.floor(now / 500) !== Math.floor(lastPv / 500) || !loop.n || now - loop.n > 500) {
+      loop.n = now;
+      cam.sent = cam.sent.filter((x) => now - x < 2000); cam.got = cam.got.filter((x) => now - x < 2000);
+      $('pvR').textContent = cam.on && C.mode !== 'text' ? `SENT ${(cam.sent.length / 2).toFixed(0)}/S · SCREEN ${(cam.got.length / 2).toFixed(0)}/S` : (S.screen ? '' : 'SCREEN IS OFF');
+      $('vStat').textContent = cam.on ? (cam.facing === 'user' ? 'FRONT' : 'BACK') + ' · ' + (C.vq === 'lo' ? '160x86' : '320x172') : '';
+    }
+  }
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

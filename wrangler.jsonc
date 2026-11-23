@@ -22,7 +22,7 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/games/*", "/voyage", "/voyage/*", "/music3d", "/music3d/*"]
+    "run_worker_first": ["/api/*", "/games/*", "/voyage", "/voyage/*", "/music3d", "/music3d/*", "/thuisfront/dev/ws"]
   },
 
   // Database for scores and saved progress.
@@ -42,7 +42,8 @@
       { "name": "CHAT", "class_name": "ChatRoom" },
       { "name": "TUSA", "class_name": "TusaRoom" },
       { "name": "VGADAI", "class_name": "VgadaiRoom" },
-      { "name": "ONLINE", "class_name": "OnlineBoard" }
+      { "name": "ONLINE", "class_name": "OnlineBoard" },
+      { "name": "HF", "class_name": "HomeFront" }
     ]
   },
   "migrations": [
@@ -51,7 +52,8 @@
     { "tag": "v3", "new_sqlite_classes": ["ChatRoom"] },
     { "tag": "v4", "new_sqlite_classes": ["TusaRoom"] },
     { "tag": "v5", "new_sqlite_classes": ["VgadaiRoom"] },
-    { "tag": "v6", "new_sqlite_classes": ["OnlineBoard"] }
+    { "tag": "v6", "new_sqlite_classes": ["OnlineBoard"] },
+    { "tag": "v7", "new_sqlite_classes": ["HomeFront"] }
   ],
 
   "observability": { "enabled": true }

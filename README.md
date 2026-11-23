@@ -75,10 +75,15 @@ public/                 the website
                         draw at 3 px per dot, then black lines over the gaps). Raycaster with walls of different heights,
                         tilt to walk/turn (calibration like NEON FLIGHT), TAP = map, find 8 places (saved on the board).
                         Lowers its own detail when the board can't keep up
+  thuisfront/           HOME FRONT (error.blue/thuisfront): screens at home, controlled from a phone (see "Home Front" below).
+                        index.html = the phone side (3D carousel of screens, then the COMM web app), text.js = text to
+                        picture, dev/ = the screen itself (dev/index.html runs in any browser, dev/render.js draws for
+                        both), flash/ = put the ESP32 firmware on a board from Chrome (ESP Web Tools)
 lib/online.js         "I'm in this game" beacon for the who's-online list (GET /api/online); game pages under
                         /games/, /voyage and /music3d get it from the server, other pages load it themselves
 esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online in which game and does ERROR-CHAT
                         (see esp32/README.md)
+esp32/HomeFront/        HOME FRONT firmware for the ESP32-S3 1.47" LCD board (see esp32/HomeFront/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
@@ -589,3 +594,22 @@ Durable Object only passes the handshake along. WebSocket messages (client -> ro
 `{id, name, w, h, seq, at, data, cams}`, `{wait:true}` while none came yet, `{off:true}` when nobody shares.
 `s=2` = half size (80 x 43, a quarter of the bytes). Asking tells the sharer someone watches. pocket.DOS
 ERROR-CHAT shows `[WATCH NAME]` in its TAP list and draws the pictures with `img4()` in its screen colour.
+
+## Home Front (error.blue/thuisfront)
+
+Screens at home that show one web app, controlled from a phone. In ERROR-DOS under APPS.
+- **A screen** is an ESP32-S3 1.47" board with the HomeFront firmware (esp32/HomeFront), or any browser at
+  error.blue/thuisfront/dev (tap it for name and home code). Its id is `HF-XXXXXX` (board) or `WEB-XXXXXX` (browser).
+- **error.blue/thuisfront**: the screens in a 3D carousel (swipe sideways), pick one, send it a web app.
+  An optional HOME CODE (set on the screen) hides screens from phones without the same code.
+- **COMM**, the first web app: TEXT (14 fonts, size or FIT, still / scroll / rise / type / blink / wave / glitch / pulse,
+  speed, colour, background, align, style), VIDEO from the phone's camera (DOS GREEN / YELLOW / BLUE / GRAY,
+  sharp 320x172 or fast 160x86, smooth or dithered, brightness, contrast, frames per second) or TEXT+VIDEO,
+  and SCREEN ON/OFF, light, scanlines, CLOSE WEB APP. The preview on the phone is drawn with the screen's own code.
+- The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
+  boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
+- Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:
+  `/thuisfront/dev/ws?id=` for screens, `/api/hf/ws?id=&home=` for phones; `GET /api/hf/list?home=`, `POST /api/hf/forget`.
+  The protocol is at the top of src/homefront.js. Video frames (HFV1, 4-bit) go to a screen only after it said it
+  showed the last one, so a slow screen gets fewer frames instead of a delay.
+- Changing the drawing: change dev/render.js AND esp32/HomeFront/screen.cpp the same way.

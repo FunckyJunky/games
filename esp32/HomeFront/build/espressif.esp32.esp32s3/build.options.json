@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "../..,../..,../..,../..,../..,../..,../..,../..,../..,../..",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "runtime.tools.ctags.path=/root/.arduino15/packages/builtin/tools/ctags/5.8-arduino11",
+  "fqbn": "espressif:esp32:esp32s3:CDCOnBoot=cdc,PartitionScheme=huge_app,PSRAM=opi",
+  "hardwareFolders": "/root/Arduino/hardware/espressif/esp32,/root/Arduino/hardware/espressif/esp32",
+  "otherLibrariesFolders": "/root/Arduino/libraries",
+  "sketchLocation": "/home/claude/games/esp32/HomeFront"
+}
