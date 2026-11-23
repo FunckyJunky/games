@@ -285,14 +285,14 @@ const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, floa
 }
 
 // ---------------- CLOCK: big dot-matrix digits (the same as drawClock in render.js) ----------------
-// 5x7 glyphs, one byte per row, bit 4 = the left column; index 10 = '-', 11 = ' '
-static const uint8_t GLYPH[12][7] = {
+// 5x7 glyphs, one byte per row, bit 4 = the left column; index 10 = '-', 11 = ' ', 12 = '+'
+static const uint8_t GLYPH[13][7] = {
   { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E }, { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E },
   { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F }, { 0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E },
   { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 }, { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E },
   { 0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E }, { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 },
   { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E }, { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C },
-  { 0, 0, 0, 0x1F, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0 } };
+  { 0, 0, 0, 0x1F, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0 }, { 0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0 } };
 static const uint8_t COLON[7] = { 0, 0, 1, 0, 1, 0, 0 };
 static const char* const WDAY[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
 static const char* const MONTH[] = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" };
@@ -307,7 +307,7 @@ static void matrix(const char* s, int x, int y, int p, int d, uint8_t lit, uint8
   for (; *s; s++) {
     bool colon = *s == ':';
     int w = colon ? 1 : 5;
-    const uint8_t* rows = GLYPH[*s >= '0' && *s <= '9' ? *s - '0' : *s == '-' ? 10 : 11];
+    const uint8_t* rows = GLYPH[*s >= '0' && *s <= '9' ? *s - '0' : *s == '-' ? 10 : *s == '+' ? 12 : 11];
     for (int r = 0; r < 7; r++) for (int c = 0; c < w; c++) {
       bool on = colon ? colonOn && COLON[r] : (rows[r] >> (4 - c)) & 1;
       dot(x + c * p, y + r * p, d, on ? lit : ghost);
@@ -342,6 +342,85 @@ void scrClock(const ClockSet& k, const struct tm* t, int ms) {
   }
   if (line[0]) { y += 12; scrText(line, (W - scrTextW(line, 2)) / 2, y, 2, IX_T + 11); }
   setTextRamp(k.pal, k.bg ? 1 : 0, 1);
+}
+
+// ---------------- ETA: when I arrive, with a description and a progress bar (the same as drawEta in render.js) ----------------
+// word wrap for the 8x8 font: lines of at most max letters (a longer word is cut); returns how many lines it takes
+static int wrapWords(const char* s, int max, char out[][40], int keep) {
+  int n = 0, ll = 0;
+  char line[40] = "";
+  auto push = [&](const char* t, int len) { if (n < keep) { memcpy(out[n], t, len); out[n][len] = 0; } n++; };
+  const char* p = s;
+  while (*p) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    const char* w = p;
+    while (*p && *p != ' ') p++;
+    int wl = p - w;
+    while (wl > max) { if (ll) { push(line, ll); ll = 0; } push(w, max); w += max; wl -= max; }
+    if (!wl) continue;
+    if (!ll) { memcpy(line, w, wl); ll = wl; }
+    else if (ll + 1 + wl <= max) { line[ll++] = ' '; memcpy(line + ll, w, wl); ll += wl; }
+    else { push(line, ll); memcpy(line, w, wl); ll = wl; }
+  }
+  if (ll) push(line, ll);
+  return n;
+}
+static void hmStr(char* b, const struct tm* t) { snprintf(b, 6, "%02d:%02d", t->tm_hour, t->tm_min); }
+void scrEta(const EtaSet& e, int64_t now, bool known, const struct tm* toT, const struct tm* fromT) {
+  memset(FB, IX_T, W * H);
+  int ms = (int)(((now % 1000) + 1000) % 1000);
+  bool blink = !scrEffects || ms < 500;
+  scrFill(0, 0, W, 12, IX_T + 12);
+  scrText("ETA", 4, 2, 1, IX_T + 0);
+  char top[24] = "", hm[8];
+  if (e.to && known && toT) { hmStr(hm, toT); snprintf(top, sizeof(top), "%s%s", e.done ? "ARRIVED " : "ARRIVES ", hm); scrText(top, W - 4 - scrTextW(top, 1), 2, 1, IX_T + 0); }
+  char lines[3][40];
+  int k = 2, n = wrapWords(e.text, 19, lines, 3);
+  if (n > 2) { k = 1; n = wrapWords(e.text, 38, lines, 3); if (n > 3) n = 3; }
+  int lh = k == 2 ? 18 : 11, descH = n * lh, gap = n ? 6 : 0;
+  int total = descH + gap + 54 + 10 + 12 + 12 + 8;
+  int y = 12 + max(4, rnd((160 - total) / 2.0f));
+  for (int i = 0; i < n; i++) scrText(lines[i], (W - scrTextW(lines[i], k)) / 2, y + i * lh, k, IX_T + 15);
+  y += descH + gap;
+  char str[16] = "--:--", bottom[40] = "NO ARRIVAL SET";
+  bool colon = false, running = false;
+  double p = 0;
+  auto fmt = [](char* b, size_t sz, const char* pre, int64_t secs) {
+    int h = secs / 3600, m = (secs % 3600) / 60, s = secs % 60;
+    if (h) snprintf(b, sz, "%s%d:%02d:%02d", pre, h, m, s); else snprintf(b, sz, "%s%02d:%02d", pre, m, s);
+  };
+  if (e.to && !known) strcpy(bottom, "WAITING FOR THE TIME");
+  else if (e.to && e.done) {
+    str[0] = 0; p = 1;
+    if (fromT) { hmStr(hm, fromT); snprintf(bottom, sizeof(bottom), "ON THE WAY SINCE %s", hm); } else bottom[0] = 0;
+  } else if (e.to) {
+    int64_t span = ((int64_t)e.to - (int64_t)e.from) * 1000, left = (int64_t)e.to * 1000 - now;
+    p = span > 0 ? (double)(now - (int64_t)e.from * 1000) / (double)span : 1;
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    if (left > 0) {
+      fmt(str, sizeof(str), "", (left + 999) / 1000); colon = true; running = true;
+      if (fromT) { hmStr(hm, fromT); snprintf(bottom, sizeof(bottom), "ON MY WAY SINCE %s", hm); } else strcpy(bottom, "ON MY WAY");
+    } else {
+      int64_t late = (-left) / 1000;
+      if (late < 60) { strcpy(str, "00:00"); strcpy(bottom, "ARRIVING NOW"); } else { fmt(str, sizeof(str), "+", late); strcpy(bottom, "LATE"); }
+    }
+  }
+  if (str[0]) {
+    int cols = -1;
+    for (const char* c = str; *c; c++) cols += (*c == ':' ? 1 : 5) + 1;
+    matrix(str, rnd((W - (cols * 8 - 2)) / 2.0f), y, 8, 6, IX_T + 15, IX_T + 2, colon ? blink : true);
+  } else scrText("ARRIVED", (W - scrTextW("ARRIVED", 4)) / 2, y + 11, 4, IX_T + 15);
+  y += 54 + 10;
+  int filled = (int)floor(p * 50);
+  for (int i = 0; i < 50; i++) {
+    uint8_t c = i < filled ? IX_T + 15 : (i == filled && running && scrEffects) ? (ms < 500 ? IX_T + 15 : IX_T + 6) : IX_T + 2;
+    scrFill(10 + i * 6, y, 5, 12, c);
+  }
+  y += 12 + 12;
+  if (bottom[0]) scrText(bottom, 10, y, 1, IX_T + 11);
+  if (e.to && known) { char pc[8]; snprintf(pc, sizeof(pc), "%d%%", (int)floor(p * 100)); scrText(pc, W - 10 - scrTextW(pc, 1), y, 1, IX_T + 11); }
+  setTextRamp(e.pal, 0, 1);
 }
 
 // ---------------- menu screens ----------------

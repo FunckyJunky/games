@@ -618,6 +618,10 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   black or dark background, 24 h or 12 h (AM/PM), seconds as a row of 60 dots / big HH:MM:SS / off, date on/off,
   time zone from the phone (IANA name for browser screens; turned into a POSIX TZ string for the board, which keeps
   the time itself with NTP). Drawn by drawClock() in dev/render.js and scrClock() in screen.cpp (pixel-identical).
+- **ETA**, the third web app: "when I'll be there". Pick IN 5 MIN ... 2 H or AT a time, a description (8x8 DOS
+  letters, wrapped over 1-3 lines), +5 / -5 MIN, I'M HERE, CLEAR. The screen shows the description, a big
+  dot-matrix countdown (H:MM:SS / MM:SS, then ARRIVING NOW / +MM:SS LATE), a 50-block progress bar and the times.
+  State `eta {from, to (unix seconds), text, pal, done}`; the screen counts by itself. drawEta() / scrEta() match.
 - The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
   boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
 - Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:

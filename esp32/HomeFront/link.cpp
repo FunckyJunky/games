@@ -58,7 +58,7 @@ static uint8_t* loadFile(const char* path, size_t& n) {
   return d;
 }
 
-static const char* const APPS[] = { "", "comm", "clock" };
+static const char* const APPS[] = { "", "comm", "clock", "eta" };
 static const char* const MODES[] = { "text", "video", "both", "photo" };
 static const char* const ANIMS[] = { "static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse" };
 static uint8_t pickIdx(const char* v, const char* const* list, int n) { for (int i = 0; i < n; i++) if (v && !strcmp(v, list[i])) return i; return 0; }
@@ -70,7 +70,7 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   JsonObjectConst s = doc["state"];
   if (s.isNull()) return false;
   o.rev = s["rev"] | 0;
-  o.app = pickIdx(s["app"] | "", APPS, 3);
+  o.app = pickIdx(s["app"] | "", APPS, 4);
   o.screen = (s["screen"] | 1) != 0;
   o.bright = constrain((int)(s["bright"] | 80), 5, 100);
   o.scan = (s["scan"] | 0) != 0;
@@ -93,6 +93,12 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.clock.sec = constrain((int)(k["sec"] | 1), 0, 2);
   o.clock.date = (k["date"] | 1) != 0;
   strlcpy(o.ptz, k["ptz"] | "", sizeof(o.ptz));
+  JsonObjectConst e = s["eta"];
+  o.eta.from = e["from"] | 0;
+  o.eta.to = e["to"] | 0;
+  o.eta.pal = constrain((int)(e["pal"] | 0), 0, 3);
+  o.eta.done = (e["done"] | 0) != 0;
+  strlcpy(o.eta.text, e["text"] | "", sizeof(o.eta.text));
   return true;
 }
 
@@ -236,7 +242,7 @@ void linkLoadSaved() {
   HfState st;
   if (d && parseState(d, n, st)) {
     G.st = st; G.haveState = true;
-    Serial.printf("FS: last web app: %s, rev %u\n", st.app == APP_COMM ? "COMM" : st.app == APP_CLOCK ? "CLOCK" : "none", (unsigned)st.rev);
+    Serial.printf("FS: last web app: %s, rev %u\n", st.app == APP_COMM ? "COMM" : st.app == APP_CLOCK ? "CLOCK" : st.app == APP_ETA ? "ETA" : "none", (unsigned)st.rev);
     applyTz(st.ptz);
     size_t bn = 0, tn = 0;
     uint8_t* tbn = loadFile("/text.tb", bn);

@@ -65,7 +65,7 @@
   input[type=range]::-moz-range-track { height: 4px; background: var(--dim); }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 26px; margin-top: -11px; background: var(--fg); box-shadow: 0 0 8px var(--glow); border: 0; }
   input[type=range]::-moz-range-thumb { width: 18px; height: 26px; background: var(--fg); border: 0; border-radius: 0; }
-  textarea, input[type=text], input[type=password] {
+  textarea, input[type=text], input[type=password], input[type=time] {
     width: 100%; background: #000; color: var(--fg); border: 2px solid var(--dim); font: inherit; font-size: 24px; padding: 8px 10px;
     text-shadow: 0 0 5px var(--glow); outline: none; resize: vertical; -webkit-user-select: text; user-select: text; border-radius: 0;
   }
@@ -185,6 +185,18 @@
 
     </div>
 
+    <div class="sec" id="pEta" hidden>
+      <div class="h">I ARRIVE IN <span id="eWhen" class="small"></span></div>
+      <div class="chips" id="eIns"></div>
+      <div class="row"><span class="dimt" style="align-self:center;flex:none">OR AT</span><input type="time" id="eAt" style="flex:1;min-width:0"><button class="btn" id="eAtB">SET</button></div>
+      <div class="h">DESCRIPTION <span id="eCount" class="small"></span></div>
+      <input type="text" id="eText" maxlength="60" placeholder="ON THE TRAIN" style="text-transform:uppercase">
+      <div class="row"><button class="btn" id="eMinus">-5 MIN</button><button class="btn" id="ePlus">+5 MIN</button></div>
+      <div class="row"><button class="btn big" id="eDone">I'M HERE</button><button class="btn red" id="eClear">CLEAR</button></div>
+      <div class="h">COLOUR</div><div class="chips" id="epals"></div>
+      <p class="dimt small">The screen counts down by itself, also when this page is closed. Letters A-Z, 0-9 and signs.</p>
+    </div>
+
     <div class="sec" id="pClock" hidden>
       <div class="h">COLOUR</div><div class="chips" id="kpals"></div>
       <div class="h">BACKGROUND</div><div class="chips" id="kbgs"></div>
@@ -235,6 +247,7 @@ $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmod
 const APPS = [
   { id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' },
   { id: 'clock', name: 'CLOCK', what: 'The time, big, in dot-matrix DOS style. Seconds, date, 24 or 12 hours, DOS colours.' },
+  { id: 'eta', name: 'ETA', what: "When I'll be there: a countdown to your arrival, a description and a progress bar that fills up." },
 ];
 // this phone's time zone, for the CLOCK (IANA name for browsers, POSIX string for the board)
 function tzHere() { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* old browser */ } return { tz, ptz: tz ? posixTZ(tz) : '' }; }
@@ -417,7 +430,7 @@ function drawPanel() {
   if ($('npNo')) $('npNo').onclick = () => { ctl.send({ t: 'nopw' }); d.pwAsked = true; drawStrip(); };
   for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => {
     const id = b.dataset.send, st = ctl.state || {};
-    if (d.app !== id) ctl.set({ app: id, screen: 1, ...(id === 'clock' && !(st.clock && st.clock.tz) ? { clock: tzHere() } : {}) });
+    if (d.app !== id) ctl.set({ app: id, screen: 1, ...((id === 'clock' || id === 'eta') && !(st.clock && st.clock.tz) ? { clock: tzHere() } : {}) });
     location.hash = id + '=' + d.id;
   };
   if ($('pwB')) $('pwB').onclick = () => { ctl.set({ screen: d.screen ? 0 : 1 }); d.screen = d.screen ? 0 : 1; drawStrip(); };
@@ -511,7 +524,12 @@ function model(d, t) {
   const sq = [[S[0], S[1]], [S[2], S[1]], [S[2], S[3]], [S[0], S[3]]];
   for (let i = 0; i < 4; i++) seg.push([[sq[i][0], sq[i][1], S[4]], [sq[(i + 1) % 4][0], sq[(i + 1) % 4][1], S[4]]]);
   if (d && d.online && d.screen) {
-    if (d.app === 'clock') {                              // a clock face with the real time
+    if (d.app === 'eta') {                                // a progress bar filling up
+      const f = (t * 0.12) % 1;
+      scr.push([[0.1, 0.35], [0.9, 0.35]], [[0.1, 0.55], [0.9, 0.55]], [[0.1, 0.35], [0.1, 0.55]], [[0.9, 0.35], [0.9, 0.55]]);
+      for (let k = 0; k < 4; k++) { const y = 0.39 + k * 0.04; scr.push([[0.12, y], [0.12 + 0.76 * f, y]]); }
+      scr.push([[0.3, 0.75], [0.7, 0.75]]);
+    } else if (d.app === 'clock') {                              // a clock face with the real time
       const now = new Date(), cx = 0.5, cy = 0.5, r = 0.36;
       for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, b = ((i + 1) / 12) * Math.PI * 2; scr.push([[cx + Math.sin(a) * r * 0.6, cy + Math.cos(a) * r], [cx + Math.sin(b) * r * 0.6, cy + Math.cos(b) * r]]); }
       const hand = (f, len) => [[cx, cy], [cx + Math.sin(f * Math.PI * 2) * len * 0.6, cy + Math.cos(f * Math.PI * 2) * len]];
@@ -568,6 +586,11 @@ function drawCards(now) {
   // the app icons in the panel: a tiny live screen
   for (const cv of document.querySelectorAll('canvas[data-icon]')) {
     const s = iconCache[cv.dataset.icon] || (iconCache[cv.dataset.icon] = { scr: new Screen(document.createElement('canvas')), t: null });
+    if (!s.t && cv.dataset.icon === 'eta') {
+      s.t = true;
+      s.scr.setState({ app: 'eta', screen: 1, scan: 1, eta: { from: 1e9, to: 1e9 + 900, text: 'ON MY WAY', pal: 0, done: 0 }, clock: { tz: 'UTC' } });
+      s.scr.nowMs = () => (1e9 + 120) * 1000 + (performance.now() % 700000); s.scr.setPhase('run');
+    }
     if (!s.t && cv.dataset.icon === 'clock') {
       s.t = true;
       s.scr.setState({ app: 'clock', screen: 1, scan: 1, clock: { pal: 0, bg: 1, h24: 1, sec: 1, date: 1, tz: '' } }); s.scr.setPhase('run');
@@ -593,6 +616,8 @@ const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, t
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
 const KDEF = { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: '', ptz: '' };
 let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
+const EDEF = { from: 0, to: 0, text: '', pal: 0, done: 0 };
+let E = { ...EDEF };                                 // the ETA
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
 
@@ -619,6 +644,27 @@ $('styles').insertAdjacentHTML('beforeend', '<button class="chip" id="capsB">ABC
 $('capsB').onclick = () => change('caps', C.caps ? 0 : 1);
 chips('vqs', [['hi', 'SHARP 320x172'], ['lo', 'FAST 160x86']].map(([v, n]) => ({ v, n })), 'vq', (it) => it.n);
 chips('looks', [['smooth', 'SMOOTH 16 SHADES'], ['dither', 'DITHER 4 SHADES']].map(([v, n]) => ({ v, n })), 'look', (it) => it.n);
+
+// ETA: when I arrive
+const touchedE = {}, nowS = () => Math.floor(Date.now() / 1000);
+const etaText = (v) => String(v || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '?').slice(0, 60);
+function eset(p) { Object.assign(E, p); for (const k in p) touchedE[k] = performance.now(); syncUI(); if (!ctl || !ctl.set({ eta: p })) toast('NOT CONNECTED: TRY AGAIN'); }
+$('eIns').innerHTML = [5, 10, 15, 20, 30, 45, 60, 90, 120].map((m) => `<button class="chip" data-m="${m}">${m < 60 ? m + ' MIN' : m / 60 + ' H'}</button>`).join('');
+for (const b of $('eIns').children) b.onclick = () => { const t = nowS(); eset({ from: t, to: t + Number(b.dataset.m) * 60, done: 0, text: etaText($('eText').value) }); };
+$('eAtB').onclick = () => {
+  const v = $('eAt').value; if (!/^\d\d:\d\d$/.test(v)) { toast('PICK A TIME FIRST'); return; }
+  const d = new Date(); d.setHours(+v.slice(0, 2), +v.slice(3), 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);           // already past today: tomorrow
+  eset({ from: nowS(), to: Math.floor(d.getTime() / 1000), done: 0, text: etaText($('eText').value) });
+};
+$('ePlus').onclick = () => { if (!E.to) { toast('SET A TIME FIRST'); return; } eset({ to: E.to + 300, done: 0 }); };
+$('eMinus').onclick = () => { if (!E.to) { toast('SET A TIME FIRST'); return; } eset({ to: Math.max(nowS() + 60, E.to - 300), done: 0 }); };
+$('eDone').onclick = () => { if (!E.to) { toast('SET A TIME FIRST'); return; } eset({ done: 1, to: nowS() }); };
+$('eClear').onclick = () => eset({ from: 0, to: 0, done: 0 });
+let eTextT = 0;
+$('eText').addEventListener('input', () => { E.text = etaText($('eText').value); touchedE.text = performance.now(); syncUI(); clearTimeout(eTextT); eTextT = setTimeout(() => eset({ text: E.text }), 400); });
+$('epals').innerHTML = PALS.map((p, i) => `<button class="chip" data-v="${i}"><i class="sw" style="background:${swatch(p)}"></i>${p.name}</button>`).join('');
+for (const b of $('epals').children) b.onclick = () => eset({ pal: Number(b.dataset.v) });
 
 // CLOCK settings
 const touchedK = {};
@@ -658,7 +704,13 @@ function syncUI() {
     for (const b of $(el).children) b.classList.toggle('on', String(K[key]) === b.dataset.v);
   }
   $('kTz').textContent = K.tz ? K.tz.toUpperCase().replace(/_/g, ' ') : 'NOT SET (UTC)';
-  $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock';
+  $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock'; $('pEta').hidden = curApp !== 'eta';
+  for (const b of $('epals').children) b.classList.toggle('on', String(E.pal) === b.dataset.v);
+  if (document.activeElement !== $('eText')) $('eText').value = E.text;
+  $('eCount').textContent = E.text ? E.text.length + '/60' : '';
+  const hhmm = (sec) => new Date(sec * 1000).toTimeString().slice(0, 5);
+  $('eWhen').textContent = !E.to ? '· NOT SET' : E.done ? '· ARRIVED ' + hhmm(E.to) : '· ARRIVES ' + hhmm(E.to);
+  $('eDone').disabled = !E.to || !!E.done;
   $('capsB').classList.toggle('on', !!C.caps);
   const set = (id, v, f) => { $(id).value = v; $(id + 'O').textContent = f(v); };
   set('tSize', C.size, (v) => (v ? v + 'px' : 'FIT')); set('tSpeed', C.speed, (v) => v);
@@ -686,7 +738,7 @@ function syncUI() {
   $('sFx').textContent = S.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'; $('sFx').classList.toggle('on', S.fx !== 0);
   $('fxNote').hidden = S.fx !== 0; $('animOff').hidden = S.fx !== 0;
   $('vStart').textContent = cam.on ? 'STOP CAMERA' : 'START CAMERA'; $('vStart').classList.toggle('on', cam.on);
-  pv.setState({ app: curApp, screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() }, clock: { ...K } });
+  pv.setState({ app: curApp, screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() }, clock: { ...K }, eta: { ...E } });
 }
 const textKey = () => TEXT_KEYS.map((k) => C[k]).join('\u0001');
 
@@ -827,12 +879,17 @@ function commState(s) {
   $('cName').textContent = curApp.toUpperCase() + ' · ' + (s.name || (ctl && ctl.id) || '');
   const nowK = performance.now();
   for (const k of Object.keys(KDEF)) if (s.clock && k in s.clock && (!loadedFromServer || nowK - (touchedK[k] || -1e9) > 3000)) K[k] = s.clock[k];
+  for (const k of Object.keys(EDEF)) {
+    if (!s.eta || !(k in s.eta)) continue;
+    if (loadedFromServer && (nowK - (touchedE[k] || -1e9) < 3000 || (k === 'text' && document.activeElement === $('eText')))) continue;
+    E[k] = s.eta[k];
+  }
   if (!loadedFromServer) {                   // the first time: take the screen's settings and redraw its text
     loadedFromServer = true;
     C = { ...DEF, ...(s.comm || {}) };
     delete C.tb;
     if (s.app !== curApp && ctl) {
-      const extra = curApp === 'clock' && !K.tz ? { clock: tzHere() } : {};
+      const extra = (curApp === 'clock' || curApp === 'eta') && !K.tz ? { clock: tzHere() } : {};
       if (extra.clock) Object.assign(K, extra.clock);
       ctl.set({ app: curApp, screen: 1, ...extra }); S.app = curApp;
     }
@@ -945,7 +1002,7 @@ let view = 'list', lock = null;
 async function wake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => (lock = null); } } catch { /* fine */ } }
 document.addEventListener('visibilitychange', () => { if (view === 'comm') wake(); });
 function route() {
-  const m = location.hash.match(/^#(comm|clock)=([A-Z0-9-]+)$/);
+  const m = location.hash.match(/^#(comm|clock|eta)=([A-Z0-9-]+)$/);
   if (m) {
     view = 'comm'; curApp = m[1]; $('vList').hidden = true; $('vComm').hidden = false;
     if (curApp !== 'comm') camStop();

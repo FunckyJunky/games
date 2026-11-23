@@ -296,6 +296,12 @@ export class Screen {
     else if (this.phase === 'connected') drawConnected(fb, t, this.info);
     else if (!s || !s.screen) fb.fill(BLACK);
     else if (s.app === 'comm') { this.drawComm(now, fx); scan = fx && !!s.scan; }
+    else if (s.app === 'eta') {
+      const e = s.eta || {}, tz = (s.clock || {}).tz, at = (sec) => (sec ? clockNow(tz, sec * 1000) : null);
+      drawEta(fb, e, this.nowMs ? this.nowMs() : Date.now(), true, at(e.to), at(e.from), fx);
+      this.setLut(T, textRamp(e.pal || 0, 0, 1));
+      scan = fx && !!s.scan;
+    }
     else if (s.app === 'clock') {
       const k = s.clock || {};
       drawClock(fb, this.timeNow ? this.timeNow() : clockNow(k.tz), k, fx);
@@ -352,7 +358,7 @@ const GLYPH = {
   4: [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02], 5: [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
   6: [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E], 7: [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
   8: [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E], 9: [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
-  '-': [0, 0, 0, 0x1F, 0, 0, 0], ' ': [0, 0, 0, 0, 0, 0, 0],
+  '-': [0, 0, 0, 0x1F, 0, 0, 0], ' ': [0, 0, 0, 0, 0, 0, 0], '+': [0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0],
 };
 const COLON = [0, 0, 1, 0, 1, 0, 0];
 const WDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -403,10 +409,72 @@ export function drawClock(fb, t, k, fx) {
   }
   if (line) { y += 12; text8(fb, line, ((W - textw(line, 2)) / 2) | 0, y, 2, T + 11); }
 }
+// ---------------- ETA: when I arrive, with a description and a progress bar (the same as scrEta in screen.cpp) ----------------
+// word wrap for the 8x8 font: lines of at most max letters; a word longer than that is cut
+export function wrapWords(s, max) {
+  const out = [];
+  let line = '';
+  for (let w of String(s || '').split(' ')) {
+    if (!w) continue;
+    while (w.length > max) { if (line) { out.push(line); line = ''; } out.push(w.slice(0, max)); w = w.slice(max); }
+    if (!w) continue;
+    if (!line) line = w; else if (line.length + 1 + w.length <= max) line += ' ' + w; else { out.push(line); line = w; }
+  }
+  if (line) out.push(line);
+  return out;
+}
+const hm = (t) => (t.h < 10 ? '0' : '') + t.h + ':' + (t.m < 10 ? '0' : '') + t.m;
+// e = {from, to (unix seconds), text, pal, done}; now in ms; toT / fromT = local {h, m} of to / from
+export function drawEta(fb, e, now, known, toT, fromT, fx) {
+  fb.fill(T);
+  const ms = ((now % 1000) + 1000) % 1000, blink = !fx || ms < 500;
+  fill(fb, 0, 0, W, 12, T + 12);
+  text8(fb, 'ETA', 4, 2, 1, T + 0);
+  const top = !e.to || !known || !toT ? '' : (e.done ? 'ARRIVED ' : 'ARRIVES ') + hm(toT);
+  if (top) text8(fb, top, W - 4 - textw(top, 1), 2, 1, T + 0);
+  let k = 2, lines = wrapWords(e.text, 19);
+  if (lines.length > 2) { k = 1; lines = wrapWords(e.text, 38).slice(0, 3); }
+  const lh = k === 2 ? 18 : 11, descH = lines.length * lh, gap = lines.length ? 6 : 0;
+  const total = descH + gap + 54 + 10 + 12 + 12 + 8;
+  let y = 12 + Math.max(4, Math.round((160 - total) / 2));
+  lines.forEach((l, i) => text8(fb, l, ((W - textw(l, k)) / 2) | 0, y + i * lh, k, T + 15));
+  y += descH + gap;
+  // the big digits (or ARRIVED)
+  let str = '--:--', colon = false, bottom = 'NO ARRIVAL SET', p = 0, running = false;
+  if (e.to && !known) bottom = 'WAITING FOR THE TIME';
+  else if (e.to && e.done) { str = ''; p = 1; bottom = fromT ? 'ON THE WAY SINCE ' + hm(fromT) : ''; }
+  else if (e.to) {
+    const span = (e.to - e.from) * 1000, left = e.to * 1000 - now;
+    p = span > 0 ? Math.min(1, Math.max(0, (now - e.from * 1000) / span)) : 1;
+    const pad = (v) => (v < 10 ? '0' : '') + v;
+    const fmt = (secs) => { const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s); };
+    if (left > 0) { str = fmt(Math.ceil(left / 1000)); colon = true; running = true; bottom = fromT ? 'ON MY WAY SINCE ' + hm(fromT) : 'ON MY WAY'; }
+    else {
+      const late = Math.floor(-left / 1000);
+      if (late < 60) { str = '00:00'; bottom = 'ARRIVING NOW'; } else { str = '+' + fmt(late); bottom = 'LATE'; }
+    }
+  }
+  if (str) {
+    let cols = -1;
+    for (const ch of str) cols += (ch === ':' ? 1 : 5) + 1;
+    matrix(fb, str, Math.round((W - (cols * 8 - 2)) / 2), y, 8, 6, T + 15, T + 2, colon ? blink : true);
+  } else text8(fb, 'ARRIVED', ((W - textw('ARRIVED', 4)) / 2) | 0, y + 11, 4, T + 15);
+  y += 54 + 10;
+  // the progress bar: 50 blocks
+  const filled = Math.floor(p * 50);
+  for (let i = 0; i < 50; i++) {
+    const c = i < filled ? T + 15 : i === filled && running && fx ? (ms < 500 ? T + 15 : T + 6) : T + 2;
+    fill(fb, 10 + i * 6, y, 5, 12, c);
+  }
+  y += 12 + 12;
+  if (bottom) text8(fb, bottom, 10, y, 1, T + 11);
+  if (e.to && known) { const pc = Math.floor(p * 100) + '%'; text8(fb, pc, W - 10 - textw(pc, 1), y, 1, T + 11); }
+}
+
 // the time in a time zone (IANA name; "" = this device's own), via Intl
 const zoneFmt = {};
-export function clockNow(tz) {
-  const now = new Date(), ms = now.getMilliseconds();
+export function clockNow(tz, at) {
+  const now = at == null ? new Date() : new Date(at), ms = now.getMilliseconds();
   let f = zoneFmt[tz || ''];
   if (f === undefined) {
     try { f = tz ? new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric', second: 'numeric' }) : null; } catch { f = null; }

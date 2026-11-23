@@ -16,6 +16,7 @@ struct HfState {                   // the web app's state, as error.blue sends i
   char pb[20] = "";                // which photo
   CommSet comm;
   ClockSet clock;
+  EtaSet eta;
   char ptz[64] = "";               // the clock's time zone, POSIX style (STD-1DST-2,M3.5.0/2,M10.5.0/3)
 };
 

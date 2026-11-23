@@ -79,7 +79,7 @@ void setup() {
   snprintf(bootLines[bootN++], 40, "LCD   320x172 (BACKLIGHT %d)", lcdBacklightPin());
   snprintf(bootLines[bootN++], 40, "ID    %s", G.id);
   snprintf(bootLines[bootN++], 40, "WIFI  %d SAVED NETWORK%s", nn, nn == 1 ? "" : "S");
-  snprintf(bootLines[bootN++], 40, "APP   %s", !G.haveState || !G.st.app ? "NONE YET" : G.st.app == APP_CLOCK ? "CLOCK (SAVED)" : "COMM (SAVED)");
+  snprintf(bootLines[bootN++], 40, "APP   %s", !G.haveState || !G.st.app ? "NONE YET" : G.st.app == APP_CLOCK ? "CLOCK (SAVED)" : G.st.app == APP_ETA ? "ETA (SAVED)" : "COMM (SAVED)");
   snprintf(bootLines[bootN++], 40, "START %s", whyS);
   snprintf(bootLines[bootN++], 40, "C:\\>HOMEFRNT");
   for (int i = 0; i < bootN; i++) bootPtr[i] = bootLines[i];
@@ -131,6 +131,17 @@ void loop() {
     bool known = tv.tv_sec > 1600000000;           // the time comes from the internet (NTP)
     if (known) localtime_r(&tv.tv_sec, &tmv);
     scrClock(st.clock, known ? &tmv : nullptr, tv.tv_usec / 1000);
+    scan = st.scan && st.fx;
+    bl = st.bright;
+    if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
+  } else if (appOn && st.app == APP_ETA) {
+    struct timeval tv; gettimeofday(&tv, nullptr);
+    bool known = tv.tv_sec > 1600000000;
+    struct tm toTm, fromTm;
+    time_t tt = st.eta.to, tf = st.eta.from;
+    if (known && tt) localtime_r(&tt, &toTm);
+    if (known && tf) localtime_r(&tf, &fromTm);
+    scrEta(st.eta, (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000, known, known && tt ? &toTm : nullptr, known && tf ? &fromTm : nullptr);
     scan = st.scan && st.fx;
     bl = st.bright;
     if (!G.wsUp && G.everStaUp) scrOfflineDot(now);

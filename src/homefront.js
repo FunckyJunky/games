@@ -54,7 +54,7 @@ const FLOW_MS = 1500;              // a frame the device never "got" is given up
 const PW_ITER = 10000;             // PBKDF2 rounds for device passwords
 const KEYS_MAX = 30;               // browsers that know the password, per device
 
-const APPS = ["", "comm", "clock"];
+const APPS = ["", "comm", "clock", "eta"];
 const TZ_RE = /^[A-Za-z0-9_+\-\/]{1,40}$/;                     // an IANA time zone, for browsers
 const PTZ_RE = /^[A-Z]{3}[-+]?\d{1,2}(:\d\d)?([A-Z]{3}([-+]?\d{1,2}(:\d\d)?)?(,M\d{1,2}\.\d\.\d(\/\d{1,2}(:\d\d)?)?){2})?$/;   // the same as a POSIX TZ, for the board
 const MODES = ["text", "video", "both", "photo"];
@@ -95,6 +95,8 @@ export function defaultState() {
     },
     // CLOCK: the time in big dot-matrix digits. sec 0 = no seconds, 1 = a row of 60 dots, 2 = HH:MM:SS
     clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "" },
+    // ETA: when I arrive (unix seconds from / to), a description, a progress bar; done = I'm here
+    eta: { from: 0, to: 0, text: "", pal: 0, done: 0 },
   };
 }
 
@@ -117,6 +119,15 @@ function mergeState(s, p) {
     if ("date" in k) set(q, "date", k.date ? 1 : 0);
     if ("tz" in k && (k.tz === "" || TZ_RE.test(String(k.tz)))) set(q, "tz", String(k.tz));
     if ("ptz" in k && (k.ptz === "" || (String(k.ptz).length <= 60 && PTZ_RE.test(String(k.ptz))))) set(q, "ptz", String(k.ptz));
+  }
+  const e = p.eta, r = s.eta;
+  if (e && typeof e === "object") {
+    const lim = Math.floor(Date.now() / 1000) + 8 * 86400;
+    if ("from" in e) set(r, "from", int(e.from, 0, lim, r.from));
+    if ("to" in e) set(r, "to", int(e.to, 0, lim, r.to));
+    if ("text" in e) set(r, "text", String(e.text == null ? "" : e.text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?").slice(0, 60));
+    if ("pal" in e) set(r, "pal", int(e.pal, 0, 3, r.pal));
+    if ("done" in e) set(r, "done", e.done ? 1 : 0);
   }
   const c = p.comm, o = s.comm;
   if (c && typeof c === "object") {
@@ -170,6 +181,7 @@ export class HomeFront extends DurableObject {
       const s = (await this.ctx.storage.get("st:" + id)) || defaultState();
       s.comm = { ...defaultState().comm, ...(s.comm || {}) };
       s.clock = { ...defaultState().clock, ...(s.clock || {}) };
+      s.eta = { ...defaultState().eta, ...(s.eta || {}) };
       this.states.set(id, s);
     }
     return this.states.get(id);
