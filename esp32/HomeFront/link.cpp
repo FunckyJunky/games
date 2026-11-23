@@ -40,10 +40,12 @@ static bool otaWant = false;
 static uint32_t otaFailedAt = 0;
 
 // ---------------- flash ----------------
-static void saveFile(const char* path, const uint8_t* d, size_t n) {
+static bool saveFile(const char* path, const uint8_t* d, size_t n) {
   File f = LittleFS.open(path, "w");
-  if (!f) { Serial.printf("FS: can't write %s\n", path); return; }
-  f.write(d, n); f.close();
+  if (!f) { Serial.printf("FS: can't write %s\n", path); return false; }
+  size_t w = f.write(d, n); f.close();
+  if (w != n) { Serial.printf("FS: %s didn't fit\n", path); LittleFS.remove(path); return false; }
+  return true;
 }
 static uint8_t* loadFile(const char* path, size_t& n) {
   n = 0;
@@ -359,7 +361,8 @@ static void handleState(const uint8_t* d, size_t n) {
   if (pendingText) {
     if (st.tb[0]) {
       nt = textDecode(pendingText, pendingLen);
-      if (nt && pendingLen < 150000) { saveFile("/text.bin", pendingText, pendingLen); saveFile("/text.tb", (const uint8_t*)st.tb, strlen(st.tb) + 1); }
+      LittleFS.remove("/text.tb");               // the name only once the picture is saved whole
+      if (nt && pendingLen < 90000 && saveFile("/text.bin", pendingText, pendingLen)) saveFile("/text.tb", (const uint8_t*)st.tb, strlen(st.tb) + 1);
     }
     free(pendingText); pendingText = nullptr;
   }
@@ -367,7 +370,8 @@ static void handleState(const uint8_t* d, size_t n) {
     if (st.pb[0]) {
       free(photoJpg); photoJpg = pendingPhoto; photoJpgLen = pendingPhotoLen; pendingPhoto = nullptr;
       showPhoto(photoJpg, photoJpgLen, st.comm.ppal);
-      saveFile("/photo.jpg", photoJpg, photoJpgLen); saveFile("/photo.pb", (const uint8_t*)st.pb, strlen(st.pb) + 1);
+      LittleFS.remove("/photo.pb");
+      if (saveFile("/photo.jpg", photoJpg, photoJpgLen)) saveFile("/photo.pb", (const uint8_t*)st.pb, strlen(st.pb) + 1);
     }
     free(pendingPhoto); pendingPhoto = nullptr;
   } else if (photoJpg && st.comm.ppal != photoPal) showPhoto(photoJpg, photoJpgLen, st.comm.ppal);   // another filter

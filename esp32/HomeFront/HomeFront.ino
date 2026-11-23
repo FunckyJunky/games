@@ -7,7 +7,8 @@
 //  - It remembers the last web app and its settings, and shows them again after a restart, also offline.
 //  - BOOT button: press = info (name, WiFi, IP), hold 3 s = open the setup WiFi.
 //
-// Arduino IDE: board "ESP32S3 Dev Module", USB CDC On Boot: Enabled, Partition Scheme: Huge APP (3MB No OTA/1MB SPIFFS),
+// Arduino IDE: board "ESP32S3 Dev Module", USB CDC On Boot: Enabled,
+// Partition Scheme: Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS) (two app slots: from 1.4 it updates itself over WiFi),
 // PSRAM: OPI PSRAM. Libraries: ArduinoJson 7. Or put it on from the browser: error.blue/thuisfront/flash
 #include <Arduino.h>
 #include <WiFi.h>

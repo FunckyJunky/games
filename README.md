@@ -626,8 +626,8 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   go to a screen only after it said it showed the last one, so a slow screen gets fewer frames instead of a delay.
   A photo (HFP1) is a 320x172 JPEG made on the phone; the screen puts the filter on itself and keeps it in flash.
 - The board's screen chip takes its colours little-endian (RAMCTRL B0h = 00 E8), so lcdColor() does not swap bytes.
-- **Updates over WiFi (OTA)**, from firmware 1.4: the board has two app slots (esp32/HomeFront/partitions.csv, used
-  automatically by the Arduino IDE and arduino-cli) and says `ota:1` in its hello. When src/hf_firmware.js names a
+- **Updates over WiFi (OTA)**, from firmware 1.4: the board has two app slots (Arduino IDE: Tools > Partition Scheme >
+  Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS); arduino-cli: PartitionScheme=min_spiffs) and says `ota:1` in its hello. When src/hf_firmware.js names a
   newer version, the server sends `{t:"ota", ver, url, size, md5}`; the board downloads
   /thuisfront/flash/homefront.bin into the other slot (progress on its screen), checks the MD5 and restarts.
   Also an UPDATE FIRMWARE button in the screen's panel. A failed version is not tried again for an hour.
