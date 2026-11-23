@@ -96,6 +96,9 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.clock.sec = constrain((int)(k["sec"] | 1), 0, 2);
   o.clock.date = (k["date"] | 1) != 0;
   strlcpy(o.ptz, k["ptz"] | "", sizeof(o.ptz));
+  o.clock.motion = (k["motion"] | 0) != 0;
+  o.clock.msens = constrain((int)(k["msens"] | 5), 1, 10);
+  o.clock.mtime = constrain((int)(k["mtime"] | 60), 5, 3600);
   JsonObjectConst e = s["eta"];
   o.eta.from = e["from"] | 0;
   o.eta.to = e["to"] | 0;
@@ -221,13 +224,16 @@ static bool jpegToPlane(const uint8_t* d, size_t n, uint16_t* out, int pal) {
   return true;
 }
 // the clock's time zone (POSIX TZ); "" = UTC. Under the lock: the screen side reads the time with it.
+// Compared with the TZ that is really set, not with the last one asked for: configTime() (the internet time)
+// sets TZ to UTC behind our back, and then the clock showed UTC (an hour early in Amsterdam) until the next change.
 static void applyTz(const char* ptz) {
-  static char cur[64] = "?";
-  if (!strcmp(cur, ptz)) return;
-  strlcpy(cur, ptz, sizeof(cur));
+  const char* want = ptz[0] ? ptz : "UTC0";
   xSemaphoreTake(G.lock, portMAX_DELAY);
-  setenv("TZ", ptz[0] ? ptz : "UTC0", 1); tzset();
+  const char* cur = getenv("TZ");
+  bool same = cur && !strcmp(cur, want);
+  if (!same) { setenv("TZ", want, 1); tzset(); }
   xSemaphoreGive(G.lock);
+  if (same) return;
   Serial.printf("CLOCK: time zone %s\n", ptz[0] ? ptz : "UTC");
 }
 // show the photo (a JPEG) with this filter; keeps the JPEG to change the filter later
@@ -371,7 +377,7 @@ static bool wsText(const String& s) { return wsSend(1, (const uint8_t*)s.c_str()
 
 static void sendHi() {
   JsonDocument d;
-  d["t"] = "hi"; d["id"] = G.id; d["kind"] = "esp"; d["ver"] = HF_VERSION; d["ota"] = 1;
+  d["t"] = "hi"; d["id"] = G.id; d["kind"] = "esp"; d["ver"] = HF_VERSION; d["ota"] = 1; d["imu"] = G.imu ? 1 : 0;
   d["flash"] = (int)(ESP.getFlashChipSize() >> 20);
   if (otaFailedVer[0]) d["otafail"] = otaFailedVer;
   d["name"] = prefGet("name", G.id); d["rename"] = prefGet("renamed", "0") == "1" ? 1 : 0;
@@ -563,7 +569,12 @@ void linkStep() {
   if (!G.wsUp) {
     if ((int32_t)(now - nextTry) < 0) return;
     if (time(nullptr) < 1600000000) {             // the certificate check needs the date
+      xSemaphoreTake(G.lock, portMAX_DELAY);     // (it also sets TZ: the screen side must not read the time meanwhile)
       configTime(0, 0, "pool.ntp.org", "time.google.com");
+      xSemaphoreGive(G.lock);
+      char ptz[64];
+      xSemaphoreTake(G.lock, portMAX_DELAY); strlcpy(ptz, G.st.ptz, sizeof(ptz)); xSemaphoreGive(G.lock);
+      applyTz(ptz);                              // configTime() just set TZ to UTC: put the clock's time zone back
       uint32_t t0 = millis();
       while (time(nullptr) < 1600000000 && millis() - t0 < 4000) delay(50);
     }
@@ -580,9 +591,14 @@ void linkStep() {
   if (!tls.connected()) { Serial.println("LINK: closed"); linkDrop(); nextTry = millis() + 1000; return; }
   if (millis() - lastPing > 15000) {
     lastPing = millis();
-    char b[96];
-    snprintf(b, sizeof(b), "{\"t\":\"ping\",\"rssi\":%d,\"fps\":%d,\"heap\":%u,\"psram\":%u,\"anim\":%d}", WiFi.RSSI(), G.renderFps,
-             (unsigned)ESP.getFreeHeap(), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10), G.animN);
+    char b[200], lt[8] = "", tz[64] = "";
+    xSemaphoreTake(G.lock, portMAX_DELAY);       // the time as the screen shows it (and the TZ it uses), to check from afar
+    time_t tt = time(nullptr); struct tm tmv;
+    if (tt > 1600000000) { localtime_r(&tt, &tmv); strftime(lt, sizeof(lt), "%H:%M", &tmv); }
+    const char* e = getenv("TZ"); if (e) strlcpy(tz, e, sizeof(tz));
+    xSemaphoreGive(G.lock);
+    snprintf(b, sizeof(b), "{\"t\":\"ping\",\"rssi\":%d,\"fps\":%d,\"heap\":%u,\"psram\":%u,\"anim\":%d,\"lt\":\"%s\",\"tz\":\"%s\"}", WiFi.RSSI(), G.renderFps,
+             (unsigned)ESP.getFreeHeap(), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10), G.animN, lt, tz);
     if (!wsText(b)) { Serial.println("LINK: ping failed"); linkDrop(); nextTry = millis() + 1000; }
   }
 }

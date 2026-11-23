@@ -23,7 +23,7 @@ TextPic* textDecode(const uint8_t* d, size_t len);   // nullptr if broken
 void textFree(TextPic* t);
 
 enum App : uint8_t { APP_NONE, APP_COMM, APP_CLOCK, APP_ETA };
-struct ClockSet { uint8_t pal = 0, bg = 0, h24 = 1, sec = 1, date = 1; };   // sec 0 = none, 1 = row of 60 dots, 2 = HH:MM:SS
+struct ClockSet { uint8_t pal = 0, bg = 0, h24 = 1, sec = 1, date = 1, motion = 0, msens = 5; uint16_t mtime = 60; };   // motion 1 = dark until moved, then on mtime s   // sec 0 = none, 1 = row of 60 dots, 2 = HH:MM:SS
 struct EtaSet { uint32_t from = 0, to = 0; uint8_t pal = 0, done = 0, lang = 0; char text[128] = ""; };   // lang 0 = English, 1 = Ukrainian   // text: UTF-8, up to 60 letters   // ETA: unix seconds, description
 struct CommSet { uint8_t mode = M_TEXT, anim = A_STATIC, speed = 5, tpal = 0, vpal = 0, bg = 0, ppal = NOFILTER; };
 

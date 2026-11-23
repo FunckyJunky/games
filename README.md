@@ -618,6 +618,15 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   black or dark background, 24 h or 12 h (AM/PM), seconds as a row of 60 dots / big HH:MM:SS / off, date on/off,
   time zone from the phone (IANA name for browser screens; turned into a POSIX TZ string for the board, which keeps
   the time itself with NTP). Drawn by drawClock() in dev/render.js and scrClock() in screen.cpp (pixel-identical).
+- CLOCK **SCREEN ON: WHEN MOVED** (firmware 1.9): clock.motion 1 = the screen is dark until the device moves (or
+  the button is pressed, or the phone changes something), then on for clock.mtime seconds (5 s - 30 min);
+  clock.msens 1 (a shake) - 10 (a touch) -> motionThreshold() 0.5 g .. 0.03 g from the slow average (gravity).
+  The board reads the 1.47B's QMI8658 accelerometer (motion.cpp; I2C 48/47, only when the backlight is on 46, because
+  on the plain 1.47 pin 48 is the backlight) and says imu:1 in its hello; a browser screen uses devicemotion (phones,
+  tablets; iOS asks on the first tap) and stays on when it never feels anything. Without a sensor: always on.
+- Time zone fix (1.9): configTime() for the internet time sets TZ to UTC; applyTz() now compares with getenv("TZ") and
+  runs again right after configTime(), so the clock no longer shows UTC (an hour early in Amsterdam) after a restart.
+  Ping reports lt (the board's HH:MM) and tz (its TZ), shown in /api/hf/list as lt / tzNow.
 - **ETA**, the third web app: "when I'll be there". Pick IN 5 MIN ... 2 H or AT a time, a description (8x8 DOS
   letters, wrapped over 1-3 lines), +5 / -5 MIN, I'M HERE, CLEAR. The screen shows the description, a big
   dot-matrix countdown (H:MM:SS / MM:SS, then ARRIVING NOW / +MM:SS LATE), a 50-block progress bar and the times.

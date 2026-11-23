@@ -92,6 +92,22 @@ let pbHave = '';
 if (last && last.comm && last.comm.pb && store.get('photopb', '') === last.comm.pb) {
   try { const j = Uint8Array.from(atob(store.get('photo', '')), (c) => c.charCodeAt(0)); photoOf(j).then((p) => { scr.setPhoto(p); pbHave = last.comm.pb; }).catch(() => {}); } catch { /* broken */ }
 }
+// this device's movement (phones and tablets), for CLOCK "on when moved"; a tap on the screen wakes it too
+let grav = null, askedMotion = false;
+window.addEventListener('devicemotion', (e) => {
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x == null || a.y == null || a.z == null) return;
+  const x = a.x / 9.81, y = a.y / 9.81, z = a.z / 9.81;
+  if (!grav) grav = { x, y, z };
+  scr.motion(Math.hypot(x - grav.x, y - grav.y, z - grav.z));
+  grav.x += (x - grav.x) * 0.04; grav.y += (y - grav.y) * 0.04; grav.z += (z - grav.z) * 0.04;
+});
+document.addEventListener('pointerdown', () => {
+  if (!askedMotion && typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {   // iPhone / iPad ask first
+    askedMotion = true; DeviceMotionEvent.requestPermission().catch(() => {});
+  }
+  scr.motion(9);
+}, { passive: true });
 let pendingPhoto = null, videoBusy = false;
 let pendingText = null, pendingRaw = null, ws = null, everConnected = false, frames = 0, fps = 0, retry = 1000, lastMsg = 0;
 

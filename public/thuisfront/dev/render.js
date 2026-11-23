@@ -95,6 +95,9 @@ export function animFrameAt(frames, t) {
   while (i < frames.length - 1 && t >= frames[i].delay) { t -= frames[i].delay; i++; }
   return i;
 }
+// CLOCK "on when moved": sensitivity 1 (a shake) .. 10 (a touch) -> how far from gravity (in g) counts as moving
+// (the same as motionThreshold in the board's motion.cpp)
+export const motionThreshold = (sens) => 0.5 * Math.pow(0.06, (Math.max(1, Math.min(10, sens || 5)) - 1) / 9);
 export function uiRamp() { const p = PALS[0], out = []; for (let v = 0; v < 16; v++) out.push(level(p, p.bg, v)); return out; }
 
 // ---------------- the 8x8 font (public domain, Daniel Hepper's font8x8_basic, characters 32-126) ----------------
@@ -342,6 +345,18 @@ export class Screen {
   }
   setText(t) { this.text = t; this.t0 = performance.now(); }
   setFrame(f) { this.frame = f; this.frameAt = performance.now(); }
+  // movement from this device's own sensor (g from its slow average); -1 never comes: no events = no sensor
+  motion(g) { this.moveSeen = performance.now(); if (g > (this.movePeak || 0)) this.movePeak = g; }
+  // CLOCK with motion on: dark until moved (or tapped, or changed from the phone), then on for mtime seconds.
+  // A screen that never felt any movement (a computer) stays on.
+  asleep(s, now) {
+    const k = s.clock || {};
+    if (!k.motion || !this.moveSeen || now - this.moveSeen > 5000) return false;
+    if (s.rev !== this.movedRev) { this.movedRev = s.rev; this.movedAt = now; }
+    if ((this.movePeak || 0) >= motionThreshold(k.msens) || !this.movedAt) this.movedAt = now;
+    this.movePeak = 0;
+    return now - this.movedAt >= (k.mtime || 60) * 1000;
+  }
   setPhoto(p) { this.photo = p; this.photoKey = ''; this.photoPlanes = []; this.photoT0 = performance.now(); }   // p = {w, h, data, frames?: [{data, delay}]} or null
   setColorFrame(f) { this.color = filterPlane(f.data, f.w, f.h, NOFILTER); this.colorAt = performance.now(); }
   restart() { this.t0 = performance.now(); }
@@ -361,6 +376,7 @@ export class Screen {
       this.setLut(T, textRamp(e.pal || 0, 0, 1));
       scan = fx && !!s.scan;
     }
+    else if (s.app === 'clock' && this.asleep(s, now)) fb.fill(BLACK);
     else if (s.app === 'clock') {
       const k = s.clock || {};
       drawClock(fb, this.timeNow ? this.timeNow() : clockNow(k.tz), k, fx);

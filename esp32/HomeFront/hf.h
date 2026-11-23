@@ -24,6 +24,7 @@ struct Shared {
   SemaphoreHandle_t lock;
   // device
   char id[16] = "";
+  bool imu = false;                // the motion sensor is there (1.47B)
   // WiFi (written by the network task)
   volatile bool staUp = false, everStaUp = false, apOn = false, joining = false, joinLow = false;
   volatile int apClients = 0;

@@ -20,6 +20,7 @@
 #include "lcd.h"
 #include "screen.h"
 #include "hf.h"
+#include "motion.h"
 
 static ScreenInfo info;
 static uint32_t bootUntil = 0, infoUntil = 0, lastFrame = 0, t0Text = 0, frames = 0, fpsAt = 0, setupForcedAt = 0;
@@ -66,6 +67,7 @@ void setup() {
   Serial.printf("\nHOME FRONT %s  %s  (start: %s, flash %u MB)\n", HF_VERSION, G.id, whyS, (unsigned)(ESP.getFlashChipSize() >> 20));
 
   lcdBegin(prefFlip());
+  G.imu = motionBegin();
   scrBegin();
   lcdBacklight(80);
   if (!LittleFS.begin(true)) Serial.println("FS: no flash file system");
@@ -80,6 +82,7 @@ void setup() {
   snprintf(bootLines[bootN++], 40, "ID    %s", G.id);
   snprintf(bootLines[bootN++], 40, "WIFI  %d SAVED NETWORK%s", nn, nn == 1 ? "" : "S");
   snprintf(bootLines[bootN++], 40, "APP   %s", !G.haveState || !G.st.app ? "NONE YET" : G.st.app == APP_CLOCK ? "CLOCK (SAVED)" : G.st.app == APP_ETA ? "ETA (SAVED)" : "COMM (SAVED)");
+  snprintf(bootLines[bootN++], 40, "MOTION %s", G.imu ? "QMI8658 OK" : "NO SENSOR");
   snprintf(bootLines[bootN++], 40, "START %s", whyS);
   snprintf(bootLines[bootN++], 40, "C:\\>HOMEFRNT");
   for (int i = 0; i < bootN; i++) bootPtr[i] = bootLines[i];
@@ -88,10 +91,22 @@ void setup() {
   netBegin();
 }
 
+// CLOCK "on when moved": dark until the board is moved (or the button is pressed, or the phone changes something),
+// then on for clock.mtime seconds. Without a motion sensor it stays on.
+static uint32_t movedAt = 0, movedRev = 0;
+static float moveNow = 0;
+static bool moveAsleep(const HfState& st, uint32_t now) {
+  if (moveNow < 0) return false;
+  if (st.rev != movedRev) { movedRev = st.rev; movedAt = now; }
+  if (moveNow >= motionThreshold(st.clock.msens) || infoUntil > now || !movedAt) movedAt = now;
+  return now - movedAt >= (uint32_t)st.clock.mtime * 1000UL;
+}
+
 void loop() {
   uint32_t now = millis();
   button(now);
   webLoop();
+  { float m = motionPoll(); if (m < 0) moveNow = -1; else if (m > moveNow) moveNow = m; }   // the biggest since the last frame
   if (G.flipChanged) { G.flipChanged = false; lcdFlip(prefFlip()); }
   if (now - lastFrame < 33) { delay(1); return; }   // about 30 frames a second
   lastFrame = now;
@@ -125,6 +140,7 @@ void loop() {
   else if (setupScreen) scrSetup(tNow, info, G.setupMsg);
   else if (!G.everStaUp && G.joining && !appOn) scrJoining(tNow, info, G.joinSsid, G.joinLow);
   else if (appOn && !st.screen) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
+  else if (appOn && st.app == APP_CLOCK && st.clock.motion && moveAsleep(st, now)) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
   else if (appOn && st.app == APP_CLOCK) {
     struct timeval tv; gettimeofday(&tv, nullptr);
     struct tm tmv;
@@ -175,6 +191,7 @@ void loop() {
   scrFlush(scan, plane);
   G.pushing = nullptr;
   if (bl != lastBl) { lcdBacklight(bl); lastBl = bl; }
+  if (moveNow > 0) moveNow = 0;
   led(lr, lg, lb);
 
   frames++;

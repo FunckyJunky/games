@@ -11,7 +11,7 @@
 //
 // Everything lives in one Durable Object ("main"). Protocol (all numbers little-endian):
 //   device -> server   {t:"hi", id, name, kind, ver, wifi, ip, rssi, home, tb, rev}   once, after connecting
-//                      {t:"ping", rssi, fps, heap, psram (KB free), anim (frames playing)}   every 15 s
+//                      {t:"ping", rssi, fps, heap, psram (KB free), anim (frames playing), lt (its HH:MM), tz (its TZ)}   every 15 s
 //                      {t:"got", s}                                                 a video frame is on screen
 //   server -> device   {t:"state", state}                                           whenever it changes
 //                      {t:"ota", ver, url, size, md5}   new firmware: get it over WiFi (boards that said ota:1)
@@ -125,7 +125,7 @@ export function defaultState() {
       vq: "hi", look: "smooth", vbri: 0, vcon: 0, mirror: 1, fps: 12,
     },
     // CLOCK: the time in big dot-matrix digits. sec 0 = no seconds, 1 = a row of 60 dots, 2 = HH:MM:SS
-    clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "" },
+    clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "", motion: 0, msens: 5, mtime: 60 },
     // ETA: when I arrive (unix seconds from / to), a description, a progress bar; done = I'm here
     eta: { from: 0, to: 0, text: "", pal: 0, done: 0, lang: 0 },
   };
@@ -150,6 +150,10 @@ function mergeState(s, p) {
     if ("date" in k) set(q, "date", k.date ? 1 : 0);
     if ("tz" in k && (k.tz === "" || TZ_RE.test(String(k.tz)))) set(q, "tz", String(k.tz));
     if ("ptz" in k && (k.ptz === "" || (String(k.ptz).length <= 60 && PTZ_RE.test(String(k.ptz))))) set(q, "ptz", String(k.ptz));
+    // motion: 1 = the screen is dark until the device is moved, then on for mtime seconds; msens 1 (a shake) - 10 (a touch)
+    if ("motion" in k) set(q, "motion", k.motion ? 1 : 0);
+    if ("msens" in k) set(q, "msens", int(k.msens, 1, 10, q.msens ?? 5));
+    if ("mtime" in k) set(q, "mtime", int(k.mtime, 5, 3600, q.mtime ?? 60));
   }
   const e = p.eta, r = s.eta;
   if (e && typeof e === "object") {
@@ -290,9 +294,9 @@ export class HomeFront extends DurableObject {
     const s = await this.state(id);
     return {
       id: d.id, name: d.name, kind: d.kind, ver: d.ver, wifi: d.wifi, ip: d.ip, rssi: a.rssi ?? d.rssi,
-      fps: a.fps || 0, psram: a.psram || 0, anim: a.anim || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
+      fps: a.fps || 0, psram: a.psram || 0, anim: a.anim || 0, lt: a.lt || "", tzNow: a.tz || "", seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
       mode: s.comm.mode, homeSet: !!d.home, locked: !!d.pw, pwAsked: !!(d.pwAsked || d.pw),
-      ota: !!d.ota, fwNew: d.kind === "esp" && newer(FIRMWARE.ver, d.ver) ? FIRMWARE.ver : "",
+      ota: !!d.ota, imu: d.kind === "esp" ? !!d.imu : null, fwNew: d.kind === "esp" && newer(FIRMWARE.ver, d.ver) ? FIRMWARE.ver : "",
     };
   }
   async pushState(id, alsoText, alsoPhoto) {
@@ -409,6 +413,7 @@ export class HomeFront extends DurableObject {
       d.ver = str(m.ver, 16); d.wifi = str(m.wifi, 32); d.ip = str(m.ip, 40); d.rssi = int(m.rssi, -120, 0, 0);
       d.home = cleanHome(m.home); d.seen = now;
       d.ota = m.ota ? 1 : 0;
+      d.imu = m.imu ? 1 : 0;                    // a board with a motion sensor (CLOCK: on when moved)
       await this.saveDev(d);
       ws.serializeAttachment({ ...a, seen: now, rssi: d.rssi, fps: 0 });
       this.flow.delete(id);
@@ -424,7 +429,8 @@ export class HomeFront extends DurableObject {
     }
     if (m.t === "ping") {
       const wasOn = this.online(id);
-      ws.serializeAttachment({ ...a, seen: now, rssi: int(m.rssi, -120, 0, a.rssi || 0), fps: int(m.fps, 0, 99, 0), psram: int(m.psram, 0, 65535, 0), anim: int(m.anim, 0, 64, 0) });
+      ws.serializeAttachment({ ...a, seen: now, rssi: int(m.rssi, -120, 0, a.rssi || 0), fps: int(m.fps, 0, 99, 0), psram: int(m.psram, 0, 65535, 0), anim: int(m.anim, 0, 64, 0),
+        lt: /^\d\d:\d\d$/.test(String(m.lt || "")) ? m.lt : "", tz: /^[A-Za-z0-9,.:\/+<>-]{0,60}$/.test(String(m.tz || "")) ? String(m.tz || "") : "" });
       const d = await this.dev(id);
       if (d && now - (d.seen || 0) > 5 * 60 * 1000) { d.seen = now; await this.saveDev(d); }   // "last seen", now and then
       if (!wasOn || this.socks("ctl", id).length) this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
