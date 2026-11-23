@@ -296,6 +296,12 @@ export class Screen {
     else if (this.phase === 'connected') drawConnected(fb, t, this.info);
     else if (!s || !s.screen) fb.fill(BLACK);
     else if (s.app === 'comm') { this.drawComm(now, fx); scan = fx && !!s.scan; }
+    else if (s.app === 'clock') {
+      const k = s.clock || {};
+      drawClock(fb, this.timeNow ? this.timeNow() : clockNow(k.tz), k, fx);
+      this.setLut(T, textRamp(k.pal || 0, k.bg ? 1 : 0, 1));
+      scan = fx && !!s.scan;
+    }
     else drawIdle(fb, fx ? now / 1000 : STILL_T, this.info);
     if (this.offline && s && s.screen && this.phase === 'run' && (!fx || Math.floor(now / 600) % 2 === 0)) fill(fb, W - 7, 2, 5, 5, RED);
     const out = this.out, fbl = this.fb, P = s && s.app === 'comm' && s.screen && this.phase === 'run' ? this.plane : null;
@@ -336,6 +342,110 @@ export class Screen {
     }
     this.setLut(T, textRamp(c.tpal, c.mode === 'text' ? c.bg : 0, k));
   }
+}
+
+// ---------------- CLOCK: big dot-matrix digits ----------------
+// 5x7 glyphs, one byte per row, bit 4 = the left column. ':' is one column wide.
+const GLYPH = {
+  0: [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E], 1: [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+  2: [0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F], 3: [0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E],
+  4: [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02], 5: [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
+  6: [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E], 7: [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+  8: [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E], 9: [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
+  '-': [0, 0, 0, 0x1F, 0, 0, 0], ' ': [0, 0, 0, 0, 0, 0, 0],
+};
+const COLON = [0, 0, 1, 0, 1, 0, 0];
+const WDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTH = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+// one round-ish dot of size d at x, y
+export function dot(fb, x, y, d, c) {
+  for (let r = 0; r < d; r++) {
+    const e = r === 0 || r === d - 1, n = r === 1 || r === d - 2;
+    const inset = d >= 6 ? (e ? 2 : n ? 1 : 0) : d >= 4 ? (e ? 1 : 0) : 0;
+    fill(fb, x + inset, y + r, d - 2 * inset, 1, c);
+  }
+}
+// a string of digits, ' ', '-' and ':' as a dot matrix; unlit dots are drawn dim (like a real LED matrix)
+function matrix(fb, str, x, y, p, d, lit, ghost, colonOn) {
+  for (const ch of str) {
+    const colon = ch === ':', w = colon ? 1 : 5, rows = colon ? null : GLYPH[ch] || GLYPH[' '];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < w; c++) {
+      const on = colon ? colonOn && COLON[r] : (rows[r] >> (4 - c)) & 1;
+      dot(fb, x + c * p, y + r * p, d, on ? lit : ghost);
+    }
+    x += (w + 1) * p;
+  }
+}
+// t = {h, m, s, wd, d, mo, y, ms} or null (no time yet); k = the clock settings
+export function drawClock(fb, t, k, fx) {
+  fb.fill(T);
+  const big = k.sec === 2, h24 = k.h24 !== 0, pad = (v) => (v < 10 ? '0' : '') + v;
+  let str, line = '';
+  if (!t) { str = big ? '--:--:--' : '--:--'; line = 'NO TIME YET'; }
+  else {
+    let h = t.h;
+    if (!h24) { h = h % 12 || 12; }
+    str = (h24 ? pad(h) : (h < 10 ? ' ' : '') + h) + ':' + pad(t.m) + (big ? ':' + pad(t.s) : '');
+    if (k.date !== 0) line = WDAY[t.wd] + ' ' + t.d + ' ' + MONTH[t.mo] + ' ' + t.y;
+    if (!h24) line += (line ? '  ' : '') + (t.h < 12 ? 'AM' : 'PM');
+  }
+  const p = big ? 8 : 12, d = p - 2, cols = big ? 39 : 25;
+  const tw = cols * p - (p - d), th = 7 * p - (p - d);
+  const row = !big && k.sec !== 0, total = th + (row ? 13 : 0) + (line ? 28 : 0);
+  let y = Math.round((H - total) / 2);
+  const x = Math.round((W - tw) / 2);
+  matrix(fb, str, x, y, p, d, T + 15, T + 2, !fx || !t || t.ms < 500);
+  y += th;
+  if (row) {                                   // the seconds: a row of 60 dots filling up
+    y += 10;
+    for (let i = 0; i < 60; i++) dot(fb, x + i * 5, y, 3, t && i <= t.s ? T + 15 : T + 2);
+    y += 3;
+  }
+  if (line) { y += 12; text8(fb, line, ((W - textw(line, 2)) / 2) | 0, y, 2, T + 11); }
+}
+// the time in a time zone (IANA name; "" = this device's own), via Intl
+const zoneFmt = {};
+export function clockNow(tz) {
+  const now = new Date(), ms = now.getMilliseconds();
+  let f = zoneFmt[tz || ''];
+  if (f === undefined) {
+    try { f = tz ? new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric', second: 'numeric' }) : null; } catch { f = null; }
+    zoneFmt[tz || ''] = f;
+  }
+  if (!f) return { h: now.getHours(), m: now.getMinutes(), s: now.getSeconds(), wd: now.getDay(), d: now.getDate(), mo: now.getMonth(), y: now.getFullYear(), ms };
+  const q = {};
+  for (const x of f.formatToParts(now)) q[x.type] = x.value;
+  return { h: +q.hour % 24, m: +q.minute, s: +q.second, wd: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(q.weekday), d: +q.day, mo: +q.month - 1, y: +q.year, ms };
+}
+// an IANA time zone as a POSIX TZ string (for the board), e.g. Europe/Amsterdam -> STD-1DST-2,M3.5.0/2,M10.5.0/3
+export function posixTZ(tz) {
+  let f;
+  try { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch { return ''; }
+  const off = (ms) => {                         // minutes east of UTC at that moment
+    const q = {}; for (const x of f.formatToParts(new Date(ms))) q[x.type] = +x.value;
+    return Math.round((Date.UTC(q.year, q.month - 1, q.day, q.hour % 24, q.minute, q.second) - Math.floor(ms / 1000) * 1000) / 60000);
+  };
+  const hm = (m) => { const a = Math.abs(m), s = (m < 0 ? '-' : '') + Math.floor(a / 60); return a % 60 ? s + ':' + String(a % 60).padStart(2, '0') : s; };
+  const y = new Date().getUTCFullYear(), t0 = Date.UTC(y, 0, 1), t1 = Date.UTC(y + 1, 0, 1), DAY = 86400000;
+  const changes = [];
+  let prev = off(t0);
+  for (let t = t0 + DAY; t <= t1; t += DAY) {
+    const o = off(t);
+    if (o === prev) continue;
+    let lo = t - DAY, hi = t;                   // find the minute it changed
+    while (hi - lo > 60000) { const mid = lo + Math.floor((hi - lo) / 120000) * 60000; if (off(mid) === prev) lo = mid; else hi = mid; }
+    changes.push({ at: hi, from: prev, to: o });
+    prev = o;
+  }
+  const offs = [off(t0), off(Date.UTC(y, 6, 1))], std = Math.min(...offs), dst = Math.max(...offs);
+  if (changes.length !== 2 || std === dst) return 'STD' + hm(-off(Date.now()));
+  const rule = (c) => {                         // the moment, in the local time just before it, as Mm.w.d/h[:mm]
+    const l = new Date(c.at + c.from * 60000), day = l.getUTCDate(), dim = new Date(Date.UTC(l.getUTCFullYear(), l.getUTCMonth() + 1, 0)).getUTCDate();
+    const wk = day + 7 > dim ? 5 : Math.ceil(day / 7), mins = l.getUTCHours() * 60 + l.getUTCMinutes();
+    return 'M' + (l.getUTCMonth() + 1) + '.' + wk + '.' + l.getUTCDay() + '/' + hm(mins);
+  };
+  const on = changes.find((c) => c.to === dst), offc = changes.find((c) => c.to === std);
+  return 'STD' + hm(-std) + 'DST' + hm(-dst) + ',' + rule(on) + ',' + rule(offc);
 }
 
 export function drawVideo(fb, f) {

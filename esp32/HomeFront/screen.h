@@ -3,6 +3,7 @@
 #pragma once
 #include <Arduino.h>
 #include "lcd.h"
+#include <time.h>
 
 enum { IX_T = 0, IX_V = 16, IX_U = 32, IX_BLACK = 48, IX_RED = 49, IX_WHITE = 50, IX_PLANE = 255 };   // 255 = colour picture
 enum Anim : uint8_t { A_STATIC, A_SCROLL, A_RISE, A_TYPE, A_BLINK, A_WAVE, A_GLITCH, A_PULSE };
@@ -19,6 +20,8 @@ struct TextPic {                 // HFT1, unpacked: one byte per pixel (level 0-
 TextPic* textDecode(const uint8_t* d, size_t len);   // nullptr if broken
 void textFree(TextPic* t);
 
+enum App : uint8_t { APP_NONE, APP_COMM, APP_CLOCK };
+struct ClockSet { uint8_t pal = 0, bg = 0, h24 = 1, sec = 1, date = 1; };   // sec 0 = none, 1 = row of 60 dots, 2 = HH:MM:SS
 struct CommSet { uint8_t mode = M_TEXT, anim = A_STATIC, speed = 5, tpal = 0, vpal = 0, bg = 0, ppal = NOFILTER; };
 
 struct Media {                   // what there is to show besides the text
@@ -48,6 +51,7 @@ void scrLine(int x0, int y0, int x1, int y1, uint8_t c);
 // whole screens
 // returns the colour picture to show under the text (or nullptr)
 const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, float tA, uint32_t nowMs);
+void scrClock(const ClockSet& c, const struct tm* t, int ms);   // t = nullptr: no time yet
 void scrIdle(float t, const ScreenInfo& in);
 void scrConnected(float t, const ScreenInfo& in);
 void scrConnecting(float t, const ScreenInfo& in);

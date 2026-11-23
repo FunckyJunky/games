@@ -13,6 +13,8 @@
 #include <WiFi.h>
 #include <LittleFS.h>
 #include "esp_mac.h"
+#include <sys/time.h>
+#include <time.h>
 #include "config.h"
 #include "lcd.h"
 #include "screen.h"
@@ -76,7 +78,7 @@ void setup() {
   snprintf(bootLines[bootN++], 40, "LCD   320x172 (BACKLIGHT %d)", lcdBacklightPin());
   snprintf(bootLines[bootN++], 40, "ID    %s", G.id);
   snprintf(bootLines[bootN++], 40, "WIFI  %d SAVED NETWORK%s", nn, nn == 1 ? "" : "S");
-  snprintf(bootLines[bootN++], 40, "APP   %s", G.haveState && G.st.app ? "COMM (SAVED)" : "NONE YET");
+  snprintf(bootLines[bootN++], 40, "APP   %s", !G.haveState || !G.st.app ? "NONE YET" : G.st.app == APP_CLOCK ? "CLOCK (SAVED)" : "COMM (SAVED)");
   snprintf(bootLines[bootN++], 40, "START %s", whyS);
   snprintf(bootLines[bootN++], 40, "C:\\>HOMEFRNT");
   for (int i = 0; i < bootN; i++) bootPtr[i] = bootLines[i];
@@ -120,7 +122,16 @@ void loop() {
   else if (setupScreen) scrSetup(tNow, info, G.setupMsg);
   else if (!G.everStaUp && G.joining && !appOn) scrJoining(tNow, info, G.joinSsid, G.joinLow);
   else if (appOn && !st.screen) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
-  else if (appOn) {
+  else if (appOn && st.app == APP_CLOCK) {
+    struct timeval tv; gettimeofday(&tv, nullptr);
+    struct tm tmv;
+    bool known = tv.tv_sec > 1600000000;           // the time comes from the internet (NTP)
+    if (known) localtime_r(&tv.tv_sec, &tmv);
+    scrClock(st.clock, known ? &tmv : nullptr, tv.tv_usec / 1000);
+    scan = st.scan && st.fx;
+    bl = st.bright;
+    if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
+  } else if (appOn) {
     String key = String(st.tb) + "|" + st.comm.anim + "|" + st.comm.speed;
     if (key != textKey) { textKey = key; t0Text = now; }
     if (G.textAt && now - G.textAt < 300) lg = 60;   // new text: a green blink

@@ -49,6 +49,7 @@ static uint8_t* loadFile(const char* path, size_t& n) {
   return d;
 }
 
+static const char* const APPS[] = { "", "comm", "clock" };
 static const char* const MODES[] = { "text", "video", "both", "photo" };
 static const char* const ANIMS[] = { "static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse" };
 static uint8_t pickIdx(const char* v, const char* const* list, int n) { for (int i = 0; i < n; i++) if (v && !strcmp(v, list[i])) return i; return 0; }
@@ -60,7 +61,7 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   JsonObjectConst s = doc["state"];
   if (s.isNull()) return false;
   o.rev = s["rev"] | 0;
-  o.app = !strcmp(s["app"] | "", "comm");
+  o.app = pickIdx(s["app"] | "", APPS, 3);
   o.screen = (s["screen"] | 1) != 0;
   o.bright = constrain((int)(s["bright"] | 80), 5, 100);
   o.scan = (s["scan"] | 0) != 0;
@@ -76,6 +77,13 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   strlcpy(o.pb, c["pb"] | "", sizeof(o.pb));
   o.comm.bg = constrain((int)(c["bg"] | 0), 0, 2);
   strlcpy(o.tb, c["tb"] | "", sizeof(o.tb));
+  JsonObjectConst k = s["clock"];
+  o.clock.pal = constrain((int)(k["pal"] | 0), 0, 3);
+  o.clock.bg = constrain((int)(k["bg"] | 0), 0, 1);
+  o.clock.h24 = (k["h24"] | 1) != 0;
+  o.clock.sec = constrain((int)(k["sec"] | 1), 0, 2);
+  o.clock.date = (k["date"] | 1) != 0;
+  strlcpy(o.ptz, k["ptz"] | "", sizeof(o.ptz));
   return true;
 }
 
@@ -118,6 +126,16 @@ static bool jpegToPlane(const uint8_t* d, size_t n, uint16_t* out, int pal) {
   if (r != JDR_OK) { Serial.printf("JPEG: broken (%d)\n", (int)r); return false; }
   return true;
 }
+// the clock's time zone (POSIX TZ); "" = UTC. Under the lock: the screen side reads the time with it.
+static void applyTz(const char* ptz) {
+  static char cur[64] = "?";
+  if (!strcmp(cur, ptz)) return;
+  strlcpy(cur, ptz, sizeof(cur));
+  xSemaphoreTake(G.lock, portMAX_DELAY);
+  setenv("TZ", ptz[0] ? ptz : "UTC0", 1); tzset();
+  xSemaphoreGive(G.lock);
+  Serial.printf("CLOCK: time zone %s\n", ptz[0] ? ptz : "UTC");
+}
 // show the photo (a JPEG) with this filter; keeps the JPEG to change the filter later
 static void showPhoto(const uint8_t* jpg, size_t n, int pal) {
   if (!photoBack) photoBack = (uint16_t*)ps_malloc(LCD_W * LCD_H * 2);
@@ -134,7 +152,8 @@ void linkLoadSaved() {
   HfState st;
   if (d && parseState(d, n, st)) {
     G.st = st; G.haveState = true;
-    Serial.printf("FS: last web app: %s, rev %u\n", st.app ? "COMM" : "none", (unsigned)st.rev);
+    Serial.printf("FS: last web app: %s, rev %u\n", st.app == APP_COMM ? "COMM" : st.app == APP_CLOCK ? "CLOCK" : "none", (unsigned)st.rev);
+    applyTz(st.ptz);
     size_t bn = 0, tn = 0;
     uint8_t* tbn = loadFile("/text.tb", bn);
     uint8_t* tx = loadFile("/text.bin", tn);
@@ -268,6 +287,7 @@ static void handleState(const uint8_t* d, size_t n) {
     }
     free(pendingPhoto); pendingPhoto = nullptr;
   } else if (photoJpg && st.comm.ppal != photoPal) showPhoto(photoJpg, photoJpgLen, st.comm.ppal);   // another filter
+  applyTz(st.ptz);
   xSemaphoreTake(G.lock, portMAX_DELAY);
   G.st = st; G.haveState = true;
   TextPic* old = nullptr;

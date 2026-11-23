@@ -6,7 +6,7 @@
 
 struct HfState {                   // the web app's state, as error.blue sends it
   uint32_t rev = 0;
-  bool app = false;                // a web app is open (COMM)
+  uint8_t app = APP_NONE;          // the web app that is open (APP_COMM, APP_CLOCK)
   bool screen = true;
   uint8_t bright = 80;
   bool scan = false;
@@ -15,6 +15,8 @@ struct HfState {                   // the web app's state, as error.blue sends i
   char tb[20] = "";                // which text picture
   char pb[20] = "";                // which photo
   CommSet comm;
+  ClockSet clock;
+  char ptz[64] = "";               // the clock's time zone, POSIX style (STD-1DST-2,M3.5.0/2,M10.5.0/3)
 };
 
 struct Shared {

@@ -141,6 +141,7 @@
       <div id="pvInfo"><span id="pvL">PREVIEW</span><span id="pvR"></span></div>
     </div>
     </div>
+    <div id="commUI">
     <div class="tabs" id="modeTabs"><button data-m="text">TEXT</button><button data-m="photo">PHOTO</button><button data-m="video">VIDEO</button><button data-m="both">VIDEO+TEXT</button></div>
 
     <div class="sec" id="pPhoto">
@@ -182,6 +183,19 @@
       <div class="row"><button class="btn" id="vMirror">MIRROR</button></div>
     </div>
 
+    </div>
+
+    <div class="sec" id="pClock" hidden>
+      <div class="h">COLOUR</div><div class="chips" id="kpals"></div>
+      <div class="h">BACKGROUND</div><div class="chips" id="kbgs"></div>
+      <div class="h">HOURS</div><div class="chips" id="kh24s"></div>
+      <div class="h">SECONDS</div><div class="chips" id="ksecs"></div>
+      <div class="h">DATE</div><div class="chips" id="kdates"></div>
+      <div class="h">TIME ZONE <span id="kTz" class="small"></span></div>
+      <div class="row"><button class="btn" id="kTzB">USE THIS PHONE'S TIME ZONE</button></div>
+      <p class="dimt small">The screen keeps the time itself (from the internet), also when this page is closed.</p>
+    </div>
+
     <div class="sec">
       <div class="h">SCREEN</div>
       <div class="row"><button class="btn big" id="sPower">SCREEN ON</button><button class="btn" id="sFx">EFFECTS: ON</button><button class="btn" id="sScan">SCANLINES</button></div>
@@ -198,7 +212,7 @@
 <script src="/lib/appback.js" defer></script>
 <script src="/lib/online.js" defer></script>
 <script type="module">
-import { Screen, PALS, W, H, NOFILTER, encodeText, encodeFrame } from './dev/render.js';
+import { Screen, PALS, W, H, NOFILTER, encodeText, encodeFrame, posixTZ } from './dev/render.js';
 import { FONTS, fontOf, makeText } from './text.js';
 
 const $ = (id) => document.getElementById(id);
@@ -218,7 +232,12 @@ const keyOf = (id) => store.get('keys', {})[id] || '';
 function keySet(id, k) { const o = store.get('keys', {}); if (k) o[id] = k; else delete o[id]; store.set('keys', o); }
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmodal(); });
 
-const APPS = [{ id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' }];
+const APPS = [
+  { id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' },
+  { id: 'clock', name: 'CLOCK', what: 'The time, big, in dot-matrix DOS style. Seconds, date, 24 or 12 hours, DOS colours.' },
+];
+// this phone's time zone, for the CLOCK (IANA name for browsers, POSIX string for the board)
+function tzHere() { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* old browser */ } return { tz, ptz: tz ? posixTZ(tz) : '' }; }
 
 // =====================================================================
 // one controller connection to one screen
@@ -392,7 +411,11 @@ function drawPanel() {
   $('pwdB').onclick = () => pwModal(d);
   if ($('npSet')) $('npSet').onclick = () => pwModal(d);
   if ($('npNo')) $('npNo').onclick = () => { ctl.send({ t: 'nopw' }); d.pwAsked = true; drawStrip(); };
-  for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => { const id = b.dataset.send; if (d.app !== id) ctl.set({ app: id, screen: 1 }); location.hash = 'comm=' + d.id; };
+  for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => {
+    const id = b.dataset.send, st = ctl.state || {};
+    if (d.app !== id) ctl.set({ app: id, screen: 1, ...(id === 'clock' && !(st.clock && st.clock.tz) ? { clock: tzHere() } : {}) });
+    location.hash = id + '=' + d.id;
+  };
   if ($('pwB')) $('pwB').onclick = () => { ctl.set({ screen: d.screen ? 0 : 1 }); d.screen = d.screen ? 0 : 1; drawStrip(); };
   $('fxB').onclick = () => { d.fx = d.fx === 0 ? 1 : 0; ctl.set({ fx: d.fx }); toast(d.fx ? 'EFFECTS ON' : 'EFFECTS OFF'); drawStrip(); };
   if ($('clB')) $('clB').onclick = () => { ctl.set({ app: '' }); d.app = ''; drawStrip(); };
@@ -484,7 +507,12 @@ function model(d, t) {
   const sq = [[S[0], S[1]], [S[2], S[1]], [S[2], S[3]], [S[0], S[3]]];
   for (let i = 0; i < 4; i++) seg.push([[sq[i][0], sq[i][1], S[4]], [sq[(i + 1) % 4][0], sq[(i + 1) % 4][1], S[4]]]);
   if (d && d.online && d.screen) {
-    if (d.app === 'comm' && d.mode !== 'video') {        // text going by
+    if (d.app === 'clock') {                              // a clock face with the real time
+      const now = new Date(), cx = 0.5, cy = 0.5, r = 0.36;
+      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, b = ((i + 1) / 12) * Math.PI * 2; scr.push([[cx + Math.sin(a) * r * 0.6, cy + Math.cos(a) * r], [cx + Math.sin(b) * r * 0.6, cy + Math.cos(b) * r]]); }
+      const hand = (f, len) => [[cx, cy], [cx + Math.sin(f * Math.PI * 2) * len * 0.6, cy + Math.cos(f * Math.PI * 2) * len]];
+      scr.push(hand(((now.getHours() % 12) + now.getMinutes() / 60) / 12, r * 0.55), hand(now.getMinutes() / 60, r * 0.85));
+    } else if (d.app === 'comm' && d.mode !== 'video') {        // text going by
       const off = (t * 0.25) % 1;
       for (let k = 0; k < 3; k++) { const x0 = 1 - ((off + k / 3) % 1) * 1.6; scr.push([[x0, 0.5], [x0 + 0.5, 0.5]]); }
       scr.push([[0.1, 0.3], [0.9, 0.3]], [[0.1, 0.7], [0.6, 0.7]]);
@@ -536,6 +564,10 @@ function drawCards(now) {
   // the app icons in the panel: a tiny live screen
   for (const cv of document.querySelectorAll('canvas[data-icon]')) {
     const s = iconCache[cv.dataset.icon] || (iconCache[cv.dataset.icon] = { scr: new Screen(document.createElement('canvas')), t: null });
+    if (!s.t && cv.dataset.icon === 'clock') {
+      s.t = true;
+      s.scr.setState({ app: 'clock', screen: 1, scan: 1, clock: { pal: 0, bg: 1, h24: 1, sec: 1, date: 1, tz: '' } }); s.scr.setPhase('run');
+    }
     if (!s.t) {
       s.t = true;
       makeText({ text: 'HOME FRONT', font: 'vt323', size: 0, align: 'c', valign: 'm', anim: 'scroll' }).then((tx) => {
@@ -555,6 +587,8 @@ const pv = new Screen($('pv'));
 pv.setPhase('run');
 const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0 };
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
+const KDEF = { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: '', ptz: '' };
+let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
 
@@ -582,6 +616,20 @@ $('capsB').onclick = () => change('caps', C.caps ? 0 : 1);
 chips('vqs', [['hi', 'SHARP 320x172'], ['lo', 'FAST 160x86']].map(([v, n]) => ({ v, n })), 'vq', (it) => it.n);
 chips('looks', [['smooth', 'SMOOTH 16 SHADES'], ['dither', 'DITHER 4 SHADES']].map(([v, n]) => ({ v, n })), 'look', (it) => it.n);
 
+// CLOCK settings
+const touchedK = {};
+function kchange(key, v) { if (K[key] === v) return; K[key] = v; touchedK[key] = performance.now(); syncUI(); ctl && ctl.set({ clock: { [key]: v } }); }
+function kchips(el, list, key, label) {
+  $(el).innerHTML = list.map((it) => `<button class="chip" data-v="${it.v}">${label(it)}</button>`).join('');
+  for (const b of $(el).children) b.onclick = () => kchange(key, Number(b.dataset.v));
+}
+kchips('kpals', PALS.map((p, i) => ({ v: i, p })), 'pal', (it) => `<i class="sw" style="background:${swatch(it.p)}"></i>${it.p.name}`);
+kchips('kbgs', [[0, 'BLACK'], [1, 'DARK TINT']].map(([v, n]) => ({ v, n })), 'bg', (it) => it.n);
+kchips('kh24s', [[1, '24 H'], [0, '12 H (AM/PM)']].map(([v, n]) => ({ v, n })), 'h24', (it) => it.n);
+kchips('ksecs', [[1, 'DOT ROW'], [2, 'BIG HH:MM:SS'], [0, 'OFF']].map(([v, n]) => ({ v, n })), 'sec', (it) => it.n);
+kchips('kdates', [[1, 'ON'], [0, 'OFF']].map(([v, n]) => ({ v, n })), 'date', (it) => it.n);
+$('kTzB').onclick = () => { const z = tzHere(); if (!z.tz) { toast('NO TIME ZONE IN THIS BROWSER'); return; } K.tz = z.tz; K.ptz = z.ptz; touchedK.tz = touchedK.ptz = performance.now(); ctl && ctl.set({ clock: z }); syncUI(); toast('TIME ZONE: ' + z.tz.toUpperCase()); };
+
 function slider(id, key, fmt, toS) {
   const el = $(id), out = $(id + 'O');
   el.oninput = () => { out.textContent = fmt(Number(el.value)); if (toS) { S[key] = Number(el.value); sendScreenSoon(key); } else change(key, Number(el.value), true); };
@@ -602,6 +650,11 @@ function syncUI() {
     for (const b of $(el).children) if (b.dataset.v != null) b.classList.toggle('on', String(C[key]) === b.dataset.v);
   }
   for (const b of $('aligns').querySelectorAll('[data-va]')) b.classList.toggle('on', C.valign === b.dataset.va);
+  for (const [el, key] of [['kpals', 'pal'], ['kbgs', 'bg'], ['kh24s', 'h24'], ['ksecs', 'sec'], ['kdates', 'date']]) {
+    for (const b of $(el).children) b.classList.toggle('on', String(K[key]) === b.dataset.v);
+  }
+  $('kTz').textContent = K.tz ? K.tz.toUpperCase().replace(/_/g, ' ') : 'NOT SET (UTC)';
+  $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock';
   $('capsB').classList.toggle('on', !!C.caps);
   const set = (id, v, f) => { $(id).value = v; $(id + 'O').textContent = f(v); };
   set('tSize', C.size, (v) => (v ? v + 'px' : 'FIT')); set('tSpeed', C.speed, (v) => v);
@@ -629,7 +682,7 @@ function syncUI() {
   $('sFx').textContent = S.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'; $('sFx').classList.toggle('on', S.fx !== 0);
   $('fxNote').hidden = S.fx !== 0; $('animOff').hidden = S.fx !== 0;
   $('vStart').textContent = cam.on ? 'STOP CAMERA' : 'START CAMERA'; $('vStart').classList.toggle('on', cam.on);
-  pv.setState({ app: 'comm', screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() } });
+  pv.setState({ app: curApp, screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() }, clock: { ...K } });
 }
 const textKey = () => TEXT_KEYS.map((k) => C[k]).join('\u0001');
 
@@ -767,12 +820,18 @@ $('cBack').onclick = () => { location.hash = ''; };
 // state from the server: the screen's current settings
 function commState(s) {
   S = { app: s.app, screen: s.screen, bright: s.bright, scan: s.scan, fx: s.fx === 0 ? 0 : 1 };
-  $('cName').textContent = 'COMM · ' + (s.name || (ctl && ctl.id) || '');
+  $('cName').textContent = curApp.toUpperCase() + ' · ' + (s.name || (ctl && ctl.id) || '');
+  const nowK = performance.now();
+  for (const k of Object.keys(KDEF)) if (s.clock && k in s.clock && (!loadedFromServer || nowK - (touchedK[k] || -1e9) > 3000)) K[k] = s.clock[k];
   if (!loadedFromServer) {                   // the first time: take the screen's settings and redraw its text
     loadedFromServer = true;
     C = { ...DEF, ...(s.comm || {}) };
     delete C.tb;
-    if (s.app !== 'comm' && ctl) { ctl.set({ app: 'comm', screen: 1 }); S.app = 'comm'; }
+    if (s.app !== curApp && ctl) {
+      const extra = curApp === 'clock' && !K.tz ? { clock: tzHere() } : {};
+      if (extra.clock) Object.assign(K, extra.clock);
+      ctl.set({ app: curApp, screen: 1, ...extra }); S.app = curApp;
+    }
     ph.have = !!(s.comm && s.comm.pb);
     if (ctl && ctl.photo) photoIn(ctl.photo);
     unsent = false;
@@ -789,7 +848,7 @@ function commState(s) {
     }
     syncUI();
   }
-  if (s.app !== 'comm' && view === 'comm') { $('pvR').textContent = 'WEB APP CLOSED ON THE SCREEN'; }
+  if (s.app !== curApp && view === 'comm') { $('pvR').textContent = 'WEB APP CLOSED ON THE SCREEN'; }
 }
 function commDev(d) {
   const on = !!(d && d.online) && ctl && ctl.ready();
@@ -821,7 +880,7 @@ $('vFlip').onclick = () => { cam.facing = cam.facing === 'user' ? 'environment' 
 function camGot(s) { cam.acked = Math.max(cam.acked, s); cam.got.push(performance.now()); }
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function camTick(now) {
-  if (!cam.on || cam.video.readyState < 2 || C.mode === 'text' || C.mode === 'photo') return;
+  if (!cam.on || cam.video.readyState < 2 || curApp !== 'comm' || C.mode === 'text' || C.mode === 'photo') return;
   if (now - cam.lastGrab < 1000 / C.fps) return;
   cam.lastGrab = now;
   const w = C.vq === 'lo' ? 160 : 320, h = C.vq === 'lo' ? 86 : 172, g = cam.g;
@@ -882,10 +941,11 @@ let view = 'list', lock = null;
 async function wake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => (lock = null); } } catch { /* fine */ } }
 document.addEventListener('visibilitychange', () => { if (view === 'comm') wake(); });
 function route() {
-  const m = location.hash.match(/^#comm=([A-Z0-9-]+)$/);
+  const m = location.hash.match(/^#(comm|clock)=([A-Z0-9-]+)$/);
   if (m) {
-    view = 'comm'; $('vList').hidden = true; $('vComm').hidden = false;
-    openCtl(m[1]); loadedFromServer = false;
+    view = 'comm'; curApp = m[1]; $('vList').hidden = true; $('vComm').hidden = false;
+    if (curApp !== 'comm') camStop();
+    openCtl(m[2]); loadedFromServer = false;
     if (ctl.auth === 'locked') unlockModal();
     else if (ctl.state) commState(ctl.state); else ctl.send({ t: 'hello' });
     commDev(ctl.dev || {});
@@ -910,7 +970,7 @@ function loop(now) {
     if (Math.floor(now / 500) !== Math.floor(lastPv / 500) || !loop.n || now - loop.n > 500) {
       loop.n = now;
       cam.sent = cam.sent.filter((x) => now - x < 2000); cam.got = cam.got.filter((x) => now - x < 2000);
-      $('pvR').textContent = cam.on && (C.mode === 'video' || C.mode === 'both') ? `SENT ${(cam.sent.length / 2).toFixed(0)}/S · SCREEN ${(cam.got.length / 2).toFixed(0)}/S` : (S.screen ? '' : 'SCREEN IS OFF');
+      $('pvR').textContent = cam.on && curApp === 'comm' && (C.mode === 'video' || C.mode === 'both') ? `SENT ${(cam.sent.length / 2).toFixed(0)}/S · SCREEN ${(cam.got.length / 2).toFixed(0)}/S` : (S.screen ? '' : 'SCREEN IS OFF');
       $('vStat').textContent = cam.on ? (cam.facing === 'user' ? 'FRONT' : 'BACK') + ' · ' + (C.vq === 'lo' ? '160x86' : '320x172') : '';
     }
   }

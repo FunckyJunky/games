@@ -45,7 +45,9 @@ const FLOW_MS = 1500;              // a frame the device never "got" is given up
 const PW_ITER = 10000;             // PBKDF2 rounds for device passwords
 const KEYS_MAX = 30;               // browsers that know the password, per device
 
-const APPS = ["", "comm"];
+const APPS = ["", "comm", "clock"];
+const TZ_RE = /^[A-Za-z0-9_+\-\/]{1,40}$/;                     // an IANA time zone, for browsers
+const PTZ_RE = /^[A-Z]{3}[-+]?\d{1,2}(:\d\d)?([A-Z]{3}([-+]?\d{1,2}(:\d\d)?)?(,M\d{1,2}\.\d\.\d(\/\d{1,2}(:\d\d)?)?){2})?$/;   // the same as a POSIX TZ, for the board
 const MODES = ["text", "video", "both", "photo"];
 const ANIMS = ["static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse"];
 const STYLES = ["plain", "shadow", "outline", "bold"];
@@ -82,6 +84,8 @@ export function defaultState() {
       text: "", font: "vt323", size: 0, align: "c", valign: "m", style: "plain", caps: 0,
       vq: "hi", look: "smooth", vbri: 0, vcon: 0, mirror: 1, fps: 12,
     },
+    // CLOCK: the time in big dot-matrix digits. sec 0 = no seconds, 1 = a row of 60 dots, 2 = HH:MM:SS
+    clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "" },
   };
 }
 
@@ -95,6 +99,16 @@ function mergeState(s, p) {
   if ("bright" in p) set(s, "bright", int(p.bright, 5, 100, s.bright));
   if ("scan" in p) set(s, "scan", p.scan ? 1 : 0);
   if ("fx" in p) set(s, "fx", p.fx ? 1 : 0);
+  const k = p.clock, q = s.clock;
+  if (k && typeof k === "object") {
+    if ("pal" in k) set(q, "pal", int(k.pal, 0, 3, q.pal));
+    if ("bg" in k) set(q, "bg", int(k.bg, 0, 1, q.bg));
+    if ("h24" in k) set(q, "h24", k.h24 ? 1 : 0);
+    if ("sec" in k) set(q, "sec", int(k.sec, 0, 2, q.sec));
+    if ("date" in k) set(q, "date", k.date ? 1 : 0);
+    if ("tz" in k && (k.tz === "" || TZ_RE.test(String(k.tz)))) set(q, "tz", String(k.tz));
+    if ("ptz" in k && (k.ptz === "" || (String(k.ptz).length <= 60 && PTZ_RE.test(String(k.ptz))))) set(q, "ptz", String(k.ptz));
+  }
   const c = p.comm, o = s.comm;
   if (c && typeof c === "object") {
     if ("mode" in c) set(o, "mode", pick(c.mode, MODES, o.mode));
@@ -145,6 +159,7 @@ export class HomeFront extends DurableObject {
     if (!this.states.has(id)) {
       const s = (await this.ctx.storage.get("st:" + id)) || defaultState();
       s.comm = { ...defaultState().comm, ...(s.comm || {}) };
+      s.clock = { ...defaultState().clock, ...(s.clock || {}) };
       this.states.set(id, s);
     }
     return this.states.get(id);

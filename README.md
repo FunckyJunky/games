@@ -614,6 +614,10 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   or VIDEO+TEXT, and SCREEN ON/OFF, EFFECTS ON/OFF (also in the screen's panel: off = still text, no scanlines,
   no glitches, no blinking, no moving noise; state `fx`), light, scanlines, CLOSE WEB APP. The preview on the phone is drawn with the
   screen's own code.
+- **CLOCK**, the second web app: the time in big dot-matrix digits (5x7, unlit dots dimly visible), DOS colours,
+  black or dark background, 24 h or 12 h (AM/PM), seconds as a row of 60 dots / big HH:MM:SS / off, date on/off,
+  time zone from the phone (IANA name for browser screens; turned into a POSIX TZ string for the board, which keeps
+  the time itself with NTP). Drawn by drawClock() in dev/render.js and scrClock() in screen.cpp (pixel-identical).
 - The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
   boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
 - Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:

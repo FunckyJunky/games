@@ -284,6 +284,66 @@ const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, floa
   return plane;
 }
 
+// ---------------- CLOCK: big dot-matrix digits (the same as drawClock in render.js) ----------------
+// 5x7 glyphs, one byte per row, bit 4 = the left column; index 10 = '-', 11 = ' '
+static const uint8_t GLYPH[12][7] = {
+  { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E }, { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E },
+  { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F }, { 0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E },
+  { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 }, { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E },
+  { 0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E }, { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 },
+  { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E }, { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C },
+  { 0, 0, 0, 0x1F, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0 } };
+static const uint8_t COLON[7] = { 0, 0, 1, 0, 1, 0, 0 };
+static const char* const WDAY[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
+static const char* const MONTH[] = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" };
+static void dot(int x, int y, int d, uint8_t c) {
+  for (int r = 0; r < d; r++) {
+    bool e = r == 0 || r == d - 1, n = r == 1 || r == d - 2;
+    int inset = d >= 6 ? (e ? 2 : n ? 1 : 0) : d >= 4 ? (e ? 1 : 0) : 0;
+    scrFill(x + inset, y + r, d - 2 * inset, 1, c);
+  }
+}
+static void matrix(const char* s, int x, int y, int p, int d, uint8_t lit, uint8_t ghost, bool colonOn) {
+  for (; *s; s++) {
+    bool colon = *s == ':';
+    int w = colon ? 1 : 5;
+    const uint8_t* rows = GLYPH[*s >= '0' && *s <= '9' ? *s - '0' : *s == '-' ? 10 : 11];
+    for (int r = 0; r < 7; r++) for (int c = 0; c < w; c++) {
+      bool on = colon ? colonOn && COLON[r] : (rows[r] >> (4 - c)) & 1;
+      dot(x + c * p, y + r * p, d, on ? lit : ghost);
+    }
+    x += (w + 1) * p;
+  }
+}
+void scrClock(const ClockSet& k, const struct tm* t, int ms) {
+  memset(FB, IX_T, W * H);
+  bool big = k.sec == 2, h24 = k.h24;
+  char str[12], line[40] = "";
+  if (!t) { strcpy(str, big ? "--:--:--" : "--:--"); strcpy(line, "NO TIME YET"); }
+  else {
+    int h = t->tm_hour;
+    if (!h24) { h %= 12; if (!h) h = 12; }
+    if (h24) snprintf(str, sizeof(str), "%02d:%02d", h, t->tm_min); else snprintf(str, sizeof(str), "%2d:%02d", h, t->tm_min);
+    if (big) { size_t n = strlen(str); snprintf(str + n, sizeof(str) - n, ":%02d", t->tm_sec); }
+    if (k.date) snprintf(line, sizeof(line), "%s %d %s %d", WDAY[t->tm_wday % 7], t->tm_mday, MONTH[t->tm_mon % 12], t->tm_year + 1900);
+    if (!h24) { size_t n = strlen(line); snprintf(line + n, sizeof(line) - n, "%s%s", n ? "  " : "", t->tm_hour < 12 ? "AM" : "PM"); }
+  }
+  int p = big ? 8 : 12, d = p - 2, cols = big ? 39 : 25;
+  int tw = cols * p - (p - d), th = 7 * p - (p - d);
+  bool row = !big && k.sec != 0;
+  int total = th + (row ? 13 : 0) + (line[0] ? 28 : 0);
+  int y = rnd((H - total) / 2.0f), x = rnd((W - tw) / 2.0f);
+  matrix(str, x, y, p, d, IX_T + 15, IX_T + 2, !scrEffects || !t || ms < 500);
+  y += th;
+  if (row) {
+    y += 10;
+    for (int i = 0; i < 60; i++) dot(x + i * 5, y, 3, t && i <= t->tm_sec ? IX_T + 15 : IX_T + 2);
+    y += 3;
+  }
+  if (line[0]) { y += 12; scrText(line, (W - scrTextW(line, 2)) / 2, y, 2, IX_T + 11); }
+  setTextRamp(k.pal, k.bg ? 1 : 0, 1);
+}
+
 // ---------------- menu screens ----------------
 static void bars(const char* left, const char* right) {
   scrFill(0, 0, W, 12, IX_U + 12);
