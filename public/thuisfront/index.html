@@ -146,9 +146,9 @@
 
     <div class="sec" id="pPhoto">
       <div class="h">PHOTO <span id="phStat" class="small"></span></div>
-      <input type="file" id="phFile" accept="image/*" hidden>
-      <div class="row"><button class="btn big" id="phPick">TAKE / PICK PHOTO</button><button class="btn" id="phSend">SEND</button></div>
-      <p class="dimt small" id="phHint">Your text goes on top of the photo. Leave the message empty for just the photo.</p>
+      <input type="file" id="phFile" accept="image/*,image/gif" hidden>
+      <div class="row"><button class="btn big" id="phPick">TAKE / PICK PHOTO OR GIF</button><button class="btn" id="phSend">SEND</button></div>
+      <p class="dimt small" id="phHint">Your text goes on top of the photo. Leave the message empty for just the photo. An animated GIF moves on the screen too (up to 48 frames; longer GIFs skip frames).</p>
       <div class="h">FILTER</div><div class="chips" id="ppals"></div>
       <div id="phEdit">
         <div class="h">SHAPE</div><div class="chips" id="pfits"></div>
@@ -225,7 +225,8 @@
 <script src="/lib/appback.js" defer></script>
 <script src="/lib/online.js" defer></script>
 <script type="module">
-import { Screen, PALS, W, H, NOFILTER, encodeText, encodeFrame, posixTZ } from './dev/render.js';
+import { Screen, PALS, W, H, NOFILTER, encodeText, encodeFrame, posixTZ, animParse, animBuild, ANIM_FRAMES, ANIM_BYTES } from './dev/render.js';
+import { gifParse, gifDecode } from './gif.js';
 import { FONTS, fontOf, makeText } from './text.js';
 
 const $ = (id) => document.getElementById(id);
@@ -246,7 +247,7 @@ function keySet(id, k) { const o = store.get('keys', {}); if (k) o[id] = k; else
 $('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') unmodal(); });
 
 const APPS = [
-  { id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo with text on it, and live video from this phone, with DOS filters or real colours.' },
+  { id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo or animated GIF with text on it, and live video from this phone, with DOS filters or real colours.' },
   { id: 'clock', name: 'CLOCK', what: 'The time, big, in dot-matrix DOS style. Seconds, date, 24 or 12 hours, DOS colours.' },
   { id: 'eta', name: 'ETA', what: "When I'll be there: a countdown to your arrival, a description and a progress bar that fills up." },
 ];
@@ -268,7 +269,8 @@ class Ctl {
     ws.onmessage = (ev) => {
       if (typeof ev.data !== 'string') {               // binary: the screen's photo ("HFP1" + JPEG)
         const u8 = new Uint8Array(ev.data);
-        if (u8.length > 8 && String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) === 'HFP1') { this.photo = u8; this.emit('photo', u8); }
+        const mg = u8.length > 8 ? String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) : '';
+        if (mg === 'HFP1' || mg === 'HFA1') { this.photo = u8; this.emit('photo', u8); }   // a photo, or an animated one
         return;
       }
       let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -757,8 +759,8 @@ function syncUI() {
   $('looks').hidden = C.vpal === NOFILTER;
   $('phEdit').classList.toggle('dim', !ph.src); for (const el of $('phEdit').querySelectorAll('input,button')) el.disabled = !ph.src;
   $('phSend').textContent = ph.unsent ? 'SEND >' : 'SENT'; $('phSend').classList.toggle('dim', !ph.unsent); $('phSend').disabled = !ph.src;
-  $('phStat').textContent = ph.busy ? 'SENDING...' : ph.src ? ph.name : ph.have ? 'ON THE SCREEN' : 'NONE YET';
-  $('phPick').textContent = ph.src || ph.have ? 'OTHER PHOTO' : 'TAKE / PICK PHOTO';
+  $('phStat').textContent = ph.busy ? 'SENDING...' : ph.src ? ph.name : ph.have ? (ph.frames > 1 ? 'GIF ' + ph.frames + ' FRAMES ON THE SCREEN' : 'ON THE SCREEN') : 'NONE YET';
+  $('phPick').textContent = ph.src || ph.have ? 'OTHER PHOTO OR GIF' : 'TAKE / PICK PHOTO OR GIF';
   $('vMirror').classList.toggle('on', !!C.mirror);
   $('tLive').textContent = 'LIVE: ' + (liveSend ? 'ON' : 'OFF'); $('tLive').classList.toggle('on', !!liveSend);
   $('tSend').textContent = unsent ? 'SEND >' : 'SENT';
@@ -821,7 +823,7 @@ for (const b of $('modeTabs').children) b.onclick = () => {
 
 // --- the photo: picked here, made 320x172 here (shape, brightness, contrast), the screen puts the filter on ---
 const PHOTO_KEYS = ['pfit', 'pbri', 'pcon'];
-const ph = { src: null, name: '', have: false, unsent: false, busy: false, timer: 0, again: false, cv: document.createElement('canvas'), sentLen: 0, sentAt: 0 };
+const ph = { src: null, anim: null, frames: 0, name: '', have: false, unsent: false, busy: false, timer: 0, again: false, cv: document.createElement('canvas'), sentLen: 0, sentAt: 0 };
 ph.cv.width = W; ph.cv.height = H;
 $('phPick').onclick = () => $('phFile').click();
 $('phFile').onchange = async () => {
@@ -829,19 +831,41 @@ $('phFile').onchange = async () => {
   $('phFile').value = '';
   if (!f) return;
   try {
-    let bm = await createImageBitmap(f, { imageOrientation: 'from-image' });
-    const k = Math.min(1, 1600 / Math.max(bm.width, bm.height));   // big camera photos: make them smaller first
-    if (k < 1) { const nb = await createImageBitmap(bm, { resizeWidth: Math.round(bm.width * k), resizeHeight: Math.round(bm.height * k), resizeQuality: 'high' }); bm.close(); bm = nb; }
-    if (ph.src && ph.src.close) ph.src.close();
-    ph.src = bm; ph.name = (f.name || 'PHOTO').toUpperCase().slice(0, 24);
+    const name = (f.name || 'PHOTO').toUpperCase();
+    const bytes = new Uint8Array(await f.arrayBuffer()), g = gifParse(bytes);
+    let anim = null, bm = null;
+    if (g && g.frames.length > 1) {                              // an animated GIF: its frames (at most ANIM_FRAMES)
+      const n = g.frames.length, step = Math.ceil(n / ANIM_FRAMES), k = Math.min(1, 640 / Math.max(g.w, g.h)), got = [];
+      gifDecode(bytes, g, (i) => i % step === 0, (i, rgba) => got.push({ i, rgba }));
+      anim = [];
+      for (const { i, rgba } of got) {
+        let delay = 0; for (let j = i; j < Math.min(n, i + step); j++) delay += g.frames[j].delay;
+        const o = k < 1 ? { resizeWidth: Math.round(g.w * k), resizeHeight: Math.round(g.h * k), resizeQuality: 'high' } : {};
+        anim.push({ bm: await createImageBitmap(new ImageData(rgba, g.w, g.h), o), delay: Math.min(10000, delay) });
+      }
+      if (anim.length < 2) { anim.forEach((a) => a.bm.close && a.bm.close()); anim = null; }
+    }
+    if (!anim) {
+      bm = await createImageBitmap(f, { imageOrientation: 'from-image' });
+      const k = Math.min(1, 1600 / Math.max(bm.width, bm.height));   // big camera photos: make them smaller first
+      if (k < 1) { const nb = await createImageBitmap(bm, { resizeWidth: Math.round(bm.width * k), resizeHeight: Math.round(bm.height * k), resizeQuality: 'high' }); bm.close(); bm = nb; }
+    }
+    photoDrop();
+    if (anim) { ph.anim = anim; ph.src = anim[0].bm; ph.frames = anim.length; ph.name = 'GIF · ' + anim.length + ' FRAMES'; }
+    else { ph.src = bm; ph.frames = 1; ph.name = name.slice(0, 24); }
     if (C.mode !== 'photo') { C.mode = 'photo'; if (cam.on) camStop(); }
     remakePhoto(0, true);
   } catch (e) { toast('CAN\'T OPEN THAT PHOTO'); }
 };
+function photoDrop() {                                           // forget the picked photo / GIF
+  if (ph.anim) for (const a of ph.anim) a.bm.close && a.bm.close();
+  else if (ph.src && ph.src.close) ph.src.close();
+  ph.anim = null; ph.src = null;
+}
 $('phSend').onclick = () => sendPhoto();
-// draw the photo into the 320x172 canvas: fill (cut the edges) or whole (black bars), then brightness and contrast
-function photoPixels() {
-  const c = ph.cv.getContext('2d', { willReadFrequently: true }), s = ph.src, sw = s.width, sh = s.height;
+// draw a picture into the 320x172 canvas: fill (cut the edges) or whole (black bars), then brightness and contrast
+function photoPixels(s = ph.src) {
+  const c = ph.cv.getContext('2d', { willReadFrequently: true }), sw = s.width, sh = s.height;
   c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
   const k = C.pfit === 'fit' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh), dw = sw * k, dh = sh * k;
   c.imageSmoothingQuality = 'high';
@@ -858,41 +882,63 @@ function remakePhoto(wait, now) {
   if (!ph.src) { syncUI(); return; }
   clearTimeout(ph.timer);
   ph.timer = setTimeout(() => {
-    const id = photoPixels();
-    pv.setPhoto({ w: W, h: H, data: id.data });
+    if (ph.anim) {
+      const frames = ph.anim.map((a) => ({ data: photoPixels(a.bm).data, delay: a.delay }));
+      pv.setPhoto({ w: W, h: H, data: frames[0].data, frames });
+    } else pv.setPhoto({ w: W, h: H, data: photoPixels().data });
     ph.unsent = true;
     if (liveSend || now) sendPhoto(); else syncUI();
   }, wait);
 }
-function sendPhoto() {
+const jpegOf = (q) => new Promise((ok, no) => ph.cv.toBlob(async (b) => { try { if (!b) throw new Error('no jpeg'); ok(new Uint8Array(await b.arrayBuffer())); } catch (e) { no(e); } }, 'image/jpeg', q));
+// an animated GIF -> HFA1: every frame a JPEG; too big -> lower quality, then fewer frames
+async function animBytes() {
+  for (const [q, step] of [[0.82, 1], [0.68, 1], [0.55, 1], [0.55, 2], [0.45, 2], [0.45, 3], [0.35, 4]]) {
+    const frames = [];
+    for (let i = 0; i < ph.anim.length; i += step) {
+      let delay = 0; for (let j = i; j < Math.min(ph.anim.length, i + step); j++) delay += ph.anim[j].delay;
+      photoPixels(ph.anim[i].bm);
+      frames.push({ jpg: await jpegOf(q), delay: Math.min(10000, delay) });
+    }
+    const u8 = animBuild(frames);
+    if (u8.length <= ANIM_BYTES * 0.95) return u8;
+  }
+  throw new Error('too big');
+}
+async function sendPhoto() {
   if (!ph.src || !ctl) return;
   if (ph.busy) { ph.again = true; return; }
   ph.busy = true; syncUI();
-  photoPixels();
-  ph.cv.toBlob(async (b) => {
-    try {
-      if (!b) throw new Error('no jpeg');
-      const j = new Uint8Array(await b.arrayBuffer()), u8 = new Uint8Array(4 + j.length);
-      u8.set([72, 70, 80, 49]); u8.set(j, 4);                   // "HFP1" + JPEG
-      ph.sentLen = u8.length; ph.sentAt = Date.now();
-      if (ctl.send(u8) && ctl.set({ comm: { mode: 'photo', ppal: C.ppal, pfit: C.pfit, pbri: C.pbri, pcon: C.pcon } })) { ph.unsent = false; ph.have = true; }
-      else toast('NOT CONNECTED: TRY AGAIN');
-    } catch { toast('PHOTO: SOMETHING WENT WRONG'); }
-    ph.busy = false;
-    if (ph.again) { ph.again = false; sendPhoto(); } else syncUI();
-  }, 'image/jpeg', 0.88);
+  try {
+    let u8;
+    if (ph.anim) u8 = await animBytes();
+    else {
+      photoPixels();
+      const j = await jpegOf(0.88);
+      u8 = new Uint8Array(4 + j.length); u8.set([72, 70, 80, 49]); u8.set(j, 4);   // "HFP1" + JPEG
+    }
+    ph.sentLen = u8.length; ph.sentAt = Date.now();
+    if (ctl.send(u8) && ctl.set({ comm: { mode: 'photo', ppal: C.ppal, pfit: C.pfit, pbri: C.pbri, pcon: C.pcon } })) { ph.unsent = false; ph.have = true; }
+    else toast('NOT CONNECTED: TRY AGAIN');
+  } catch (e) { toast(e && e.message === 'too big' ? 'THAT GIF IS TOO BIG' : 'PHOTO: SOMETHING WENT WRONG'); }
+  ph.busy = false;
+  if (ph.again) { ph.again = false; sendPhoto(); } else syncUI();
 }
-// the screen's photo, from the server (when this page opens, or another phone sent one)
+// the screen's photo or animation, from the server (when this page opens, or another phone sent one)
 async function photoIn(u8) {
   ph.have = true;
+  const anim = animParse(u8);
+  ph.frames = anim ? anim.length : 1;
   if (ph.src && u8.length === ph.sentLen && Date.now() - ph.sentAt < 30000) { syncUI(); return; }   // our own, back again
   try {
-    const bm = await createImageBitmap(new Blob([u8.subarray(4)], { type: 'image/jpeg' }));
     const c = document.createElement('canvas'); c.width = W; c.height = H;
-    const x = c.getContext('2d'); x.drawImage(bm, 0, 0, W, H); bm.close();
-    if (ph.src && ph.src.close) ph.src.close();
-    ph.src = null; ph.unsent = false;                           // shape/brightness are already in it: pick it again to change those
-    pv.setPhoto({ w: W, h: H, data: x.getImageData(0, 0, W, H).data });
+    const x = c.getContext('2d', { willReadFrequently: true });
+    const rgba = async (jpg) => { const bm = await createImageBitmap(new Blob([jpg], { type: 'image/jpeg' })); x.drawImage(bm, 0, 0, W, H); bm.close(); return x.getImageData(0, 0, W, H).data; };
+    let p;
+    if (anim) { const frames = []; for (const f of anim) frames.push({ data: await rgba(f.jpg), delay: f.delay }); p = { w: W, h: H, data: frames[0].data, frames }; }
+    else p = { w: W, h: H, data: await rgba(u8.subarray(4)) };
+    photoDrop(); ph.unsent = false;                             // shape/brightness are already in it: pick it again to change those
+    pv.setPhoto(p);
   } catch { /* not a picture */ }
   syncUI();
 }

@@ -637,6 +637,13 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   The protocol is at the top of src/homefront.js. Video frames (HFV1 4-bit grey, or HFV2 a colour JPEG for NONE)
   go to a screen only after it said it showed the last one, so a slow screen gets fewer frames instead of a delay.
   A photo (HFP1) is a 320x172 JPEG made on the phone; the screen puts the filter on itself and keeps it in flash.
+  An animated GIF (from 1.8): the phone decodes it (public/thuisfront/gif.js: LZW, transparency, disposal, interlace),
+  keeps at most 48 frames (longer GIFs: every n-th frame, shown as long), makes each one 320x172 like a photo and sends
+  HFA1: "HFA1" u16 n, u16 0, n x (u16 delay ms, u32 bytes), then the n JPEGs (at most 1 MB; lower JPEG quality / fewer
+  frames until it fits). It takes the photo's place (comm.pb). The board decodes every frame once into its own 320x172
+  picture in PSRAM (as many as fit with 700 KB to spare, else every n-th) and plays them by time (also with effects off);
+  flash (128 KB) keeps the whole HFA1 only when it fits, else its first frame ("pb*" in photo.pb), and then error.blue
+  sends it again after a restart. Ping reports psram (KB free) and anim (frames playing).
 - The board's screen chip takes its colours little-endian (RAMCTRL B0h = 00 E8), so lcdColor() does not swap bytes.
 - **Updates over WiFi (OTA)**, from firmware 1.4: the board has two app slots (Arduino IDE: Tools > Partition Scheme >
   Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS); arduino-cli: PartitionScheme=min_spiffs) and says `ota:1` in its hello. When src/hf_firmware.js names a

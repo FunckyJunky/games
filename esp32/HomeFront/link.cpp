@@ -33,6 +33,9 @@ static size_t photoJpgLen = 0;
 static int photoPal = -1;                      // the filter the shown photo has
 static uint16_t* photoBack = nullptr;          // decode here, then swap with G.photo
 static uint16_t* colorBack = nullptr;          // the same for colour video
+static bool photoFull = false;                 // the photo (or the whole animation) that st.pb names is here
+static uint16_t* owned[64];                    // the frames of the animation (G.anim shows them)
+static int ownedN = 0;
 // new firmware over WiFi (error.blue says {t:"ota", ver, url, size, md5})
 static char otaVer[16] = "", otaUrl[96] = "", otaMd5[40] = "", otaFailedVer[16] = "";
 static size_t otaSize = 0;
@@ -236,6 +239,72 @@ static void showPhoto(const uint8_t* jpg, size_t n, int pal) {
   xSemaphoreGive(G.lock);
   photoPal = pal;
 }
+// HFA1, an animated photo: "HFA1" u16 n, u16 0, n x (u16 delay ms, u32 bytes), then the n JPEGs. -> n (0 = not one)
+struct AnimFrame { const uint8_t* jpg; uint32_t len; uint16_t delay; };
+static int animParse(const uint8_t* d, size_t n, AnimFrame* out) {
+  if (n < 8 || memcmp(d, "HFA1", 4)) return 0;
+  int cnt = d[4] | d[5] << 8;
+  if (cnt < 1 || cnt > 64) return 0;
+  size_t o = 8 + 6 * (size_t)cnt;
+  if (o > n) return 0;
+  for (int i = 0; i < cnt; i++) {
+    const uint8_t* t = d + 8 + 6 * i;
+    uint32_t len = t[2] | t[3] << 8 | t[4] << 16 | (uint32_t)t[5] << 24;
+    if (len > n - o) return 0;
+    out[i] = { d + o, len, (uint16_t)constrain((int)(t[0] | t[1] << 8), 20, 10000) };
+    o += len;
+  }
+  return cnt;
+}
+// stop the animation and free its frames (the screen side may be sending one right now: wait for it)
+static void animStop() {
+  xSemaphoreTake(G.lock, portMAX_DELAY);
+  G.animN = 0; G.animTotal = 0;
+  xSemaphoreGive(G.lock);
+  for (int w = 0; w < 100; w++) {
+    bool busy = false;
+    for (int k = 0; k < ownedN; k++) if (G.pushing == owned[k]) busy = true;
+    if (!busy) break;
+    vTaskDelay(1);
+  }
+  for (int k = 0; k < ownedN; k++) free(owned[k]);
+  ownedN = 0;
+}
+// show photoJpg with this filter: a JPEG, or an animation (its first frame at once, then every frame decoded
+// into its own picture so playing it is only choosing one; as many as fit in memory)
+static void showPicture(int pal) {
+  static AnimFrame fr[64];
+  int n = animParse(photoJpg, photoJpgLen, fr);
+  animStop();
+  if (!n) { showPhoto(photoJpg, photoJpgLen, pal); return; }
+  showPhoto(fr[0].jpg, fr[0].len, pal);
+  photoPal = pal;
+  if (n < 2) return;
+  // how many frames fit (keeping 700 KB for the rest); fewer than n: every step-th frame, shown as long
+  const size_t one = LCD_W * LCD_H * 2, freeNow = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+  int fit = freeNow > 700000 + one ? (int)((freeNow - 700000) / one) : 0;
+  if (fit < 2) { Serial.println("PHOTO: no room for the animation, showing its first frame"); return; }
+  int step = (n + fit - 1) / fit;
+  static uint16_t delays[64];
+  uint32_t total = 0, t0 = millis();
+  for (int k = 0; k < n; k += step) {
+    uint16_t* p = (uint16_t*)ps_malloc(one);
+    if (!p) break;
+    if (!jpegToPlane(fr[k].jpg, fr[k].len, p, pal)) { free(p); break; }
+    uint32_t d = 0;
+    for (int j = k; j < n && j < k + step; j++) d += fr[j].delay;
+    delays[ownedN] = (uint16_t)min(d, (uint32_t)60000);
+    owned[ownedN++] = p; total += delays[ownedN - 1];
+    vTaskDelay(1);                               // let the rest of the network side breathe
+  }
+  Serial.printf("PHOTO: animation, %d of %d frames ready in %u ms, %u ms long, %u KB memory left\n", ownedN, n,
+                (unsigned)(millis() - t0), (unsigned)total, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10));
+  if (ownedN < 2) return;
+  xSemaphoreTake(G.lock, portMAX_DELAY);
+  for (int k = 0; k < ownedN; k++) { G.anim[k] = owned[k]; G.animDelay[k] = delays[k]; }
+  G.animN = ownedN; G.animTotal = total; G.animT0 = millis();
+  xSemaphoreGive(G.lock);
+}
 
 void linkLoadSaved() {
   size_t n;
@@ -253,7 +322,12 @@ void linkLoadSaved() {
     size_t pn = 0, jn = 0;
     uint8_t* pbn = loadFile("/photo.pb", pn);
     uint8_t* jpg = loadFile("/photo.jpg", jn);
-    if (pbn && jpg && st.pb[0] && !strcmp((char*)pbn, st.pb)) { photoJpg = jpg; photoJpgLen = jn; jpg = nullptr; showPhoto(photoJpg, photoJpgLen, st.comm.ppal); }
+    char part[24]; snprintf(part, sizeof(part), "%s*", st.pb);   // "name*" = only the first frame of an animation was saved
+    if (pbn && jpg && st.pb[0] && (!strcmp((char*)pbn, st.pb) || !strcmp((char*)pbn, part))) {
+      photoJpg = jpg; photoJpgLen = jn; jpg = nullptr;
+      showPicture(st.comm.ppal);
+      photoFull = !strcmp((char*)pbn, st.pb);    // not whole: error.blue sends it again when the board says hi
+    }
     free(pbn); free(jpg);
   }
   free(d);
@@ -304,7 +378,7 @@ static void sendHi() {
   d["home"] = prefGet("home"); d["wifi"] = G.wifi; d["ip"] = G.ip; d["rssi"] = WiFi.RSSI();
   xSemaphoreTake(G.lock, portMAX_DELAY);
   d["tb"] = G.text ? G.st.tb : ""; d["rev"] = G.st.rev;
-  d["pb"] = G.photo ? G.st.pb : "";
+  d["pb"] = G.photo && photoFull ? G.st.pb : "";
   xSemaphoreGive(G.lock);
   String s; serializeJson(d, s);
   wsText(s);
@@ -376,12 +450,18 @@ static void handleState(const uint8_t* d, size_t n) {
   if (pendingPhoto) {                            // a new photo
     if (st.pb[0]) {
       free(photoJpg); photoJpg = pendingPhoto; photoJpgLen = pendingPhotoLen; pendingPhoto = nullptr;
-      showPhoto(photoJpg, photoJpgLen, st.comm.ppal);
-      LittleFS.remove("/photo.pb");
-      if (saveFile("/photo.jpg", photoJpg, photoJpgLen)) saveFile("/photo.pb", (const uint8_t*)st.pb, strlen(st.pb) + 1);
+      showPicture(st.comm.ppal);
+      photoFull = true;
+      LittleFS.remove("/photo.pb");               // the flash is small (128 KB): a big animation keeps only its first frame
+      AnimFrame f0;
+      if (photoJpgLen < 100000 && saveFile("/photo.jpg", photoJpg, photoJpgLen)) saveFile("/photo.pb", (const uint8_t*)st.pb, strlen(st.pb) + 1);
+      else if (animParse(photoJpg, photoJpgLen, &f0) && f0.len < 100000 && saveFile("/photo.jpg", f0.jpg, f0.len)) {
+        char part[24]; snprintf(part, sizeof(part), "%s*", st.pb);
+        saveFile("/photo.pb", (const uint8_t*)part, strlen(part) + 1);
+      }
     }
     free(pendingPhoto); pendingPhoto = nullptr;
-  } else if (photoJpg && st.comm.ppal != photoPal) showPhoto(photoJpg, photoJpgLen, st.comm.ppal);   // another filter
+  } else if (photoJpg && st.comm.ppal != photoPal) showPicture(st.comm.ppal);   // another filter
   applyTz(st.ptz);
   xSemaphoreTake(G.lock, portMAX_DELAY);
   G.st = st; G.haveState = true;
@@ -425,6 +505,10 @@ static void handleMessage() {
     free(pendingPhoto);
     pendingPhoto = (uint8_t*)ps_malloc(msgLen - 4);
     if (pendingPhoto) { memcpy(pendingPhoto, msg + 4, msgLen - 4); pendingPhotoLen = msgLen - 4; }
+  } else if (!memcmp(msg, "HFA1", 4)) {          // an animated photo: kept whole ("HFA1" tells it apart from a JPEG);
+    free(pendingPhoto);                          // it takes the read buffer itself (up to 1 MB: no copy)
+    pendingPhoto = msg; pendingPhotoLen = msgLen;
+    msg = nullptr; msgCap = 0; msgLen = 0;
   } else if (!memcmp(msg, "HFT1", 4)) {
     free(pendingText);
     pendingText = (uint8_t*)ps_malloc(msgLen);
@@ -461,7 +545,10 @@ static bool readFrame() {
   if (!readExact(msg + msgLen, n, 15000)) return false;
   if (masked) for (uint64_t i = 0; i < n; i++) msg[msgLen + i] ^= mk[i & 3];
   msgLen += n;
-  if (fin) handleMessage();
+  if (fin) {
+    handleMessage();
+    if (msgCap > 262144) { free(msg); msg = nullptr; msgCap = 0; }   // don't keep a big read buffer: the memory is for pictures
+  }
   return true;
 }
 
@@ -494,7 +581,8 @@ void linkStep() {
   if (millis() - lastPing > 15000) {
     lastPing = millis();
     char b[96];
-    snprintf(b, sizeof(b), "{\"t\":\"ping\",\"rssi\":%d,\"fps\":%d,\"heap\":%u}", WiFi.RSSI(), G.renderFps, (unsigned)ESP.getFreeHeap());
+    snprintf(b, sizeof(b), "{\"t\":\"ping\",\"rssi\":%d,\"fps\":%d,\"heap\":%u,\"psram\":%u,\"anim\":%d}", WiFi.RSSI(), G.renderFps,
+             (unsigned)ESP.getFreeHeap(), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10), G.animN);
     if (!wsText(b)) { Serial.println("LINK: ping failed"); linkDrop(); nextTry = millis() + 1000; }
   }
 }

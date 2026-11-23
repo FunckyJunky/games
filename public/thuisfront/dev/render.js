@@ -60,6 +60,41 @@ export function filterPlane(rgba, w, h, pal) {
   }
   return out;
 }
+// HFA1, an animated photo (a GIF made 320x172 on the phone): "HFA1", u16 n frames, u16 0,
+// n x (u16 delay in ms, u32 bytes), then the n JPEGs one after the other. All numbers little-endian.
+export const ANIM_FRAMES = 48, ANIM_BYTES = 1000000;
+export function animParse(u8) {
+  if (!u8 || u8.length < 8 || String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) !== 'HFA1') return null;
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), n = dv.getUint16(4, true);
+  if (n < 1 || n > 64) return null;
+  let o = 8 + 6 * n;
+  if (o > u8.length) return null;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const delay = dv.getUint16(8 + 6 * i, true), len = dv.getUint32(10 + 6 * i, true);
+    if (o + len > u8.length) return null;
+    out.push({ jpg: u8.subarray(o, o + len), delay: Math.min(10000, Math.max(20, delay)) });
+    o += len;
+  }
+  return out;
+}
+export function animBuild(frames) {             // frames = [{jpg (Uint8Array), delay (ms)}]
+  const n = frames.length, size = 8 + 6 * n + frames.reduce((a, f) => a + f.jpg.length, 0);
+  const u8 = new Uint8Array(size), dv = new DataView(u8.buffer);
+  u8.set([72, 70, 65, 49]); dv.setUint16(4, n, true);
+  let o = 8 + 6 * n;
+  frames.forEach((f, i) => { dv.setUint16(8 + 6 * i, Math.min(10000, Math.max(20, Math.round(f.delay))), true); dv.setUint32(10 + 6 * i, f.jpg.length, true); u8.set(f.jpg, o); o += f.jpg.length; });
+  return u8;
+}
+// which frame of an animation shows t ms after it started (frames = [{delay}], it loops)
+export function animFrameAt(frames, t) {
+  const total = frames.reduce((a, f) => a + f.delay, 0);
+  if (frames.length < 2 || !total) return 0;
+  t = ((t % total) + total) % total;
+  let i = 0;
+  while (i < frames.length - 1 && t >= frames[i].delay) { t -= frames[i].delay; i++; }
+  return i;
+}
 export function uiRamp() { const p = PALS[0], out = []; for (let v = 0; v < 16; v++) out.push(level(p, p.bg, v)); return out; }
 
 // ---------------- the 8x8 font (public domain, Daniel Hepper's font8x8_basic, characters 32-126) ----------------
@@ -307,7 +342,7 @@ export class Screen {
   }
   setText(t) { this.text = t; this.t0 = performance.now(); }
   setFrame(f) { this.frame = f; this.frameAt = performance.now(); }
-  setPhoto(p) { this.photo = p; this.photoKey = ''; }                 // p = {w, h, data} or null
+  setPhoto(p) { this.photo = p; this.photoKey = ''; this.photoPlanes = []; this.photoT0 = performance.now(); }   // p = {w, h, data, frames?: [{data, delay}]} or null
   setColorFrame(f) { this.color = filterPlane(f.data, f.w, f.h, NOFILTER); this.colorAt = performance.now(); }
   restart() { this.t0 = performance.now(); }
 
@@ -354,9 +389,14 @@ export class Screen {
     if (this.lastPal !== vkey) { this.setLut(V, videoRamp(vpal)); this.lastPal = vkey; }
     this.plane = null;
     if (c.mode === 'photo') {
-      const pal = c.ppal == null ? NOFILTER : c.ppal, key = pal + '|' + (this.photo ? this.photo.data.length : 0);
-      if (this.photo && this.photoKey !== key) { this.photoPlane = filterPlane(this.photo.data, this.photo.w, this.photo.h, pal); this.photoKey = key; }
-      if (this.photo) { fb.fill(PLANE); this.plane = this.photoPlane; }
+      const pal = c.ppal == null ? NOFILTER : c.ppal, P = this.photo;
+      if (P) {                                // a photo, or an animation: the frame for now (it keeps playing, also with effects off)
+        if (this.photoKey !== String(pal)) { this.photoKey = String(pal); this.photoPlanes = []; }
+        const i = P.frames ? animFrameAt(P.frames, now - this.photoT0) : 0;
+        let pl = this.photoPlanes[i];
+        if (!pl) pl = this.photoPlanes[i] = filterPlane(P.frames ? P.frames[i].data : P.data, P.w, P.h, pal);
+        fb.fill(PLANE); this.plane = pl;
+      }
       else { fb.fill(T); text8(fb, 'NO PHOTO YET', 4, 4, 1, U + 6); }
     } else if (c.mode === 'video' || c.mode === 'both') {
       const grey = this.frame && now - this.frameAt < 3000 ? this.frameAt : 0, col = this.color && now - this.colorAt < 3000 ? this.colorAt : 0;

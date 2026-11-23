@@ -11,17 +11,18 @@
 //
 // Everything lives in one Durable Object ("main"). Protocol (all numbers little-endian):
 //   device -> server   {t:"hi", id, name, kind, ver, wifi, ip, rssi, home, tb, rev}   once, after connecting
-//                      {t:"ping", rssi, fps, heap}                                  every 15 s
+//                      {t:"ping", rssi, fps, heap, psram (KB free), anim (frames playing)}   every 15 s
 //                      {t:"got", s}                                                 a video frame is on screen
 //   server -> device   {t:"state", state}                                           whenever it changes
 //                      {t:"ota", ver, url, size, md5}   new firmware: get it over WiFi (boards that said ota:1)
 //                      binary "HFT1..."  the text picture (sent before the state that names it)
 //                      binary "HFP1..."  the photo (a JPEG, sent before the state that names it)
+//                      binary "HFA1..."  or an animated photo (a GIF made into JPEG frames), in its place
 //                      binary "HFV1..." / "HFV2..."  one video frame (only after the last one was "got")
 //   controller -> server  {t:"auth", key} or {t:"auth", pw}  first, always (ignored when there is no password)
 //                         {t:"setpw", pw, old}  set / change / remove ("") the password    {t:"nopw"}  "no password, thanks"
 //                         {t:"set", p:{...}}  change the state     {t:"name", name}  rename the device
-//                         binary "HFT1..."    new text picture     binary "HFP1..."  new photo
+//                         binary "HFT1..."    new text picture     binary "HFP1..." / "HFA1..."  new photo / animation
 //                         binary "HFV1..." / "HFV2..."  video frame
 //   server -> controller  {t:"state", state, dev}   {t:"dev", dev}   {t:"got", s}   {t:"err", msg}
 //                         {t:"authok", key}   {t:"locked", dev}   {t:"authfail", wait}   {t:"pwset", key}   {t:"pwfail", msg, wait}
@@ -32,8 +33,23 @@
 // HFV1 (video, grey for the DOS filters): "HFV1" u16 w, u16 h, u32 seq, then w*h 4-bit levels, two per byte,
 //   high nibble first.  HFV2 (video in colour): "HFV2" u16 w, u16 h, u32 seq, then a JPEG.
 // HFP1 (photo): "HFP1" then a JPEG (320x172, colour; the screen applies the filter itself).
+// HFA1 (animated photo, from a GIF): "HFA1" u16 n (1-64), u16 0, n x (u16 delay ms, u32 bytes), then the n JPEGs.
 
 import { DurableObject } from "cloudflare:workers";
+
+// an HFA1 whose frame table adds up (1-64 frames, each a JPEG)
+function animOk(u8) {
+  if (u8.length < 14) return false;
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), n = dv.getUint16(4, true);
+  if (n < 1 || n > 64) return false;
+  let o = 8 + 6 * n;
+  for (let i = 0; i < n; i++) {
+    const len = dv.getUint32(10 + 6 * i, true);
+    if (len < 100 || o + len > u8.length || u8[o] !== 0xff || u8[o + 1] !== 0xd8) return false;
+    o += len;
+  }
+  return o === u8.length;
+}
 import { FIRMWARE } from "./hf_firmware.js";
 
 // "1.10" > "1.9": compare version numbers part by part
@@ -48,6 +64,7 @@ const HOME_RE = /^[A-Z0-9]{0,12}$/;
 const TEXT_MAX = 1000000;          // bytes of one HFT1
 const FRAME_MAX = 120000;          // bytes of one video frame (HFV1 320x172 is 27532, HFV2 is a JPEG)
 const PHOTO_MAX = 500000;          // bytes of one HFP1
+const ANIM_MAX = 1000000;          // bytes of one HFA1 (the board keeps it in its memory)
 const CHUNK = 100000;              // HFT1 is stored in pieces this big
 const ONLINE_MS = 45000;           // no ping for this long = offline
 const FLOW_MS = 1500;              // a frame the device never "got" is given up after this
@@ -270,7 +287,7 @@ export class HomeFront extends DurableObject {
     const s = await this.state(id);
     return {
       id: d.id, name: d.name, kind: d.kind, ver: d.ver, wifi: d.wifi, ip: d.ip, rssi: a.rssi ?? d.rssi,
-      fps: a.fps || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
+      fps: a.fps || 0, psram: a.psram || 0, anim: a.anim || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
       mode: s.comm.mode, homeSet: !!d.home, locked: !!d.pw, pwAsked: !!(d.pwAsked || d.pw),
       ota: !!d.ota, fwNew: d.kind === "esp" && newer(FIRMWARE.ver, d.ver) ? FIRMWARE.ver : "",
     };
@@ -404,7 +421,7 @@ export class HomeFront extends DurableObject {
     }
     if (m.t === "ping") {
       const wasOn = this.online(id);
-      ws.serializeAttachment({ ...a, seen: now, rssi: int(m.rssi, -120, 0, a.rssi || 0), fps: int(m.fps, 0, 99, 0) });
+      ws.serializeAttachment({ ...a, seen: now, rssi: int(m.rssi, -120, 0, a.rssi || 0), fps: int(m.fps, 0, 99, 0), psram: int(m.psram, 0, 65535, 0), anim: int(m.anim, 0, 64, 0) });
       const d = await this.dev(id);
       if (d && now - (d.seen || 0) > 5 * 60 * 1000) { d.seen = now; await this.saveDev(d); }   // "last seen", now and then
       if (!wasOn || this.socks("ctl", id).length) this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
@@ -461,8 +478,8 @@ export class HomeFront extends DurableObject {
       await this.saveState(id, s);
       await this.pushState(id, true, false);
     }
-    if (kind === "HFP1") {
-      if (u8.length < 100 || u8.length > PHOTO_MAX) return this.toCtl(id, { t: "err", msg: "photo too big" });
+    if (kind === "HFP1" || kind === "HFA1") {
+      if (kind === "HFP1" ? u8.length < 100 || u8.length > PHOTO_MAX : u8.length > ANIM_MAX || !animOk(u8)) return this.toCtl(id, { t: "err", msg: "photo too big" });
       const pb = "p" + Date.now().toString(36);
       await this.savePhoto(id, pb, u8);
       const s = await this.state(id);

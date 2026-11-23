@@ -42,6 +42,11 @@ struct Shared {
   uint16_t* color = nullptr;       // colour video frame, 320x172 RGB565
   uint32_t colorAt = 0;
   uint16_t* photo = nullptr;       // the photo, 320x172 RGB565, filter already applied
+  // an animated photo (a GIF): animN > 1 frames like photo, each shown animDelay ms, looping from animT0
+  uint16_t* anim[64] = {};
+  uint16_t animDelay[64] = {};
+  int animN = 0;
+  uint32_t animTotal = 0, animT0 = 0;
   const uint16_t* volatile pushing = nullptr;   // the picture being sent to the screen right now
   // requests from the screen side / the setup page to the network task
   volatile bool wantSetup = false, wantRelink = false;

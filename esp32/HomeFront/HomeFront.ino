@@ -149,7 +149,14 @@ void loop() {
     String key = String(st.tb) + "|" + st.comm.anim + "|" + st.comm.speed;
     if (key != textKey) { textKey = key; t0Text = now; }
     if (G.textAt && now - G.textAt < 300) lg = 60;   // new text: a green blink
-    Media md = { G.frame, G.fw, G.fh, G.frameAt, G.color, G.colorAt, G.photo };
+    const uint16_t* pic = G.photo;
+    if (G.animN > 1 && G.animTotal) {             // an animated photo: the frame for now (it plays also with effects off)
+      uint32_t t = (now - G.animT0) % G.animTotal;
+      int i = 0;
+      while (i < G.animN - 1 && t >= G.animDelay[i]) { t -= G.animDelay[i]; i++; }
+      pic = G.anim[i];
+    }
+    Media md = { G.frame, G.fw, G.fh, G.frameAt, G.color, G.colorAt, pic };
     plane = scrComm(st.comm, G.text, md, (now - t0Text) / 1000.0f, now);
     scan = st.scan && st.fx;
     bl = st.bright;
