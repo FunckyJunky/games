@@ -424,6 +424,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   playing when you step out), brew coffee or cook a meal on the stove (then the mug or bowl is in your
   hands), sleep; move to step out (or to wake up). Take down one tent, or pack up everything
 - string lights, tree lights and the lights inside tents pulse with the beat when music plays nearby
+- decorations (Camp, src `decor.js`): on a tree: tree lights, paper lanterns, a wind chime (rings now and
+  then, more in the wind, heard close by); on the ground in front of you: candle jars, a fairy ring of
+  glowing mushrooms, fireflies; between two trees: a light garland, bunting, a tarp, a hammock. Two
+  trees: start at one tree, walk to a second (a line from the first tree turns green when the gap is
+  right: hammock 2.8-5 m, tarp 2-6.5 m), then Hang it here. Tarp: Higher / Lower (1.1-2.6 m) and Longer /
+  Shorter (1.4-5 m along the ridge) when you stand under your own. Hammock: anyone can lie in one (one at
+  a time); it swings, you get up by moving. Presence `dec`: [x, z, r, scheme] (tree lights, the old
+  form), [x, z, r, scheme, kind] or [x1, z1, r1, scheme, kind, x2, z2, r2, height, length]; up to 16
+  in all, the oldest of a kind comes down past its limit. All lights pulse to music nearby
 - knee-high ground fog: three drifting mist layers laid over the ground around you, thicker in fog
   and rain, lit orange by fires, kept out of tents and fire rings; Ground fog slider in Lighting & map
 - campfire: billowing smoke puffs (noise texture, turning and swelling, lit by the flames from below);
