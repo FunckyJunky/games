@@ -399,6 +399,12 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- up to 3 instruments on the ground per explorer (drum machine, synth, e-piano), each playing by itself
+  where it stands, with its own steps and sound (Music: Set it down and play; a 4th waits until one is
+  picked up or packed away). Walk up to one (or sit at it) and the Music sheet works on that one: Sit at
+  it, Pick it up (into your backpack, still playing), Stop / Play, Pack away. They stay where you left
+  them after a reload (localStorage `wt.rig`). Presence `rig`: [instrument + id] x3; `ins` stays what
+  you carry (or, for older versions of the game, the first one on the ground)
 - drum machine: its own punch bus (compressor and drive), a deep 808 bass on the chord's root that
   follows the kick, and eleven styles (boom bap, lazy, breaks, jazz hop, trap, house, one drop,
   shuffle, half time, bossa, dusty) with the odd fill. No record crackle or hiss on the music
