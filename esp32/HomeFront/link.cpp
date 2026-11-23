@@ -64,6 +64,7 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.screen = (s["screen"] | 1) != 0;
   o.bright = constrain((int)(s["bright"] | 80), 5, 100);
   o.scan = (s["scan"] | 0) != 0;
+  o.fx = (s["fx"] | 1) != 0;
   strlcpy(o.name, s["name"] | "", sizeof(o.name));
   JsonObjectConst c = s["comm"];
   o.comm.mode = pickIdx(c["mode"] | "text", MODES, 4);

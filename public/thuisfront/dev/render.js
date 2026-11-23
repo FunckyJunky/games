@@ -19,6 +19,7 @@ export const PALS = [
   { id: 'gray',   name: 'DOS GRAY',   lo: [3, 3, 3],   bg: [12, 12, 12], fg: [192, 192, 192], hi: [255, 255, 255], tx: [225, 225, 225] },
 ];
 export const ANIMS = ['static', 'scroll', 'rise', 'type', 'blink', 'wave', 'glitch', 'pulse'];
+export const STILL_T = 5.3;                // effects off: the idle screen stands still at this moment (no glitch, cursor on)
 
 const lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
 function level(p, from, v) { return v <= 12 ? lerp(from, p.fg, v / 12) : lerp(p.fg, p.hi, (v - 12) / 3); }
@@ -290,12 +291,13 @@ export class Screen {
     const fb = this.fb, s = this.state;
     const t = (now - this.phaseAt) / 1000;
     let scan = false;
+    const fx = !s || s.fx !== 0;                // fx 0: all effects off (still text, no scanlines, no glitches, no blinking)
     if (this.phase === 'connecting') drawConnecting(fb, t, this.info);
     else if (this.phase === 'connected') drawConnected(fb, t, this.info);
     else if (!s || !s.screen) fb.fill(BLACK);
-    else if (s.app === 'comm') { this.drawComm(now); scan = !!s.scan; }
-    else drawIdle(fb, now / 1000, this.info);
-    if (this.offline && s && s.screen && this.phase === 'run' && Math.floor(now / 600) % 2 === 0) fill(fb, W - 7, 2, 5, 5, RED);
+    else if (s.app === 'comm') { this.drawComm(now, fx); scan = fx && !!s.scan; }
+    else drawIdle(fb, fx ? now / 1000 : STILL_T, this.info);
+    if (this.offline && s && s.screen && this.phase === 'run' && (!fx || Math.floor(now / 600) % 2 === 0)) fill(fb, W - 7, 2, 5, 5, RED);
     const out = this.out, fbl = this.fb, P = s && s.app === 'comm' && s.screen && this.phase === 'run' ? this.plane : null;
     for (let y = 0; y < H; y++) {
       const dimRow = scan && (y & 1), L = dimRow ? this.dim : this.lut, o = y * W;
@@ -310,7 +312,7 @@ export class Screen {
     this.cx.putImageData(this.img, 0, 0);
   }
 
-  drawComm(now) {
+  drawComm(now, fx = true) {
     const fb = this.fb, c = this.state.comm, tA = (now - this.t0) / 1000;
     const vpal = c.vpal === NOFILTER ? 0 : c.vpal, vkey = 'v' + vpal;
     if (this.lastPal !== vkey) { this.setLut(V, videoRamp(vpal)); this.lastPal = vkey; }
@@ -324,12 +326,12 @@ export class Screen {
       const grey = this.frame && now - this.frameAt < 3000 ? this.frameAt : 0, col = this.color && now - this.colorAt < 3000 ? this.colorAt : 0;
       if (col && col >= grey) { fb.fill(PLANE); this.plane = this.color; }
       else if (grey) drawVideo(fb, this.frame);
-      else if (c.mode === 'video') drawNoSignal(fb, now);
+      else if (c.mode === 'video') drawNoSignal(fb, fx ? now : 0);
       else { fb.fill(T); text8(fb, 'NO VIDEO', 4, 4, 1, U + 6); }
     } else fb.fill(T);
     let k = 1;
     if (c.mode !== 'video') {
-      if (this.text) k = drawText(fb, this.text, c.anim, c.speed, tA);
+      if (this.text) k = drawText(fb, this.text, fx ? c.anim : 'static', c.speed, tA);
       else if (c.mode === 'text') center8(fb, 'NO TEXT YET', 82, 1, U + 5);
     }
     this.setLut(T, textRamp(c.tpal, c.mode === 'text' ? c.bg : 0, k));

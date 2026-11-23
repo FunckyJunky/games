@@ -10,6 +10,7 @@ struct HfState {                   // the web app's state, as error.blue sends i
   bool screen = true;
   uint8_t bright = 80;
   bool scan = false;
+  bool fx = true;                  // false = all effects off (still text, no scanlines, no glitches, no blinking)
   char name[24] = "";
   char tb[20] = "";                // which text picture
   char pb[20] = "";                // which photo

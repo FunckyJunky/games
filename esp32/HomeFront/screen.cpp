@@ -9,6 +9,7 @@
 #define H LCD_H
 
 uint8_t* FB = nullptr;
+bool scrEffects = true;
 static uint16_t lut[64], lutDim[64];
 static uint8_t* rowTmp = nullptr;
 
@@ -271,12 +272,12 @@ const uint16_t* scrComm(const CommSet& c, const TextPic* t, const Media& m, floa
     uint32_t col = m.color && m.colorAt && nowMs - m.colorAt < 3000 ? m.colorAt : 0;
     if (col && col >= grey) { memset(FB, IX_PLANE, W * H); plane = m.color; }
     else if (grey) drawVideo(m.gray, m.fw, m.fh);
-    else if (c.mode == M_VIDEO) drawNoSignal(nowMs);
+    else if (c.mode == M_VIDEO) drawNoSignal(scrEffects ? nowMs : 0);
     else { memset(FB, IX_T, W * H); scrText("NO VIDEO", 4, 4, 1, IX_U + 6); }
   } else memset(FB, IX_T, W * H);
   float k = 1;
   if (c.mode != M_VIDEO) {
-    if (t) k = drawText(t, c.anim, c.speed, tA);
+    if (t) k = drawText(t, scrEffects ? c.anim : (uint8_t)A_STATIC, c.speed, tA);
     else if (c.mode == M_TEXT) scrCenter("NO TEXT YET", 82, 1, IX_U + 5);
   }
   setTextRamp(c.tpal, c.mode == M_TEXT ? c.bg : 0, k);
@@ -403,4 +404,4 @@ void scrBanner(const char* s) {
   scrFill(0, H - 12, W, 12, IX_U + 12);
   scrText(s, 4, H - 10, 1, IX_U + 0);
 }
-void scrOfflineDot(uint32_t nowMs) { if ((nowMs / 600) % 2 == 0) scrFill(W - 7, 2, 5, 5, IX_RED); }
+void scrOfflineDot(uint32_t nowMs) { if (!scrEffects || (nowMs / 600) % 2 == 0) scrFill(W - 7, 2, 5, 5, IX_RED); }

@@ -162,7 +162,7 @@
       <div class="row"><button class="btn big" id="tSend">SEND &gt;</button><button class="btn" id="tLive">LIVE: ON</button></div>
       <div class="h">FONT</div><div class="chips" id="fonts"></div>
       <div class="slider"><label>SIZE</label><input type="range" id="tSize" min="0" max="172" step="1"><output id="tSizeO"></output></div>
-      <div class="h">ANIMATION</div><div class="chips" id="anims"></div>
+      <div class="h">ANIMATION <span id="animOff" class="small" hidden>· EFFECTS ARE OFF, SO IT STANDS STILL</span></div><div class="chips" id="anims"></div>
       <div class="slider"><label>SPEED</label><input type="range" id="tSpeed" min="1" max="10" step="1"><output id="tSpeedO"></output></div>
       <div class="h">TEXT COLOUR</div><div class="chips" id="tpals"></div>
       <div id="bgRow"><div class="h">BACKGROUND</div><div class="chips" id="bgs"></div></div>
@@ -184,7 +184,8 @@
 
     <div class="sec">
       <div class="h">SCREEN</div>
-      <div class="row"><button class="btn big" id="sPower">SCREEN ON</button><button class="btn" id="sScan">SCANLINES</button></div>
+      <div class="row"><button class="btn big" id="sPower">SCREEN ON</button><button class="btn" id="sFx">EFFECTS: ON</button><button class="btn" id="sScan">SCANLINES</button></div>
+      <p class="dimt small" id="fxNote" hidden>EFFECTS OFF: the text stands still, no scanlines, no glitches or blinking on the screen.</p>
       <div class="slider"><label>LIGHT</label><input type="range" id="sBri" min="5" max="100" step="1"><output id="sBriO"></output></div>
       <div class="row"><button class="btn red" id="sClose">CLOSE WEB APP</button></div>
       <p class="dimt small">The screen keeps showing your text and photo after you close this page, also after a restart. Video only runs while this page sends it.</p>
@@ -384,6 +385,7 @@ function drawPanel() {
       <div class="row"><button class="btn big" data-send="${a.id}" ${d.online ? '' : 'disabled'}>${d.app === a.id ? 'OPEN ' + a.name + ' &gt;' : 'SEND TO SCREEN &gt;'}</button></div>`).join('')}
     ${d.online ? '' : '<p class="dimt small">THE SCREEN IS OFFLINE. IT GETS NEW ORDERS WHEN IT IS BACK.</p>'}
     <div class="row">${d.online ? `<button class="btn" id="pwB">${d.screen ? 'SCREEN OFF' : 'SCREEN ON'}</button>` : ''}
+      <button class="btn${d.fx === 0 ? '' : ' on'}" id="fxB">${d.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'}</button>
       ${d.online && d.app ? '<button class="btn" id="clB">CLOSE WEB APP</button>' : ''}
       ${d.online ? '' : '<button class="btn red" id="fgB">FORGET</button>'}</div>
     <div class="row"><button class="btn${d.locked ? ' on' : ''}" id="pwdB">${d.locked ? 'PASSWORD: ON' : 'PASSWORD: OFF'}</button></div>`;
@@ -392,6 +394,7 @@ function drawPanel() {
   if ($('npNo')) $('npNo').onclick = () => { ctl.send({ t: 'nopw' }); d.pwAsked = true; drawStrip(); };
   for (const b of p.querySelectorAll('[data-send]')) b.onclick = () => { const id = b.dataset.send; if (d.app !== id) ctl.set({ app: id, screen: 1 }); location.hash = 'comm=' + d.id; };
   if ($('pwB')) $('pwB').onclick = () => { ctl.set({ screen: d.screen ? 0 : 1 }); d.screen = d.screen ? 0 : 1; drawStrip(); };
+  $('fxB').onclick = () => { d.fx = d.fx === 0 ? 1 : 0; ctl.set({ fx: d.fx }); toast(d.fx ? 'EFFECTS ON' : 'EFFECTS OFF'); drawStrip(); };
   if ($('clB')) $('clB').onclick = () => { ctl.set({ app: '' }); d.app = ''; drawStrip(); };
   if ($('fgB')) $('fgB').onclick = async () => {
     if (!confirm('FORGET ' + (d.name || d.id) + '?')) return;
@@ -551,7 +554,7 @@ function drawCards(now) {
 const pv = new Screen($('pv'));
 pv.setPhase('run');
 const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0 };
-let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0 };
+let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
 
@@ -622,16 +625,19 @@ function syncUI() {
   $('tSend').textContent = unsent ? 'SEND >' : 'SENT';
   $('tSend').classList.toggle('dim', !unsent);
   $('sPower').textContent = S.screen ? 'SCREEN: ON' : 'SCREEN: OFF'; $('sPower').classList.toggle('on', !!S.screen);
-  $('sScan').classList.toggle('on', !!S.scan);
+  $('sScan').classList.toggle('on', !!S.scan && S.fx !== 0); $('sScan').classList.toggle('dim', S.fx === 0);
+  $('sFx').textContent = S.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'; $('sFx').classList.toggle('on', S.fx !== 0);
+  $('fxNote').hidden = S.fx !== 0; $('animOff').hidden = S.fx !== 0;
   $('vStart').textContent = cam.on ? 'STOP CAMERA' : 'START CAMERA'; $('vStart').classList.toggle('on', cam.on);
-  pv.setState({ app: 'comm', screen: 1, scan: S.scan, bright: S.bright, comm: { ...C, tb: textKey() } });
+  pv.setState({ app: 'comm', screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() } });
 }
 const textKey = () => TEXT_KEYS.map((k) => C[k]).join('\u0001');
 
 // a change from the page
+const touched = {};                            // when this page last changed a setting (so an older echo doesn't undo it)
 function change(key, v, slide) {
   if (C[key] === v) return;
-  C[key] = v;
+  C[key] = v; touched[key] = performance.now();
   syncUI();
   if (TEXT_KEYS.includes(key)) { remakeText(slide ? 250 : 60); return; }
   if (PHOTO_KEYS.includes(key)) { remakePhoto(slide ? 400 : 60); return; }
@@ -753,13 +759,14 @@ async function photoIn(u8) {
 }
 $('vMirror').onclick = () => change('mirror', C.mirror ? 0 : 1);
 $('sPower').onclick = () => { S.screen = S.screen ? 0 : 1; ctl && ctl.set({ screen: S.screen }); syncUI(); };
-$('sScan').onclick = () => { S.scan = S.scan ? 0 : 1; ctl && ctl.set({ scan: S.scan }); syncUI(); };
+$('sScan').onclick = () => { if (S.fx === 0) { toast('EFFECTS ARE OFF'); return; } S.scan = S.scan ? 0 : 1; ctl && ctl.set({ scan: S.scan }); syncUI(); };
+$('sFx').onclick = () => { S.fx = S.fx === 0 ? 1 : 0; ctl && ctl.set({ fx: S.fx }); syncUI(); };
 $('sClose').onclick = () => { ctl && ctl.set({ app: '' }); camStop(); location.hash = ''; toast('WEB APP CLOSED'); };
 $('cBack').onclick = () => { location.hash = ''; };
 
 // state from the server: the screen's current settings
 function commState(s) {
-  S = { app: s.app, screen: s.screen, bright: s.bright, scan: s.scan };
+  S = { app: s.app, screen: s.screen, bright: s.bright, scan: s.scan, fx: s.fx === 0 ? 0 : 1 };
   $('cName').textContent = 'COMM · ' + (s.name || (ctl && ctl.id) || '');
   if (!loadedFromServer) {                   // the first time: take the screen's settings and redraw its text
     loadedFromServer = true;
@@ -772,9 +779,11 @@ function commState(s) {
     syncUI();
     makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });
   } else {
-    // someone else (another phone) changed it: follow, but don't fight the text box you're typing in
-    const typing = document.activeElement === $('tIn');
-    for (const k of Object.keys(DEF)) if (!(typing && k === 'text') && s.comm && k in s.comm && s.comm[k] !== C[k]) {
+    // someone else (another phone) changed it: follow, but don't fight the text box you're typing in,
+    // text settings that are not sent yet, or something changed here a moment ago (its echo is still on the way)
+    const typing = document.activeElement === $('tIn'), now = performance.now();
+    const mine = (k) => (typing && k === 'text') || (TEXT_KEYS.includes(k) && (unsent || textBusy || textAgain)) || now - (touched[k] || -1e9) < 3000;
+    for (const k of Object.keys(DEF)) if (!mine(k) && s.comm && k in s.comm && s.comm[k] !== C[k]) {
       C[k] = s.comm[k];
       if (TEXT_KEYS.includes(k)) makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });
     }

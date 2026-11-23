@@ -33,6 +33,8 @@ struct ScreenInfo {
 };
 
 extern uint8_t* FB;              // 320 x 172 colour numbers
+extern bool scrEffects;          // false: all effects off (still text, no glitches, no blinking, no noise)
+#define STILL_T 5.3f             // effects off: the idle screen stands still at this moment
 
 void scrBegin();
 void scrFlush(bool scanlines, const uint16_t* plane);

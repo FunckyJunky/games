@@ -75,7 +75,7 @@ const cleanHome = (v) => { const h = String(v || "").toUpperCase().replace(/[^A-
 
 export function defaultState() {
   return {
-    rev: 1, app: "", screen: 1, bright: 80, scan: 0,
+    rev: 1, app: "", screen: 1, bright: 80, scan: 0, fx: 1,      // fx 0 = all effects off (no animation, scanlines, glitches)
     comm: {
       mode: "text", tb: "", pb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0,
       ppal: 4, pfit: "fill", pbri: 0, pcon: 0,
@@ -94,6 +94,7 @@ function mergeState(s, p) {
   if ("screen" in p) set(s, "screen", p.screen ? 1 : 0);
   if ("bright" in p) set(s, "bright", int(p.bright, 5, 100, s.bright));
   if ("scan" in p) set(s, "scan", p.scan ? 1 : 0);
+  if ("fx" in p) set(s, "fx", p.fx ? 1 : 0);
   const c = p.comm, o = s.comm;
   if (c && typeof c === "object") {
     if ("mode" in c) set(o, "mode", pick(c.mode, MODES, o.mode));
@@ -217,7 +218,7 @@ export class HomeFront extends DurableObject {
     const s = await this.state(id);
     return {
       id: d.id, name: d.name, kind: d.kind, ver: d.ver, wifi: d.wifi, ip: d.ip, rssi: a.rssi ?? d.rssi,
-      fps: a.fps || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen,
+      fps: a.fps || 0, seen: Math.max(d.seen || 0, a.seen || 0), online: this.online(id), app: s.app, screen: s.screen, fx: s.fx === 0 ? 0 : 1,
       mode: s.comm.mode, homeSet: !!d.home, locked: !!d.pw, pwAsked: !!(d.pwAsked || d.pw),
     };
   }

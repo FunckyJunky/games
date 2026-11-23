@@ -109,6 +109,7 @@ void loop() {
   xSemaphoreTake(G.lock, portMAX_DELAY);
   const HfState& st = G.st;
   bool appOn = G.haveState && st.app;
+  scrEffects = !G.haveState || st.fx;
   bool setupScreen = G.apOn && (!G.everStaUp ? (!appOn || G.apClients > 0 || now - G.apSince < 60000)
                                              : (G.apClients > 0 || (setupForcedAt && now - setupForcedAt < 300000)));
   if (G.staUp && setupForcedAt && !G.apOn) setupForcedAt = 0;
@@ -125,12 +126,12 @@ void loop() {
     if (G.textAt && now - G.textAt < 300) lg = 60;   // new text: a green blink
     Media md = { G.frame, G.fw, G.fh, G.frameAt, G.color, G.colorAt, G.photo };
     plane = scrComm(st.comm, G.text, md, (now - t0Text) / 1000.0f, now);
-    scan = st.scan;
+    scan = st.scan && st.fx;
     bl = st.bright;
     if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
   } else {
     if (G.haveState && !st.screen) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
-    else scrIdle(tNow, info);
+    else scrIdle(scrEffects ? tNow : STILL_T, info);
     if (G.haveState) bl = st.bright;
   }
   G.pushing = plane;
