@@ -86,6 +86,9 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.comm.tpal = constrain((int)(c["tpal"] | 0), 0, 3);
   o.comm.vpal = constrain((int)(c["vpal"] | 0), 0, 4);
   o.comm.ppal = constrain((int)(c["ppal"] | NOFILTER), 0, 4);
+  o.comm.motion = (c["motion"] | 0) != 0;
+  o.comm.msens = constrain((int)(c["msens"] | 5), 1, 10);
+  o.comm.mtime = constrain((int)(c["mtime"] | 60), 5, 3600);
   strlcpy(o.pb, c["pb"] | "", sizeof(o.pb));
   o.comm.bg = constrain((int)(c["bg"] | 0), 0, 2);
   strlcpy(o.tb, c["tb"] | "", sizeof(o.tb));

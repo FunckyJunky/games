@@ -624,6 +624,8 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   The board reads the 1.47B's QMI8658 accelerometer (motion.cpp; I2C 48/47, only when the backlight is on 46, because
   on the plain 1.47 pin 48 is the backlight) and says imu:1 in its hello; a browser screen uses devicemotion (phones,
   tablets; iOS asks on the first tap) and stays on when it never feels anything. Without a sensor: always on.
+  COMM has the same, with its own comm.motion / msens / mtime (firmware 1.10; SCREEN ON block under the COMM tabs);
+  there new text, a new photo or incoming video also keep it awake.
 - Time zone fix (1.9): configTime() for the internet time sets TZ to UTC; applyTz() now compares with getenv("TZ") and
   runs again right after configTime(), so the clock no longer shows UTC (an hour early in Amsterdam) after a restart.
   Ping reports lt (the board's HH:MM) and tz (its TZ), shown in /api/hf/list as lt / tzNow.

@@ -347,13 +347,14 @@ export class Screen {
   setFrame(f) { this.frame = f; this.frameAt = performance.now(); }
   // movement from this device's own sensor (g from its slow average); -1 never comes: no events = no sensor
   motion(g) { this.moveSeen = performance.now(); if (g > (this.movePeak || 0)) this.movePeak = g; }
-  // CLOCK with motion on: dark until moved (or tapped, or changed from the phone), then on for mtime seconds.
-  // A screen that never felt any movement (a computer) stays on.
+  // CLOCK / COMM with motion on: dark until moved (or tapped, or changed from the phone, or video coming in),
+  // then on for mtime seconds. A screen that never felt any movement (a computer) stays on.
   asleep(s, now) {
-    const k = s.clock || {};
+    const k = (s.app === 'clock' ? s.clock : s.app === 'comm' ? s.comm : null) || {};
     if (!k.motion || !this.moveSeen || now - this.moveSeen > 5000) return false;
+    const video = s.app === 'comm' && (k.mode === 'video' || k.mode === 'both') && ((this.frame && now - this.frameAt < 1500) || (this.color && now - this.colorAt < 1500));
     if (s.rev !== this.movedRev) { this.movedRev = s.rev; this.movedAt = now; }
-    if ((this.movePeak || 0) >= motionThreshold(k.msens) || !this.movedAt) this.movedAt = now;
+    if (video || (this.movePeak || 0) >= motionThreshold(k.msens) || !this.movedAt) this.movedAt = now;
     this.movePeak = 0;
     return now - this.movedAt >= (k.mtime || 60) * 1000;
   }
@@ -369,6 +370,7 @@ export class Screen {
     if (this.phase === 'connecting') drawConnecting(fb, t, this.info);
     else if (this.phase === 'connected') drawConnected(fb, t, this.info);
     else if (!s || !s.screen) fb.fill(BLACK);
+    else if ((s.app === 'clock' || s.app === 'comm') && this.asleep(s, now)) { fb.fill(BLACK); this.plane = null; }
     else if (s.app === 'comm') { this.drawComm(now, fx); scan = fx && !!s.scan; }
     else if (s.app === 'eta') {
       const e = s.eta || {}, tz = (s.clock || {}).tz, at = (sec) => (sec ? clockNow(tz, sec * 1000) : null);
@@ -376,7 +378,6 @@ export class Screen {
       this.setLut(T, textRamp(e.pal || 0, 0, 1));
       scan = fx && !!s.scan;
     }
-    else if (s.app === 'clock' && this.asleep(s, now)) fb.fill(BLACK);
     else if (s.app === 'clock') {
       const k = s.clock || {};
       drawClock(fb, this.timeNow ? this.timeNow() : clockNow(k.tz), k, fx);

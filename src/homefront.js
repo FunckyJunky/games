@@ -119,7 +119,7 @@ export function defaultState() {
   return {
     rev: 1, app: "", screen: 1, bright: 80, scan: 0, fx: 1,      // fx 0 = all effects off (no animation, scanlines, glitches)
     comm: {
-      mode: "text", tb: "", pb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0,
+      mode: "text", tb: "", pb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0, motion: 0, msens: 5, mtime: 60,
       ppal: 4, pfit: "fill", pbri: 0, pcon: 0, ppx: 0, ppy: 0, pzm: 100,
       text: "", font: "vt323", size: 0, align: "c", valign: "m", style: "plain", caps: 0,
       vq: "hi", look: "smooth", vbri: 0, vcon: 0, mirror: 1, fps: 12,
@@ -173,6 +173,9 @@ function mergeState(s, p) {
     if ("tpal" in c) set(o, "tpal", int(c.tpal, 0, 3, o.tpal));
     if ("vpal" in c) set(o, "vpal", int(c.vpal, 0, 4, o.vpal));          // 4 = no filter, real colours
     if ("ppal" in c) set(o, "ppal", int(c.ppal, 0, 4, o.ppal));
+    if ("motion" in c) set(o, "motion", c.motion ? 1 : 0);                   // COMM's own SCREEN ON: WHEN MOVED (as clock)
+    if ("msens" in c) set(o, "msens", int(c.msens, 1, 10, o.msens ?? 5));
+    if ("mtime" in c) set(o, "mtime", int(c.mtime, 5, 3600, o.mtime ?? 60));
     if ("pfit" in c) set(o, "pfit", pick(c.pfit, ["fill", "fit"], o.pfit));
     if ("pbri" in c) set(o, "pbri", int(c.pbri, -50, 50, o.pbri));
     if ("pcon" in c) set(o, "pcon", int(c.pcon, -50, 50, o.pcon));

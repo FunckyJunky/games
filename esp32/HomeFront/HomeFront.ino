@@ -91,15 +91,15 @@ void setup() {
   netBegin();
 }
 
-// CLOCK "on when moved": dark until the board is moved (or the button is pressed, or the phone changes something),
-// then on for clock.mtime seconds. Without a motion sensor it stays on.
+// CLOCK / COMM "on when moved": dark until the board is moved (or the button is pressed, or the phone changes something,
+// or video is coming in: busy), then on for mtime seconds. Without a motion sensor it stays on.
 static uint32_t movedAt = 0, movedRev = 0;
 static float moveNow = 0;
-static bool moveAsleep(const HfState& st, uint32_t now) {
+static bool moveAsleep(uint32_t rev, int msens, int mtime, uint32_t now, bool busy) {
   if (moveNow < 0) return false;
-  if (st.rev != movedRev) { movedRev = st.rev; movedAt = now; }
-  if (moveNow >= motionThreshold(st.clock.msens) || infoUntil > now || !movedAt) movedAt = now;
-  return now - movedAt >= (uint32_t)st.clock.mtime * 1000UL;
+  if (rev != movedRev) { movedRev = rev; movedAt = now; }
+  if (busy || moveNow >= motionThreshold(msens) || infoUntil > now || !movedAt) movedAt = now;
+  return now - movedAt >= (uint32_t)mtime * 1000UL;
 }
 
 void loop() {
@@ -140,7 +140,7 @@ void loop() {
   else if (setupScreen) scrSetup(tNow, info, G.setupMsg);
   else if (!G.everStaUp && G.joining && !appOn) scrJoining(tNow, info, G.joinSsid, G.joinLow);
   else if (appOn && !st.screen) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
-  else if (appOn && st.app == APP_CLOCK && st.clock.motion && moveAsleep(st, now)) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
+  else if (appOn && st.app == APP_CLOCK && st.clock.motion && moveAsleep(st.rev, st.clock.msens, st.clock.mtime, now, false)) { memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0; }
   else if (appOn && st.app == APP_CLOCK) {
     struct timeval tv; gettimeofday(&tv, nullptr);
     struct tm tmv;
@@ -161,6 +161,10 @@ void loop() {
     scan = st.scan && st.fx;
     bl = st.bright;
     if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
+  } else if (appOn && st.app == APP_COMM && st.comm.motion &&
+             moveAsleep(st.rev, st.comm.msens, st.comm.mtime, now, (st.comm.mode == M_VIDEO || st.comm.mode == M_BOTH) &&
+                        ((G.frameAt && now - G.frameAt < 1500) || (G.colorAt && now - G.colorAt < 1500)))) {
+    memset(FB, IX_BLACK, LCD_W * LCD_H); bl = 0;
   } else if (appOn) {
     String key = String(st.tb) + "|" + st.comm.anim + "|" + st.comm.speed;
     if (key != textKey) { textKey = key; t0Text = now; }

@@ -45,7 +45,7 @@
   .btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
   .btn.big { font-size: 26px; min-height: 52px; }
   .btn.dim { border-color: var(--dim); box-shadow: none; color: var(--dim); text-shadow: none; }
-  #kMotion.dim, #phEdit.dim { opacity: .45; }
+  #kMotion.dim, #cMotion.dim, #phEdit.dim { opacity: .45; }
   .btn.red { border-color: var(--red); color: var(--red); box-shadow: 0 0 6px rgba(255,75,75,.4); text-shadow: none; }
   .btn[disabled] { opacity: .35; pointer-events: none; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
@@ -186,6 +186,16 @@
       <div class="slider"><label>CONTRAST</label><input type="range" id="vCon" min="-50" max="50" step="1"><output id="vConO"></output></div>
       <div class="slider"><label>FRAMES/S</label><input type="range" id="vFps" min="1" max="25" step="1"><output id="vFpsO"></output></div>
       <div class="row"><button class="btn" id="vMirror">MIRROR</button></div>
+    </div>
+
+    <div class="sec" id="cMotionSec">
+      <div class="h">SCREEN ON</div><div class="chips" id="cmotions"></div>
+      <div id="cMotion">
+        <div class="slider"><label>SENSITIVITY</label><input type="range" id="cSens" min="1" max="10" step="1"><output id="cSensO"></output></div>
+        <div class="slider"><label>TIME ON</label><input type="range" id="cTime" min="0" max="13" step="1"><output id="cTimeO"></output></div>
+        <p class="dimt small">SENSITIVITY 1-3: it needs a shake. 4-7: picking it up. 8-10: a light touch or bump.</p>
+      </div>
+      <p class="dimt small" id="cMotNote"></p>
     </div>
 
     </div>
@@ -627,7 +637,7 @@ function drawCards(now) {
 // =====================================================================
 const pv = new Screen($('pv'));
 pv.setPhase('run');
-const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0, ppx: 0, ppy: 0, pzm: 100 };
+const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, motion: 0, msens: 5, mtime: 60, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0, ppx: 0, ppy: 0, pzm: 100 };
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
 const KDEF = { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: '', ptz: '', motion: 0, msens: 5, mtime: 60 };
 const MTIMES = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800];   // TIME ON steps (seconds)
@@ -732,6 +742,19 @@ function kslide(id, key, val, name) {
 kslide.t = {};
 kslide('kSens', 'msens', (v) => v, msensName);
 kslide('kTime', 'mtime', (i) => MTIMES[i], mtimeName);
+// COMM has its own SCREEN ON settings (comm.motion / msens / mtime)
+chips('cmotions', [[0, 'ALWAYS'], [1, 'WHEN MOVED']].map(([v, n]) => ({ v, n })), 'motion', (it) => it.n);
+$('cSens').oninput = () => { const v = Number($('cSens').value); $('cSensO').textContent = msensName(v); change('msens', v, true); };
+$('cTime').oninput = () => { const v = MTIMES[Number($('cTime').value)]; $('cTimeO').textContent = mtimeName(v); change('mtime', v, true); };
+// what WHEN MOVED does on this screen (or why it can't)
+function motionNote(on, mtime) {
+  const d = (ctl && ctl.dev) || {};
+  return !on ? 'WHEN MOVED: the screen stays dark and lights up when it is moved or tapped, then stays on for TIME ON.'
+    : d.kind === 'esp' && d.imu === false ? 'THIS BOARD HAS NO MOTION SENSOR, SO IT STAYS ON. (The 1.47B board has one.)'
+    : d.kind === 'web' ? 'A browser screen can only feel motion on a phone or tablet (it may ask once). Without it, it stays on.'
+    : 'Dark until it is moved or tapped, then on for ' + mtimeName(mtime || 60) + '. Something new from this phone also wakes it.';
+}
+function mtimeIdx(t) { return MTIMES.reduce((b, v, j) => (Math.abs(v - t) < Math.abs(MTIMES[b] - t) ? j : b), 0); }
 $('kTzB').onclick = () => { const z = tzHere(); if (!z.tz) { toast('NO TIME ZONE IN THIS BROWSER'); return; } K.tz = z.tz; K.ptz = z.ptz; touchedK.tz = touchedK.ptz = performance.now(); ctl && ctl.set({ clock: z }); syncUI(); toast('TIME ZONE: ' + z.tz.toUpperCase()); };
 
 function slider(id, key, fmt, toS) {
@@ -751,7 +774,7 @@ let scrTimer = 0;
 function sendScreenSoon(key) { pv.state.bright = S.bright; clearTimeout(scrTimer); scrTimer = setTimeout(() => ctl && ctl.set({ [key]: S[key] }), 150); }
 
 function syncUI() {
-  for (const [el, key] of [['fonts', 'font'], ['anims', 'anim'], ['tpals', 'tpal'], ['vpals', 'vpal'], ['ppals', 'ppal'], ['pfits', 'pfit'], ['bgs', 'bg'], ['aligns', 'align'], ['styles', 'style'], ['vqs', 'vq'], ['looks', 'look']]) {
+  for (const [el, key] of [['fonts', 'font'], ['anims', 'anim'], ['tpals', 'tpal'], ['vpals', 'vpal'], ['ppals', 'ppal'], ['pfits', 'pfit'], ['bgs', 'bg'], ['aligns', 'align'], ['styles', 'style'], ['vqs', 'vq'], ['looks', 'look'], ['cmotions', 'motion']]) {
     for (const b of $(el).children) if (b.dataset.v != null) b.classList.toggle('on', String(C[key]) === b.dataset.v);
   }
   for (const b of $('aligns').querySelectorAll('[data-va]')) b.classList.toggle('on', C.valign === b.dataset.va);
@@ -762,14 +785,13 @@ function syncUI() {
   $('kMotion').classList.toggle('dim', !K.motion); for (const el of $('kMotion').querySelectorAll('input')) el.disabled = !K.motion;
   if (document.activeElement !== $('kSens')) { $('kSens').value = K.msens || 5; $('kSensO').textContent = msensName(K.msens || 5); }
   if (document.activeElement !== $('kTime')) {
-    const t = K.mtime || 60, i = MTIMES.reduce((b, v, j) => (Math.abs(v - t) < Math.abs(MTIMES[b] - t) ? j : b), 0);
-    $('kTime').value = i; $('kTimeO').textContent = mtimeName(t);
+    $('kTime').value = mtimeIdx(K.mtime || 60); $('kTimeO').textContent = mtimeName(K.mtime || 60);
   }
-  const kd = (ctl && ctl.dev) || {};
-  $('kMotNote').textContent = !K.motion ? 'WHEN MOVED: the screen stays dark and lights up when it is moved or tapped, then stays on for TIME ON.'
-    : kd.kind === 'esp' && kd.imu === false ? 'THIS BOARD HAS NO MOTION SENSOR, SO IT STAYS ON. (The 1.47B board has one.)'
-    : kd.kind === 'web' ? 'A browser screen can only feel motion on a phone or tablet (it may ask once). Without it, it stays on.'
-    : 'Dark until it is moved or tapped, then on for ' + mtimeName(K.mtime || 60) + '. A change here also wakes it.';
+  $('kMotNote').textContent = motionNote(K.motion, K.mtime);
+  $('cMotion').classList.toggle('dim', !C.motion); for (const el of $('cMotion').querySelectorAll('input')) el.disabled = !C.motion;
+  if (document.activeElement !== $('cSens')) { $('cSens').value = C.msens || 5; $('cSensO').textContent = msensName(C.msens || 5); }
+  if (document.activeElement !== $('cTime')) { $('cTime').value = mtimeIdx(C.mtime || 60); $('cTimeO').textContent = mtimeName(C.mtime || 60); }
+  $('cMotNote').textContent = motionNote(C.motion, C.mtime);
   $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock'; $('pEta').hidden = curApp !== 'eta';
   for (const b of $('epals').children) b.classList.toggle('on', String(E.pal) === b.dataset.v);
   if (document.activeElement !== $('eText')) $('eText').value = E.text;
