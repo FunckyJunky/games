@@ -98,6 +98,7 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.eta.to = e["to"] | 0;
   o.eta.pal = constrain((int)(e["pal"] | 0), 0, 3);
   o.eta.done = (e["done"] | 0) != 0;
+  o.eta.lang = constrain((int)(e["lang"] | 0), 0, 1);
   strlcpy(o.eta.text, e["text"] | "", sizeof(o.eta.text));
   return true;
 }

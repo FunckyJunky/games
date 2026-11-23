@@ -82,6 +82,20 @@ async function pwHash(pw, salt) {
 }
 const sha = async (s) => b64(new Uint8Array(await crypto.subtle.digest("SHA-256", enc(s))));
 const cleanPw = (v) => (typeof v === "string" ? v.slice(0, 64) : "");
+// an ETA description: ASCII and Cyrillic (the screens have both), a few signs made plain, accents off Latin letters, max 60
+function cleanEtaText(v) {
+  let out = "";
+  for (const ch of String(v == null ? "" : v).normalize("NFC")) {
+    const cp = ch.codePointAt(0);
+    if ((cp >= 32 && cp <= 126) || (cp >= 0x400 && cp <= 0x45f) || cp === 0x490 || cp === 0x491) out += ch;
+    else if (cp === 0x2018 || cp === 0x2019 || cp === 0x2bc) out += "'";
+    else if ([0xab, 0xbb, 0x201c, 0x201d, 0x201e].includes(cp)) out += '"';
+    else if (cp === 0x2013 || cp === 0x2014) out += "-";
+    else if (cp >= 0xc0 && cp <= 0x24f) out += ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?");
+    else out += "?";
+  }
+  return Array.from(out).slice(0, 60).join("");
+}
 const cleanHome = (v) => { const h = String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); return HOME_RE.test(h) ? h : ""; };
 
 export function defaultState() {
@@ -96,7 +110,7 @@ export function defaultState() {
     // CLOCK: the time in big dot-matrix digits. sec 0 = no seconds, 1 = a row of 60 dots, 2 = HH:MM:SS
     clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "" },
     // ETA: when I arrive (unix seconds from / to), a description, a progress bar; done = I'm here
-    eta: { from: 0, to: 0, text: "", pal: 0, done: 0 },
+    eta: { from: 0, to: 0, text: "", pal: 0, done: 0, lang: 0 },
   };
 }
 
@@ -125,7 +139,8 @@ function mergeState(s, p) {
     const lim = Math.floor(Date.now() / 1000) + 8 * 86400;
     if ("from" in e) set(r, "from", int(e.from, 0, lim, r.from));
     if ("to" in e) set(r, "to", int(e.to, 0, lim, r.to));
-    if ("text" in e) set(r, "text", String(e.text == null ? "" : e.text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?").slice(0, 60));
+    if ("text" in e) set(r, "text", cleanEtaText(e.text));
+    if ("lang" in e) set(r, "lang", int(e.lang, 0, 1, r.lang));
     if ("pal" in e) set(r, "pal", int(e.pal, 0, 3, r.pal));
     if ("done" in e) set(r, "done", e.done ? 1 : 0);
   }

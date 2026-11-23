@@ -6,6 +6,8 @@
 #include <time.h>
 
 enum { IX_T = 0, IX_V = 16, IX_U = 32, IX_BLACK = 48, IX_RED = 49, IX_WHITE = 50, IX_PLANE = 255 };   // 255 = colour picture
+// the ETA train scene (real colours): yellow and blue train, glass, rails, dark grey, brick, lamps, platform
+enum { IX_NSY = 51, IX_NSB, IX_GLASS, IX_RAIL, IX_DARK, IX_BRICK, IX_LAMP, IX_PLAT };
 enum Anim : uint8_t { A_STATIC, A_SCROLL, A_RISE, A_TYPE, A_BLINK, A_WAVE, A_GLITCH, A_PULSE };
 enum Mode : uint8_t { M_TEXT, M_VIDEO, M_BOTH, M_PHOTO };
 #define NOFILTER 4                // vpal / ppal 4 = no filter, real colours
@@ -22,7 +24,7 @@ void textFree(TextPic* t);
 
 enum App : uint8_t { APP_NONE, APP_COMM, APP_CLOCK, APP_ETA };
 struct ClockSet { uint8_t pal = 0, bg = 0, h24 = 1, sec = 1, date = 1; };   // sec 0 = none, 1 = row of 60 dots, 2 = HH:MM:SS
-struct EtaSet { uint32_t from = 0, to = 0; uint8_t pal = 0, done = 0; char text[64] = ""; };   // ETA: unix seconds, description
+struct EtaSet { uint32_t from = 0, to = 0; uint8_t pal = 0, done = 0, lang = 0; char text[128] = ""; };   // lang 0 = English, 1 = Ukrainian   // text: UTF-8, up to 60 letters   // ETA: unix seconds, description
 struct CommSet { uint8_t mode = M_TEXT, anim = A_STATIC, speed = 5, tpal = 0, vpal = 0, bg = 0, ppal = NOFILTER; };
 
 struct Media {                   // what there is to show besides the text

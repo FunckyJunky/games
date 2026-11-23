@@ -8,6 +8,9 @@
 
 export const W = 320, H = 172;
 export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
+// the ETA train scene (real colours, whatever the DOS look): yellow and blue train, glass, rails, dark grey, brick, lamps, platform
+export const NSY = 51, NSB = 52, GLASS = 53, RAIL = 54, DARK = 55, BRICK = 56, LAMP = 57, PLAT = 58;
+const SCENE = [[255, 201, 23], [0, 48, 130], [24, 34, 52], [150, 150, 160], [52, 52, 58], [156, 70, 48], [255, 236, 160], [112, 112, 118]];
 export const NOFILTER = 4;                 // vpal / ppal 4 = no filter, real colours
 
 // the four DOS looks, for the camera filter and for the text
@@ -68,17 +71,36 @@ export function fill(fb, x, y, w, h, c) {
   const x0 = Math.max(0, x | 0), y0 = Math.max(0, y | 0), x1 = Math.min(W, (x + w) | 0), y1 = Math.min(H, (y + h) | 0);
   for (let yy = y0; yy < y1; yy++) fb.fill(c, yy * W + x0, yy * W + x1);
 }
-export function textw(s, k = 1) { return s.length * 8 * k; }
+// Cyrillic capitals in the same style (А-Я, then Ё Є І Ї Ґ); small letters use the capitals
+const CYR = new Uint8Array('0c1e33333f3333007f46063e66663f003f66663e66663f007f46060606060f007c666666667f63007f46161e16467f006b6b3e1c3e6b6b001e33301c30331e006363736b676363001c63736b676363006766361e36666700786c6c6c6c66630063777f7f6b6363003333333f333333001c36636363361c007f636363636363003f66663e06060f003c66030303663c003f2d0c0c0c0c1e003333333e30331e00083e6b6b3e081c006363361c1c36630033333333337f60003333333e303078006b6b6b6b6b6b7f006b6b6b6b6bff80000706063e66663e006363636f6b6b6f000606063e66663e001e33303c30331e00334b4b4f4b4b33007e63637e786c670012007f461e467f003c66031f03663c001e0c0c0c0c0c1e0012001e0c0c0c1e00607f060606060f00'.match(/../g).map((h) => parseInt(h, 16)));
+// a character (code point) -> its glyph: 32-126 the 8x8 font, 0x100 + n Cyrillic glyph n, else '?'
+export function glyphOf(cp) {
+  if (cp >= 32 && cp <= 126) return cp;
+  if (cp >= 0x410 && cp <= 0x42f) return 0x100 + cp - 0x410;
+  if (cp >= 0x430 && cp <= 0x44f) return 0x100 + cp - 0x430;
+  switch (cp) {
+    case 0x401: case 0x451: return 0x100 + 32;   // Ё
+    case 0x404: case 0x454: return 0x100 + 33;   // Є
+    case 0x406: case 0x456: return 0x100 + 34;   // І
+    case 0x407: case 0x457: return 0x100 + 35;   // Ї
+    case 0x490: case 0x491: return 0x100 + 36;   // Ґ
+    case 0x2018: case 0x2019: case 0x2bc: return 39;
+    case 0xab: case 0xbb: case 0x201c: case 0x201d: case 0x201e: return 34;
+    case 0x2013: case 0x2014: return 45;
+  }
+  return 63;
+}
+export function textw(s, k = 1) { return Array.from(String(s)).length * 8 * k; }
 export function text8(fb, s, x, y, k, c) {
-  for (let i = 0; i < s.length; i++) {
-    let ch = s.charCodeAt(i);
-    if (ch < 32 || ch > 126) ch = 63;
-    const g = (ch - 32) * 8;
+  let i = 0;
+  for (const ch of String(s)) {
+    const g = glyphOf(ch.codePointAt(0));
     for (let r = 0; r < 8; r++) {
-      const bits = FONT[g + r];
+      const bits = g >= 0x100 ? CYR[(g - 0x100) * 8 + r] : FONT[(g - 32) * 8 + r];
       if (!bits) continue;
       for (let b = 0; b < 8; b++) if (bits & (1 << b)) fill(fb, x + (i * 8 + b) * k, y + r * k, k, k, c);
     }
+    i++;
   }
 }
 export function center8(fb, s, y, k, c) { text8(fb, s, ((W - textw(s, k)) / 2) | 0, y, k, c); }
@@ -267,6 +289,7 @@ export class Screen {
     this.lastPal = '';
     this.setLut(U, uiRamp());
     this.lutSet(BLACK, [0, 0, 0]); this.lutSet(RED, [255, 40, 40]); this.lutSet(WHITE, [255, 255, 255]);
+    SCENE.forEach((c, i) => this.lutSet(NSY + i, c));
   }
   lutSet(i, c) {
     const r = Math.round(c[0]), g = Math.round(c[1]), b = Math.round(c[2]);
@@ -424,49 +447,102 @@ export function wrapWords(s, max) {
   return out;
 }
 const hm = (t) => (t.h < 10 ? '0' : '') + t.h + ':' + (t.m < 10 ? '0' : '') + t.m;
-// e = {from, to (unix seconds), text, pal, done}; now in ms; toT / fromT = local {h, m} of to / from
+// a description about a train (English, Dutch, Ukrainian, Russian) -> the progress bar is a train going to the station
+export const TRAIN_WORDS = ['TRAIN', 'TREIN', 'SPRINTER', 'INTERCITY', 'ПОТЯГ', 'ПОТЯЗ', 'ПОЇЗД', 'ПОЕЗД', 'ЕЛЕКТРИЧК', 'ЭЛЕКТРИЧК'];
+export function isTrain(text) { const u = String(text || '').toUpperCase(); return TRAIN_WORDS.some((w) => u.includes(w)); }
+// one car of the train, x = its left end; the cab (front) car has a sloped nose and a pantograph
+function trainCar(fb, x, y, len, cab, wheel) {
+  fill(fb, x + 1, y + 8, len - 2, 1, DARK);                       // roof
+  fill(fb, x, y + 9, len, 12, NSY);                               // yellow body
+  for (let wx = x + 3; wx + 5 <= x + len - (cab ? 10 : 3); wx += 7) fill(fb, wx, y + 11, 5, 4, GLASS);
+  fill(fb, x, y + 17, len, 2, NSB);                               // blue band
+  const door = x + (cab ? 12 : (len >> 1) - 2);
+  fill(fb, door, y + 11, 4, 9, NSB);                              // blue door
+  fill(fb, door + 1, y + 12, 2, 3, GLASS);
+  fill(fb, x + 2, y + 21, len - 4, 1, DARK);                      // under the floor
+  for (const wx of [x + 4, x + 9, x + len - 10, x + len - 5]) {   // wheels
+    fill(fb, wx - 1, y + 21, 3, 3, BLACK);
+    fill(fb, wx - 1 + wheel, y + 22, 1, 1, RAIL);
+  }
+  if (cab) {
+    for (let r = 0; r < 4; r++) fill(fb, x + len - 4 + r, y + 9 + r, 4 - r, 1, T);   // sloped nose
+    fill(fb, x + len - 9, y + 11, 5, 4, GLASS);                   // windscreen
+    fill(fb, x + len - 3, y + 15, 2, 2, LAMP);                    // headlight
+    fill(fb, x + 10, y + 7, 8, 1, RAIL);                          // pantograph
+    fill(fb, x + 12, y + 6, 1, 1, RAIL); fill(fb, x + 13, y + 5, 1, 1, RAIL); fill(fb, x + 14, y + 4, 1, 1, RAIL);
+    fill(fb, x + 13, y + 3, 1, 1, RAIL); fill(fb, x + 12, y + 2, 1, 1, RAIL);
+    fill(fb, x + 9, y + 1, 7, 1, RAIL);
+  }
+}
+// rails, a station on the right, and the train: at p = 0 on the left, at p = 1 at the station (28 pixels high)
+export function drawTrainScene(fb, y, p, wheel) {
+  const sx = 282;
+  fill(fb, 262, y + 21, W - 262, 2, PLAT);                        // platform
+  fill(fb, sx, y + 7, 34, 14, BRICK);                             // the station
+  fill(fb, sx - 2, y + 5, 38, 2, DARK); fill(fb, sx + 2, y + 3, 30, 2, DARK); fill(fb, sx + 6, y + 1, 22, 2, DARK);
+  fill(fb, sx + 4, y + 11, 6, 5, LAMP); fill(fb, sx + 24, y + 11, 6, 5, LAMP);
+  fill(fb, sx + 14, y + 12, 6, 9, NSB);
+  fill(fb, sx + 11, y + 7, 12, 3, NSB); fill(fb, sx + 13, y + 8, 8, 1, WHITE);   // the station's sign
+  fill(fb, 0, y + 24, W, 1, RAIL);                                // rails and sleepers
+  for (let x = 2; x < W; x += 6) fill(fb, x, y + 25, 3, 2, DARK);
+  const L = 66, span = sx - 8 - L, front = 4 + L + Math.floor(p * span);
+  trainCar(fb, front - L, y, 30, false, wheel);
+  fill(fb, front - L + 30, y + 15, 2, 2, DARK);                   // the coupling
+  trainCar(fb, front - 34, y, 34, true, wheel);
+}
+// the words on the ETA screen: 0 = English, 1 = Ukrainian (the same as ETA_TXT in screen.cpp)
+export const ETA_TXT = [
+  ['ETA', 'ARRIVES ', 'ARRIVED ', 'ARRIVED', 'ON MY WAY SINCE ', 'ON MY WAY', 'ON THE WAY SINCE ', 'ARRIVING NOW', 'LATE', 'NO ARRIVAL SET', 'WAITING FOR THE TIME'],
+  ['ПРИЇЗД', 'БУДУ О ', 'НА МІСЦІ О ', 'НА МІСЦІ', 'В ДОРОЗІ З ', 'В ДОРОЗІ', 'В ДОРОЗІ З ', 'ОСЬ-ОСЬ БУДУ', 'ЗАПІЗНЮЮСЬ', 'ЧАС НЕ ЗАДАНО', 'ЧЕКАЮ НА ЧАС'],
+];
+// e = {from, to (unix seconds), text, pal, done, lang}; now in ms; toT / fromT = local {h, m} of to / from
 export function drawEta(fb, e, now, known, toT, fromT, fx) {
   fb.fill(T);
   const ms = ((now % 1000) + 1000) % 1000, blink = !fx || ms < 500;
   fill(fb, 0, 0, W, 12, T + 12);
-  text8(fb, 'ETA', 4, 2, 1, T + 0);
-  const top = !e.to || !known || !toT ? '' : (e.done ? 'ARRIVED ' : 'ARRIVES ') + hm(toT);
+  const L = ETA_TXT[e.lang === 1 ? 1 : 0];
+  text8(fb, L[0], 4, 2, 1, T + 0);
+  const top = !e.to || !known || !toT ? '' : (e.done ? L[2] : L[1]) + hm(toT);
   if (top) text8(fb, top, W - 4 - textw(top, 1), 2, 1, T + 0);
   let k = 2, lines = wrapWords(e.text, 19);
   if (lines.length > 2) { k = 1; lines = wrapWords(e.text, 38).slice(0, 3); }
   const lh = k === 2 ? 18 : 11, descH = lines.length * lh, gap = lines.length ? 6 : 0;
-  const total = descH + gap + 54 + 10 + 12 + 12 + 8;
+  const train = isTrain(e.text), barH = train ? 28 : 12;
+  const total = descH + gap + 54 + 10 + barH + 12 + 8;
   let y = 12 + Math.max(4, Math.round((160 - total) / 2));
   lines.forEach((l, i) => text8(fb, l, ((W - textw(l, k)) / 2) | 0, y + i * lh, k, T + 15));
   y += descH + gap;
   // the big digits (or ARRIVED)
-  let str = '--:--', colon = false, bottom = 'NO ARRIVAL SET', p = 0, running = false;
-  if (e.to && !known) bottom = 'WAITING FOR THE TIME';
-  else if (e.to && e.done) { str = ''; p = 1; bottom = fromT ? 'ON THE WAY SINCE ' + hm(fromT) : ''; }
+  let str = '--:--', colon = false, bottom = L[9], p = 0, running = false;
+  if (e.to && !known) bottom = L[10];
+  else if (e.to && e.done) { str = ''; p = 1; bottom = fromT ? L[6] + hm(fromT) : ''; }
   else if (e.to) {
     const span = (e.to - e.from) * 1000, left = e.to * 1000 - now;
     p = span > 0 ? Math.min(1, Math.max(0, (now - e.from * 1000) / span)) : 1;
     const pad = (v) => (v < 10 ? '0' : '') + v;
     const fmt = (secs) => { const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s); };
-    if (left > 0) { str = fmt(Math.ceil(left / 1000)); colon = true; running = true; bottom = fromT ? 'ON MY WAY SINCE ' + hm(fromT) : 'ON MY WAY'; }
+    if (left > 0) { str = fmt(Math.ceil(left / 1000)); colon = true; running = true; bottom = fromT ? L[4] + hm(fromT) : L[5]; }
     else {
       const late = Math.floor(-left / 1000);
-      if (late < 60) { str = '00:00'; bottom = 'ARRIVING NOW'; } else { str = '+' + fmt(late); bottom = 'LATE'; }
+      if (late < 60) { str = '00:00'; bottom = L[7]; } else { str = '+' + fmt(late); bottom = L[8]; }
     }
   }
   if (str) {
     let cols = -1;
     for (const ch of str) cols += (ch === ':' ? 1 : 5) + 1;
     matrix(fb, str, Math.round((W - (cols * 8 - 2)) / 2), y, 8, 6, T + 15, T + 2, colon ? blink : true);
-  } else text8(fb, 'ARRIVED', ((W - textw('ARRIVED', 4)) / 2) | 0, y + 11, 4, T + 15);
+  } else text8(fb, L[3], ((W - textw(L[3], 4)) / 2) | 0, y + 11, 4, T + 15);
   y += 54 + 10;
-  // the progress bar: 50 blocks
-  const filled = Math.floor(p * 50);
-  for (let i = 0; i < 50; i++) {
-    const c = i < filled ? T + 15 : i === filled && running && fx ? (ms < 500 ? T + 15 : T + 6) : T + 2;
-    fill(fb, 10 + i * 6, y, 5, 12, c);
+  // the progress bar: 50 blocks, or a train on its way to the station
+  if (train) drawTrainScene(fb, y, e.to ? p : 0, running && fx ? Math.floor(ms / 250) % 2 : 0);
+  else {
+    const filled = Math.floor(p * 50);
+    for (let i = 0; i < 50; i++) {
+      const c = i < filled ? T + 15 : i === filled && running && fx ? (ms < 500 ? T + 15 : T + 6) : T + 2;
+      fill(fb, 10 + i * 6, y, 5, 12, c);
+    }
   }
-  y += 12 + 12;
+  y += barH + 12;
   if (bottom) text8(fb, bottom, 10, y, 1, T + 11);
   if (e.to && known) { const pc = Math.floor(p * 100) + '%'; text8(fb, pc, W - 10 - textw(pc, 1), y, 1, T + 11); }
 }

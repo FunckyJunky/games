@@ -621,7 +621,12 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
 - **ETA**, the third web app: "when I'll be there". Pick IN 5 MIN ... 2 H or AT a time, a description (8x8 DOS
   letters, wrapped over 1-3 lines), +5 / -5 MIN, I'M HERE, CLEAR. The screen shows the description, a big
   dot-matrix countdown (H:MM:SS / MM:SS, then ARRIVING NOW / +MM:SS LATE), a 50-block progress bar and the times.
-  State `eta {from, to (unix seconds), text, pal, done}`; the screen counts by itself. drawEta() / scrEta() match.
+  State `eta {from, to (unix seconds), text, pal, done, lang}`; the screen counts by itself. drawEta() / scrEta() match.
+  From 1.6: Cyrillic letters (А-Я plus Ukrainian Є І Ї Ґ and Ё; small letters show as capitals) in an 8x8 table
+  next to the DOS font (CYR in render.js = CYR8 in screen.cpp, made by tools/hf-cyr.py); text goes as UTF-8.
+  `lang` 0 = English, 1 = Ukrainian words on the screen (ETA_TXT) and on the phone's ETA panel.
+  A train word in the description (TRAIN, TREIN, SPRINTER, INTERCITY, ПОТЯГ, ПОТЯЗІ, ПОЇЗД, ЕЛЕКТРИЧКА; TRAIN_WORDS)
+  turns the bar into a yellow-and-blue Dutch train riding to a station (drawTrainScene / trainScene).
 - The phone draws the letters (any web font) into a picture (HFT1: 16 grey levels, run-length coded, plus letter
   boxes for TYPE); the screen only moves it around, so it keeps going without the phone, and after a restart.
 - Server: Durable Object `HomeFront` (src/homefront.js, one instance "main"). WebSockets:

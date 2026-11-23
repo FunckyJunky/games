@@ -186,15 +186,16 @@
     </div>
 
     <div class="sec" id="pEta" hidden>
-      <div class="h">I ARRIVE IN <span id="eWhen" class="small"></span></div>
+      <div class="h"><span data-t="in">I ARRIVE IN</span> <span id="eWhen" class="small"></span></div>
       <div class="chips" id="eIns"></div>
-      <div class="row"><span class="dimt" style="align-self:center;flex:none">OR AT</span><input type="time" id="eAt" style="flex:1;min-width:0"><button class="btn" id="eAtB">SET</button></div>
-      <div class="h">DESCRIPTION <span id="eCount" class="small"></span></div>
+      <div class="row"><span class="dimt" style="align-self:center;flex:none" data-t="at">OR AT</span><input type="time" id="eAt" style="flex:1;min-width:0"><button class="btn" id="eAtB" data-t="set">SET</button></div>
+      <div class="h"><span data-t="desc">DESCRIPTION</span> <span id="eCount" class="small"></span></div>
       <input type="text" id="eText" maxlength="60" placeholder="ON THE TRAIN" style="text-transform:uppercase">
       <div class="row"><button class="btn" id="eMinus">-5 MIN</button><button class="btn" id="ePlus">+5 MIN</button></div>
-      <div class="row"><button class="btn big" id="eDone">I'M HERE</button><button class="btn red" id="eClear">CLEAR</button></div>
-      <div class="h">COLOUR</div><div class="chips" id="epals"></div>
-      <p class="dimt small">The screen counts down by itself, also when this page is closed. Letters A-Z, 0-9 and signs.</p>
+      <div class="row"><button class="btn big" id="eDone" data-t="here">I'M HERE</button><button class="btn red" id="eClear" data-t="clear">CLEAR</button></div>
+      <div class="h" data-t="lang">LANGUAGE ON THE SCREEN</div><div class="chips" id="elangs"></div>
+      <div class="h" data-t="colour">COLOUR</div><div class="chips" id="epals"></div>
+      <p class="dimt small" data-t="note">The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station.</p>
     </div>
 
     <div class="sec" id="pClock" hidden>
@@ -616,7 +617,7 @@ const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, t
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
 const KDEF = { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: '', ptz: '' };
 let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
-const EDEF = { from: 0, to: 0, text: '', pal: 0, done: 0 };
+const EDEF = { from: 0, to: 0, text: '', pal: 0, done: 0, lang: 0 };
 let E = { ...EDEF };                                 // the ETA
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
@@ -647,9 +648,31 @@ chips('looks', [['smooth', 'SMOOTH 16 SHADES'], ['dither', 'DITHER 4 SHADES']].m
 
 // ETA: when I arrive
 const touchedE = {}, nowS = () => Math.floor(Date.now() / 1000);
-const etaText = (v) => String(v || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '?').slice(0, 60);
+// the description: capitals; Latin and Cyrillic stay, a few signs made plain, accents off Latin letters, the rest '?' (as on the server)
+function etaText(v) {
+  let out = '';
+  for (const ch of String(v || '').toUpperCase().normalize('NFC')) {
+    const cp = ch.codePointAt(0);
+    if ((cp >= 32 && cp <= 126) || (cp >= 0x400 && cp <= 0x45f) || cp === 0x490 || cp === 0x491) out += ch;
+    else if (cp === 0x2018 || cp === 0x2019 || cp === 0x2bc) out += "'";
+    else if ([0xab, 0xbb, 0x201c, 0x201d, 0x201e].includes(cp)) out += '"';
+    else if (cp === 0x2013 || cp === 0x2014) out += '-';
+    else if (cp >= 0xc0 && cp <= 0x24f) out += ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '?');
+    else out += '?';
+  }
+  return Array.from(out).slice(0, 60).join('');
+}
+// the ETA controls in English or Ukrainian (follows the screen's language)
+const ETA_UI = {
+  in: ['I ARRIVE IN', 'БУДУ ЧЕРЕЗ'], at: ['OR AT', 'АБО О'], set: ['SET', 'ОК'], desc: ['DESCRIPTION', 'ОПИС'], here: ["I'M HERE", 'Я НА МІСЦІ'],
+  clear: ['CLEAR', 'ОЧИСТИТИ'], lang: ['LANGUAGE ON THE SCREEN', 'МОВА НА ЕКРАНІ'], colour: ['COLOUR', 'КОЛІР'],
+  note: ['The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station.',
+    'Екран рахує сам, навіть коли ця сторінка закрита. Латиниця і кирилиця (також українські літери), цифри і знаки. Потяг в описі (ПОТЯГ, ПОТЯЗІ, ПОЇЗД, TRAIN, TREIN) — і замість смужки потяг їде до станції.'],
+  min: ['MIN', 'ХВ'], h: ['H', 'ГОД'], arrives: ['ARRIVES', 'БУДУ О'], arrived: ['ARRIVED', 'НА МІСЦІ О'], notset: ['NOT SET', 'НЕ ЗАДАНО'], ph: ['ON THE TRAIN', 'У ПОТЯЗІ'],
+};
+const eui = (k) => ETA_UI[k][E.lang === 1 ? 1 : 0];
 function eset(p) { Object.assign(E, p); for (const k in p) touchedE[k] = performance.now(); syncUI(); if (!ctl || !ctl.set({ eta: p })) toast('NOT CONNECTED: TRY AGAIN'); }
-$('eIns').innerHTML = [5, 10, 15, 20, 30, 45, 60, 90, 120].map((m) => `<button class="chip" data-m="${m}">${m < 60 ? m + ' MIN' : m / 60 + ' H'}</button>`).join('');
+$('eIns').innerHTML = [5, 10, 15, 20, 30, 45, 60, 90, 120].map((m) => `<button class="chip" data-m="${m}"></button>`).join('');
 for (const b of $('eIns').children) b.onclick = () => { const t = nowS(); eset({ from: t, to: t + Number(b.dataset.m) * 60, done: 0, text: etaText($('eText').value) }); };
 $('eAtB').onclick = () => {
   const v = $('eAt').value; if (!/^\d\d:\d\d$/.test(v)) { toast('PICK A TIME FIRST'); return; }
@@ -663,6 +686,8 @@ $('eDone').onclick = () => { if (!E.to) { toast('SET A TIME FIRST'); return; } e
 $('eClear').onclick = () => eset({ from: 0, to: 0, done: 0 });
 let eTextT = 0;
 $('eText').addEventListener('input', () => { E.text = etaText($('eText').value); touchedE.text = performance.now(); syncUI(); clearTimeout(eTextT); eTextT = setTimeout(() => eset({ text: E.text }), 400); });
+$('elangs').innerHTML = [[0, 'ENGLISH'], [1, 'УКРАЇНСЬКА']].map(([v, n]) => `<button class="chip" data-v="${v}">${n}</button>`).join('');
+for (const b of $('elangs').children) b.onclick = () => eset({ lang: Number(b.dataset.v) });
 $('epals').innerHTML = PALS.map((p, i) => `<button class="chip" data-v="${i}"><i class="sw" style="background:${swatch(p)}"></i>${p.name}</button>`).join('');
 for (const b of $('epals').children) b.onclick = () => eset({ pal: Number(b.dataset.v) });
 
@@ -709,7 +734,12 @@ function syncUI() {
   if (document.activeElement !== $('eText')) $('eText').value = E.text;
   $('eCount').textContent = E.text ? E.text.length + '/60' : '';
   const hhmm = (sec) => new Date(sec * 1000).toTimeString().slice(0, 5);
-  $('eWhen').textContent = !E.to ? '· NOT SET' : E.done ? '· ARRIVED ' + hhmm(E.to) : '· ARRIVES ' + hhmm(E.to);
+  $('eWhen').textContent = '· ' + (!E.to ? eui('notset') : (E.done ? eui('arrived') : eui('arrives')) + ' ' + hhmm(E.to));
+  for (const el of $('pEta').querySelectorAll('[data-t]')) el.textContent = eui(el.dataset.t);
+  for (const b of $('eIns').children) { const m = Number(b.dataset.m); b.textContent = m < 60 ? m + ' ' + eui('min') : m / 60 + ' ' + eui('h'); }
+  $('eMinus').textContent = '-5 ' + eui('min'); $('ePlus').textContent = '+5 ' + eui('min');
+  $('eText').placeholder = eui('ph');
+  for (const b of $('elangs').children) b.classList.toggle('on', String(E.lang === 1 ? 1 : 0) === b.dataset.v);
   $('eDone').disabled = !E.to || !!E.done;
   $('capsB').classList.toggle('on', !!C.caps);
   const set = (id, v, f) => { $(id).value = v; $(id + 'O').textContent = f(v); };
