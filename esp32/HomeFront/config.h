@@ -2,7 +2,7 @@
 // Board: Waveshare / diymore ESP32-S3-LCD-1.47 (or 1.47B), 172x320 ST7789, used sideways (320x172).
 #pragma once
 
-#define HF_VERSION      "1.4"
+#define HF_VERSION      "1.4.1"
 
 // error.blue: the device's web app lives at https://error.blue/thuisfront/dev, its connection is this WebSocket
 #define HF_HOST         "error.blue"
