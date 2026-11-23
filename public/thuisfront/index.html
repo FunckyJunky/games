@@ -102,6 +102,7 @@
   #cTop .bar { position: static; }
   #pvBox { background: var(--bg); padding: 10px 12px 6px; }
   @media (max-height: 640px) { #pv { width: auto; height: 34dvh; margin: 0 auto; } }
+  #pv.move { cursor: grab; outline: 2px dashed var(--dim); outline-offset: 2px; }
   #pv { width: 100%; aspect-ratio: 320 / 172; display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
     border: 3px solid #161616; box-shadow: 0 0 0 2px #2a2a2a, 0 0 18px rgba(0,0,0,.8); border-radius: 4px; }
   #pvInfo { display: flex; justify-content: space-between; font-size: 17px; color: var(--dim); text-shadow: none; padding-top: 4px; }
@@ -154,6 +155,9 @@
         <div class="h">SHAPE</div><div class="chips" id="pfits"></div>
         <div class="slider"><label>BRIGHTNESS</label><input type="range" id="pBri" min="-50" max="50" step="1"><output id="pBriO"></output></div>
         <div class="slider"><label>CONTRAST</label><input type="range" id="pCon" min="-50" max="50" step="1"><output id="pConO"></output></div>
+        <div class="slider"><label>ZOOM</label><input type="range" id="pZoom" min="100" max="500" step="5"><output id="pZoomO"></output></div>
+        <div class="row"><button class="btn" id="pCentre">CENTRE</button></div>
+        <p class="dimt small">Drag the preview to move the photo, pinch it (or use ZOOM) to make it bigger.</p>
       </div>
     </div>
 
@@ -615,7 +619,7 @@ function drawCards(now) {
 // =====================================================================
 const pv = new Screen($('pv'));
 pv.setPhase('run');
-const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0 };
+const DEF = { mode: 'text', anim: 'static', speed: 5, tpal: 0, vpal: 0, bg: 0, text: '', font: 'vt323', size: 0, align: 'c', valign: 'm', style: 'plain', caps: 0, vq: 'hi', look: 'smooth', vbri: 0, vcon: 0, mirror: 1, fps: 12, ppal: NOFILTER, pfit: 'fill', pbri: 0, pcon: 0, ppx: 0, ppy: 0, pzm: 100 };
 let C = { ...DEF }, S = { app: 'comm', screen: 1, bright: 80, scan: 0, fx: 1 };
 const KDEF = { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: '', ptz: '' };
 let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
@@ -718,6 +722,7 @@ slider('vCon', 'vcon', (v) => (v > 0 ? '+' : '') + v);
 slider('vFps', 'fps', (v) => v);
 slider('pBri', 'pbri', (v) => (v > 0 ? '+' : '') + v);
 slider('pCon', 'pcon', (v) => (v > 0 ? '+' : '') + v);
+slider('pZoom', 'pzm', (v) => (v / 100).toFixed(2) + 'x');
 slider('sBri', 'bright', (v) => v + '%', true);
 let scrTimer = 0;
 function sendScreenSoon(key) { pv.state.bright = S.bright; clearTimeout(scrTimer); scrTimer = setTimeout(() => ctl && ctl.set({ [key]: S[key] }), 150); }
@@ -748,6 +753,9 @@ function syncUI() {
   set('tSize', C.size, (v) => (v ? v + 'px' : 'FIT')); set('tSpeed', C.speed, (v) => v);
   set('vBri', C.vbri, (v) => (v > 0 ? '+' : '') + v); set('vCon', C.vcon, (v) => (v > 0 ? '+' : '') + v); set('vFps', C.fps, (v) => v);
   set('pBri', C.pbri, (v) => (v > 0 ? '+' : '') + v); set('pCon', C.pcon, (v) => (v > 0 ? '+' : '') + v);
+  set('pZoom', C.pzm, (v) => (v / 100).toFixed(2) + 'x');
+  const mv = photoMovable(); $('pv').classList.toggle('move', mv); $('pv').style.touchAction = mv ? 'none' : '';
+  $('pvL').textContent = mv ? 'PREVIEW · DRAG / PINCH' : 'PREVIEW';
   set('sBri', S.bright, (v) => v + '%');
   if (document.activeElement !== $('tIn')) $('tIn').value = C.text;
   $('tCount').textContent = C.text.length ? C.text.length + '/2000' : '';
@@ -822,7 +830,7 @@ for (const b of $('modeTabs').children) b.onclick = () => {
 };
 
 // --- the photo: picked here, made 320x172 here (shape, brightness, contrast), the screen puts the filter on ---
-const PHOTO_KEYS = ['pfit', 'pbri', 'pcon'];
+const PHOTO_KEYS = ['pfit', 'pbri', 'pcon', 'pzm'], PHOTO_ALL = [...PHOTO_KEYS, 'ppx', 'ppy'];
 const ph = { src: null, anim: null, frames: 0, name: '', have: false, unsent: false, busy: false, timer: 0, again: false, cv: document.createElement('canvas'), sentLen: 0, sentAt: 0 };
 ph.cv.width = W; ph.cv.height = H;
 $('phPick').onclick = () => $('phFile').click();
@@ -851,6 +859,7 @@ $('phFile').onchange = async () => {
       if (k < 1) { const nb = await createImageBitmap(bm, { resizeWidth: Math.round(bm.width * k), resizeHeight: Math.round(bm.height * k), resizeQuality: 'high' }); bm.close(); bm = nb; }
     }
     photoDrop();
+    C.ppx = 0; C.ppy = 0; C.pzm = 100;                           // a new picture starts centred, not zoomed
     if (anim) { ph.anim = anim; ph.src = anim[0].bm; ph.frames = anim.length; ph.name = 'GIF · ' + anim.length + ' FRAMES'; }
     else { ph.src = bm; ph.frames = 1; ph.name = name.slice(0, 24); }
     if (C.mode !== 'photo') { C.mode = 'photo'; if (cam.on) camStop(); }
@@ -863,13 +872,75 @@ function photoDrop() {                                           // forget the p
   ph.anim = null; ph.src = null;
 }
 $('phSend').onclick = () => sendPhoto();
+// --- move the photo / GIF by touching the preview: one finger drags, two fingers pinch (and drag); mouse wheel zooms ---
+function photoMovable() { return curApp === 'comm' && C.mode === 'photo' && !!ph.src; }
+const drag = { pts: new Map(), m0: null, o0: null, z0: 100, d0: 0, raf: 0 };
+function pvPoint(e) {                                          // a finger on the preview -> screen pixels from the middle
+  const el = $('pv'), r = el.getBoundingClientRect(), k = W / el.clientWidth;
+  return { x: (e.clientX - r.left - el.clientLeft) * k - W / 2, y: (e.clientY - r.top - el.clientTop) * k - H / 2 };
+}
+function dragFrom() {                                          // remember where the fingers and the picture are now
+  const ps = [...drag.pts.values()];
+  drag.m0 = { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length };
+  drag.d0 = ps.length > 1 ? Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) : 0;
+  drag.o0 = { x: C.ppx || 0, y: C.ppy || 0 }; drag.z0 = C.pzm || 100;
+}
+// put the picture at middle m with zoom z, keeping the spot that was under the fingers under them
+function photoPlace(m, z) {
+  z = Math.max(100, Math.min(500, Math.round(z)));
+  const f = z / drag.z0;
+  C.pzm = z;
+  C.ppx = m.x - (drag.m0.x - drag.o0.x) * f; C.ppy = m.y - (drag.m0.y - drag.o0.y) * f;
+  const { dw, dh } = photoBox(), mx = (W + dw) / 2 - 12, my = (H + dh) / 2 - 12;   // keep a bit of it on the screen
+  C.ppx = Math.round(Math.max(-mx, Math.min(mx, C.ppx))); C.ppy = Math.round(Math.max(-my, Math.min(my, C.ppy)));
+  for (const k of ['ppx', 'ppy', 'pzm']) touched[k] = performance.now();
+  ph.unsent = true;
+  if (!drag.raf) drag.raf = requestAnimationFrame(() => {      // while moving: only the first frame, quickly
+    drag.raf = 0;
+    pv.setPhoto({ w: W, h: H, data: photoPixels().data });
+    $('pZoom').value = C.pzm; $('pZoomO').textContent = (C.pzm / 100).toFixed(2) + 'x';
+  });
+}
+function photoMoved() { clearTimeout(ph.timer); ph.timer = 0; remakePhoto(0); }   // the whole picture (every GIF frame), sent when LIVE
+const pvEl = $('pv');
+pvEl.addEventListener('pointerdown', (e) => {
+  if (!photoMovable()) { if (curApp === 'comm' && C.mode === 'photo' && ph.have) toast('PICK THE PHOTO AGAIN TO MOVE IT'); return; }
+  e.preventDefault();
+  try { pvEl.setPointerCapture(e.pointerId); } catch { /* fine */ }
+  drag.pts.set(e.pointerId, pvPoint(e)); dragFrom();
+});
+pvEl.addEventListener('pointermove', (e) => {
+  if (!drag.pts.has(e.pointerId)) return;
+  e.preventDefault();
+  drag.pts.set(e.pointerId, pvPoint(e));
+  const ps = [...drag.pts.values()], m = { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length };
+  const z = ps.length > 1 && drag.d0 > 4 ? drag.z0 * Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) / drag.d0 : drag.z0;
+  photoPlace(m, z);
+});
+const dragEnd = (e) => {
+  if (!drag.pts.delete(e.pointerId)) return;
+  if (drag.pts.size) dragFrom(); else photoMoved();
+};
+pvEl.addEventListener('pointerup', dragEnd); pvEl.addEventListener('pointercancel', dragEnd);
+pvEl.addEventListener('wheel', (e) => {
+  if (!photoMovable()) return;
+  e.preventDefault();
+  drag.pts.clear(); drag.m0 = pvPoint(e); drag.o0 = { x: C.ppx || 0, y: C.ppy || 0 }; drag.z0 = C.pzm || 100;
+  photoPlace(drag.m0, drag.z0 * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+  clearTimeout(drag.wt); drag.wt = setTimeout(photoMoved, 350);
+}, { passive: false });
+$('pCentre').onclick = () => { C.ppx = 0; C.ppy = 0; C.pzm = 100; for (const k of ['ppx', 'ppy', 'pzm']) touched[k] = performance.now(); syncUI(); remakePhoto(60); };
 // draw a picture into the 320x172 canvas: fill (cut the edges) or whole (black bars), then brightness and contrast
+// its size on the screen: SHAPE (fill / whole) times ZOOM; ppx, ppy = where its middle is, from the screen's middle
+function photoBox(s = ph.src) {
+  const sw = s.width, sh = s.height, k = (C.pfit === 'fit' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh)) * (C.pzm || 100) / 100;
+  return { dw: sw * k, dh: sh * k };
+}
 function photoPixels(s = ph.src) {
-  const c = ph.cv.getContext('2d', { willReadFrequently: true }), sw = s.width, sh = s.height;
+  const c = ph.cv.getContext('2d', { willReadFrequently: true }), { dw, dh } = photoBox(s);
   c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
-  const k = C.pfit === 'fit' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh), dw = sw * k, dh = sh * k;
   c.imageSmoothingQuality = 'high';
-  c.drawImage(s, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  c.drawImage(s, (W - dw) / 2 + (C.ppx || 0), (H - dh) / 2 + (C.ppy || 0), dw, dh);
   const id = c.getImageData(0, 0, W, H);
   if (C.pbri || C.pcon) {
     const d = id.data, con = 1 + C.pcon / 50, bri = C.pbri * 2.2;
@@ -918,7 +989,7 @@ async function sendPhoto() {
       u8 = new Uint8Array(4 + j.length); u8.set([72, 70, 80, 49]); u8.set(j, 4);   // "HFP1" + JPEG
     }
     ph.sentLen = u8.length; ph.sentAt = Date.now();
-    if (ctl.send(u8) && ctl.set({ comm: { mode: 'photo', ppal: C.ppal, pfit: C.pfit, pbri: C.pbri, pcon: C.pcon } })) { ph.unsent = false; ph.have = true; }
+    if (ctl.send(u8) && ctl.set({ comm: { mode: 'photo', ppal: C.ppal, pfit: C.pfit, pbri: C.pbri, pcon: C.pcon, ppx: C.ppx, ppy: C.ppy, pzm: C.pzm } })) { ph.unsent = false; ph.have = true; }
     else toast('NOT CONNECTED: TRY AGAIN');
   } catch (e) { toast(e && e.message === 'too big' ? 'THAT GIF IS TOO BIG' : 'PHOTO: SOMETHING WENT WRONG'); }
   ph.busy = false;
@@ -978,7 +1049,8 @@ function commState(s) {
     // someone else (another phone) changed it: follow, but don't fight the text box you're typing in,
     // text settings that are not sent yet, or something changed here a moment ago (its echo is still on the way)
     const typing = document.activeElement === $('tIn'), now = performance.now();
-    const mine = (k) => (typing && k === 'text') || (TEXT_KEYS.includes(k) && (unsent || textBusy || textAgain)) || now - (touched[k] || -1e9) < 3000;
+    const mine = (k) => (typing && k === 'text') || (TEXT_KEYS.includes(k) && (unsent || textBusy || textAgain))
+      || (PHOTO_ALL.includes(k) && (ph.unsent || ph.busy || ph.again)) || now - (touched[k] || -1e9) < 3000;
     for (const k of Object.keys(DEF)) if (!mine(k) && s.comm && k in s.comm && s.comm[k] !== C[k]) {
       C[k] = s.comm[k];
       if (TEXT_KEYS.includes(k)) makeText(C).then((t) => { pv.setText(t); lastBlob = encodeText(t); });

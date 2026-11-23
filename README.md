@@ -637,6 +637,9 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   The protocol is at the top of src/homefront.js. Video frames (HFV1 4-bit grey, or HFV2 a colour JPEG for NONE)
   go to a screen only after it said it showed the last one, so a slow screen gets fewer frames instead of a delay.
   A photo (HFP1) is a 320x172 JPEG made on the phone; the screen puts the filter on itself and keeps it in flash.
+  Position: in PHOTO mode with a picked photo / GIF, drag the phone's preview to move it, pinch (or ZOOM slider,
+  mouse wheel) to zoom 1-5x, CENTRE to reset. comm.ppx / ppy (where its middle is, from the screen's middle, in
+  screen pixels) and pzm (zoom x100); baked into the JPEG(s) by photoPixels(), so screens and firmware need nothing.
   An animated GIF (from 1.8): the phone decodes it (public/thuisfront/gif.js: LZW, transparency, disposal, interlace),
   keeps at most 48 frames (longer GIFs: every n-th frame, shown as long), makes each one 320x172 like a photo and sends
   HFA1: "HFA1" u16 n, u16 0, n x (u16 delay ms, u32 bytes), then the n JPEGs (at most 1 MB; lower JPEG quality / fewer

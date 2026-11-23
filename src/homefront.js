@@ -120,7 +120,7 @@ export function defaultState() {
     rev: 1, app: "", screen: 1, bright: 80, scan: 0, fx: 1,      // fx 0 = all effects off (no animation, scanlines, glitches)
     comm: {
       mode: "text", tb: "", pb: "", anim: "static", speed: 5, tpal: 0, vpal: 0, bg: 0,
-      ppal: 4, pfit: "fill", pbri: 0, pcon: 0,
+      ppal: 4, pfit: "fill", pbri: 0, pcon: 0, ppx: 0, ppy: 0, pzm: 100,
       text: "", font: "vt323", size: 0, align: "c", valign: "m", style: "plain", caps: 0,
       vq: "hi", look: "smooth", vbri: 0, vcon: 0, mirror: 1, fps: 12,
     },
@@ -172,6 +172,9 @@ function mergeState(s, p) {
     if ("pfit" in c) set(o, "pfit", pick(c.pfit, ["fill", "fit"], o.pfit));
     if ("pbri" in c) set(o, "pbri", int(c.pbri, -50, 50, o.pbri));
     if ("pcon" in c) set(o, "pcon", int(c.pcon, -50, 50, o.pcon));
+    if ("ppx" in c) set(o, "ppx", int(c.ppx, -4000, 4000, o.ppx || 0));     // where the photo sits (already in its JPEG)
+    if ("ppy" in c) set(o, "ppy", int(c.ppy, -4000, 4000, o.ppy || 0));
+    if ("pzm" in c) set(o, "pzm", int(c.pzm, 100, 500, o.pzm || 100));
     if ("bg" in c) set(o, "bg", int(c.bg, 0, 2, o.bg));
     if ("text" in c) set(o, "text", str(c.text, 2000));
     if ("font" in c) set(o, "font", str(c.font, 24).replace(/[^a-z0-9-]/g, ""));
