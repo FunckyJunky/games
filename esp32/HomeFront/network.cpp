@@ -350,5 +350,5 @@ void netBegin() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  xTaskCreatePinnedToCore(netLoop, "net", 12288, nullptr, 2, nullptr, 0);
+  xTaskCreatePinnedToCore(netLoop, "net", 20480, nullptr, 2, nullptr, 0);   // TLS + JSON + flash need room
 }
