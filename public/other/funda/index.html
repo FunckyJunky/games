@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FUNDA WATCH · Rozengaard 11 4, Lelystad</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 15 16 5l12 10v13H4z' fill='%232a78d6'/%3E%3Cpath d='M13 28v-8h6v8' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --card-edge: #e6e5df;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7;
+    --s1: #2a78d6; --s1-soft: rgba(42,120,214,.12); --s2: #eb6834; --s2-soft: rgba(235,104,52,.12);
+    --good: #006300; --bad: #d03b3b; --warn-bg: #fff4dc; --warn-edge: #f0c766;
+    --tip: #0b0b0b; --tip-ink: #f0efec;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --card-edge: #2c2c2a;
+      --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835;
+      --s1: #3987e5; --s1-soft: rgba(57,135,229,.16); --s2: #d95926; --s2-soft: rgba(217,89,38,.16);
+      --good: #0ca30c; --bad: #e66767; --warn-bg: #2e2510; --warn-edge: #6b5316;
+      --tip: #f0efec; --tip-ink: #0b0b0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--page); color: var(--ink); }
+  body {
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 40px max(14px, env(safe-area-inset-left));
+    font-variant-numeric: tabular-nums;
+  }
+  a { color: var(--s1); }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  /* top bar */
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .crumb { font: 600 12px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb b { color: var(--ink); }
+  .spacer { flex: 1; }
+  .live { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: #0ca30c; box-shadow: 0 0 0 3px rgba(12,163,12,.18); }
+  .dot.off { background: var(--bad); }
+  button.check {
+    font: 600 13px/1 inherit; font-family: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--card-edge); border-radius: 999px; padding: 9px 14px; cursor: pointer;
+  }
+  button.check:hover { border-color: var(--axis); }
+  button.check:disabled { opacity: .55; cursor: default; }
+
+  .card { background: var(--surface); border: 1px solid var(--card-edge); border-radius: var(--radius); }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-edge); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+  .warn:empty { display: none; }
+
+  /* the house */
+  .house { display: grid; grid-template-columns: 220px 1fr; overflow: hidden; margin-bottom: 14px; }
+  .photo { background: var(--grid) center / cover no-repeat; min-height: 150px; display: grid; place-items: center; }
+  .photo svg { width: 54px; height: 54px; opacity: .35; }
+  .photo.has svg { display: none; }
+  .house .txt { padding: 16px 18px; min-width: 0; }
+  h1 { font-size: 22px; line-height: 1.2; margin: 0 0 2px; letter-spacing: -.01em; }
+  .sub { color: var(--ink-2); margin: 0 0 10px; }
+  .specs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
+  .specs li { font-size: 13px; color: var(--ink-2); border: 1px solid var(--card-edge); border-radius: 999px; padding: 3px 10px; }
+  .open { font-size: 14px; font-weight: 600; text-decoration: none; }
+  .open:hover { text-decoration: underline; }
+  @media (max-width: 620px) { .house { grid-template-columns: 1fr; } .photo { min-height: 170px; } }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile { padding: 14px 16px; min-width: 0; }
+  .tile .k { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+  .tile .v { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; white-space: nowrap; }
+  .tile .d { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+  .tile .d + .d { margin-top: 1px; }
+  .up { color: var(--good); } .down { color: var(--ink); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--card-edge); }
+
+  /* charts */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel { padding: 14px 16px 10px; margin-bottom: 14px; min-width: 0; }
+  .grid2 .panel { margin-bottom: 0; }
+  .panel h2 { font-size: 15px; margin: 0; }
+  .panel .note { font-size: 12.5px; color: var(--muted); margin: 2px 0 6px; }
+  .chart { position: relative; height: 210px; touch-action: pan-y; }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); font-size: 13px; padding: 0 20px; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--tip); color: var(--tip-ink); border-radius: 8px;
+    padding: 6px 9px; font-size: 12.5px; line-height: 1.35; white-space: nowrap; transform: translate(-50%, -100%);
+    opacity: 0; transition: opacity .08s; z-index: 2;
+  }
+  .tip b { font-size: 14px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin: 4px 0 2px; }
+  .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--s1); vertical-align: middle; margin-right: 5px; }
+  .legend i.est { border-top-style: dashed; border-color: var(--muted); }
+  .legend i.mark { width: 0; height: 12px; border-top: 0; border-left: 2px dashed var(--ink-2); margin-right: 7px; }
+
+  /* log + tables */
+  .log { list-style: none; margin: 6px 0 4px; padding: 0; }
+  .log li { display: grid; grid-template-columns: 118px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--grid); font-size: 14px; }
+  .log li:first-child { border-top: 0; }
+  .log time { color: var(--muted); font-size: 13px; }
+  .log .what b { font-weight: 650; }
+  @media (max-width: 480px) { .log li { grid-template-columns: 1fr; gap: 0; } }
+  details summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: "▸ "; color: var(--muted); }
+  details[open] summary::before { content: "▾ "; }
+  .tbl { overflow-x: auto; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
+  th:first-child, td:first-child { text-align: left; }
+  td.src { color: var(--muted); font-size: 12px; }
+  footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 18px; }
+  footer code { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="crumb"><a href="/">error.blue</a> / other / <b>funda watch</b></div>
+    <div class="spacer"></div>
+    <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Loading…</span></div>
+    <button class="check" id="checkBtn" type="button">Check now</button>
+  </div>
+
+  <div class="warn" id="warn"></div>
+
+  <section class="card house">
+    <div class="photo" id="photo" role="img" aria-label="Photo of the house">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 15 16 5l12 10v13H4z" fill="currentColor"/></svg>
+    </div>
+    <div class="txt">
+      <h1 id="addr">Rozengaard 11 4</h1>
+      <p class="sub" id="place">8212 DA Lelystad</p>
+      <ul class="specs" id="specs"></ul>
+      <a class="open" id="openLink" href="https://www.funda.nl/detail/koop/lelystad/huis-rozengaard-11-4/44666454/" target="_blank" rel="noopener">Open on Funda ↗</a>
+    </div>
+  </section>
+
+  <section class="tiles">
+    <div class="card tile"><div class="k">Asking price</div><div class="v" id="tPrice">–</div><div class="d" id="tPriceD"></div><div class="d" id="tPriceM"></div></div>
+    <div class="card tile"><div class="k">Views</div><div class="v" id="tViews">–</div><div class="d" id="tViewsD"></div><div class="d" id="tViewsA"></div></div>
+    <div class="card tile"><div class="k">Saves</div><div class="v" id="tSaves">–</div><div class="d" id="tSavesD"></div><div class="d" id="tSavesR"></div></div>
+    <div class="card tile"><div class="k">On Funda</div><div class="v" id="tDays">–</div><div class="d" id="tDaysD"></div><div class="d" id="tStatus"></div></div>
+  </section>
+
+  <section class="card panel">
+    <h2>Asking price</h2>
+    <p class="note" id="priceNote">Every reading of the asking price.</p>
+    <div class="chart" id="cPrice"></div>
+    <div class="legend" id="priceLegend"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card panel">
+      <h2>Total views</h2>
+      <p class="note">Funda's “Bekeken” counter over time.</p>
+      <div class="chart" id="cViews"></div>
+      <div class="legend" id="viewsLegend"></div>
+    </section>
+    <section class="card panel">
+      <h2>New views per day</h2>
+      <p class="note">Growth of the counter per calendar day (Amsterdam time).</p>
+      <div class="chart" id="cDaily"></div>
+    </section>
+  </div>
+
+  <section class="card panel">
+    <h2>Total saves</h2>
+    <p class="note">Funda's “Bewaard” counter: people who saved this house.</p>
+    <div class="chart" id="cSaves" style="height:170px"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>What changed</h2>
+    <ul class="log" id="log"></ul>
+  </section>
+
+  <section class="card panel" id="histPanel" hidden>
+    <h2>Earlier prices of this address</h2>
+    <p class="note">From Walter Living's price history (asking prices, sales, WOZ).</p>
+    <div class="tbl"><table><thead><tr><th>Date</th><th>What</th><th>Price</th></tr></thead><tbody id="histBody"></tbody></table></div>
+  </section>
+
+  <section class="card panel">
+    <details>
+      <summary>All readings <span id="nReadings" style="color:var(--muted);font-weight:500"></span></summary>
+      <div class="tbl"><table><thead><tr><th>When</th><th>Price</th><th>Views</th><th>Saves</th><th>Status</th><th>From</th></tr></thead><tbody id="rows"></tbody></table></div>
+    </details>
+  </section>
+
+  <footer>
+    The watcher reads Funda every 30 minutes, also when this page is closed.<br>
+    <span id="foot"></span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const ID = new URLSearchParams(location.search).get("id") || "44666454";
+const API = "/api/funda/" + ID;
+const TZ = "Europe/Amsterdam";
+const DAY = 86400000;
+
+const nf = new Intl.NumberFormat("nl-NL");
+const eur = (v) => v == null ? "–" : "€ " + nf.format(v);
+const eurK = (v) => v == null ? "–" : (Math.abs(v) >= 1e6 ? "€ " + (v / 1e6).toLocaleString("nl-NL", { maximumFractionDigits: 2 }) + "M" : "€ " + Math.round(v / 1000) + "k");
+const num = (v) => v == null ? "–" : nf.format(v);
+const sign = (v, f = num) => (v > 0 ? "+" : v < 0 ? "−" : "±") + f(Math.abs(v));
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+const fDate = (t) => new Date(t).toLocaleDateString("en-GB", { timeZone: TZ, day: "numeric", month: "short" });
+const fDateY = (t) => new Date(t).toLocaleDateString("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
+const fTime = (t) => new Date(t).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+const fWhen = (t) => fDate(t) + ", " + fTime(t);
+function ago(t) {
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 90) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " days ago";
+}
+// "30-10-2026" -> midnight Amsterdam (close enough: CET is UTC+1)
+function nlDate(s) {
+  const m = String(s || "").match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if (!m) { const t = Date.parse(s); return isNaN(t) ? null : t; }
+  return Date.UTC(+m[3], +m[2] - 1, +m[1]) - 3600000;
+}
+// start of the Amsterdam day that contains t
+function dayStart(t) {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t));
+  const g = (k) => +p.find((x) => x.type === k).value;
+  const local = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"));
+  const off = local - Math.floor(t / 60000) * 60000; // Amsterdam offset at t
+  return Date.UTC(g("year"), g("month") - 1, g("day")) - off;
+}
+
+let DATA = null;
+const SRC = { seed: "first look", app: "Funda app API", web: "Funda website", "app+web": "Funda app + website" };
+
+// ---------- charts (plain SVG) ----------
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function niceTicks(lo, hi, n) {
+  if (hi === lo) { hi = lo + 1; }
+  const raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => s >= raw) || 10 * p;
+  const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step;
+  const out = [];
+  for (let v = a; v <= b + step / 2; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  return out;
+}
+function timeTicks(t0, t1, width) {
+  const maxN = Math.max(2, Math.floor(width / 70));
+  const days = (t1 - t0) / DAY;
+  if (days < 1.5) {
+    const hrs = [1, 2, 3, 6, 12].find((h) => (t1 - t0) / (h * 3600000) <= maxN) || 24;
+    const out = []; let t = Math.ceil(t0 / (hrs * 3600000)) * hrs * 3600000;
+    for (; t <= t1; t += hrs * 3600000) out.push({ t, label: fTime(t) });
+    return out;
+  }
+  const step = [1, 2, 3, 7, 14, 30, 61, 91].find((d) => days / d <= maxN) || 182;
+  const out = []; let t = dayStart(t0) + DAY;
+  for (; t <= t1; t = dayStart(t + step * DAY + 3 * 3600000)) out.push({ t, label: fDate(t) });
+  return out;
+}
+
+// o: {pts:[{t,v,...}], est:[{t,v}] dashed lead-in, step, color, soft, yFmt, axisFmt, tip(p), marks:[{t,label}], zero, empty}
+function lineChart(box, o) {
+  box.innerHTML = "";
+  const all = (o.est || []).concat(o.pts);
+  if (!o.pts.length) { box.innerHTML = '<div class="empty">' + (o.empty || "No readings yet.") + "</div>"; return; }
+  const W = box.clientWidth, H = box.clientHeight;
+  const m = { l: 62, r: 14, t: 12, b: 26 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  let t0 = Math.min(...all.map((p) => p.t)), t1 = Math.max(...all.map((p) => p.t), Date.now() - 60000);
+  if (t1 - t0 < 3600000) t0 = t1 - 3600000;
+  let lo = Math.min(...all.map((p) => p.v)), hi = Math.max(...all.map((p) => p.v));
+  if (o.zero) lo = 0;
+  if (hi === lo) { const pad = Math.max(1, Math.abs(hi) * 0.04); lo -= pad; hi += pad; if (o.zero) lo = 0; }
+  const yt = niceTicks(lo, hi, Math.max(2, Math.min(5, Math.floor(ih / 40))));
+  lo = yt[0]; hi = yt[yt.length - 1];
+  const X = (t) => m.l + ((t - t0) / (t1 - t0)) * iw;
+  const Y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.label || "chart" }, box);
+  const g = el("g", {}, svg);
+  for (const v of yt) {
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === lo ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, g);
+    const tx = el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end", "font-size": 11.5, fill: "var(--muted)" }, g);
+    tx.textContent = (o.axisFmt || o.yFmt)(v);
+  }
+  for (const tk of timeTicks(t0, t1, iw)) {
+    if (tk.t < t0 || tk.t > t1) continue;
+    const tx = el("text", { x: X(tk.t), y: H - 7, "text-anchor": "middle", "font-size": 11.5, fill: "var(--muted)" }, g);
+    tx.textContent = tk.label;
+  }
+  const path = (pts) => pts.map((p, i) => {
+    if (i === 0) return `M${X(p.t)},${Y(p.v)}`;
+    return o.step ? `H${X(p.t)}V${Y(p.v)}` : `L${X(p.t)},${Y(p.v)}`;
+  }).join("");
+
+  // price-change markers
+  for (const mk of o.marks || []) {
+    if (mk.t < t0 || mk.t > t1) continue;
+    el("line", { x1: X(mk.t), x2: X(mk.t), y1: m.t, y2: m.t + ih, stroke: "var(--ink-2)", "stroke-width": 1.5, "stroke-dasharray": "3 3", opacity: .7 }, g);
+  }
+  if (o.est && o.est.length) {
+    el("path", { d: path(o.est.concat([o.pts[0]])), fill: "none", stroke: "var(--muted)", "stroke-width": 2, "stroke-dasharray": "5 5", "stroke-linecap": "round" }, g);
+  }
+  const line = o.pts.slice();
+  if (o.step) line.push({ t: t1, v: line[line.length - 1].v }); // the current price holds until now
+  if (o.soft && !o.step) {
+    el("path", { d: path(line) + `L${X(line[line.length - 1].t)},${Y(lo)}L${X(line[0].t)},${Y(lo)}Z`, fill: o.soft, stroke: "none" }, g);
+  }
+  el("path", { d: path(line), fill: "none", stroke: o.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, g);
+  if (o.pts.length <= 40) for (const p of o.pts) el("circle", { cx: X(p.t), cy: Y(p.v), r: 3, fill: o.color, stroke: "var(--surface)", "stroke-width": 2 }, g);
+  const lastP = o.pts[o.pts.length - 1];
+  el("circle", { cx: X(lastP.t), cy: Y(lastP.v), r: 4.5, fill: o.color, stroke: "var(--surface)", "stroke-width": 2 }, g);
+
+  // hover: crosshair + tooltip on the nearest reading
+  const hov = el("g", { opacity: 0 }, svg);
+  const vx = el("line", { y1: m.t, y2: m.t + ih, stroke: "var(--ink-2)", "stroke-width": 1 }, hov);
+  const dot = el("circle", { r: 5, fill: o.color, stroke: "var(--surface)", "stroke-width": 2 }, hov);
+  const tip = document.createElement("div"); tip.className = "tip"; box.appendChild(tip);
+  const hit = el("rect", { x: m.l, y: 0, width: iw, height: H, fill: "transparent" }, svg);
+  const cand = all.concat(o.marks ? [] : []);
+  function show(ev) {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (W / r.width);
+    const t = t0 + ((px - m.l) / iw) * (t1 - t0);
+    let best = cand[0];
+    for (const p of cand) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+    const x = X(best.t), y = Y(best.v);
+    vx.setAttribute("x1", x); vx.setAttribute("x2", x);
+    dot.setAttribute("cx", x); dot.setAttribute("cy", y);
+    dot.setAttribute("fill", best.est ? "var(--muted)" : o.color);
+    hov.setAttribute("opacity", 1);
+    tip.innerHTML = o.tip(best);
+    tip.style.opacity = 1;
+    const bx = (x / W) * r.width, by = (y / H) * r.height;
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.min(r.width - tw / 2 - 2, Math.max(tw / 2 + 2, bx)) + "px";
+    tip.style.top = Math.max(tip.offsetHeight + 4, by - 10) + "px";
+  }
+  function hide() { hov.setAttribute("opacity", 0); tip.style.opacity = 0; }
+  hit.addEventListener("pointermove", show);
+  hit.addEventListener("pointerdown", show);
+  hit.addEventListener("pointerleave", hide);
+}
+
+// bars: [{t, v, partial, label}]
+function barChart(box, bars, o) {
+  box.innerHTML = "";
+  if (!bars.length) { box.innerHTML = '<div class="empty">' + o.empty + "</div>"; return; }
+  const W = box.clientWidth, H = box.clientHeight;
+  const m = { l: 44, r: 8, t: 12, b: 26 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const hi0 = Math.max(1, ...bars.map((b) => b.v));
+  const yt = niceTicks(0, hi0, Math.max(2, Math.min(4, Math.floor(ih / 45))));
+  const hi = yt[yt.length - 1];
+  const Y = (v) => m.t + ih - (v / hi) * ih;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "new views per day" }, box);
+  for (const v of yt) {
+    el("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)" }, svg);
+    const tx = el("text", { x: m.l - 8, y: Y(v) + 4, "text-anchor": "end", "font-size": 11.5, fill: "var(--muted)" }, svg);
+    tx.textContent = num(v);
+  }
+  const slot = iw / bars.length, bw = Math.max(3, Math.min(34, slot - 2));
+  const every = Math.max(1, Math.ceil(bars.length / Math.max(1, Math.floor(iw / 56))));
+  const tip = document.createElement("div"); tip.className = "tip"; box.appendChild(tip);
+  bars.forEach((b, i) => {
+    const cx = m.l + slot * i + slot / 2, x = cx - bw / 2, y = Y(b.v), h = Math.max(0, m.t + ih - y);
+    const r = Math.min(4, bw / 2, h);
+    // rounded top, square at the baseline
+    const d = h <= 0 ? "" : `M${x},${m.t + ih}V${y + r}Q${x},${y} ${x + r},${y}H${x + bw - r}Q${x + bw},${y} ${x + bw},${y + r}V${m.t + ih}Z`;
+    const bar = el("path", { d, fill: "var(--s1)", opacity: b.partial ? 0.45 : 1 }, svg);
+    if (bars.length <= 8 && b.v > 0) {
+      const tx = el("text", { x: cx, y: y - 5, "text-anchor": "middle", "font-size": 11.5, fill: "var(--ink-2)" }, svg);
+      tx.textContent = num(b.v);
+    }
+    if ((bars.length - 1 - i) % every === 0) {
+      const tx = el("text", { x: cx, y: H - 7, "text-anchor": "middle", "font-size": 11.5, fill: "var(--muted)" }, svg);
+      tx.textContent = b.today ? "today" : fDate(b.t + 12 * 3600000);
+    }
+    const hit = el("rect", { x: m.l + slot * i, y: m.t, width: slot, height: ih + 4, fill: "transparent" }, svg);
+    const show = () => {
+      const rr = svg.getBoundingClientRect();
+      tip.innerHTML = `<b>${sign(b.v)}</b> views<br>${b.today ? "today so far" : fDateY(b.t + 12 * 3600000)}${b.partial && !b.today ? " (part of the day)" : ""}`;
+      tip.style.opacity = 1;
+      const tw = tip.offsetWidth;
+      tip.style.left = Math.min(rr.width - tw / 2 - 2, Math.max(tw / 2 + 2, (cx / W) * rr.width)) + "px";
+      tip.style.top = Math.max(tip.offsetHeight + 4, (y / H) * rr.height - 8) + "px";
+      bar.setAttribute("opacity", b.partial ? 0.65 : 0.8);
+    };
+    hit.addEventListener("pointerenter", show);
+    hit.addEventListener("pointerdown", show);
+    hit.addEventListener("pointerleave", () => { tip.style.opacity = 0; bar.setAttribute("opacity", b.partial ? 0.45 : 1); });
+  });
+}
+
+// ---------- turning readings into numbers ----------
+function readings() {
+  return (DATA.snaps || []).map(([t, price, orig, views, saves, status, src]) => ({ t, price, orig, views, saves, status, src }));
+}
+// counter value at time t, from the readings around it (straight line between readings)
+function valueAt(rs, key, t) {
+  const pts = rs.filter((r) => r[key] != null);
+  if (!pts.length || t < pts[0].t) return null;
+  for (let i = pts.length - 1; i >= 0; i--) {
+    if (pts[i].t <= t) {
+      const a = pts[i], b = pts[i + 1];
+      if (!b) return a[key];
+      return a[key] + (b[key] - a[key]) * ((t - a.t) / (b.t - a.t));
+    }
+  }
+  return null;
+}
+function dailyViews(rs) {
+  const pts = rs.filter((r) => r.views != null);
+  if (pts.length < 2) return [];
+  const first = pts[0].t, last = pts[pts.length - 1].t, today = dayStart(Date.now());
+  const out = [];
+  for (let d = dayStart(first); d <= last; d = dayStart(d + DAY + 3 * 3600000)) {
+    const end = dayStart(d + DAY + 3 * 3600000);
+    const a = Math.max(d, first), b = Math.min(end, last);
+    if (b <= a) continue;
+    const v = Math.round(valueAt(pts, "views", b) - valueAt(pts, "views", a));
+    out.push({ t: d, v, today: d === today, partial: a > d || b < end });
+  }
+  return out;
+}
+// asking-price changes from Walter Living's history between the listing date and the first reading
+function earlierAsking(d, listed, until) {
+  const ch = d.history && Array.isArray(d.history.changes) ? d.history.changes : [];
+  return ch
+    .filter((c) => c.price && c.ts && /vraagprijs|asking/i.test(c.status || ""))
+    .map((c) => ({ t: c.ts * (c.ts < 1e12 ? 1000 : 1), price: c.price }))
+    .filter((c) => listed && c.t >= listed - 2 * DAY && c.t < until)
+    .sort((a, b) => a.t - b.t);
+}
+function priceChanges(rs) {
+  const out = [];
+  for (let i = 1; i < rs.length; i++) {
+    const a = rs[i - 1], b = rs[i];
+    if (a.price != null && b.price != null && a.price !== b.price) out.push({ t: b.t, from: a.price, to: b.price, between: a.t });
+  }
+  return out;
+}
+
+// ---------- drawing the page ----------
+function render() {
+  const d = DATA, info = d.info || {}, rs = readings();
+  const last = rs[rs.length - 1] || {}, firstR = rs[0];
+  const listed = nlDate(info.onFunda) || (info.published ? Date.parse(info.published) : null);
+
+  // header
+  const addr = info.address || "Funda listing " + ID;
+  $("addr").textContent = addr;
+  $("place").textContent = [info.postcode, info.city].filter(Boolean).join(" ") + (info.neighbourhood ? " · " + info.neighbourhood : "");
+  document.title = "FUNDA WATCH · " + addr + (info.city ? ", " + info.city : "");
+  $("openLink").href = info.url || d.url;
+  const specs = [];
+  if (info.living) specs.push(info.living + " m² living");
+  if (info.plot) specs.push(info.plot + " m² plot");
+  if (info.rooms) specs.push(info.rooms + " rooms" + (info.bedrooms ? " · " + info.bedrooms + " bed" : ""));
+  else if (info.bedrooms) specs.push(info.bedrooms + " bedrooms");
+  if (info.energy) specs.push("Energy " + info.energy);
+  if (info.built) specs.push("Built " + info.built);
+  $("specs").innerHTML = specs.map((s) => "<li>" + esc(s) + "</li>").join("");
+  if (info.photo) {
+    const ph = $("photo");
+    const img = new Image(); img.referrerPolicy = "no-referrer";
+    img.onload = () => { ph.style.backgroundImage = `url("${info.photo.replace(/"/g, "%22")}")`; ph.classList.add("has"); };
+    img.src = info.photo;
+  }
+
+  // live status
+  const okRecent = d.lastOk && Date.now() - d.lastOk < 2 * 3600000;
+  $("dot").className = "dot " + (okRecent ? "on" : d.lastTry ? "off" : "");
+  $("liveTxt").textContent = d.lastOk ? "Checked " + ago(d.lastOk) : "Waiting for the first check";
+  const failing = d.lastTry && (!d.lastOk || d.lastTry > d.lastOk);
+  $("warn").innerHTML = failing
+    ? `<b>Funda didn't answer the last check</b> (${esc(fWhen(d.lastTry))}). ${esc(d.lastError || "")}<br>The watcher keeps trying every 30 minutes; the numbers below are from the last good reading.`
+    : "";
+
+  // tiles
+  const origPrice = last.orig || rs.map((r) => r.orig).find((v) => v != null) || null;
+  $("tPrice").textContent = eur(last.price);
+  if (origPrice && last.price && origPrice !== last.price) {
+    const diff = last.price - origPrice;
+    $("tPriceD").innerHTML = `<span class="${diff < 0 ? "down" : "up"}">${diff < 0 ? "▼" : "▲"} ${sign(diff, eur).replace("€ ", "€")}</span> (${(diff / origPrice * 100).toLocaleString("en-GB", { maximumFractionDigits: 1, signDisplay: "always" }).replace("-", "−")}%) from ${eur(origPrice)}`;
+  } else $("tPriceD").textContent = origPrice ? "Unchanged since listing" : "";
+  $("tPriceM").textContent = last.price && info.living ? eur(Math.round(last.price / info.living)) + " per m²" : "";
+
+  $("tViews").textContent = num(last.views);
+  const dayAgo = Date.now() - DAY;
+  const vDay = rs.length && rs[0].t <= dayAgo ? last.views - valueAt(rs, "views", dayAgo) : null;
+  const vToday = last.views != null ? last.views - (valueAt(rs, "views", dayStart(Date.now())) ?? (firstR && firstR.t >= dayStart(Date.now()) ? firstR.views : null)) : null;
+  $("tViewsD").textContent = vDay != null ? sign(Math.round(vDay)) + " last 24 h" : vToday != null && rs.length > 1 ? sign(Math.round(vToday)) + " today" : "";
+  const daysListed = listed ? (Date.now() - listed) / DAY : null;
+  $("tViewsA").textContent = daysListed && last.views ? "≈ " + num(Math.round(last.views / daysListed)) + " per day since listing" : "";
+
+  $("tSaves").textContent = num(last.saves);
+  const sDay = rs.length && rs[0].t <= dayAgo ? last.saves - Math.round(valueAt(rs, "saves", dayAgo)) : null;
+  $("tSavesD").textContent = sDay != null ? sign(sDay) + " last 24 h" : rs.length > 1 && firstR.saves != null ? sign(last.saves - firstR.saves) + " since watching" : "";
+  $("tSavesR").textContent = last.saves && last.views ? (last.saves / last.views * 100).toLocaleString("en-GB", { maximumFractionDigits: 1 }) + "% of views saved it" : "";
+
+  $("tDays").textContent = daysListed != null ? Math.floor(daysListed) + " days" : "–";
+  $("tDaysD").textContent = listed ? "Since " + fDateY(listed) : "";
+  $("tStatus").innerHTML = last.status ? '<span class="pill">' + esc(last.status) + "</span>" : "";
+
+  // price chart: readings, plus the original price at the listing date (dashed: the date of the drop is not known)
+  const pricePts = rs.filter((r) => r.price != null).map((r) => ({ t: r.t, v: r.price, r }));
+  const pEst = [];
+  const walter = earlierAsking(d, listed, pricePts.length ? pricePts[0].t : Date.now());
+  if (pricePts.length && listed && listed < pricePts[0].t) {
+    pEst.push({ t: listed, v: origPrice || (walter[0] && walter[0].price) || pricePts[0].v, est: true, listedAt: true });
+    for (const w of walter) if (w.price !== pEst[pEst.length - 1].v) pEst.push({ t: w.t, v: w.price, est: true, walter: true, from: pEst[pEst.length - 1].v });
+    const lastEst = pEst[pEst.length - 1].v;
+    if (lastEst !== pricePts[0].v) pEst.push({ t: pricePts[0].t, v: lastEst, est: true, dropUnknown: true });
+  }
+  const changes = priceChanges(rs);
+  lineChart($("cPrice"), {
+    pts: pricePts, est: pEst, step: true, color: "var(--s1)", yFmt: eur, axisFmt: eurK, label: "asking price over time",
+    tip: (p) => p.listedAt ? `<b>${eur(p.v)}</b><br>listed on Funda, ${fDateY(p.t)}`
+      : p.dropUnknown ? `<b>${eur(p.v)}</b><br>changed some time before ${fDate(p.t)}`
+      : p.walter ? `<b>${eur(p.v)}</b><br>${p.v < p.from ? "lowered" : "raised"} ${fDateY(p.t)} (Walter Living)`
+      : `<b>${eur(p.v)}</b><br>${fWhen(p.t)}`,
+  });
+  $("priceLegend").innerHTML = '<span><i></i>Readings by the watcher</span>' + (pEst.length ? '<span><i class="est"></i>Before watching started (Funda’s listing date and original price' + (walter.length ? ", Walter Living's history" : "") + ')</span>' : "");
+  $("priceNote").textContent = origPrice && last.price && origPrice !== last.price
+    ? `Listed at ${eur(origPrice)}, now ${eur(last.price)}. ` + (changes.length ? "Price changes seen by the watcher are marked on the view charts."
+      : walter.length ? "The drop happened before the watcher started; its date comes from Walter Living." : "The drop happened before the watcher started, on a day Funda doesn't show.")
+    : "Every reading of the asking price.";
+
+  // views + saves charts
+  const marks = changes.map((c) => ({ t: c.t, label: eur(c.from) + " → " + eur(c.to) }));
+  const viewPts = rs.filter((r) => r.views != null).map((r) => ({ t: r.t, v: r.views }));
+  const vEst = viewPts.length && listed && listed < viewPts[0].t ? [{ t: listed, v: 0, est: true }] : [];
+  const tipCounter = (word) => (p) => p.est ? `<b>0</b> ${word}<br>listed ${fDateY(p.t)}` :
+    `<b>${num(p.v)}</b> ${word}<br>${fWhen(p.t)}` + (marks.find((mk) => Math.abs(mk.t - p.t) < 60000) ? "<br>price " + marks.find((mk) => Math.abs(mk.t - p.t) < 60000).label : "");
+  lineChart($("cViews"), { pts: viewPts, est: vEst, color: "var(--s1)", soft: "var(--s1-soft)", yFmt: num, zero: true, marks, label: "total views over time", tip: tipCounter("views") });
+  $("viewsLegend").innerHTML = (vEst.length ? '<span><i class="est"></i>From the listing date (0 views) to the first reading</span>' : "") + (marks.length ? '<span><i class="mark"></i>Price changed</span>' : "");
+  const savePts = rs.filter((r) => r.saves != null).map((r) => ({ t: r.t, v: r.saves }));
+  const sEst = savePts.length && listed && listed < savePts[0].t ? [{ t: listed, v: 0, est: true }] : [];
+  lineChart($("cSaves"), { pts: savePts, est: sEst, color: "var(--s2)", soft: "var(--s2-soft)", yFmt: num, zero: true, marks, label: "total saves over time", tip: tipCounter("saves") });
+
+  barChart($("cDaily"), dailyViews(rs), { empty: "Needs two readings. The first bars appear after the next check (every 30 minutes)." });
+
+  // what changed
+  const ev = [];
+  if (listed) ev.push({ t: listed, html: `<b>Listed on Funda</b>${origPrice ? " at " + eur(origPrice) : ""}` });
+  if (firstR) {
+    const known = pEst.filter((p) => p.walter);
+    for (const p of known) {
+      const diff = p.v - p.from;
+      ev.push({ t: p.t, day: true, html: `<b>Price ${diff < 0 ? "lowered" : "raised"}</b> from ${eur(p.from)} to ${eur(p.v)} (${sign(diff, eur)}, ${(diff / p.from * 100).toFixed(1).replace("-", "−")}%) <span style="color:var(--muted)">· Walter Living</span>` });
+    }
+    const unknown = pEst.find((p) => p.dropUnknown);
+    if (unknown) {
+      const from = unknown.v, diff = firstR.price - from;
+      ev.push({ t: firstR.t - 1, day: true, before: true, html: `<b>Price ${diff < 0 ? "lowered" : "raised"}</b> from ${eur(from)} to ${eur(firstR.price)} <span style="color:var(--muted)">(some time before the watcher started)</span>` });
+    }
+    ev.push({ t: firstR.t, html: `<b>Watcher started</b>: ${eur(firstR.price)}, ${num(firstR.views)} views, ${num(firstR.saves)} saves${firstR.status ? ", " + esc(firstR.status) : ""}` });
+  }
+  for (const c of changes) {
+    const diff = c.to - c.from;
+    ev.push({ t: c.t, html: `<b>Price ${diff < 0 ? "lowered" : "raised"}</b> from ${eur(c.from)} to ${eur(c.to)} (${sign(diff, eur)}, ${(diff / c.from * 100).toFixed(1).replace("-", "−")}%)` });
+  }
+  for (let i = 1; i < rs.length; i++) {
+    const a = rs[i - 1], b = rs[i];
+    if (a.status && b.status && a.status !== b.status) ev.push({ t: b.t, html: `<b>Status</b> ${esc(a.status)} → <b>${esc(b.status)}</b>` });
+    if (a.orig !== b.orig && b.orig && a.orig) ev.push({ t: b.t, html: `<b>Original price</b> on Funda changed to ${eur(b.orig)}` });
+    for (const [key, stepN, word] of [["views", 500, "views"], ["saves", 25, "saves"]]) {
+      if (a[key] != null && b[key] != null && Math.floor(b[key] / stepN) > Math.floor(a[key] / stepN)) {
+        ev.push({ t: b.t, html: `Passed <b>${num(Math.floor(b[key] / stepN) * stepN)}</b> ${word}` });
+      }
+    }
+  }
+  ev.sort((a, b) => b.t - a.t);
+  $("log").innerHTML = ev.map((e) => `<li><time>${e.before ? "before " + fDate(e.t + 1) : e.day || e.t === listed ? fDateY(e.t) : fWhen(e.t)}</time><span class="what">${e.html}</span></li>`).join("");
+
+  // Walter Living history
+  const h = d.history && Array.isArray(d.history.changes) ? d.history.changes.filter((c) => c.price || c.text) : [];
+  $("histPanel").hidden = !h.length;
+  if (h.length) {
+    $("histBody").innerHTML = h.map((c) => `<tr><td>${esc(c.date || (c.ts ? fDateY(c.ts * (c.ts < 1e12 ? 1000 : 1)) : ""))}</td><td>${esc(c.badge || c.status || "")}</td><td>${c.price ? eur(c.price) : esc(c.text)}</td></tr>`).join("");
+  }
+
+  // all readings
+  $("nReadings").textContent = "(" + num(d.count || rs.length) + ")";
+  $("rows").innerHTML = rs.slice().reverse().map((r) => `<tr><td>${fWhen(r.t)}</td><td>${eur(r.price)}</td><td>${num(r.views)}</td><td>${num(r.saves)}</td><td>${esc(r.status || "")}</td><td class="src">${SRC[r.src] || esc(r.src || "")}</td></tr>`).join("");
+
+  $("foot").innerHTML = d.lastOk ? "Last good reading " + esc(fWhen(d.lastOk)) + (d.source ? " via " + (SRC[d.source] || d.source) : "") : "";
+}
+
+async function load() {
+  try {
+    const r = await fetch(API, { cache: "no-store" });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
+    DATA = d; render();
+  } catch (e) {
+    $("liveTxt").textContent = "Can't reach the watcher";
+    $("dot").className = "dot off";
+    $("warn").textContent = "Could not load the readings: " + e.message;
+  }
+}
+
+$("checkBtn").addEventListener("click", async () => {
+  const b = $("checkBtn");
+  b.disabled = true; b.textContent = "Checking…";
+  try {
+    const r = await fetch(API + "/check", { method: "POST" });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
+    DATA = d; render();
+    b.textContent = d.checked === false ? "Checked " + ago(d.lastTry) : d.result && d.result.ok ? "Updated ✓" : "Funda didn't answer";
+  } catch (e) {
+    b.textContent = "Failed";
+  }
+  setTimeout(() => { b.disabled = false; b.textContent = "Check now"; }, 4000);
+});
+
+let rz = 0;
+addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => DATA && render(), 120); });
+setInterval(load, 5 * 60 * 1000);
+setInterval(() => DATA && ($("liveTxt").textContent = DATA.lastOk ? "Checked " + ago(DATA.lastOk) : $("liveTxt").textContent), 30000);
+load();
+</script>
+</body>
+</html>

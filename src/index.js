@@ -30,10 +30,13 @@
 //   GET  /thuisfront/dev/ws?id=HF-XXXX         HOME FRONT: a screen at home (WebSocket; more in src/homefront.js)
 //   GET  /api/hf/ws?id=HF-XXXX&home=CODE       HOME FRONT: the phone that controls one screen (WebSocket)
 //   GET  /api/hf/list?home=CODE                HOME FRONT: the screens with that home code
+//   GET  /api/funda/<id>                       FUNDA WATCH: a house on funda.nl, price/views over time (src/funda.js)
+//   POST /api/funda/<id>/check                 FUNDA WATCH: read Funda now (also every 30 min by the cron)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
 export { HomeFront } from "./homefront.js";
+import { handleFunda, fundaCron } from "./funda.js";
 
 const GAME_RE = /^[a-z0-9-]{1,40}$/;
 const PLAYER_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -993,6 +996,8 @@ export default {
 
       if (path.startsWith("/api/hud/")) return await handleHud(request, env, url);
 
+      if (path === "/api/funda" || path.startsWith("/api/funda/")) return await handleFunda(request, env, url);
+
       if (path === "/thuisfront/dev/ws" || path.startsWith("/api/hf/")) return env.HF.get(env.HF.idFromName("main")).fetch(request);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
@@ -1039,6 +1044,11 @@ export default {
       console.error(err);
       return json({ error: "server error" }, 500);
     }
+  },
+
+  // the cron in wrangler.jsonc (every 30 minutes): FUNDA WATCH reads funda.nl
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(fundaCron(env));
   },
 };
 

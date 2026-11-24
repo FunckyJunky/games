@@ -56,5 +56,8 @@
     { "tag": "v7", "new_sqlite_classes": ["HomeFront"] }
   ],
 
+  // FUNDA WATCH (error.blue/other/funda): read funda.nl every 30 minutes.
+  "triggers": { "crons": ["7,37 * * * *"] },
+
   "observability": { "enabled": true }
 }

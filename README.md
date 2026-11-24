@@ -69,6 +69,9 @@ public/                 the website
                         connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and
                         saved spots, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE> and the live link.
                         Edit public/hud/ directly (index.html, sw.js, manifest.webmanifest, icons)
+  other/funda/          FUNDA WATCH (error.blue/other/funda): price, views and saves of a house on funda.nl over time.
+                        The server reads Funda every 30 minutes (cron in wrangler.jsonc, src/funda.js); the houses
+                        watched are in FUNDA_WATCH at the top of src/funda.js. Page: ?id=<funda number> for another one
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:
@@ -85,6 +88,7 @@ esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online 
                         (see esp32/README.md)
 esp32/HomeFront/        HOME FRONT firmware for the ESP32-S3 1.47" LCD board (see esp32/HomeFront/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
+src/funda.js            FUNDA WATCH: reads funda.nl (app API, website as fallback) and keeps every reading in the database
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
 ```
