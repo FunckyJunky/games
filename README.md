@@ -66,11 +66,13 @@ public/                 the website
                         AUTO = the bike stays on and rides exactly on your GPS spot (no road snap). Riding/walking away by hand:
                         an amber pillar + radar marker + HUD line show your real GPS spot, TELEPORT TO ME jumps back.
                         LEVEL (or double-tap right half, R) = look straight ahead; with phone sensors it takes how you hold it now.
-                        Tap the radar (or M) = full-screen MAP: streets, you, your real GPS spot, 150 m zone, 200 m NEAR reach and
-                        the players near you (name, distance, bike); drag, pinch, N↑ / heading-up, ◎ follow, tap a player to centre.
+                        Tap the radar (or M) = MAP: the 3D camera goes up above the city (drag = move, pinch = height, N↑/heading-up,
+                        ◎ = back to you). Tap a player (or their chip) or any spot, then TELEPORT: you land there in FREE and walk
+                        around with the others. GPS = summon yourself back to your real spot.
                         NEAR = see other ZONE players within 200 m (opt-in, S.mp). Rooms /api/room/zone/<CELL>: 420 m map cells
-                        (8 chars, base36 row+column); you listen in the up to 4 cells around you and send in your own, only while
-                        you play with GPS (GPS/AUTO); messages {t:'s',u,n,la,lo,y,m,v,c} / {t:'bye',u}; further than 200 m is ignored.
+                        (8 chars, base36 row+column), from your real GPS; you listen in the up to 4 cells around you and send in your own.
+                        Messages {t:'s',u,n,la,lo,y,m,v,c,rla,rlo} (la/lo = your avatar, also in FREE after a teleport; rla/rlo = real
+                        spot, 4 decimals, decides the 200 m) / {t:'away',u} (far-away demo city) / {t:'bye',u}.
                         DEMO = fake GPS that drives (or walks) the real streets. Map: OpenFreeMap vector tiles (OpenMapTiles,
                         no key), then Overpass, then a made-up SIMULATED SECTOR when offline. zone-worker.js decodes the tiles
                         and builds 64 m chunks off the main thread; three.module.min.js = three.js r170 (MIT).

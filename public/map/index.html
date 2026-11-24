@@ -75,7 +75,13 @@
   #near p { font-size: 18px; color: #dfe; line-height: 1.15; margin: 8px 0; }
   #near input { width: 100%; font: 22px var(--ui); padding: 6px 8px; background: #050012; color: #fff; border: 1px solid rgba(0,240,255,.6); text-transform: uppercase; }
   #nearList div { font-size: 19px; color: #fff; padding: 2px 0; }
-  #bigmap { position: fixed; inset: 0; z-index: 8; background: #04000e; touch-action: none; }
+  #bigmap { position: fixed; inset: 0; z-index: 8; touch-action: none; }
+  body.mapmode #hud, body.mapmode #radar, body.mapmode #btns, body.mapmode #tele, body.mapmode #level, body.mapmode #hint, body.mapmode #stick { display: none !important; }
+  #mapGo { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px); padding: 12px 18px; font: 900 15px var(--hd); letter-spacing: 2px; color: #fff;
+    background: rgba(60,0,50,.75); border: 1px solid var(--m); box-shadow: 0 0 16px rgba(255,43,214,.6), inset 0 0 10px rgba(255,43,214,.35); text-shadow: 0 0 6px var(--m); cursor: pointer; white-space: nowrap;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+  #mapGo span { font: 17px var(--ui); color: #ffd36a; }
+  #mapHint { position: absolute; left: 0; right: 0; transition: opacity 1s; top: calc(max(8px, env(safe-area-inset-top)) + 64px); text-align: center; font-size: 16px; color: rgba(180,220,255,.7); pointer-events: none; text-shadow: 0 0 4px #000; }
   #mapc { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #mapTop { position: absolute; left: 0; right: 0; top: 0; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
     display: flex; gap: 8px; align-items: center; background: linear-gradient(rgba(4,0,14,.95), rgba(4,0,14,0)); pointer-events: none; }
@@ -120,6 +126,8 @@
 <div id="bigmap" class="hide">
   <canvas id="mapc"></canvas>
   <div id="mapTop"><div id="mapTitle">MAP<small id="mapSub"></small></div><button class="mb" id="mapNorth">N↑</button><button class="mb on" id="mapMe">◎</button><button class="mb" id="mapClose">✕</button></div>
+  <div id="mapHint">drag = move camera · pinch = zoom · tap a player or a spot</div>
+  <button id="mapGo" class="hide"></button>
   <div id="mapList"></div>
 </div>
 <div id="attr" class="hide"></div>
@@ -144,7 +152,8 @@
 <div id="near" class="ov hide"><div class="box">
   <h2>⚇ NEARBY</h2>
   <p>See other ZONE players who are within <b>200 m</b> of you, walking or on their light bikes, with their names, and they see you.</p>
-  <p class="dim">While NEARBY is on and you play with GPS (GPS or AUTO), ZONE sends your live position, name and bike colour to ZONE players around you. In FREE roam or DEMO no position is sent: the others see you as AWAY at your last spot. Turn it off any time: then nothing is sent.</p>
+  <p class="dim">Who counts as near is decided by your real GPS. While NEARBY is on, ZONE sends your name, bike colour, where your avatar is (your GPS spot, or where you walk or teleport to in FREE) and your rough real position to ZONE players within reach. In a far-away demo city you show as AWAY. Turn it off any time: then nothing is sent.</p>
+  <p class="dim">Tap the radar for the MAP: pick a player or a spot and teleport there, so you can walk around together. GPS brings you back to your real spot.</p>
   <div class="lab" style="color:var(--m);font-size:18px">YOUR NAME</div>
   <input id="nearName" maxlength="12" autocomplete="off" spellcheck="false">
   <div id="nearList" style="margin-top:10px"></div>
@@ -587,7 +596,7 @@ function dropChunk(key) {
 worker.onmessage = (e) => {
   const m = e.data;
   if (m.t === 'chunk') {
-    if (!O || chunkDist(m.key, P.x, P.z) > R + 90) { worker.postMessage({ t: 'drop', keys: [m.key] }); return; }
+    if (!O || !keepChunk(m.key)) { worker.postMessage({ t: 'drop', keys: [m.key] }); return; }
     dropChunk(m.key);
     const now = U.uTime.value, c = { roads: m.roads, names: m.names, pois: m.pois, foot: [] };
     if (m.geo.count) { c.mesh = new THREE.Mesh(geoFrom(m.geo), makeMat(CHUNK_FRAG, now)); scene.add(c.mesh); }
@@ -614,18 +623,19 @@ worker.onmessage = (e) => {
 };
 worker.onerror = (e) => { console.error('worker', e.message); toast('MAP CORE ERROR', e.message || 'worker failed'); };
 let lastWant = 0;
+function keepChunk(key) { return chunkDist(key, P.x, P.z) <= R + 90 || (MV.open && chunkDist(key, MV.fx, MV.fz) <= mapR() + 90); }
 function updateChunks(now) {
   if (!O || now - lastWant < 250) return; lastWant = now;
-  const vx = clamp(vel.x, -40, 40), vz = clamp(vel.z, -40, 40), ax = P.x + vx * 1.5, az = P.z + vz * 1.5, rr = R + 18;
+  const vx = MV.open ? 0 : clamp(vel.x, -40, 40), vz = MV.open ? 0 : clamp(vel.z, -40, 40), ax = (MV.open ? MV.fx : P.x) + vx * 1.5, az = (MV.open ? MV.fz : P.z) + vz * 1.5, rr = (MV.open ? mapR() : R) + 18;
   const keys = [];
   for (let cx = Math.floor((ax - rr) / CH); cx <= Math.floor((ax + rr) / CH); cx++)
     for (let cz = Math.floor((az - rr) / CH); cz <= Math.floor((az + rr) / CH); cz++) {
       const k = cx + ',' + cz; if (chunks.has(k)) continue;
-      const d = Math.min(chunkDist(k, ax, az), chunkDist(k, P.x, P.z)); if (d <= rr) keys.push([d, k]);
+      const d = MV.open ? chunkDist(k, ax, az) : Math.min(chunkDist(k, ax, az), chunkDist(k, P.x, P.z)); if (d <= rr) keys.push([d, k]);
     }
   keys.sort((a, b) => a[0] - b[0]);
-  worker.postMessage({ t: 'want', keys: keys.map((k) => k[1]), x: P.x, z: P.z, vx, vz });
-  const drop = []; for (const k of chunks.keys()) if (chunkDist(k, P.x, P.z) > R + 90) { dropChunk(k); drop.push(k); }
+  worker.postMessage({ t: 'want', keys: keys.map((k) => k[1]), x: ax, z: az, vx, vz });
+  const drop = []; for (const k of chunks.keys()) if (!keepChunk(k)) { dropChunk(k); drop.push(k); }
   if (drop.length) { worker.postMessage({ t: 'drop', keys: drop }); radarDirty = true; }
 }
 function* chunksNear(x, z, r) {
@@ -850,13 +860,12 @@ function geoDist(la1, lo1, la2, lo2) { const r = Math.PI / 180, x = (lo2 - lo1) 
 const cleanName = (n) => String(n || '').toUpperCase().replace(/[^A-Z0-9ÄÖÜÀ-Ý _.-]/g, '').trim().slice(0, 12);
 function myName() { if (!S.name) { let g = ''; try { g = localStorage.getItem('gamelab-player-name') || ''; } catch (e) {} S.name = cleanName(g) || 'RUNNER-' + MP.u.slice(0, 2).toUpperCase(); saveS(); } return S.name; }
 // where the others see you: only while you play with GPS
+// la/lo = where your avatar is (your GPS spot, or where you walked / teleported in FREE); rla/rlo = your real GPS spot (who is within 200 m)
 function mySpot() {
   if (!REAL.ok) return null;
-  if (src === 'gps') {
-    if (F.init && O) { const [la, lo] = toLatLon(mode === 'bike' ? B.x : P.x, mode === 'bike' ? B.z : P.z); return { la, lo, live: true }; }
-    return { la: REAL.lat, lo: REAL.lon, live: true };
-  }
-  return { la: REAL.lat, lo: REAL.lon, live: false };
+  let la = REAL.lat, lo = REAL.lon;
+  if (O && (src !== 'gps' || F.init)) [la, lo] = toLatLon(mode === 'bike' ? B.x : P.x, mode === 'bike' ? B.z : P.z);
+  return { la, lo, rla: REAL.lat, rlo: REAL.lon, live: geoDist(la, lo, REAL.lat, REAL.lon) < 3000 };   // a demo city far away = AWAY
 }
 function mpJoin(code) {
   const e = { ws: null, live: false, retry: 0, dead: false };
@@ -888,12 +897,12 @@ function mpTick(now) {
   const me = mySpot();
   if (!me) return;
   if (now - MP.lastBlock > 2000) {
-    MP.lastBlock = now; MP.myCell = cellCode(me.la, me.lo);
-    const want = new Set(blockCodes(me.la, me.lo));
+    MP.lastBlock = now; MP.myCell = cellCode(me.rla, me.rlo);
+    const want = new Set(blockCodes(me.rla, me.rlo));
     for (const [code, e] of MP.rooms) if (!want.has(code)) { e.close(); MP.rooms.delete(code); }
     for (const code of want) if (!MP.rooms.has(code)) mpJoin(code);
   }
-  if (!me.live) {                                   // FREE / DEMO: no position, just "still here, away"
+  if (!me.live) {                                   // in a far-away demo city: no position, just "still here, away"
     if (MP.sending && now - MP.lastSend > 3000) { const e = mpRoom(); if (e) { MP.lastSend = now; e.send({ t: 'away', u: MP.u }); } }
   } else {
     const moving = mode === 'bike' || Math.hypot(vel.x, vel.z) > 0.4;
@@ -902,14 +911,14 @@ function mpTick(now) {
       if (e) {
         MP.lastSend = now; MP.sending = true;
         const spd = mode === 'bike' ? Math.abs(B.v) : Math.hypot(vel.x, vel.z);
-        e.send({ t: 's', u: MP.u, n: myName(), la: +me.la.toFixed(6), lo: +me.lo.toFixed(6), y: +(mode === 'bike' ? B.yaw : camYaw()).toFixed(2), m: mode === 'bike' ? 1 : 0, v: +spd.toFixed(1), c: S.color });
+        e.send({ t: 's', u: MP.u, n: myName(), la: +me.la.toFixed(6), lo: +me.lo.toFixed(6), y: +(mode === 'bike' ? B.yaw : camYaw()).toFixed(2), m: mode === 'bike' ? 1 : 0, v: +spd.toFixed(1), c: S.color, rla: +me.rla.toFixed(4), rlo: +me.rlo.toFixed(4) });
       }
     }
   }
   for (const [u, p] of MP.peers) {
-    p.dist = geoDist(me.la, me.lo, p.la, p.lo);
+    p.dist = geoDist(me.la, me.lo, p.la, p.lo); p.rd = geoDist(me.rla, me.rlo, p.rla, p.rlo);
     if (Date.now() - p.at > 25000) dropPeer(u);                 // silent for 25 s: really gone
-    else if (p.dist > NEAR_R + 30) dropPeer(u, true);           // walked out of range: no "left" toast
+    else if (p.rd > NEAR_R + 30) dropPeer(u, true);             // walked out of range: no "left" toast
   }
 }
 function mpMsg(d) {
@@ -918,9 +927,10 @@ function mpMsg(d) {
   if (d.t === 'away') { const q = MP.peers.get(d.u); if (q) { q.at = Date.now(); q.away = true; } return; }
   if (d.t !== 's' || !Number.isFinite(d.la) || !Number.isFinite(d.lo)) return;
   const me = mySpot(); if (!me) return;
-  const dist = geoDist(me.la, me.lo, d.la, d.lo);
+  const rla = Number.isFinite(d.rla) ? d.rla : d.la, rlo = Number.isFinite(d.rlo) ? d.rlo : d.lo;
+  const rd = geoDist(me.rla, me.rlo, rla, rlo), dist = geoDist(me.la, me.lo, d.la, d.lo);
   let p = MP.peers.get(d.u);
-  if (dist > NEAR_R) { if (p && dist > NEAR_R + 30) dropPeer(d.u); if (!p) return; }
+  if (rd > NEAR_R) { if (p && rd > NEAR_R + 30) dropPeer(d.u, true); if (!p) return; }
   if (!p) {
     p = newPeer(d.u); MP.peers.set(d.u, p);
     if (Date.now() - (MP.seen.get(d.u) || 0) > 60000) { toast((cleanName(d.n) || 'SOMEONE') + ' NEARBY', Math.round(dist) + ' m away · ' + (d.m ? 'on a light bike' : 'on foot'), 2200); glitch(0.5); }
@@ -928,7 +938,7 @@ function mpMsg(d) {
   MP.seen.set(d.u, Date.now()); p.away = false;
   const n = cleanName(d.n) || 'RUNNER', c = BIKE_COL[d.c] ? d.c : 'cyan';
   if (n !== p.name || c !== p.c) { p.name = n; p.c = c; peerLook(p); }
-  Object.assign(p, { la: d.la, lo: d.lo, y: Number.isFinite(d.y) ? d.y : 0, m: d.m ? 1 : 0, v: clamp(+d.v || 0, 0, 80), at: Date.now(), dist });
+  Object.assign(p, { la: d.la, lo: d.lo, rla, rlo, rd, y: Number.isFinite(d.y) ? d.y : 0, m: d.m ? 1 : 0, v: clamp(+d.v || 0, 0, 80), at: Date.now(), dist });
 }
 function makeWalker() {
   const g = new THREE.Group(), dark = new THREE.MeshBasicMaterial({ color: 0x05060c }), lineM = new THREE.LineBasicMaterial({ color: 0xffffff });
@@ -1269,7 +1279,7 @@ function goGps(quiet) {
   src = 'gps';
   if (F.init) { P.x = F.x; P.z = F.z; B.x = P.x; B.z = P.z; trail.reset(); }
   if (mode === 'bike') exitBike(true);
-  glitch(0.6); updateButtons(); if (!quiet) toast('GPS LOCK', S.auto ? 'auto drive: the bike rides on your GPS spot' : 'you are where you are');
+  glitch(0.6); updateButtons(); if (!quiet) toast('SUMMONED', S.auto ? 'back on your GPS spot · auto drive' : 'back on your real GPS spot');
   return true;
 }
 function teleport() {
@@ -1356,114 +1366,132 @@ const sfx = (() => {
 
 /* ---------- radar ---------- */
 const radar = $('radar'), rc = radar.getContext('2d'); let radarDirty = true, lastRadar = 0;
-/* ---------- big MAP: tap the radar ---------- */
-const MV = { open: false, cx: 0, cz: 0, s: 2, follow: true, headUp: false, ptrs: new Map(), pinch: 0, last: 0, list: 0 };
+/* ---------- MAP: tap the radar. A camera high above the city; move it, pick a player or a spot, teleport there ---------- */
+const MV = { open: false, fx: 0, fz: 0, tx: null, tz: null, h: 300, follow: true, headUp: false, sel: null, ptrs: new Map(), pinch: 0, last: 0, list: 0, down: null };
 const mapCv = $('mapc'), mc = mapCv.getContext('2d');
-function meXZ() { return mode === 'bike' ? { x: B.x, z: B.z, yaw: B.yaw } : { x: P.x, z: P.z, yaw: camYaw() }; }
+const mapRay = new THREE.Raycaster(), gPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitV = new THREE.Vector3(), _sv = new THREE.Vector3(), _ndc = new THREE.Vector2();
+const mapR = () => clamp(MV.h * 0.85, 160, 330);
+function meXZ() { return mode === 'bike' ? { x: B.x, z: B.z, yaw: B.yaw } : { x: P.x, z: P.z, yaw: MV.open && MV.myYaw != null ? MV.myYaw : camYaw() }; }
 function openMap() {
-  if (!O) return;
-  MV.open = true; MV.follow = true; $('mapMe').classList.add('on');
-  MV.s = clamp((Math.min(innerWidth, innerHeight) / 2 - 30) / 230, 0.3, 12);
-  $('bigmap').classList.remove('hide'); glitch(0.4); MV.list = 0;
+  if (!O || MV.open) return;
+  const me = meXZ(); Object.assign(MV, { follow: true, sel: null, fx: me.x, fz: me.z, tx: null, tz: null, h: 300, list: 0, myYaw: me.yaw, open: true });
+  $('mapMe').classList.add('on'); document.body.classList.add('mapmode'); $('bigmap').classList.remove('hide'); glitch(0.6); lastWant = 0;
+  $('mapHint').style.opacity = 1; clearTimeout(MV.hintT); MV.hintT = setTimeout(() => { $('mapHint').style.opacity = 0; }, 5000);
 }
-function closeMap() { MV.open = false; $('bigmap').classList.add('hide'); }
+function closeMap() { if (!MV.open) return; MV.open = false; document.body.classList.remove('mapmode'); $('bigmap').classList.add('hide'); lastWant = 0; camera.up.set(0, 1, 0); }
 radar.addEventListener('click', openMap);
 $('mapClose').onclick = closeMap;
-$('mapMe').onclick = () => { MV.follow = true; $('mapMe').classList.add('on'); };
+$('mapMe').onclick = () => { MV.follow = true; MV.sel = null; MV.tx = null; $('mapMe').classList.add('on'); };
 $('mapNorth').onclick = () => { MV.headUp = !MV.headUp; $('mapNorth').textContent = MV.headUp ? '⇧' : 'N↑'; $('mapNorth').classList.toggle('on', MV.headUp); };
-const mapRot = () => (MV.headUp ? -meXZ().yaw : 0);
+const mapYaw = () => (MV.headUp ? MV.myYaw || 0 : 0);
+const mapK = () => 2 * Math.hypot(MV.h, MV.h * 0.35) * Math.tan(camera.fov * Math.PI / 360) / innerHeight;   // metres per pixel at the centre
 function mapPan(dx, dy) {
-  const r = mapRot(), c = Math.cos(r), sn = Math.sin(r);
-  MV.cx -= (dx * c + dy * sn) / MV.s; MV.cz -= (-dx * sn + dy * c) / MV.s;
-  MV.follow = false; $('mapMe').classList.remove('on');
+  const y = mapYaw(), c = Math.cos(y), sn = Math.sin(y), k = mapK();
+  MV.fx -= k * (dx * c - dy * sn); MV.fz -= k * (dx * sn + dy * c);
+  MV.follow = false; MV.tx = null; $('mapMe').classList.remove('on');
 }
-mapCv.addEventListener('pointerdown', (e) => { MV.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); mapCv.setPointerCapture(e.pointerId); MV.pinch = 0; });
+function mapCamera(dt) {
+  MV.myYaw = mode === 'bike' ? B.yaw : camYaw();   // your heading, read before the camera goes up
+  const me = meXZ();
+  if (MV.follow) { const k = Math.min(1, dt * 6); MV.fx += (me.x - MV.fx) * k; MV.fz += (me.z - MV.fz) * k; }
+  else if (MV.tx != null) { const k = Math.min(1, dt * 3.5); MV.fx += (MV.tx - MV.fx) * k; MV.fz += (MV.tz - MV.fz) * k; if (Math.hypot(MV.tx - MV.fx, MV.tz - MV.fz) < 0.5) MV.tx = null; }
+  const y = mapYaw(), back = MV.h * 0.35;
+  camera.fov = 50; camera.up.set(0, 1, 0);
+  camera.position.set(MV.fx - Math.sin(y) * back, MV.h, MV.fz + Math.cos(y) * back);
+  camera.lookAt(MV.fx, 0, MV.fz);
+  U.uPlayer.value.set(MV.fx, 0, MV.fz);
+}
+function scr(x, y, z) { _sv.set(x, y, z).project(camera); return [(_sv.x + 1) / 2 * innerWidth, (1 - _sv.y) / 2 * innerHeight, _sv.z < 1]; }
+function mapPick(x, y) {
+  let best = null, bd = 36;
+  for (const p of MP.peers.values()) { if (p.x == null) continue; const [sx, sy] = scr(p.x, 1, p.z); const d = Math.hypot(sx - x, sy - y); if (d < bd) { bd = d; best = p; } }
+  if (best) { MV.sel = { u: best.u }; MV.follow = false; MV.tx = best.x; MV.tz = best.z; $('mapMe').classList.remove('on'); return; }
+  const me = meXZ(), [mx, my] = scr(me.x, 1, me.z); if (Math.hypot(mx - x, my - y) < 30) { MV.sel = null; return; }
+  _ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); mapRay.setFromCamera(_ndc, camera);
+  if (mapRay.ray.intersectPlane(gPlane, hitV)) MV.sel = { x: hitV.x, z: hitV.z, at: performance.now() };
+}
+mapCv.addEventListener('pointerdown', (e) => { MV.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); mapCv.setPointerCapture(e.pointerId); MV.pinch = 0; MV.down = MV.ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false } : null; });
 mapCv.addEventListener('pointermove', (e) => {
   const p = MV.ptrs.get(e.pointerId); if (!p) return;
-  if (MV.ptrs.size === 1) { mapPan(e.clientX - p.x, e.clientY - p.y); }
+  if (MV.ptrs.size === 1) { if (MV.down && Math.hypot(e.clientX - MV.down.x, e.clientY - MV.down.y) > 7) MV.down.moved = true; if (!MV.down || MV.down.moved) mapPan(e.clientX - p.x, e.clientY - p.y); }
   p.x = e.clientX; p.y = e.clientY;
-  if (MV.ptrs.size === 2) {
-    const [a, b] = [...MV.ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (MV.pinch) MV.s = clamp(MV.s * d / MV.pinch, 0.3, 12);
-    MV.pinch = d;
-  }
+  if (MV.ptrs.size === 2) { const [a, b] = [...MV.ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (MV.pinch) MV.h = clamp(MV.h * MV.pinch / d, 70, 900); MV.pinch = d; MV.down = null; }
 });
-const mapUp = (e) => { MV.ptrs.delete(e.pointerId); MV.pinch = 0; };
-mapCv.addEventListener('pointerup', mapUp); mapCv.addEventListener('pointercancel', mapUp);
-mapCv.addEventListener('wheel', (e) => { e.preventDefault(); MV.s = clamp(MV.s * Math.exp(-e.deltaY * 0.0015), 0.3, 12); }, { passive: false });
-function chunkPaths(c) {             // map drawing of a chunk, made once, in world metres
-  if (c._map) return c._map;
-  const foot = new Path2D(), big = new Path2D(), mid = new Path2D(), path = new Path2D();
-  for (const f of c.foot) { const r = f.r; foot.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) foot.lineTo(r[i], r[i + 1]); foot.closePath(); }
-  const a = c.roads;
-  for (let i = 0; i < a.length; i += 6) { const cls = a[i + 4], pth = cls <= 4 ? big : cls <= 8 ? mid : path; pth.moveTo(a[i], a[i + 1]); pth.lineTo(a[i + 2], a[i + 3]); }
-  return (c._map = { foot, big, mid, path });
+const mapUp = (e) => {
+  if (MV.down && !MV.down.moved && performance.now() - MV.down.t < 450 && MV.ptrs.size === 1) mapPick(e.clientX, e.clientY);
+  MV.ptrs.delete(e.pointerId); MV.pinch = 0; if (!MV.ptrs.size) MV.down = null;
+};
+mapCv.addEventListener('pointerup', mapUp); mapCv.addEventListener('pointercancel', (e) => { MV.ptrs.delete(e.pointerId); MV.down = null; });
+mapCv.addEventListener('wheel', (e) => { e.preventDefault(); MV.h = clamp(MV.h * Math.exp(e.deltaY * 0.0015), 70, 900); }, { passive: false });
+// teleport: to a player (just behind them, looking the way they look) or to the picked spot
+function teleportTo(x, z, yaw, label) {
+  if (demo.on) demoStop();
+  src = 'free'; autoArm = false;
+  P.x = x; P.z = z; B.x = x; B.z = z; vel.x = vel.z = 0; trail.reset(); if (mode === 'bike') { B.v = 0; B.yaw = yaw; }
+  if (insideBuilding(P.x, P.z)) toStreet(false);
+  look.yaw = -yaw; look.pitch = 0;
+  closeMap(); glitch(1.3); sfx.bikeOn(); updateButtons(); lastWant = 0;
+  toast('TELEPORTED', label + ' · GPS = back to your real spot', 2600);
 }
-function drawMap(now) {
-  if (now - MV.last < 33) return; MV.last = now;
+$('mapGo').onclick = () => {
+  const sel = MV.sel; if (!sel) return;
+  if (sel.u) { const p = MP.peers.get(sel.u); if (!p || p.x == null) return; teleportTo(p.x - Math.sin(p.dy) * 3, p.z + Math.cos(p.dy) * 3, p.dy, 'next to ' + p.name); }
+  else teleportTo(sel.x, sel.z, Math.atan2(sel.x - P.x, -(sel.z - P.z)), 'to the spot you picked');
+};
+function drawMapOverlay(now) {
+  if (now - MV.last < 30) return; MV.last = now;
   const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
   if (mapCv.width !== Math.round(W * dpr) || mapCv.height !== Math.round(H * dpr)) { mapCv.width = Math.round(W * dpr); mapCv.height = Math.round(H * dpr); }
-  const me = meXZ(); if (MV.follow) { MV.cx = me.x; MV.cz = me.z; }
-  const s = MV.s, rot = mapRot(), cr = Math.cos(rot), sr = Math.sin(rot);
-  const pr = (x, z) => { const dx = x - MV.cx, dz = z - MV.cz; return [W / 2 + (dx * cr - dz * sr) * s, H / 2 + (dx * sr + dz * cr) * s]; };
-  const c = mc; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#04000e'; c.fillRect(0, 0, W, H);
-  // world layer
-  c.save(); c.translate(W / 2, H / 2); c.rotate(rot); c.scale(s, s); c.translate(-MV.cx, -MV.cz);
-  const view = Math.hypot(W, H) / 2 / s + 10, g0 = 50;
-  c.lineWidth = 1 / s; c.strokeStyle = 'rgba(120,60,200,.18)'; c.beginPath();
-  for (let x = Math.floor((MV.cx - view) / g0) * g0; x < MV.cx + view; x += g0) { c.moveTo(x, MV.cz - view); c.lineTo(x, MV.cz + view); }
-  for (let z = Math.floor((MV.cz - view) / g0) * g0; z < MV.cz + view; z += g0) { c.moveTo(MV.cx - view, z); c.lineTo(MV.cx + view, z); }
-  c.stroke();
-  const vis = [...chunksNear(MV.cx, MV.cz, view)];
-  c.fillStyle = 'rgba(0,120,190,.22)'; c.strokeStyle = 'rgba(0,240,255,.55)'; c.lineWidth = Math.max(0.6, 1.1 / s);
-  for (const ch of vis) { const m = chunkPaths(ch); c.fill(m.foot); c.stroke(m.foot); }
-  c.lineCap = 'round';
-  for (const [k, col, w, minPx] of [['path', '#0a5a66', 1.6, 0.8], ['mid', '#9b2a8c', 5, 1.4], ['big', '#ff2bd6', 9, 2.2]]) {
-    c.strokeStyle = col; c.lineWidth = Math.max(w, minPx / s);           // real road width, never thinner than minPx on screen
-    for (const ch of vis) c.stroke(chunkPaths(ch)[k]);
-  }
-  c.restore();
-  // circles: the 150 m zone around you, the 200 m NEARBY reach around your real spot
-  const ring = (x, z, r, col, dash) => { const [sx, sy] = pr(x, z); c.setLineDash(dash || []); c.strokeStyle = col; c.lineWidth = 1.5; c.beginPath(); c.arc(sx, sy, r * s, 0, 7); c.stroke(); c.setLineDash([]); };
-  ring(me.x, me.z, R, 'rgba(0,240,255,.5)', [6, 5]);
-  const real = realSpot(), realXZ = real && real.d < 20000 ? real : (src === 'gps' ? { x: P.x, z: P.z } : null);
-  if (S.mp && realXZ) ring(realXZ.x, realXZ.z, NEAR_R, 'rgba(150,255,60,.55)', [3, 6]);
-  // shop signs
-  if (s > 1.6) { c.fillStyle = '#ffb020'; c.font = '13px VT323, monospace'; c.textAlign = 'left';
-    for (const ch of vis) for (const p of ch.pois) { const [x, y] = pr(p.x, p.z); if (x < -50 || y < -20 || x > W + 50 || y > H + 20) continue; c.fillRect(x - 2, y - 2, 4, 4); if (s > 3) c.fillText(p.name.slice(0, 18), x + 5, y + 4); } }
-  // your real GPS spot (when you roam away from it)
-  if (real && real.d >= 6 && real.d < 20000 && src !== 'gps') { const [x, y] = pr(real.x, real.z); c.strokeStyle = c.fillStyle = '#ffc040'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 7, 0, 7); c.stroke(); c.beginPath(); c.arc(x, y, 2.5, 0, 7); c.fill(); c.font = '15px VT323, monospace'; c.textAlign = 'left'; c.fillText('REAL GPS', x + 10, y + 5); }
-  const arrow = (x, y, a, col, size, glow) => { c.save(); c.translate(x, y); c.rotate(a); c.shadowColor = col; c.shadowBlur = glow ? 12 : 0; c.fillStyle = col; c.beginPath(); c.moveTo(0, -size); c.lineTo(size * 0.7, size * 0.75); c.lineTo(0, size * 0.35); c.lineTo(-size * 0.7, size * 0.75); c.closePath(); c.fill(); c.restore(); };
-  // other players
+  const c = mc; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const me = meXZ();
+  const circ = (x, z, r, col, dash) => { c.setLineDash(dash); c.strokeStyle = col; c.lineWidth = 1.6; c.beginPath(); for (let i = 0; i <= 72; i++) { const a = i / 72 * 6.2832, [sx, sy] = scr(x + Math.cos(a) * r, 0.3, z + Math.sin(a) * r); i ? c.lineTo(sx, sy) : c.moveTo(sx, sy); } c.stroke(); c.setLineDash([]); };
+  circ(me.x, me.z, R, 'rgba(0,240,255,.6)', [7, 5]);
+  if (S.mp && REAL.ok) { const [rx, rz] = toLocal(REAL.lat, REAL.lon); if (Math.hypot(rx - me.x, rz - me.z) < 5000) circ(rx, rz, NEAR_R, 'rgba(150,255,60,.6)', [3, 6]); }
+  const arrow = (x, y, a, col, size) => { c.save(); c.translate(x, y); c.rotate(a); c.shadowColor = col; c.shadowBlur = 12; c.fillStyle = col; c.beginPath(); c.moveTo(0, -size); c.lineTo(size * 0.7, size * 0.75); c.lineTo(0, size * 0.35); c.lineTo(-size * 0.7, size * 0.75); c.closePath(); c.fill(); c.restore(); };
+  const headA = (x, z, yaw) => { const [ax, ay] = scr(x, 0.5, z), [bx, by] = scr(x + Math.sin(yaw) * 5, 0.5, z - Math.cos(yaw) * 5); return Math.atan2(bx - ax, -(by - ay)); };
   const labels = [];
+  const lab = (x, y, col, t, hot) => labels.push([x, y, col, t, hot]);
+  // your real GPS spot when you're away from it
+  const real = realSpot();
+  if (real && real.d >= 6 && real.d < 20000 && src !== 'gps') { const [x, y] = scr(real.x, 0.5, real.z); c.strokeStyle = c.fillStyle = '#ffc040'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 8, 0, 7); c.stroke(); c.beginPath(); c.arc(x, y, 2.6, 0, 7); c.fill(); lab(x, y, '#ffc040', 'REAL GPS'); }
+  // players
   for (const p of MP.peers.values()) {
     if (p.x == null) continue;
-    const c3 = BIKE_COL[p.c] || BIKE_COL.cyan, col = `rgba(${c3.map((v) => Math.round(v * 255)).join(',')},${p.away ? 0.45 : 1})`;
-    let [x, y] = pr(p.x, p.z); const off = x < 14 || y < 70 || x > W - 14 || y > H - 60;
-    if (off) { const cx2 = W / 2, cy2 = H / 2, vx = x - cx2, vy = y - cy2, k = Math.min((W / 2 - 18) / Math.abs(vx || 1e-6), (H / 2 - 70) / Math.abs(vy || 1e-6)); x = cx2 + vx * k; y = cy2 + vy * k; }
-    arrow(x, y, p.away ? 0 : p.dy + rot, col, p.m && !p.away ? 13 : 10, !p.away);
-    labels.push([x, y, col, p.name + ' · ' + Math.round(p.dist || 0) + ' M' + (p.away ? ' · AWAY' : p.m ? ' ⚡' : '')]);
+    const c3 = BIKE_COL[p.c] || BIKE_COL.cyan, col = `rgba(${c3.map((v) => Math.round(v * 255)).join(',')},${p.away ? 0.5 : 1})`, hot = MV.sel && MV.sel.u === p.u;
+    let [x, y, front] = scr(p.x, 1, p.z); const off = !front || x < 16 || y < 96 || x > W - 16 || y > H - 120;
+    if (off) { const vx = x - W / 2, vy = y - H / 2, k = Math.min((W / 2 - 22) / Math.abs(vx || 1e-6), (H / 2 - 120) / Math.abs(vy || 1e-6)); x = W / 2 + vx * k; y = H / 2 + vy * k; arrow(x, y, Math.atan2(vx, -vy), col, 11); }
+    else { if (hot) { c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 19 + Math.sin(now / 150) * 2, 0, 7); c.stroke(); } arrow(x, y, headA(p.x, p.z, p.dy), col, p.m && !p.away ? 13 : 10); }
+    lab(x, y, col, p.name + ' · ' + Math.round(p.dist || 0) + ' M' + (p.away ? ' · AWAY' : p.m ? ' ⚡' : ''), hot);
   }
   // you
-  const [mx, my] = pr(me.x, me.z); arrow(mx, my, me.yaw + rot, mode === 'bike' ? '#ff2bd6' : '#ffffff', mode === 'bike' ? 14 : 12, true);
-  labels.push([mx, my, mode === 'bike' ? '#ff2bd6' : '#ffffff', 'YOU']);
+  { const [x, y] = scr(me.x, 1, me.z); arrow(x, y, headA(me.x, me.z, me.yaw), mode === 'bike' ? '#ff2bd6' : '#ffffff', 13); lab(x, y, mode === 'bike' ? '#ff2bd6' : '#ffffff', 'YOU'); }
+  // the picked spot
+  if (MV.sel && !MV.sel.u) {
+    const [x, y] = scr(MV.sel.x, 0.3, MV.sel.z), r = 14 + Math.sin(now / 160) * 3;
+    c.strokeStyle = '#ff2bd6'; c.shadowColor = '#ff2bd6'; c.shadowBlur = 10; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r, 0, 7); c.moveTo(x - r - 8, y); c.lineTo(x - 5, y); c.moveTo(x + 5, y); c.lineTo(x + r + 8, y); c.moveTo(x, y - r - 8); c.lineTo(x, y - 5); c.moveTo(x, y + 5); c.lineTo(x, y + r + 8); c.stroke(); c.shadowBlur = 0;
+  }
   c.font = '17px VT323, monospace'; c.textAlign = 'center';
-  for (const [x, y, col, t] of labels) { const w = c.measureText(t).width + 10; c.fillStyle = 'rgba(4,0,14,.75)'; c.fillRect(x - w / 2, y + 14, w, 18); c.fillStyle = col; c.fillText(t, x, y + 28); }
-  // north and scale
-  const nx = W - 26, ny = H - 96; c.save(); c.translate(nx, ny); c.rotate(rot); c.fillStyle = '#ff2bd6'; c.beginPath(); c.moveTo(0, -12); c.lineTo(5, 2); c.lineTo(-5, 2); c.closePath(); c.fill(); c.restore();
+  for (const [x, y, col, t, hot] of labels) { const w = c.measureText(t).width + 10; c.fillStyle = hot ? 'rgba(60,0,50,.85)' : 'rgba(4,0,14,.75)'; c.fillRect(x - w / 2, y + 15, w, 18); c.fillStyle = col; c.fillText(t, x, y + 29); }
+  // north + scale bar
+  const nA = headA(MV.fx, MV.fz, 0), nx = W - 28, ny = H - 150; c.save(); c.translate(nx, ny); c.rotate(nA); c.fillStyle = '#ff2bd6'; c.beginPath(); c.moveTo(0, -12); c.lineTo(5, 2); c.lineTo(-5, 2); c.closePath(); c.fill(); c.restore();
   c.fillStyle = '#ff2bd6'; c.font = '15px VT323, monospace'; c.fillText('N', nx, ny + 18);
-  const steps = [10, 20, 50, 100, 200, 500, 1000]; let sm = steps[0]; for (const st of steps) if (st * s < 120) sm = st;
-  c.strokeStyle = '#00f0ff'; c.lineWidth = 2; c.beginPath(); c.moveTo(14, H - 92); c.lineTo(14 + sm * s, H - 92); c.stroke(); c.fillStyle = '#00f0ff'; c.textAlign = 'left'; c.fillText(sm + ' M', 14, H - 98);
-  // title + player list
+  const k = mapK(), steps = [10, 20, 50, 100, 200, 500]; let sm = 10; for (const st of steps) if (st / k < 130) sm = st;
+  c.strokeStyle = '#00f0ff'; c.lineWidth = 2; c.beginPath(); c.moveTo(14, H - 146); c.lineTo(14 + sm / k, H - 146); c.stroke(); c.fillStyle = '#00f0ff'; c.textAlign = 'left'; c.fillText(sm + ' M', 14, H - 152);
+  // title, teleport button, player chips
   const n = MP.peers.size;
-  $('mapSub').textContent = !S.mp ? 'NEAR is off: turn it on to see players' : !mySpot() ? 'NEAR needs your GPS' : n ? n + (n === 1 ? ' PLAYER' : ' PLAYERS') + ' WITHIN 200 M' : 'nobody within 200 m yet';
+  $('mapSub').textContent = !S.mp ? 'NEAR is off: no players' : !mySpot() ? 'NEAR needs your GPS' : n ? n + (n === 1 ? ' PLAYER' : ' PLAYERS') + ' WITHIN 200 M' : 'nobody within 200 m yet';
+  const go = $('mapGo'); let gt = '';
+  if (MV.sel && MV.sel.u) { const p = MP.peers.get(MV.sel.u); if (p) gt = '⤓ TELEPORT TO ' + p.name; else MV.sel = null; }
+  else if (MV.sel) gt = '⤓ TELEPORT HERE <span>' + fmtDist(Math.hypot(MV.sel.x - me.x, MV.sel.z - me.z)) + '</span>';
+  if (gt !== go.dataset.t) { go.dataset.t = gt; go.innerHTML = gt; go.classList.toggle('hide', !gt); }
   if (now - MV.list > 600) {
     MV.list = now; const el = $('mapList'); el.innerHTML = '';
     if (!S.mp) { const b = document.createElement('button'); b.textContent = '⚇ TURN ON NEAR'; b.style.color = '#b6ff5a'; b.onclick = () => { closeMap(); openNear(); }; el.appendChild(b); }
     for (const p of MP.peers.values()) {
       const c3 = BIKE_COL[p.c] || BIKE_COL.cyan, b = document.createElement('button');
       b.style.color = `rgb(${c3.map((v) => Math.round(v * 255)).join(',')})`; b.textContent = '● ' + p.name + ' ' + Math.round(p.dist || 0) + ' M' + (p.away ? ' · AWAY' : p.m ? ' ⚡' : '');
-      b.onclick = () => { if (p.x == null) return; MV.follow = false; $('mapMe').classList.remove('on'); MV.cx = p.x; MV.cz = p.z; MV.s = Math.max(MV.s, 2.5); };
+      if (MV.sel && MV.sel.u === p.u) b.style.background = 'rgba(60,0,50,.85)';
+      b.onclick = () => { if (p.x == null) return; MV.sel = { u: p.u }; MV.follow = false; MV.tx = p.x; MV.tz = p.z; $('mapMe').classList.remove('on'); MV.list = 0; };
       el.appendChild(b);
     }
   }
@@ -1639,7 +1667,7 @@ function frame(now) {
     if (gyroOn()) {
       qY.setFromAxisAngle(YAX, look.trim); tmpQ.copy(qY).multiply(look.q);
       if (look.pOff) { eul2.setFromQuaternion(tmpQ, 'YXZ'); eul2.x = clamp(eul2.x - look.pOff, -1.45, 1.45); tmpQ.setFromEuler(eul2); }
-      camera.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 14));
+      if (MV.open) camera.quaternion.copy(tmpQ); else camera.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 14));
     } else {
       look.yaw -= inp.lx * dt * 2.2; look.pitch = clamp(look.pitch - inp.ly * dt * 1.8, -1.3, 1.3);
       camera.rotation.set(look.pitch, look.yaw, 0);
@@ -1647,13 +1675,15 @@ function frame(now) {
     camera.fov = lerp(camera.fov, 72, dt * 3);
     sfx.engine(false, 0);
   }
+  if (MV.open) mapCamera(dt);
+  U.uRadius.value = MV.open ? mapR() : R; U.uFogD.value = MV.open ? 0.0013 : FOGD; scene.fog.density = U.uFogD.value;
   camera.updateProjectionMatrix();
   U.uCam.value.copy(camera.position);
-  ground.position.set(Math.round(P.x / 2) * 2, 0, Math.round(P.z / 2) * 2);
-  wall.position.set(P.x, 0, P.z);
+  { const gx = MV.open ? MV.fx : P.x, gz = MV.open ? MV.fz : P.z; ground.position.set(Math.round(gx / 2) * 2, 0, Math.round(gz / 2) * 2); ground.scale.setScalar(MV.open ? (2 * mapR() + 60) / (2 * R + 60) : 1); }
+  wall.position.set(P.x, 0, P.z); wall.visible = !MV.open;
   updateSpot(t); mpTick(now); updatePeers(dt, t);
   sky.position.copy(camera.position);
-  rain.visible = S.rain;
+  rain.visible = S.rain && !MV.open;
   const anc = traffic.material.uniforms.uAnchor.value; if (Math.hypot(anc.x - P.x, anc.z - P.z) > 220) anc.set(P.x, 0, P.z);
 
   // glitch: decays, random small hits, more at speed
@@ -1662,7 +1692,7 @@ function frame(now) {
   compMat.uniforms.uAberr.value = 0.0012 + (mode === 'bike' ? Math.min(0.004, Math.abs(B.v) * 0.00015) : 0);
 
   updateChunks(now); updateSigns(now); animSigns(t); drawRadar(now); drawHud(now);
-  if (MV.open) drawMap(now); else renderFrame();
+  renderFrame(); if (MV.open) drawMapOverlay(now);
 
   // keep it smooth: lower the resolution, then the bloom, if frames are slow
   frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
@@ -1701,7 +1731,7 @@ function enterGame() {
 }
 resize();
 requestAnimationFrame(frame);
-window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, MV, openMap, MP, cellCode, blockCodes, recenter, look };
+window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, MV, openMap, closeMap, MP, cellCode, blockCodes, recenter, look };
 if (Q.get('auto') === '1') { const lat = parseFloat(Q.get('lat')) || 47.3769, lon = parseFloat(Q.get('lon')) || 8.5417; $('start').classList.add('hide'); startSensors(); initWorld(lat, lon); src = 'free'; enterGame(); }
 </script>
 </body>
