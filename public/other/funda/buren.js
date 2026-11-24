@@ -826,7 +826,8 @@ function refreshMap() {
   heightInfo();
   legendMap(MAP.S);
   const yi = Math.round(MAP.year || 0);
-  $("mapYearBig").textContent = MAP.year != null ? String(MAP.playing ? Math.floor(MAP.year + 1e-6) : yi) : "";
+  $("mapYearNow").textContent = MAP.year != null ? String(MAP.playing ? Math.floor(MAP.year + 1e-6) : yi) : "";
+  if (MAP.cyber) cyberRefresh();
 }
 
 async function drawMap(S) {
@@ -867,7 +868,6 @@ async function drawMap(S) {
     },
   });
   MAP.map = map;
-  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   const pin = document.createElement("div"); pin.className = "me-pin"; pin.textContent = "This house";
   MAP.mePin = pin;
   pin.style.zIndex = 5;
@@ -891,26 +891,31 @@ async function drawMap(S) {
   map.on("mouseleave", "b3d", () => { map.getCanvas().style.cursor = ""; });
   map.on("click", "b3d", (e) => {
     const f = e.features && e.features[0]; if (!f) return;
-    const p = f.properties, S2 = MAP.S;
-    let names = []; try { names = JSON.parse(p.names); } catch {}
-    const yr = Math.round(MAP.year || (S2 && S2.Y) || 0);
-    const lines = [`<b>${esc(names[0] || "Building")}</b>${p.n > 1 ? ` <span style="color:#52514e">+ ${p.n - 1} more address${p.n > 2 ? "es" : ""}</span>` : ""}`];
-    if (p.known && S2) {
-      const sc = mapScales(S2);
-      const v = p.v, svy = wozAt(S2.self, yr);
-      lines.push(`WOZ ${yr}: <b>${eur(Math.round(p.v / 1000) * 1000)}</b>${p.known > 1 ? " (average)" : ""}${p.me ? " · this house" : ""}`);
-      if (!p.me && svy) lines.push(`${sEur(v - svy)} (${pct((v / svy - 1) * 100)}) vs this house`);
-      if (sc.ask) lines.push(`${sEur(v - sc.ask)} vs the asking price of this house`);
-      if (p.g > -50) lines.push(`Grew ${pct(p.g * 100, 0)} since ${sc.base}`);
-      const R = MAP.R || scoreSet(S2, yr);
-      const e = names.length ? R.list.find((x) => x.h.name === names[0]) : null;
-      if (e) lines.push(`Value score <b>${Math.round(e.score)}</b> · #${e.rank} of ${R.n}`);
-    } else lines.push(`<span style="color:#52514e">Not compared. Choose more houses above to include it.</span>`);
-    if (p.built) lines.push(`Built ${p.built}`);
-    new maplibregl.Popup({ closeButton: true, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML(lines.join("<br>")).addTo(map);
+    new maplibregl.Popup({ closeButton: true, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML(buildingInfo(f.properties)).addTo(map);
   });
   ["mousedown", "touchstart", "wheel", "dragstart"].forEach((ev) => map.on(ev, () => { MAP.spin = false; }));
   MAP.starting = false;
+}
+// what a building is: shown when tapped on the map, and when looked at in the cyberpunk view
+function buildingInfo(p, plain) {
+  const S2 = MAP.S, mute = plain ? "" : ' style="color:#52514e"';
+  let names = []; try { names = typeof p.names === "string" ? JSON.parse(p.names) : p.names || []; } catch {}
+  const yr = Math.round(MAP.year || (S2 && S2.Y) || 0);
+  const lines = [`<b>${esc(names[0] || "Building")}</b>${p.n > 1 ? ` <span${mute}>+ ${p.n - 1} more address${p.n > 2 ? "es" : ""}</span>` : ""}`];
+  if (p.known && S2) {
+    const sc = mapScales(S2);
+    const v = p.v, svy = wozAt(S2.self, yr);
+    lines.push(`WOZ ${yr}: <b>${eur(Math.round(p.v / 1000) * 1000)}</b>${p.known > 1 ? " (average)" : ""}${p.me ? " · this house" : ""}`);
+    if (p.me && askNow()) lines.push(`Asking price now: <b>${eur(askNow())}</b>`);
+    if (!p.me && svy) lines.push(`${sEur(v - svy)} (${pct((v / svy - 1) * 100)}) vs this house`);
+    if (!p.me && sc.ask) lines.push(`${sEur(v - sc.ask)} vs the asking price of this house`);
+    if (p.g > -50) lines.push(`Grew ${pct(p.g * 100, 0)} since ${sc.base}`);
+    const R = MAP.R || scoreSet(S2, yr);
+    const e = names.length ? R.list.find((x) => x.h.name === names[0]) : null;
+    if (e) lines.push(`Value score <b>${Math.round(e.score)}</b> · #${e.rank} of ${R.n}`);
+  } else lines.push(`<span${mute}>Not compared. Choose more houses above to include it.</span>`);
+  if (p.built) lines.push(`Built ${p.built}`);
+  return lines.join("<br>");
 }
 function spin() {
   const map = MAP.map; if (!map || !MAP.spin || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -946,6 +951,95 @@ function legendMap(S) {
   }
   el.innerHTML = h + `<span>${sq(GREY)} not compared</span>`;
 }
+
+// ----- cyberpunk view (cyber.js, three.js): the same buildings, colours and heights as the 3D map -----
+function cyberData() {
+  const S = MAP.S, d = NB.data;
+  const fc = mapFeatures(S);
+  const key = heightProp()[1];
+  const hOf = new Map(fc.features.map((f) => [f.properties.id, f.properties[key]]));
+  const sc = S ? mapScales(S) : null, Y = MAP.year != null ? MAP.year : S ? S.Y : null;
+  const labels = [];
+  if (S) {
+    const R = MAP.mode === "score" ? MAP.R || scoreSet(S, Y) : null;
+    const tag = (h) => {
+      const v = wozAt(h, Y);
+      if (MAP.mode === "score") { const e = R && R.byNid.get(h.nid); return e ? Math.round(e.score) + " PTS" : null; }
+      if (MAP.mode === "growth") { const g = growthAt(h, Y, sc.base); return g != null ? pct(g * 100, 0) : null; }
+      if (MAP.mode === "diff" && h !== S.self) { const sv = wozAt(S.self, Y); return v != null && sv != null ? sEur(v - sv) : null; }
+      if (MAP.mode === "ask" && h !== S.self && sc.ask) return v != null ? sEur(v - sc.ask) : null;
+      if (MAP.mode === "price") { const p = priceNow(S, h); return p != null ? kEur(p) : null; }
+      return v != null ? kEur(v) : null;
+    };
+    const ask = askNow();
+    if (S.self.lon != null) labels.push({ lon: S.self.lon, lat: S.self.lat, h: hOf.get(S.self.pand) || 6, text: "THIS HOUSE" + (ask ? " · " + kEur(ask) : ""), me: true });
+    for (const h of S.houses) {
+      if (h.lon == null || !h.woz || !h.woz.length) continue;
+      const t = tag(h); if (t) labels.push({ lon: h.lon, lat: h.lat, h: hOf.get(h.pand) || 6, text: t });
+    }
+  }
+  return {
+    center: d.center, radius: d.radius,
+    buildings: fc.features.map((f) => ({ ring: f.geometry.coordinates[0], h: f.properties[key], color: f.properties.color, me: f.properties.me, known: f.properties.known, info: buildingInfo(f.properties, true) })),
+    labels,
+  };
+}
+let cyberT = 0;
+function cyberRefresh() {
+  if (cyberT) return;
+  cyberT = setTimeout(() => { cyberT = 0; if (MAP.cyber && NB.data) MAP.cyber.set(cyberData()); }, MAP.playing ? 250 : 60);
+}
+async function enterCyber() {
+  if (MAP.cyber || MAP.cyberLoading) return;
+  const box = $("map3d");
+  const host = document.createElement("div"); host.className = "cyber"; host.innerHTML = '<div class="cy-load">BOOTING NEON CITY…</div>';
+  box.appendChild(host);
+  box.classList.add("cyber-on"); // the 3D map's own labels stay hidden behind it
+  MAP.spin = false;
+  MAP.cyberLoading = true;
+  try {
+    const mod = await import("/other/funda/cyber.js");
+    if (!MAP.cyberLoading) return; // switched back while loading
+    host.innerHTML = "";
+    MAP.cyber = mod.createCyber(host);
+    MAP.cyberHost = host;
+    if (NB.data) MAP.cyber.set(cyberData());
+  } catch (e) {
+    host.innerHTML = `<div class="cy-load">The cyberpunk view couldn't start: ${esc(e.message || String(e))}</div>`;
+  }
+  MAP.cyberLoading = false;
+}
+function exitCyber() {
+  MAP.cyberLoading = false;
+  if (MAP.cyber) { MAP.cyber.dispose(); MAP.cyber = null; }
+  const h = $("map3d").querySelector(".cyber"); if (h) h.remove();
+  $("map3d").classList.remove("cyber-on");
+  MAP.cyberHost = null;
+}
+
+// ----- full screen: the whole map card (real full screen where the browser allows, else filling the window) -----
+function setFull(on) {
+  const el = $("mapPanel");
+  el.classList.toggle("full", on);
+  document.documentElement.classList.toggle("map-full-on", on);
+  $("mapFull").textContent = on ? "✕" : "⛶";
+  $("mapFull").setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+  setTimeout(() => { if (MAP.map) MAP.map.resize(); if (MAP.cyber) MAP.cyber.resize(); }, 150);
+}
+$("mapFull").addEventListener("click", async () => {
+  const el = $("mapPanel");
+  if (!el.classList.contains("full")) {
+    setFull(true);
+    try { if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: "hide" }); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); } catch {}
+  } else {
+    setFull(false);
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); } catch {}
+  }
+});
+const fsChange = () => { if (!(document.fullscreenElement || document.webkitFullscreenElement) && $("mapPanel").classList.contains("full")) setFull(false); };
+document.addEventListener("fullscreenchange", fsChange);
+document.addEventListener("webkitfullscreenchange", fsChange);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && $("mapPanel").classList.contains("full")) setFull(false); });
 
 // ----- time slider + play -----
 function setupSlider(S) {
@@ -999,8 +1093,10 @@ $("mapMode").addEventListener("click", (e) => {
 
 $("mapBase").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  MAP.base = b.dataset.v;
   $("mapBase").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  if (b.dataset.v === "cyber") { enterCyber(); return; }
+  exitCyber();
+  MAP.base = b.dataset.v;
   setBase();
 });
 // ----- height settings -----
@@ -1026,6 +1122,7 @@ $("mapH").addEventListener("click", (e) => {
   MAP.height = b.dataset.v;
   $("mapH").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
   if (MAP.map && MAP.ready) { MAP.map.setPaintProperty("b3d", "fill-extrusion-height", heightProp()); refreshMap(); }
+  else if (MAP.cyber) cyberRefresh();
   heightInfo();
 });
 

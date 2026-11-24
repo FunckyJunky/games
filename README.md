@@ -76,7 +76,8 @@ public/                 the website
                         watched are in FUNDA_WATCH at the top of src/funda.js. Page: ?id=<funda number> for another one.
                         Neighbours (buren.js + src/buren.js): WOZ values of the houses within 150 m (PDOK, BAG,
                         WOZ-waardeloket; cached, at most 30 lookups per request), 8 charts and a 3D map
-                        (maplibre/ = MapLibre GL JS 4.7.1, BSD-3; PDOK base map / aerial photo)
+                        (maplibre/ = MapLibre GL JS 4.7.1, BSD-3; PDOK base map / aerial photo). Cyberpunk view:
+                        cyber.js (three/ = three.js r170, MIT): neon city of the same buildings, fly over or walk
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:

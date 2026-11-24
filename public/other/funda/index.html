@@ -6,6 +6,7 @@
 <title>Funda EYE · Rozengaard 11 4, Lelystad</title>
 <meta name="robots" content="noindex">
 <link rel="manifest" href="/other/funda/manifest.webmanifest">
+<script type="importmap">{ "imports": { "three": "/other/funda/three/three.module.min.js", "three/addons/": "/other/funda/three/jsm/" } }</script>
 <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="/other/funda/apple-touch-icon.png">
@@ -176,6 +177,36 @@
   .hset output { font-size: 12.5px; color: var(--ink-2); min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
   .hset .line { grid-column: 1 / -1; margin: 2px 0 0; font-size: 12.5px; }
   .hset .btn { grid-column: 1 / -1; justify-self: start; padding: 6px 10px; font-size: 12.5px; }
+  .fs-btn { position: absolute; right: 8px; top: 8px; z-index: 7; width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(0,0,0,.12); background: rgba(252,252,251,.9); color: #0b0b0b; font-size: 18px; line-height: 1; cursor: pointer; }
+  .yr-now { font-size: 15px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; color: var(--ink); }
+  .map3d .ctl { z-index: 7 !important; }
+  #mapPanel.full { position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0; border: 0; overflow-y: auto; display: flex; flex-direction: column;
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--surface); }
+  #mapPanel.full > h2, #mapPanel.full > .note { display: none; }
+  #mapPanel.full .map3d { flex: 1 1 auto; height: auto; min-height: 58vh; }
+  html.map-full-on, html.map-full-on body { overflow: hidden; }
+  /* cyberpunk view */
+  .map3d.cyber-on .maplibregl-marker { display: none; }
+  .cyber { position: absolute; inset: 0; z-index: 4; background: #04020b; overflow: hidden; touch-action: none; }
+  .cyber .cy-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .cy-load { position: absolute; inset: 0; display: grid; place-items: center; color: #40fbff; font: 700 14px/1.4 ui-monospace, Menlo, monospace; letter-spacing: .12em; text-shadow: 0 0 8px #40fbff; text-align: center; padding: 20px; }
+  .cy-hud { position: absolute; inset: 0; pointer-events: none; font: 700 11.5px/1.3 ui-monospace, Menlo, Consolas, monospace; color: #e8fbff; letter-spacing: .06em; }
+  .cy-top { position: absolute; left: 10px; right: 10px; top: 56px; display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; white-space: nowrap; text-shadow: 0 0 5px rgba(255,63,208,.8); }
+  .cy-tag { color: #ff6ade; }
+  .cy-read { color: #7ff9ff; text-shadow: 0 0 6px #00e5ff; }
+  .cy-cross { display: none; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid rgba(127,249,255,.55); border-radius: 50%; box-shadow: 0 0 6px #00e5ff; }
+  .cy-cross.on { border-color: #ff6ade; box-shadow: 0 0 8px #ff3fd0; }
+  .cy-info { position: absolute; left: 10px; bottom: 34px; max-width: min(62%, 300px); font: 600 11.5px/1.4 system-ui, -apple-system, sans-serif; letter-spacing: 0; color: #f2fbff;
+    background: rgba(12,4,24,.62); border: 1px solid rgba(255,63,208,.7); border-radius: 10px; padding: 8px 11px; box-shadow: 0 0 14px rgba(255,63,208,.35); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+  .cy-info:empty { display: none; }
+  .cy-info b { color: #7ff9ff; }
+  .cy-help { position: absolute; left: 10px; right: 104px; bottom: 10px; color: rgba(232,251,255,.62); font-size: 9.5px; line-height: 1.25; }
+  .cy-btns { position: absolute; right: 10px; bottom: 10px; display: grid; gap: 6px; pointer-events: auto; }
+  .cy-btns button { font: 800 12px/1 ui-monospace, Menlo, monospace; letter-spacing: .1em; color: #0b0013; background: #40fbff; border: 0; border-radius: 6px; padding: 10px 12px; box-shadow: 0 0 14px rgba(64,251,255,.7); cursor: pointer; }
+  .cy-btns #cyRain { background: rgba(20,4,30,.7); color: #ff6ade; border: 1px solid #ff3fd0; box-shadow: 0 0 10px rgba(255,63,208,.5); }
+  .cy-btns #cyRain[aria-pressed="false"] { opacity: .55; }
+  .cy-joy { display: none; position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; border: 2px solid rgba(64,251,255,.6); box-shadow: 0 0 12px rgba(64,251,255,.5) inset; }
+  .cy-joy i { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; background: rgba(255,63,208,.75); box-shadow: 0 0 12px #ff3fd0; }
   .map-year { position: absolute; left: 12px; bottom: 10px; z-index: 2; font: 800 34px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
     text-shadow: 0 0 6px rgba(255,255,255,.9), 0 0 2px rgba(255,255,255,.9); pointer-events: none; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .price-pin { background: rgba(252,252,251,.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); color: #0b0b0b; font: 700 11.5px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; pointer-events: none; }
@@ -430,7 +461,7 @@
 
   <section class="card panel" id="mapPanel">
     <h2>3D map · 150 m around the house</h2>
-    <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ. With a height chosen, the highest house is two houses tall and the rest are in proportion.</p>
+    <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ (on a computer: right-drag to turn). With a height chosen, the highest house is two houses tall and the rest are in proportion.</p>
     <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px"><span class="muted" style="font-size:12.5px;align-self:center;margin-right:2px">Colour:</span>
       <button type="button" data-v="diff" aria-pressed="true">vs this house</button>
       <button type="button" data-v="ask" aria-pressed="false">vs asking price</button>
@@ -449,9 +480,9 @@
       <button class="btn" type="button" id="hReset">Reset heights</button>
     </div>
     <div class="map3d" id="map3d">
-      <div class="map-year" id="mapYearBig" aria-hidden="true"></div>
+      <button type="button" class="fs-btn" id="mapFull" aria-label="Full screen">⛶</button>
       <div class="ctl">
-        <div class="seg" id="mapBase"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="photo" aria-pressed="false">Aerial</button></div>
+        <div class="seg" id="mapBase"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="photo" aria-pressed="false">Aerial</button><button type="button" data-v="cyber" aria-pressed="false">Cyberpunk</button></div>
 
       </div>
       <div class="msg" id="mapMsg">Loading the map…</div>
@@ -461,6 +492,7 @@
       <span class="muted" id="mapYearMin"></span>
       <input type="range" id="mapYear" min="2014" max="2025" step="any" value="2025" aria-label="Year">
       <span class="muted" id="mapYearMax"></span>
+      <b class="yr-now" id="mapYearNow"></b>
     </div>
     <div class="scale" id="mapScale"></div>
   </section>
