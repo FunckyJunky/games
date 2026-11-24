@@ -59,7 +59,7 @@ public/                 the website
                         SPOT: point at a player you can see and the compass fixes their direction (mutual spots averaged,
                         fades after 3 min). Steps + compass move you between GPS fixes (dead reckoning)
   lib/qrcode.js         QR code generator used by radar/ and rifle/ (MIT, Kazuhiko Arase)
-  zone/                 ZONE (error.blue/zone): the 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon
+  map/                  ZONE (error.blue/map; error.blue/zone forwards here): the 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon
                         city. GPS = where you are, phone sensors = where you look (or drag), FREE = walk with the stick/WASD.
                         On a road at speed (over 18 km/h for 2.5 s, within ~15 m of a street) a light bike drops in and rides
                         that road in your lane (left-hand countries too); it docks after ~6 s slow. BIKE = ride it yourself.
