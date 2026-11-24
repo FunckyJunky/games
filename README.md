@@ -66,6 +66,8 @@ public/                 the website
                         AUTO = the bike stays on and rides exactly on your GPS spot (no road snap). Riding/walking away by hand:
                         an amber pillar + radar marker + HUD line show your real GPS spot, TELEPORT TO ME jumps back.
                         LEVEL (or double-tap right half, R) = look straight ahead; with phone sensors it takes how you hold it now.
+                        Tap the radar (or M) = full-screen MAP: streets, you, your real GPS spot, 150 m zone, 200 m NEAR reach and
+                        the players near you (name, distance, bike); drag, pinch, N↑ / heading-up, ◎ follow, tap a player to centre.
                         NEAR = see other ZONE players within 200 m (opt-in, S.mp). Rooms /api/room/zone/<CELL>: 420 m map cells
                         (8 chars, base36 row+column); you listen in the up to 4 cells around you and send in your own, only while
                         you play with GPS (GPS/AUTO); messages {t:'s',u,n,la,lo,y,m,v,c} / {t:'bye',u}; further than 200 m is ignored.

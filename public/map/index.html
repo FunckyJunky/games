@@ -26,7 +26,7 @@
   #hud .gp { color: #ffd36a; text-shadow: 0 0 6px rgba(255,190,60,.9); }
   #hud .nr { color: #b6ff5a; text-shadow: 0 0 6px rgba(150,255,60,.8); }
   #hud .mode { color: var(--a); text-shadow: 0 0 6px rgba(255,176,32,.8); }
-  #radar { position: fixed; right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); width: 128px; height: 128px; pointer-events: none; }
+  #radar { position: fixed; right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); width: 128px; height: 128px; pointer-events: auto; cursor: pointer; }
   #toast { position: fixed; left: 50%; top: 30%; transform: translate(-50%, -50%); font-family: var(--hd); font-weight: 900; font-size: clamp(16px, 4.4vw, 30px); letter-spacing: 3px; color: #fff; text-align: center; pointer-events: none; opacity: 0; transition: opacity .35s; text-shadow: 0 0 10px var(--c), 3px 0 var(--m), -3px 0 var(--c); white-space: pre-line; width: 92vw; }
   #toast.on { opacity: 1; }
   #toast small { display: block; font-family: var(--ui); font-weight: 400; font-size: 19px; letter-spacing: 1px; color: var(--a); text-shadow: 0 0 6px rgba(255,176,32,.8); margin-top: 6px; }
@@ -75,6 +75,19 @@
   #near p { font-size: 18px; color: #dfe; line-height: 1.15; margin: 8px 0; }
   #near input { width: 100%; font: 22px var(--ui); padding: 6px 8px; background: #050012; color: #fff; border: 1px solid rgba(0,240,255,.6); text-transform: uppercase; }
   #nearList div { font-size: 19px; color: #fff; padding: 2px 0; }
+  #bigmap { position: fixed; inset: 0; z-index: 8; background: #04000e; touch-action: none; }
+  #mapc { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #mapTop { position: absolute; left: 0; right: 0; top: 0; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
+    display: flex; gap: 8px; align-items: center; background: linear-gradient(rgba(4,0,14,.95), rgba(4,0,14,0)); pointer-events: none; }
+  #mapTop > * { pointer-events: auto; }
+  #mapTitle { flex: 1; font: 900 15px var(--hd); letter-spacing: 3px; color: #fff; text-shadow: 0 0 8px var(--c), 2px 0 var(--m); pointer-events: none !important; }
+  #mapTitle small { display: block; font: 17px var(--ui); letter-spacing: 1px; color: #b6ff5a; text-shadow: 0 0 6px rgba(150,255,60,.7); }
+  .mb { min-width: 46px; height: 42px; padding: 0 10px; font: 19px var(--ui); color: var(--c); background: rgba(6,1,20,.75); border: 1px solid rgba(0,240,255,.6); cursor: pointer; }
+  .mb.on { color: #fff; border-color: #fff; background: rgba(0,240,255,.22); }
+  #mapList { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px max(10px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom)); display: flex; gap: 6px; flex-wrap: wrap;
+    background: linear-gradient(rgba(4,0,14,0), rgba(4,0,14,.95)); }
+  #mapList button { font: 18px var(--ui); padding: 5px 9px; background: rgba(6,1,20,.8); border: 1px solid currentColor; cursor: pointer; }
+  #mapList .dim { font-size: 17px; }
   #load { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); font: 20px var(--ui); color: var(--c); text-shadow: 0 0 6px var(--c); pointer-events: none; letter-spacing: 2px; }
 </style>
 </head>
@@ -104,6 +117,11 @@
 <button id="level" class="hide">⊙ LEVEL</button>
 <button id="tele" class="hide">⤓ TELEPORT TO ME <span id="teleD"></span></button>
 <div id="stick"><div id="knob"></div></div>
+<div id="bigmap" class="hide">
+  <canvas id="mapc"></canvas>
+  <div id="mapTop"><div id="mapTitle">MAP<small id="mapSub"></small></div><button class="mb" id="mapNorth">N↑</button><button class="mb on" id="mapMe">◎</button><button class="mb" id="mapClose">✕</button></div>
+  <div id="mapList"></div>
+</div>
 <div id="attr" class="hide"></div>
 
 <div id="start" class="ov"><div class="box">
@@ -1206,12 +1224,15 @@ const endPtr = (e) => { if (e.pointerId === joy.id) { joy.id = null; joy.x = joy
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
 addEventListener('keydown', (e) => {
   if (!O || e.target.tagName === 'INPUT') return;
+  if (MV.open && e.key.toLowerCase() !== 'm' && e.key !== 'Escape') return;
   const k = e.key.toLowerCase(); keys.add(k);
   if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) goFree();
   if (k === 'b' || k === ' ') { e.preventDefault(); toggleBike(); }
   if (k === 'v') toggleAuto();
   if (k === 't') teleport();
   if (k === 'r') recenter();
+  if (k === 'm') { MV.open ? closeMap() : openMap(); }
+  if (k === 'escape' && MV.open) closeMap();
   if (k === 'g') goGps(false); if (k === 'c') { S.cam = S.cam === 'fpv' ? 'chase' : 'fpv'; saveS(); syncSettings(); }
   if (k === 'f') { S.fx = S.fx === 'high' ? 'low' : S.fx === 'low' ? 'off' : 'high'; saveS(); makeRTs(); toast('FX ' + S.fx.toUpperCase()); }
 });
@@ -1335,6 +1356,119 @@ const sfx = (() => {
 
 /* ---------- radar ---------- */
 const radar = $('radar'), rc = radar.getContext('2d'); let radarDirty = true, lastRadar = 0;
+/* ---------- big MAP: tap the radar ---------- */
+const MV = { open: false, cx: 0, cz: 0, s: 2, follow: true, headUp: false, ptrs: new Map(), pinch: 0, last: 0, list: 0 };
+const mapCv = $('mapc'), mc = mapCv.getContext('2d');
+function meXZ() { return mode === 'bike' ? { x: B.x, z: B.z, yaw: B.yaw } : { x: P.x, z: P.z, yaw: camYaw() }; }
+function openMap() {
+  if (!O) return;
+  MV.open = true; MV.follow = true; $('mapMe').classList.add('on');
+  MV.s = clamp((Math.min(innerWidth, innerHeight) / 2 - 30) / 230, 0.3, 12);
+  $('bigmap').classList.remove('hide'); glitch(0.4); MV.list = 0;
+}
+function closeMap() { MV.open = false; $('bigmap').classList.add('hide'); }
+radar.addEventListener('click', openMap);
+$('mapClose').onclick = closeMap;
+$('mapMe').onclick = () => { MV.follow = true; $('mapMe').classList.add('on'); };
+$('mapNorth').onclick = () => { MV.headUp = !MV.headUp; $('mapNorth').textContent = MV.headUp ? '⇧' : 'N↑'; $('mapNorth').classList.toggle('on', MV.headUp); };
+const mapRot = () => (MV.headUp ? -meXZ().yaw : 0);
+function mapPan(dx, dy) {
+  const r = mapRot(), c = Math.cos(r), sn = Math.sin(r);
+  MV.cx -= (dx * c + dy * sn) / MV.s; MV.cz -= (-dx * sn + dy * c) / MV.s;
+  MV.follow = false; $('mapMe').classList.remove('on');
+}
+mapCv.addEventListener('pointerdown', (e) => { MV.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); mapCv.setPointerCapture(e.pointerId); MV.pinch = 0; });
+mapCv.addEventListener('pointermove', (e) => {
+  const p = MV.ptrs.get(e.pointerId); if (!p) return;
+  if (MV.ptrs.size === 1) { mapPan(e.clientX - p.x, e.clientY - p.y); }
+  p.x = e.clientX; p.y = e.clientY;
+  if (MV.ptrs.size === 2) {
+    const [a, b] = [...MV.ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (MV.pinch) MV.s = clamp(MV.s * d / MV.pinch, 0.3, 12);
+    MV.pinch = d;
+  }
+});
+const mapUp = (e) => { MV.ptrs.delete(e.pointerId); MV.pinch = 0; };
+mapCv.addEventListener('pointerup', mapUp); mapCv.addEventListener('pointercancel', mapUp);
+mapCv.addEventListener('wheel', (e) => { e.preventDefault(); MV.s = clamp(MV.s * Math.exp(-e.deltaY * 0.0015), 0.3, 12); }, { passive: false });
+function chunkPaths(c) {             // map drawing of a chunk, made once, in world metres
+  if (c._map) return c._map;
+  const foot = new Path2D(), big = new Path2D(), mid = new Path2D(), path = new Path2D();
+  for (const f of c.foot) { const r = f.r; foot.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) foot.lineTo(r[i], r[i + 1]); foot.closePath(); }
+  const a = c.roads;
+  for (let i = 0; i < a.length; i += 6) { const cls = a[i + 4], pth = cls <= 4 ? big : cls <= 8 ? mid : path; pth.moveTo(a[i], a[i + 1]); pth.lineTo(a[i + 2], a[i + 3]); }
+  return (c._map = { foot, big, mid, path });
+}
+function drawMap(now) {
+  if (now - MV.last < 33) return; MV.last = now;
+  const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+  if (mapCv.width !== Math.round(W * dpr) || mapCv.height !== Math.round(H * dpr)) { mapCv.width = Math.round(W * dpr); mapCv.height = Math.round(H * dpr); }
+  const me = meXZ(); if (MV.follow) { MV.cx = me.x; MV.cz = me.z; }
+  const s = MV.s, rot = mapRot(), cr = Math.cos(rot), sr = Math.sin(rot);
+  const pr = (x, z) => { const dx = x - MV.cx, dz = z - MV.cz; return [W / 2 + (dx * cr - dz * sr) * s, H / 2 + (dx * sr + dz * cr) * s]; };
+  const c = mc; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#04000e'; c.fillRect(0, 0, W, H);
+  // world layer
+  c.save(); c.translate(W / 2, H / 2); c.rotate(rot); c.scale(s, s); c.translate(-MV.cx, -MV.cz);
+  const view = Math.hypot(W, H) / 2 / s + 10, g0 = 50;
+  c.lineWidth = 1 / s; c.strokeStyle = 'rgba(120,60,200,.18)'; c.beginPath();
+  for (let x = Math.floor((MV.cx - view) / g0) * g0; x < MV.cx + view; x += g0) { c.moveTo(x, MV.cz - view); c.lineTo(x, MV.cz + view); }
+  for (let z = Math.floor((MV.cz - view) / g0) * g0; z < MV.cz + view; z += g0) { c.moveTo(MV.cx - view, z); c.lineTo(MV.cx + view, z); }
+  c.stroke();
+  const vis = [...chunksNear(MV.cx, MV.cz, view)];
+  c.fillStyle = 'rgba(0,120,190,.22)'; c.strokeStyle = 'rgba(0,240,255,.55)'; c.lineWidth = Math.max(0.6, 1.1 / s);
+  for (const ch of vis) { const m = chunkPaths(ch); c.fill(m.foot); c.stroke(m.foot); }
+  c.lineCap = 'round';
+  for (const [k, col, w, minPx] of [['path', '#0a5a66', 1.6, 0.8], ['mid', '#9b2a8c', 5, 1.4], ['big', '#ff2bd6', 9, 2.2]]) {
+    c.strokeStyle = col; c.lineWidth = Math.max(w, minPx / s);           // real road width, never thinner than minPx on screen
+    for (const ch of vis) c.stroke(chunkPaths(ch)[k]);
+  }
+  c.restore();
+  // circles: the 150 m zone around you, the 200 m NEARBY reach around your real spot
+  const ring = (x, z, r, col, dash) => { const [sx, sy] = pr(x, z); c.setLineDash(dash || []); c.strokeStyle = col; c.lineWidth = 1.5; c.beginPath(); c.arc(sx, sy, r * s, 0, 7); c.stroke(); c.setLineDash([]); };
+  ring(me.x, me.z, R, 'rgba(0,240,255,.5)', [6, 5]);
+  const real = realSpot(), realXZ = real && real.d < 20000 ? real : (src === 'gps' ? { x: P.x, z: P.z } : null);
+  if (S.mp && realXZ) ring(realXZ.x, realXZ.z, NEAR_R, 'rgba(150,255,60,.55)', [3, 6]);
+  // shop signs
+  if (s > 1.6) { c.fillStyle = '#ffb020'; c.font = '13px VT323, monospace'; c.textAlign = 'left';
+    for (const ch of vis) for (const p of ch.pois) { const [x, y] = pr(p.x, p.z); if (x < -50 || y < -20 || x > W + 50 || y > H + 20) continue; c.fillRect(x - 2, y - 2, 4, 4); if (s > 3) c.fillText(p.name.slice(0, 18), x + 5, y + 4); } }
+  // your real GPS spot (when you roam away from it)
+  if (real && real.d >= 6 && real.d < 20000 && src !== 'gps') { const [x, y] = pr(real.x, real.z); c.strokeStyle = c.fillStyle = '#ffc040'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 7, 0, 7); c.stroke(); c.beginPath(); c.arc(x, y, 2.5, 0, 7); c.fill(); c.font = '15px VT323, monospace'; c.textAlign = 'left'; c.fillText('REAL GPS', x + 10, y + 5); }
+  const arrow = (x, y, a, col, size, glow) => { c.save(); c.translate(x, y); c.rotate(a); c.shadowColor = col; c.shadowBlur = glow ? 12 : 0; c.fillStyle = col; c.beginPath(); c.moveTo(0, -size); c.lineTo(size * 0.7, size * 0.75); c.lineTo(0, size * 0.35); c.lineTo(-size * 0.7, size * 0.75); c.closePath(); c.fill(); c.restore(); };
+  // other players
+  const labels = [];
+  for (const p of MP.peers.values()) {
+    if (p.x == null) continue;
+    const c3 = BIKE_COL[p.c] || BIKE_COL.cyan, col = `rgba(${c3.map((v) => Math.round(v * 255)).join(',')},${p.away ? 0.45 : 1})`;
+    let [x, y] = pr(p.x, p.z); const off = x < 14 || y < 70 || x > W - 14 || y > H - 60;
+    if (off) { const cx2 = W / 2, cy2 = H / 2, vx = x - cx2, vy = y - cy2, k = Math.min((W / 2 - 18) / Math.abs(vx || 1e-6), (H / 2 - 70) / Math.abs(vy || 1e-6)); x = cx2 + vx * k; y = cy2 + vy * k; }
+    arrow(x, y, p.away ? 0 : p.dy + rot, col, p.m && !p.away ? 13 : 10, !p.away);
+    labels.push([x, y, col, p.name + ' · ' + Math.round(p.dist || 0) + ' M' + (p.away ? ' · AWAY' : p.m ? ' ⚡' : '')]);
+  }
+  // you
+  const [mx, my] = pr(me.x, me.z); arrow(mx, my, me.yaw + rot, mode === 'bike' ? '#ff2bd6' : '#ffffff', mode === 'bike' ? 14 : 12, true);
+  labels.push([mx, my, mode === 'bike' ? '#ff2bd6' : '#ffffff', 'YOU']);
+  c.font = '17px VT323, monospace'; c.textAlign = 'center';
+  for (const [x, y, col, t] of labels) { const w = c.measureText(t).width + 10; c.fillStyle = 'rgba(4,0,14,.75)'; c.fillRect(x - w / 2, y + 14, w, 18); c.fillStyle = col; c.fillText(t, x, y + 28); }
+  // north and scale
+  const nx = W - 26, ny = H - 96; c.save(); c.translate(nx, ny); c.rotate(rot); c.fillStyle = '#ff2bd6'; c.beginPath(); c.moveTo(0, -12); c.lineTo(5, 2); c.lineTo(-5, 2); c.closePath(); c.fill(); c.restore();
+  c.fillStyle = '#ff2bd6'; c.font = '15px VT323, monospace'; c.fillText('N', nx, ny + 18);
+  const steps = [10, 20, 50, 100, 200, 500, 1000]; let sm = steps[0]; for (const st of steps) if (st * s < 120) sm = st;
+  c.strokeStyle = '#00f0ff'; c.lineWidth = 2; c.beginPath(); c.moveTo(14, H - 92); c.lineTo(14 + sm * s, H - 92); c.stroke(); c.fillStyle = '#00f0ff'; c.textAlign = 'left'; c.fillText(sm + ' M', 14, H - 98);
+  // title + player list
+  const n = MP.peers.size;
+  $('mapSub').textContent = !S.mp ? 'NEAR is off: turn it on to see players' : !mySpot() ? 'NEAR needs your GPS' : n ? n + (n === 1 ? ' PLAYER' : ' PLAYERS') + ' WITHIN 200 M' : 'nobody within 200 m yet';
+  if (now - MV.list > 600) {
+    MV.list = now; const el = $('mapList'); el.innerHTML = '';
+    if (!S.mp) { const b = document.createElement('button'); b.textContent = '⚇ TURN ON NEAR'; b.style.color = '#b6ff5a'; b.onclick = () => { closeMap(); openNear(); }; el.appendChild(b); }
+    for (const p of MP.peers.values()) {
+      const c3 = BIKE_COL[p.c] || BIKE_COL.cyan, b = document.createElement('button');
+      b.style.color = `rgb(${c3.map((v) => Math.round(v * 255)).join(',')})`; b.textContent = '● ' + p.name + ' ' + Math.round(p.dist || 0) + ' M' + (p.away ? ' · AWAY' : p.m ? ' ⚡' : '');
+      b.onclick = () => { if (p.x == null) return; MV.follow = false; $('mapMe').classList.remove('on'); MV.cx = p.x; MV.cz = p.z; MV.s = Math.max(MV.s, 2.5); };
+      el.appendChild(b);
+    }
+  }
+}
+
 function drawRadar(now) {
   if (now - lastRadar < 180) return; lastRadar = now;
   const dpr = Math.min(2, devicePixelRatio || 1), W = radar.clientWidth || 128; if (radar.width !== Math.round(W * dpr)) { radar.width = radar.height = Math.round(W * dpr); }
@@ -1528,7 +1662,7 @@ function frame(now) {
   compMat.uniforms.uAberr.value = 0.0012 + (mode === 'bike' ? Math.min(0.004, Math.abs(B.v) * 0.00015) : 0);
 
   updateChunks(now); updateSigns(now); animSigns(t); drawRadar(now); drawHud(now);
-  renderFrame();
+  if (MV.open) drawMap(now); else renderFrame();
 
   // keep it smooth: lower the resolution, then the bloom, if frames are slow
   frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
@@ -1567,7 +1701,7 @@ function enterGame() {
 }
 resize();
 requestAnimationFrame(frame);
-window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, MP, cellCode, blockCodes, recenter, look };
+window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, MV, openMap, MP, cellCode, blockCodes, recenter, look };
 if (Q.get('auto') === '1') { const lat = parseFloat(Q.get('lat')) || 47.3769, lon = parseFloat(Q.get('lon')) || 8.5417; $('start').classList.add('hide'); startSensors(); initWorld(lat, lon); src = 'free'; enterGame(); }
 </script>
 </body>
