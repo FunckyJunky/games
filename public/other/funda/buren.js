@@ -676,7 +676,14 @@ function mapScales(S) {
 }
 const growthAt = (h, y, base) => { const v = wozAt(h, y), b = wozAt(h, base); return v != null && b ? v / b - 1 : null; };
 
-const heightProp = () => ["get", MAP.height === "woz" ? "hWoz" : MAP.height === "score" ? "hScore" : "hFlat"];
+const HOUSE_H = 6, MAX_H = 2 * HOUSE_H; // a house is about 6 m: the highest one is two houses tall
+const heightProp = () => ["get", MAP.height === "woz" ? "hWoz" : MAP.height === "score" ? "hScore" : MAP.height === "price" ? "hPrice" : "hFlat"];
+// the price of a house now: this house's asking price, the others' latest WOZ value (only houses for sale have an asking price)
+function priceNow(S, h) {
+  const sc = mapScales(S);
+  if (h === S.self) return askNow() || wozAt(h, sc.last);
+  return wozAt(h, sc.last);
+}
 function mapFeatures(S) {
   const d = NB.data;
   const byPand = new Map();
@@ -689,6 +696,9 @@ function mapFeatures(S) {
   const sv = S ? wozAt(S.self, Y) : null;
   const R = S && (MAP.mode === "score" || MAP.height === "score") ? scoreSet(S, Y) : null;
   MAP.R = R;
+  const priceMax = S ? Math.max(1, ...sc.all.map((h) => priceNow(S, h) || 0)) : 1;
+  const priceMin = S ? Math.min(...sc.all.map((h) => priceNow(S, h)).filter((v) => v != null)) : 0;
+  MAP.priceRange = [priceMin, priceMax];
   const feats = d.panden.map((p) => {
     const list = byPand.get(p.id) || [];
     const me = list.some((x) => x.isSelf);
@@ -699,18 +709,22 @@ function mapFeatures(S) {
     const g = gs.length ? gs.reduce((a, b) => a + b, 0) / gs.length : null;
     const ss = R ? known.map((x) => R.byNid.get(x.h.nid)).filter(Boolean).map((e) => e.score) : [];
     const score = ss.length ? ss.reduce((a, b) => a + b, 0) / ss.length : null;
+    const ps = S ? known.map((x) => priceNow(S, x.h)).filter((v) => v != null) : [];
+    const price = ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : null;
     let color = GREY;
     if (S && MAP.mode === "diff") color = me ? (cssv("--s1") || "#2a78d6") : v != null && sv != null ? diffColor(v - sv, sc.lim) : GREY;
     else if (S && MAP.mode === "value") color = v != null ? rampColor("value", (v - sc.vmin) / (sc.vmax - sc.vmin || 1)) : GREY;
     else if (S && MAP.mode === "growth") color = g != null ? rampColor("growth", g / sc.gmax) : GREY;
     else if (S && MAP.mode === "ask") color = v != null && sc.ask ? diffColor(v - sc.ask, sc.askLim) : GREY;
     else if (S && MAP.mode === "score") color = score != null ? rampColor("score", score / 100) : GREY;
+    else if (S && MAP.mode === "price") color = me ? (cssv("--s1") || "#2a78d6") : price != null ? rampColor("value", (price - priceMin) / (priceMax - priceMin || 1)) : GREY;
     const flatH = 6 + Math.min(6, Math.max(0, list.length - 1)) * 1.2;
-    const wozH = v != null && sc ? 3 + 30 * (v / sc.vmax) : 2;
+    const wozH = v != null && sc ? MAX_H * (v / sc.vmax) : 1;
+    const priceH = price != null ? MAX_H * (price / priceMax) : 1;
     const names = list.map((x) => x.h.name);
     return {
       type: "Feature",
-      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, hScore: score != null ? 2 + 0.3 * score : 2, v: v || 0, g: g == null ? -99 : g, s: score == null ? -1 : score, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
+      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, hScore: score != null ? MAX_H * (score / 100) : 1, hPrice: priceH, p: price || 0, v: v || 0, g: g == null ? -99 : g, s: score == null ? -1 : score, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
       geometry: { type: "Polygon", coordinates: [p.ring] },
     };
   });
@@ -742,11 +756,55 @@ function updatePins() {
   });
 }
 
+function updatePriceLabels() {
+  MAP.plabels = MAP.plabels || new Map();
+  const S = MAP.S, map = MAP.map;
+  const on = MAP.mode === "price" && S && MAP.ready;
+  if (MAP.mePin) {
+    const ask = askNow();
+    MAP.mePin.innerHTML = on && ask ? `This house · <b>${kEur(ask)}</b> asking` : "This house";
+    MAP.mePin.parentElement && (MAP.mePin.parentElement.style.zIndex = 5);
+  }
+  if (!on) { for (const x of MAP.plabels.values()) x.m.remove(); MAP.plabels.clear(); return; }
+  const seen = new Set();
+  for (const h of S.houses) {
+    if (h.lon == null || !h.woz || !h.woz.length) continue;
+    const p = priceNow(S, h); if (p == null) continue;
+    seen.add(h.nid);
+    let x = MAP.plabels.get(h.nid);
+    if (!x) {
+      const el = document.createElement("div"); el.className = "price-pin";
+      x = { el, h, m: new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -8] }).setLngLat([h.lon, h.lat]).addTo(map) };
+      MAP.plabels.set(h.nid, x);
+    }
+    x.el.innerHTML = `<small>WOZ</small> ${kEur(p)}`;
+    x.el.title = `${h.name}: WOZ ${mapScales(S).last} ${eur(p)}`;
+  }
+  for (const [k, x] of MAP.plabels) if (!seen.has(k)) { x.m.remove(); MAP.plabels.delete(k); }
+  placeLabels();
+}
+// labels that would overlap are hidden: this house first, then the nearest houses; zoom in to see more
+function placeLabels() {
+  if (!MAP.plabels || !MAP.plabels.size || !MAP.map) return;
+  const map = MAP.map, boxes = [];
+  const box = (pt, w, h, dy) => ({ x0: pt.x - w / 2, x1: pt.x + w / 2, y0: pt.y - dy - h, y1: pt.y - dy });
+  const hit = (b) => boxes.some((o) => b.x0 < o.x1 + 3 && b.x1 > o.x0 - 3 && b.y0 < o.y1 + 2 && b.y1 > o.y0 - 2);
+  const S = MAP.S;
+  if (S && S.self && S.self.lon != null) boxes.push(box(map.project([S.self.lon, S.self.lat]), 170, 26, 24));
+  const list = [...MAP.plabels.values()].sort((a, b) => (a.h.dist ?? 1e9) - (b.h.dist ?? 1e9));
+  for (const x of list) {
+    const b = box(map.project([x.h.lon, x.h.lat]), x.el.offsetWidth || 62, x.el.offsetHeight || 18, 8);
+    const free = !hit(b);
+    x.el.classList.toggle("off", !free);
+    if (free) boxes.push(b);
+  }
+}
 function refreshMap() {
   if (!MAP.map) return;
   if (!MAP.ready) { if (!MAP.map.isStyleLoaded()) return; MAP.ready = true; const m = $("mapMsg"); if (m) m.remove(); spin(); }
   MAP.map.getSource("panden").setData(mapFeatures(MAP.S));
   updatePins();
+  updatePriceLabels();
   legendMap(MAP.S);
   const yi = Math.round(MAP.year || 0);
   $("mapYearBig").textContent = MAP.year != null ? String(MAP.playing ? Math.floor(MAP.year + 1e-6) : yi) : "";
@@ -792,6 +850,9 @@ async function drawMap(S) {
   MAP.map = map;
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   const pin = document.createElement("div"); pin.className = "me-pin"; pin.textContent = "This house";
+  MAP.mePin = pin;
+  let placing = 0;
+  map.on("move", () => { if (MAP.mode === "price" && !placing) placing = setTimeout(() => { placing = 0; placeLabels(); }, 120); });
   new maplibregl.Marker({ element: pin, anchor: "bottom", offset: [0, -24] }).setLngLat(d.self ? [d.self.lon, d.self.lat] : c).addTo(map);
   // ready as soon as the style is there (the "load" event can wait forever when base-map tiles fail)
   const onReady = () => {
@@ -848,6 +909,11 @@ function legendMap(S) {
     h = `<span>WOZ value ${yr}:</span><span>${kEur(sc.vmin)}</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("value", 0)}, ${rampColor("value", 0.5)}, ${rampColor("value", 1)})"></span><span>${kEur(sc.vmax)}</span>`;
   } else if (MAP.mode === "ask") {
     h = sc.ask ? `<span>WOZ ${yr} vs this house's asking price ${kEur(sc.ask)}:</span><span>${sEur(-sc.askLim)}</span><span class="bar" style="background:linear-gradient(90deg, ${diffColor(-sc.askLim, sc.askLim)}, ${diffColor(0, sc.askLim)}, ${diffColor(sc.askLim, sc.askLim)})"></span><span>${sEur(sc.askLim)}</span>` : "<span>No asking price yet.</span>";
+  } else if (MAP.mode === "price") {
+    const [lo, hi] = MAP.priceRange || [sc.vmin, sc.vmax];
+    const ask = askNow();
+    h = `<span>Prices now:</span><span>${kEur(lo)}</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("value", 0)}, ${rampColor("value", 0.5)}, ${rampColor("value", 1)})"></span><span>${kEur(hi)}</span><span>${sq("var(--s1)")} this house: asking price ${ask ? kEur(ask) : "–"}</span>`
+      + `<span style="flex-basis:100%">Only houses for sale have an asking price, so the others show their WOZ value of 1 Jan ${sc.last}. Labels that would overlap are hidden: zoom in to see more.</span>`;
   } else if (MAP.mode === "score") {
     const R = MAP.R || scoreSet(S, MAP.year != null ? MAP.year : S.Y);
     const me = R.byNid.get(S.self.nid);

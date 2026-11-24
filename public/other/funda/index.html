@@ -170,6 +170,9 @@
   .me-pin { background: var(--s1); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; pointer-events: none; }
   .map-year { position: absolute; left: 12px; bottom: 10px; z-index: 2; font: 800 34px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
     text-shadow: 0 0 6px rgba(255,255,255,.9), 0 0 2px rgba(255,255,255,.9); pointer-events: none; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .price-pin { background: rgba(252,252,251,.95); color: #0b0b0b; font: 700 11.5px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none; }
+  .price-pin small { font-weight: 500; font-size: 9.5px; color: #52514e; }
+  .price-pin.off { display: none; }
   .chg-pin { background: #3b2a9e; color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; pointer-events: none; }
   .chg-pin b { font-weight: 800; opacity: .8; margin-right: 2px; }
   .timebar { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
@@ -315,16 +318,17 @@
 
   <section class="card panel">
     <h2>3D map · 150 m around the house</h2>
-    <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ.</p>
+    <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ. With a height chosen, the highest house is two houses tall and the rest are in proportion.</p>
     <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px"><span class="muted" style="font-size:12.5px;align-self:center;margin-right:2px">Colour:</span>
       <button type="button" data-v="diff" aria-pressed="true">vs this house</button>
       <button type="button" data-v="ask" aria-pressed="false">vs asking price</button>
       <button type="button" data-v="value" aria-pressed="false">WOZ value</button>
       <button type="button" data-v="growth" aria-pressed="false">Most changed</button>
       <button type="button" data-v="score" aria-pressed="false">Score</button>
+      <button type="button" data-v="price" aria-pressed="false">Prices</button>
     </div>
     <div class="row" style="margin:6px 0 2px;gap:6px"><span class="muted" style="font-size:12.5px">Height:</span>
-      <div class="seg small" id="mapH" role="group" aria-label="Building height"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">WOZ value</button><button type="button" data-v="score" aria-pressed="false">Score</button></div>
+      <div class="seg small" id="mapH" role="group" aria-label="Building height"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">WOZ value</button><button type="button" data-v="price" aria-pressed="false">Price</button><button type="button" data-v="score" aria-pressed="false">Score</button></div>
     </div>
     <div class="map3d" id="map3d">
       <div class="map-year" id="mapYearBig" aria-hidden="true"></div>
