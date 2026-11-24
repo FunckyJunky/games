@@ -120,12 +120,15 @@ function inside(pt, ring) {
 }
 const centroid = (ring) => { let x = 0, y = 0; for (const p of ring) { x += p[0]; y += p[1]; } return [x / ring.length, y / ring.length]; };
 
-async function buildArea(info) {
+async function buildArea(info, trace = []) {
   const sample = {};
+  trace.push("find the house: " + info.address + " " + info.postcode);
   const { doc, point } = await findSelf(info);
+  trace.push("found: " + (doc && doc.weergavenaam) + " at " + JSON.stringify(point));
   if (!point) throw new Error("PDOK gave no point for the house");
   sample.self = doc;
   const docs = await around(point);
+  trace.push("addresses around it: " + docs.length);
   sample.reverse = docs[0] || null;
   const addrs = [];
   for (const d of docs) {
@@ -159,9 +162,11 @@ async function buildArea(info) {
         panden.push({ id: plain(p.identificatie || f.id), built: p.bouwjaar ? +String(p.bouwjaar).slice(0, 4) : null, status: p.status || null, ring: ring.map((c) => [r6(c[0]), r6(c[1])]) });
       }
     }
-  } catch (e) { errors.push(String(e.message || e)); }
+    trace.push("building outlines: " + panden.length);
+  } catch (e) { errors.push(String(e.message || e)); trace.push("outlines failed: " + (e.message || e)); }
   try {
     const feats = await bag("verblijfsobject", point);
+    trace.push("verblijfsobjecten: " + feats.length);
     sample.verblijfsobject = feats[0] ? feats[0].properties : null;
     const area = new Map();
     for (const f of feats) {
@@ -198,6 +203,17 @@ async function woz(nid) {
 }
 
 export async function handleBuren(request, env, url, id, info) {
+  const trace = [];
+  try {
+    return await buren(request, env, url, id, info, trace);
+  } catch (e) {
+    console.error("buren", e);
+    const debug = url.searchParams.get("debug") === "1";
+    return json({ error: "Couldn't load the neighbours: " + (e.message || e), trace: debug ? trace : undefined, stack: debug ? String(e.stack || "") : undefined }, debug ? 200 : 500);
+  }
+}
+
+async function buren(request, env, url, id, info, trace) {
   await schema(env);
   const n = Math.max(1, Math.min(MAX_N, parseInt(url.searchParams.get("n") || "10", 10) || 10));
   const debug = url.searchParams.get("debug") === "1";
@@ -209,10 +225,11 @@ export async function handleBuren(request, env, url, id, info) {
   try { area = row ? JSON.parse(row.data) : null; } catch {}
   if (!area || now - row.fetched > AREA_TTL || (url.searchParams.get("fresh") === "1" && now - row.fetched > 600000)) {
     try {
-      area = await buildArea(info);
+      area = await buildArea(info, trace);
       await env.DB.prepare(`INSERT OR REPLACE INTO funda_area (id, data, fetched) VALUES (?, ?, ?)`).bind(id, JSON.stringify(area), now).run();
     } catch (e) {
-      if (!area) return json({ error: "Couldn't find the houses around it: " + (e.message || e) }, 502);
+      trace.push("area failed: " + (e.message || e));
+      if (!area) return json({ error: "Couldn't find the houses around it: " + (e.message || e), trace: debug ? trace : undefined }, debug ? 200 : 502);
     }
   }
 
@@ -269,6 +286,6 @@ export async function handleBuren(request, env, url, id, info) {
     areaFetched: row ? row.fetched : now,
     sources: ["PDOK Locatieserver", "BAG (Kadaster, via PDOK)", "WOZ-waardeloket (Kadaster)"],
   };
-  if (debug) body.debug = { sample: area.sample, woz: rawSample, total: area.total };
+  if (debug) body.debug = { trace, sample: area.sample, woz: rawSample, total: area.total };
   return json(body);
 }
