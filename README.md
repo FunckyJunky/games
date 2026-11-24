@@ -399,6 +399,17 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- recorded sound (src `bgm.js`, files in `public/games/mistwalkers/audio/`): ambient music (ambient.mp3),
+  rain and storm outside (rain.mp3, follows the weather), rain on the tent instead of it while you're in
+  a tent (tent-rain.mp3), and the campfire (campfire.mp3: half as loud at 4 m, a quarter at 8 m, gone by
+  45 m, from the fire's side, muffled from inside a tent). Each loops without a seam (two copies
+  crossfade over the last 7 s), pauses when silent, and the tent and fire ones load when first needed.
+  The music goes quieter while instruments play nearby. Only the error.blue copy has the files
+  (`window.BG_BASE` is set in game-errorblue.html)
+- sound mixer (Settings > Sound): Background sound on/off, Master, Background music, Rain and storm,
+  Rain on the tent, Campfire, Nature sounds (the game's own wind, rain and thunder), Instruments,
+  Voices; switches: Rain follows the weather, Music quieter while instruments play. Saved as `wt.mix`.
+  Sound is on by default and starts with your first tap or key
 - settings in tabs (Mistwalkers): Game (camp info, change explorer or camp, change your look, keys),
   Graphics (quality and phone fix, lighting and map, picture, lens, draw distances, copy my settings),
   World (time, weather, forests), Sound (music for everyone, hearing distance, volume, ambient sound),
