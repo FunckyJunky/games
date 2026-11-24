@@ -168,6 +168,13 @@
   .map3d .maplibregl-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0b0b0b; border-radius: 10px; padding: 10px 12px; max-width: 240px; }
   .map3d .maplibregl-popup-content b { font-weight: 650; }
   .me-pin { background: var(--s1); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; pointer-events: none; }
+  .hset { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; margin: 6px 0 2px; padding: 10px 12px; background: var(--page); border-radius: 10px; }
+  .hset[hidden] { display: none; }
+  .hset label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .hset input { width: 100%; accent-color: var(--s1); }
+  .hset output { font-size: 12.5px; color: var(--ink-2); min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+  .hset .line { grid-column: 1 / -1; margin: 2px 0 0; font-size: 12.5px; }
+  .hset .btn { grid-column: 1 / -1; justify-self: start; padding: 6px 10px; font-size: 12.5px; }
   .map-year { position: absolute; left: 12px; bottom: 10px; z-index: 2; font: 800 34px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
     text-shadow: 0 0 6px rgba(255,255,255,.9), 0 0 2px rgba(255,255,255,.9); pointer-events: none; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .price-pin { background: rgba(252,252,251,.95); color: #0b0b0b; font: 700 11.5px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none; }
@@ -329,6 +336,12 @@
     </div>
     <div class="row" style="margin:6px 0 2px;gap:6px"><span class="muted" style="font-size:12.5px">Height:</span>
       <div class="seg small" id="mapH" role="group" aria-label="Building height"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">WOZ value</button><button type="button" data-v="price" aria-pressed="false">Price</button><button type="button" data-v="score" aria-pressed="false">Score</button></div>
+    </div>
+    <div class="hset" id="hSet" hidden>
+      <label for="hTall">Tallest house</label><input type="range" id="hTall" min="1" max="6" step="0.5" value="2"><output id="hTallOut"></output>
+      <label for="hCon">Differences</label><input type="range" id="hCon" min="0" max="100" step="5" value="0"><output id="hConOut"></output>
+      <p class="line" id="hInfo"></p>
+      <button class="btn" type="button" id="hReset">Reset heights</button>
     </div>
     <div class="map3d" id="map3d">
       <div class="map-year" id="mapYearBig" aria-hidden="true"></div>

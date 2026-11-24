@@ -676,7 +676,20 @@ function mapScales(S) {
 }
 const growthAt = (h, y, base) => { const v = wozAt(h, y), b = wozAt(h, base); return v != null && b ? v / b - 1 : null; };
 
-const HOUSE_H = 6, MAX_H = 2 * HOUSE_H; // a house is about 6 m: the highest one is two houses tall
+// heights: a house is about 6 m. "Tallest" = how many houses tall the highest one is (2 by default);
+// "Differences" 0 = true to scale (heights start at zero), 1 = strongest (the lowest value is almost flat)
+const HOUSE_H = 6, MIN_H = 0.6;
+const H3D = { tall: 2, contrast: 0 };
+try { const x = JSON.parse(localStorage.getItem("funda.h3d") || "null"); if (x) { if (x.tall >= 1 && x.tall <= 6) H3D.tall = x.tall; if (x.contrast >= 0 && x.contrast <= 1) H3D.contrast = x.contrast; } } catch {}
+const maxH = () => HOUSE_H * H3D.tall;
+// value -> metres. lo/hi: the lowest and highest value now; top: the scale's top when true to scale
+function scaleH(v, lo, hi, top) {
+  if (v == null || !isFinite(v)) return 1;
+  const c = H3D.contrast;
+  const t = c > 0 ? hi : top, b = c * lo;
+  const k = Math.max(0, Math.min(1, (v - b) / ((t - b) || 1)));
+  return MIN_H + (maxH() - MIN_H) * k;
+}
 const heightProp = () => ["get", MAP.height === "woz" ? "hWoz" : MAP.height === "score" ? "hScore" : MAP.height === "price" ? "hPrice" : "hFlat"];
 // the price of a house now: this house's asking price, the others' latest WOZ value (only houses for sale have an asking price)
 function priceNow(S, h) {
@@ -699,6 +712,11 @@ function mapFeatures(S) {
   const priceMax = S ? Math.max(1, ...sc.all.map((h) => priceNow(S, h) || 0)) : 1;
   const priceMin = S ? Math.min(...sc.all.map((h) => priceNow(S, h)).filter((v) => v != null)) : 0;
   MAP.priceRange = [priceMin, priceMax];
+  const wozNow = S ? sc.all.map((h) => wozAt(h, Y)).filter((v) => v != null) : [];
+  const wozLo = wozNow.length ? Math.min(...wozNow) : 0, wozHi = wozNow.length ? Math.max(...wozNow) : 1;
+  const scNow = R ? R.list.map((e) => e.score) : [];
+  const scLo = scNow.length ? Math.min(...scNow) : 0, scHi = scNow.length ? Math.max(...scNow) : 100;
+  MAP.hRange = { woz: [wozLo, wozHi, sc ? sc.vmax : 1], price: [priceMin, priceMax, priceMax], score: [scLo, scHi, 100] };
   const feats = d.panden.map((p) => {
     const list = byPand.get(p.id) || [];
     const me = list.some((x) => x.isSelf);
@@ -719,12 +737,12 @@ function mapFeatures(S) {
     else if (S && MAP.mode === "score") color = score != null ? rampColor("score", score / 100) : GREY;
     else if (S && MAP.mode === "price") color = me ? (cssv("--s1") || "#2a78d6") : price != null ? rampColor("value", (price - priceMin) / (priceMax - priceMin || 1)) : GREY;
     const flatH = 6 + Math.min(6, Math.max(0, list.length - 1)) * 1.2;
-    const wozH = v != null && sc ? MAX_H * (v / sc.vmax) : 1;
-    const priceH = price != null ? MAX_H * (price / priceMax) : 1;
+    const wozH = v != null && sc ? scaleH(v, wozLo, wozHi, sc.vmax) : 1;
+    const priceH = price != null ? scaleH(price, priceMin, priceMax, priceMax) : 1;
     const names = list.map((x) => x.h.name);
     return {
       type: "Feature",
-      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, hScore: score != null ? MAX_H * (score / 100) : 1, hPrice: priceH, p: price || 0, v: v || 0, g: g == null ? -99 : g, s: score == null ? -1 : score, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
+      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, hScore: score != null ? scaleH(score, scLo, scHi, 100) : 1, hPrice: priceH, p: price || 0, v: v || 0, g: g == null ? -99 : g, s: score == null ? -1 : score, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
       geometry: { type: "Polygon", coordinates: [p.ring] },
     };
   });
@@ -805,6 +823,7 @@ function refreshMap() {
   MAP.map.getSource("panden").setData(mapFeatures(MAP.S));
   updatePins();
   updatePriceLabels();
+  heightInfo();
   legendMap(MAP.S);
   const yi = Math.round(MAP.year || 0);
   $("mapYearBig").textContent = MAP.year != null ? String(MAP.playing ? Math.floor(MAP.year + 1e-6) : yi) : "";
@@ -983,11 +1002,30 @@ $("mapBase").addEventListener("click", (e) => {
   $("mapBase").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
   setBase();
 });
+// ----- height settings -----
+function heightInfo() {
+  const box = $("hInfo"), row = $("hSet");
+  row.hidden = MAP.height === "flat";
+  if (MAP.height === "flat") return;
+  $("hTall").value = H3D.tall; $("hCon").value = Math.round(H3D.contrast * 100);
+  $("hTallOut").textContent = `${H3D.tall % 1 ? H3D.tall.toFixed(1) : H3D.tall} house${H3D.tall === 1 ? "" : "s"} (${Math.round(maxH())} m)`;
+  $("hConOut").textContent = H3D.contrast === 0 ? "true to scale" : H3D.contrast >= 1 ? "strongest" : `${Math.round(H3D.contrast * 100)}% stronger`;
+  const r = MAP.hRange && MAP.hRange[MAP.height];
+  if (!r) { box.textContent = ""; return; }
+  const [lo, hi, top] = r, f = MAP.height === "score" ? (v) => Math.round(v) + " pts" : kEur;
+  box.textContent = `Lowest ${f(lo)} = ${scaleH(lo, lo, hi, top).toFixed(1)} m · highest ${f(hi)} = ${scaleH(hi, lo, hi, top).toFixed(1)} m` + (H3D.contrast > 0 ? " · heights now start from the lowest value, not from zero" : "");
+}
+function saveH3D() { try { localStorage.setItem("funda.h3d", JSON.stringify(H3D)); } catch {} }
+$("hTall").addEventListener("input", () => { H3D.tall = +$("hTall").value; saveH3D(); refreshMap(); heightInfo(); });
+$("hCon").addEventListener("input", () => { H3D.contrast = +$("hCon").value / 100; saveH3D(); refreshMap(); heightInfo(); });
+$("hReset").addEventListener("click", () => { H3D.tall = 2; H3D.contrast = 0; saveH3D(); refreshMap(); heightInfo(); });
+
 $("mapH").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   MAP.height = b.dataset.v;
   $("mapH").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
   if (MAP.map && MAP.ready) { MAP.map.setPaintProperty("b3d", "fill-extrusion-height", heightProp()); refreshMap(); }
+  heightInfo();
 });
 
 // start when the section comes near the screen (keeps the first load light)
