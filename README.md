@@ -63,6 +63,12 @@ public/                 the website
                         city. GPS = where you are, phone sensors = where you look (or drag), FREE = walk with the stick/WASD.
                         On a road at speed (over 18 km/h for 2.5 s, within ~15 m of a street) a light bike drops in and rides
                         that road in your lane (left-hand countries too); it docks after ~6 s slow. BIKE = ride it yourself.
+                        AUTO = the bike stays on and rides exactly on your GPS spot (no road snap). Riding/walking away by hand:
+                        an amber pillar + radar marker + HUD line show your real GPS spot, TELEPORT TO ME jumps back.
+                        LEVEL (or double-tap right half, R) = look straight ahead; with phone sensors it takes how you hold it now.
+                        NEAR = see other ZONE players within 200 m (opt-in, S.mp). Rooms /api/room/zone/<CELL>: 420 m map cells
+                        (8 chars, base36 row+column); you listen in the up to 4 cells around you and send in your own, only while
+                        you play with GPS (GPS/AUTO); messages {t:'s',u,n,la,lo,y,m,v,c} / {t:'bye',u}; further than 200 m is ignored.
                         DEMO = fake GPS that drives (or walks) the real streets. Map: OpenFreeMap vector tiles (OpenMapTiles,
                         no key), then Overpass, then a made-up SIMULATED SECTOR when offline. zone-worker.js decodes the tiles
                         and builds 64 m chunks off the main thread; three.module.min.js = three.js r170 (MIT).
