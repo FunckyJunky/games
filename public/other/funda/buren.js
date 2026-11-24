@@ -767,7 +767,7 @@ function updatePins() {
     const t = top[i];
     if (!t) { pn.m.remove(); pn.on = false; return; }
     pn.el.innerHTML = `<b>#${i + 1}</b> ${t.txt}`;
-    pn.el.style.background = MAP.mode === "score" ? "#06604a" : "#3b2a9e";
+    pn.el.style.background = MAP.mode === "score" ? "rgba(6,96,74,.78)" : "rgba(59,42,158,.78)";
     pn.el.title = t.h.name;
     pn.m.setLngLat([t.h.lon, t.h.lat]);
     if (!pn.on) { pn.m.addTo(MAP.map); pn.on = true; }
@@ -781,7 +781,7 @@ function updatePriceLabels() {
   if (MAP.mePin) {
     const ask = askNow();
     MAP.mePin.innerHTML = on && ask ? `This house · <b>${kEur(ask)}</b> asking` : "This house";
-    MAP.mePin.parentElement && (MAP.mePin.parentElement.style.zIndex = 5);
+    MAP.mePin.style.zIndex = 5; // the marker element itself: "This house" stays in front of the other labels
   }
   if (!on) { for (const x of MAP.plabels.values()) x.m.remove(); MAP.plabels.clear(); return; }
   const seen = new Set();
@@ -870,6 +870,7 @@ async function drawMap(S) {
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   const pin = document.createElement("div"); pin.className = "me-pin"; pin.textContent = "This house";
   MAP.mePin = pin;
+  pin.style.zIndex = 5;
   let placing = 0;
   map.on("move", () => { if (MAP.mode === "price" && !placing) placing = setTimeout(() => { placing = 0; placeLabels(); }, 120); });
   new maplibregl.Marker({ element: pin, anchor: "bottom", offset: [0, -24] }).setLngLat(d.self ? [d.self.lon, d.self.lat] : c).addTo(map);

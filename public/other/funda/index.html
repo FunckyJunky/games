@@ -168,7 +168,7 @@
   .map3d .msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--ink-2); font-size: 14px; }
   .map3d .maplibregl-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0b0b0b; border-radius: 10px; padding: 10px 12px; max-width: 240px; }
   .map3d .maplibregl-popup-content b { font-weight: 650; }
-  .me-pin { background: var(--s1); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; pointer-events: none; }
+  .me-pin { background: var(--s1); background: color-mix(in srgb, var(--s1) 78%, transparent); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.18); white-space: nowrap; pointer-events: none; }
   .hset { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; margin: 6px 0 2px; padding: 10px 12px; background: var(--page); border-radius: 10px; }
   .hset[hidden] { display: none; }
   .hset label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -178,10 +178,10 @@
   .hset .btn { grid-column: 1 / -1; justify-self: start; padding: 6px 10px; font-size: 12.5px; }
   .map-year { position: absolute; left: 12px; bottom: 10px; z-index: 2; font: 800 34px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
     text-shadow: 0 0 6px rgba(255,255,255,.9), 0 0 2px rgba(255,255,255,.9); pointer-events: none; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-  .price-pin { background: rgba(252,252,251,.95); color: #0b0b0b; font: 700 11.5px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.25); white-space: nowrap; pointer-events: none; }
+  .price-pin { background: rgba(252,252,251,.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); color: #0b0b0b; font: 700 11.5px/1 system-ui, sans-serif; padding: 3px 6px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; pointer-events: none; }
   .price-pin small { font-weight: 500; font-size: 9.5px; color: #52514e; }
   .price-pin.off { display: none; }
-  .chg-pin { background: #3b2a9e; color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; pointer-events: none; }
+  .chg-pin { background: rgba(59,42,158,.78); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; pointer-events: none; }
   .chg-pin b { font-weight: 800; opacity: .8; margin-right: 2px; }
   .timebar { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
   .timebar[hidden] { display: none; }
