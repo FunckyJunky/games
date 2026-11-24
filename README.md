@@ -419,7 +419,8 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   lands in your pack. B drops one beacon lantern below it (with a beam of light; another one moves
   it); with your explorer an arrow at the top points to it with the distance. Night vision (N) at
   night. Presence `dr`: [x, y, z, yaw, mode 1 flying / 2 waiting / 3 coming home], `bc`: [x, z].
-  The beacon is kept in the browser (`wt.beacon`); the drone's buzz has its own mixer slider
+  The beacon is kept in the browser (`wt.beacon`); the drone's buzz has its own mixer slider. While you fly, you hear
+  the instruments from the drone (`listener()`): they fade as it flies away, back to normal with your own view
 - recorded sound (src `bgm.js`, files in `public/games/mistwalkers/audio/`): ambient music (ambient.mp3),
   rain and storm outside (rain.mp3, follows the weather), rain on the tent instead of it while you're in
   a tent (tent-rain.mp3), and the campfire (campfire.mp3: half as loud at 4 m, a quarter at 8 m, gone by
@@ -430,6 +431,10 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
 - sound mixer (Settings > Sound): Background sound on/off, Master, Background music, Rain and storm,
   Rain on the tent, Campfire, Nature sounds (the game's own wind, rain and thunder), Instruments,
   Voices; switches: Rain follows the weather, Music quieter while instruments play. Saved as `wt.mix`.
+- Look (Settings > Graphics, at the top; saved as `wt.look`): Misty forest (the game's own weather:
+  mist and rain that music lifts), Sunny (clear sky, no mist or rain, following the clock), Golden
+  afternoon (clear sky with the sun held at 4:30 pm on your screen only, `state.viewHour`; the clock,
+  night events and other explorers' time carry on). The sky changes over about 3 seconds when picked
   Sound is on by default and starts with your first tap or key
 - settings in tabs (Mistwalkers): Game (camp info, change explorer or camp, change your look, keys),
   Graphics (quality and phone fix, lighting and map, picture, lens, draw distances, copy my settings),
