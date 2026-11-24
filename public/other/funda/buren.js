@@ -94,18 +94,24 @@ function drawBuren() {
   rankChart(S); diffChart(S); yearsChart(S); growthChart(S); heatChart(S); m2Chart(S); scatterChart(S); distChart(S);
 }
 
+// this house's asking price right now (the newest Funda reading), drawn as a dashed blue outline everywhere
+const ASK_NAME = "Asking price now";
+const askNow = () => (typeof DATA !== "undefined" && DATA && readings().length ? readings().at(-1).price : null);
+const ASK_STYLE = 'stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="3 2"';
+const ASK_FILL = "var(--s1-soft)";
+
 function tiles(S) {
   const { sv, rows, med, Y } = S;
   const all = rows.map((r) => r.v).concat(sv != null ? [sv] : []).sort((a, b) => b - a);
   const rank = sv != null ? all.indexOf(sv) + 1 : null;
-  const cheaper = rows.filter((r) => r.v < sv).length;
+  const ask = askNow();
+  const askRank = ask ? rows.filter((r) => r.v > ask).length + 1 : null;
   const t = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d || ""}</div></div>`;
-  const ask = DATA && readings().length ? readings().at(-1).price : null;
   $("nbTiles").innerHTML =
-    t("This house · WOZ " + Y, sv != null ? eur(sv) : "–", ask && sv ? `Asking price is ${pct((ask / sv - 1) * 100, 0)} on top` : "") +
-    t("Neighbours' median", med != null ? eur(Math.round(med)) : "–", rows.length ? `${rows.length} houses · ${kEur(Math.min(...rows.map((r) => r.v)))} – ${kEur(Math.max(...rows.map((r) => r.v)))}` : "") +
-    t("Difference", sv != null && med != null ? sEur(sv - med) : "–", sv != null && med ? `${pct((sv / med - 1) * 100)} vs the median` : "") +
-    t("Rank", rank ? `#${rank} <span class="muted" style="font-size:15px;font-weight:600">of ${all.length}</span>` : "–", rank ? `${cheaper} neighbour${cheaper === 1 ? " is" : "s are"} valued lower` : "");
+    t("This house · WOZ " + Y, sv != null ? eur(sv) : "–", rank ? `#${rank} of ${all.length} · ${sv != null && med != null ? sEur(sv - med) : ""} vs median` : "") +
+    t("Asking price now", ask ? eur(ask) : "–", ask ? `would be #${askRank} of ${rows.length + 1} · ${med != null ? sEur(ask - med) : ""} vs median` : "") +
+    t("Neighbours' median WOZ", med != null ? eur(Math.round(med)) : "–", rows.length ? `${rows.length} houses · ${kEur(Math.min(...rows.map((r) => r.v)))} – ${kEur(Math.max(...rows.map((r) => r.v)))}` : "") +
+    t("Asking vs own WOZ", ask && sv ? sEur(ask - sv) : "–", ask && sv ? `${pct((ask / sv - 1) * 100)} on top of the ${Y} WOZ` : "");
 }
 
 // ---------- tooltips for every chart: any element with data-tip ----------
@@ -149,31 +155,39 @@ function hbar(x0, x1, y, h, fill, tip, extra = "") {
 // ---------- 1. ranking ----------
 function rankChart(S) {
   const box = $("cRank");
-  const items = S.rows.map((r) => ({ name: r.h.name, v: r.v, h: r.h })).concat(S.sv != null ? [{ name: S.self.name, v: S.sv, me: true }] : []).sort((a, b) => b.v - a.v);
+  const ask = askNow();
+  const items = S.rows.map((r) => ({ name: r.h.name, v: r.v, h: r.h }))
+    .concat(S.sv != null ? [{ name: S.self.name, v: S.sv, me: true }] : [], ask ? [{ name: ASK_NAME, v: ask, ask: true }] : [])
+    .sort((a, b) => b.v - a.v);
   if (items.length < 2) return empty(box, "Waiting for the neighbours' WOZ values.");
   const w = W(box), dense = items.length > 30, rh = dense ? 13 : 20, bh = dense ? 9 : 13, lw = Math.min(150, w * 0.36), top = 18;
   const x0 = lw + 6, x1 = w - (dense ? 8 : 46);
   const max = Math.max(...items.map((i) => i.v)), X = (v) => x0 + (v / max) * (x1 - x0);
   let g = "";
   items.forEach((it, i) => {
-    const y = top + i * rh;
-    const tip = `<b>${esc(it.name)}</b>${it.me ? " (this house)" : ""}<br>WOZ ${S.Y}: <b>${eur(it.v)}</b>` + (!it.me && S.sv ? `<br>${sEur(it.v - S.sv)} vs this house` : "") + (it.h && it.h.dist != null ? `<br>${Math.round(it.h.dist)} m away` : "");
-    g += T(lw, y + bh / 2, short(it.name, dense ? 22 : 20), { a: "end", db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 700 : null, fs: dense ? 10 : 11.5 });
-    g += hbar(x0, X(it.v), y, bh, it.me ? "var(--s1)" : "var(--nb)", tip);
-    if (!dense || it.me) g += T(X(it.v) + 5, y + bh / 2, kEur(it.v), { db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 700 : null });
+    const y = top + i * rh, hl = it.me || it.ask;
+    const tip = it.ask
+      ? `<b>Asking price now</b><br><b>${eur(it.v)}</b>` + (S.sv ? `<br>${sEur(it.v - S.sv)} on top of its WOZ ${S.Y}` : "") + `<br>Higher than ${S.rows.filter((r) => r.v < it.v).length} of ${S.rows.length} neighbours' WOZ`
+      : `<b>${esc(it.name)}</b>${it.me ? " (this house)" : ""}<br>WOZ ${S.Y}: <b>${eur(it.v)}</b>` + (!it.me && S.sv ? `<br>${sEur(it.v - S.sv)} vs this house` : "") + (!it.me && ask ? `<br>${sEur(it.v - ask)} vs the asking price` : "") + (it.h && it.h.dist != null ? `<br>${Math.round(it.h.dist)} m away` : "");
+    g += T(lw, y + bh / 2, short(it.name, dense ? 24 : 22), { a: "end", db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null, fs: dense ? 10 : 11.5 });
+    g += hbar(x0, X(it.v), y, bh, it.ask ? ASK_FILL : it.me ? "var(--s1)" : "var(--nb)", tip, it.ask ? ASK_STYLE : "");
+    if (!dense || hl) g += T(X(it.v) + 5, y + bh / 2, kEur(it.v), { db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null });
   });
   const mx = X(S.med);
   g += `<line x1="${mx}" x2="${mx}" y1="${top - 6}" y2="${top + items.length * rh}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>` + T(mx, top - 8, "median " + kEur(S.med), { a: "middle", fill: "var(--ink-2)" });
   put(box, `<svg viewBox="0 0 ${w} ${top + items.length * rh + 4}" height="${top + items.length * rh + 4}">${g}</svg>`);
-  const rank = items.findIndex((i) => i.me) + 1;
-  $("nbRankNote").textContent = `WOZ value ${S.Y} of each house, highest first. This house is #${rank} of ${items.length}.`;
+  const rank = items.filter((i) => !i.ask).findIndex((i) => i.me) + 1;
+  const askRank = ask ? items.findIndex((i) => i.ask) + 1 : null;
+  $("nbRankNote").textContent = `WOZ value ${S.Y} of each house, highest first. This house is #${rank} of ${items.filter((i) => !i.ask).length}` + (ask ? `; at its asking price of ${eur(ask)} it would be #${askRank} (dashed bar). WOZ values date from 1 January ${S.Y}, so today's market prices are higher for every house.` : ".");
 }
 
 // ---------- 2. difference with this house (diverging) ----------
 function diffChart(S) {
   const box = $("cDiff");
   if (S.sv == null || !S.rows.length) return empty(box, "Waiting for the neighbours' WOZ values.");
-  const items = S.rows.map((r) => ({ name: r.h.name, d: r.v - S.sv, v: r.v, h: r.h })).sort((a, b) => b.d - a.d);
+  const ask = askNow();
+  const items = S.rows.map((r) => ({ name: r.h.name, d: r.v - S.sv, v: r.v, h: r.h }))
+    .concat(ask ? [{ name: ASK_NAME, d: ask - S.sv, v: ask, ask: true }] : []).sort((a, b) => b.d - a.d);
   const w = W(box), dense = items.length > 30, rh = dense ? 13 : 20, bh = dense ? 9 : 13, lw = Math.min(150, w * 0.34), top = 22;
   const x0 = lw + (dense ? 10 : 52), x1 = w - (dense ? 10 : 48); // room for the value labels on both sides
   const m = Math.max(1000, ...items.map((i) => Math.abs(i.d)));
@@ -181,27 +195,40 @@ function diffChart(S) {
   let g = T(zero - 6, 10, "← lower", { a: "end", fill: "var(--ink-2)" }) + T(zero + 6, 10, "higher →", { fill: "var(--ink-2)" });
   items.forEach((it, i) => {
     const y = top + i * rh;
-    const tip = `<b>${esc(it.name)}</b><br>WOZ ${S.Y}: ${eur(it.v)}<br><b>${sEur(it.d)}</b> (${pct((it.v / S.sv - 1) * 100)}) vs this house`;
-    g += T(lw, y + bh / 2, short(it.name, dense ? 22 : 20), { a: "end", db: "middle", fill: "var(--ink-2)", fs: dense ? 10 : 11.5 });
-    g += hbar(zero, X(it.d), y, bh, it.d > 0 ? "var(--hi)" : "var(--lo)", tip);
-    if (!dense) g += T(it.d >= 0 ? X(it.d) + 5 : X(it.d) - 5, y + bh / 2, sEur(it.d), { a: it.d >= 0 ? "start" : "end", db: "middle", fill: "var(--ink-2)" });
+    const tip = it.ask
+      ? `<b>Asking price now</b><br>${eur(it.v)}<br><b>${sEur(it.d)}</b> (${pct((it.v / S.sv - 1) * 100)}) on top of its own WOZ ${S.Y}`
+      : `<b>${esc(it.name)}</b><br>WOZ ${S.Y}: ${eur(it.v)}<br><b>${sEur(it.d)}</b> (${pct((it.v / S.sv - 1) * 100)}) vs this house` + (ask ? `<br>${sEur(it.v - ask)} vs the asking price` : "");
+    g += T(lw, y + bh / 2, short(it.name, dense ? 24 : 22), { a: "end", db: "middle", fill: it.ask ? "var(--ink)" : "var(--ink-2)", w: it.ask ? 700 : null, fs: dense ? 10 : 11.5 });
+    g += hbar(zero, X(it.d), y, bh, it.ask ? ASK_FILL : it.d > 0 ? "var(--hi)" : "var(--lo)", tip, it.ask ? ASK_STYLE : "");
+    if (!dense || it.ask) g += T(it.d >= 0 ? X(it.d) + 5 : X(it.d) - 5, y + bh / 2, sEur(it.d), { a: it.d >= 0 ? "start" : "end", db: "middle", fill: it.ask ? "var(--ink)" : "var(--ink-2)", w: it.ask ? 700 : null });
   });
   g += `<line x1="${zero}" x2="${zero}" y1="${top - 4}" y2="${top + items.length * rh}" stroke="var(--s1)" stroke-width="2"/>`;
-  g += T(zero, top + items.length * rh + 14, "this house " + kEur(S.sv), { a: "middle", fill: "var(--ink)", w: 650 });
+  g += T(zero, top + items.length * rh + 14, "this house's WOZ " + kEur(S.sv), { a: "middle", fill: "var(--ink)", w: 650 });
+  if (ask) {
+    const ax = X(ask - S.sv);
+    g += `<line x1="${ax}" x2="${ax}" y1="${top - 4}" y2="${top + items.length * rh}" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".7"/>`;
+  }
   const H = top + items.length * rh + 20;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
 }
 
-// ---------- 3. WOZ over the years (lines) ----------
+// ---------- 3. WOZ over the years (lines) + the asking price today ----------
 function yearsChart(S) {
   const box = $("cYears");
   const ys = S.years; if (ys.length < 2) return empty(box, "Needs more than one year.");
-  const w = W(box), H = 240, m = { l: 52, r: 56, t: 10, b: 24 };
+  const ask = askNow();
+  const now = new Date(), yNow = now.getFullYear() + (now - new Date(now.getFullYear(), 0, 1)) / (365.25 * DAY);
+  const info = (DATA && DATA.info) || {};
+  const listed = nlDate(info.onFunda) || (info.published ? Date.parse(info.published) : null);
+  const orig = readings().map((r) => r.orig).find((v) => v != null);
+  const yListed = listed ? new Date(listed).getFullYear() + (listed - new Date(new Date(listed).getFullYear(), 0, 1)) / (365.25 * DAY) : null;
+  const xMax = ask ? Math.max(ys[ys.length - 1], yNow) : ys[ys.length - 1];
+  const w = W(box), H = 250, m = { l: 52, r: 74, t: 14, b: 24 };
   const series = S.houses.map((h) => ({ h, pts: h.woz.filter(([y]) => ys.includes(y)) }));
   const selfPts = (S.self.woz || []);
-  const all = series.flatMap((s) => s.pts.map((p) => p[1])).concat(selfPts.map((p) => p[1]));
+  const all = series.flatMap((s) => s.pts.map((p) => p[1])).concat(selfPts.map((p) => p[1]), ask ? [ask] : [], orig ? [orig] : []);
   const yt = niceTicks(0, Math.max(...all), 4), hi = yt[yt.length - 1];
-  const X = (y) => m.l + ((y - ys[0]) / (ys[ys.length - 1] - ys[0])) * (w - m.l - m.r), Y = (v) => m.t + (H - m.t - m.b) * (1 - v / hi);
+  const X = (y) => m.l + ((y - ys[0]) / (xMax - ys[0])) * (w - m.l - m.r), Y = (v) => m.t + (H - m.t - m.b) * (1 - v / hi);
   const path = (pts) => pts.map(([y, v], i) => `${i ? "L" : "M"}${X(y).toFixed(1)},${Y(v).toFixed(1)}`).join("");
   let g = "";
   for (const v of yt) g += `<line x1="${m.l}" x2="${w - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v ? "var(--grid)" : "var(--axis)"}"/>` + T(m.l - 6, Y(v) + 4, kEur(v), { a: "end" });
@@ -212,13 +239,25 @@ function yearsChart(S) {
   g += `<path d="${path(medPts)}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4"/>`;
   g += `<path d="${path(selfPts)}" fill="none" stroke="var(--s1)" stroke-width="2.5" stroke-linejoin="round"/>`;
   const ls = selfPts.at(-1), lm = medPts.at(-1);
-  if (ls) g += `<circle cx="${X(ls[0])}" cy="${Y(ls[1])}" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>` + T(X(ls[0]) + 7, Y(ls[1]) + (lm && ls[1] >= lm[1] ? -4 : 12), "this house", { fill: "var(--ink)", w: 650 });
-  if (lm) g += T(X(lm[0]) + 7, Y(lm[1]) + (ls && ls[1] >= lm[1] ? 12 : -4), "median", { fill: "var(--ink-2)" });
+  // from the last WOZ value to today's asking price (and the original one when it was listed)
+  if (ask && ls) {
+    const pts = [[ls[0], ls[1]]];
+    if (orig && yListed && yListed > ls[0] && yListed < yNow) pts.push([yListed, orig]);
+    pts.push([yNow, ask]);
+    g += `<path d="${path(pts)}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-dasharray="4 3"/>`;
+    if (orig && yListed && yListed > ls[0] && yListed < yNow) g += `<circle cx="${X(yListed)}" cy="${Y(orig)}" r="4" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" data-tip="${esc(`<b>Listed on Funda</b><br>${eur(orig)}<br>${fDateY(listed)}`)}"/>`;
+    const cx = X(yNow), cy = Y(ask), r = 6;
+    g += `<path d="M${cx},${cy - r}L${cx + r},${cy}L${cx},${cy + r}L${cx - r},${cy}Z" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" data-tip="${esc(`<b>Asking price now</b><br>${eur(ask)}<br>${sEur(ask - ls[1])} on top of its WOZ ${ls[0]}`)}"/>`;
+    g += T(cx + 9, cy - 2, "asking", { fill: "var(--ink)", w: 650 }) + T(cx + 9, cy + 11, kEur(ask), { fill: "var(--ink)", w: 650 });
+    g += T(cx, H - 6, "now", { a: "middle", fill: "var(--ink-2)" });
+  }
+  if (ls) g += `<circle cx="${X(ls[0])}" cy="${Y(ls[1])}" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>` + T(X(ls[0]) - 6, Y(ls[1]) - 8, "this house", { a: "end", fill: "var(--ink)", w: 650 });
+  if (lm) g += T(X(lm[0]) + 7, Y(lm[1]) + 12, "median", { fill: "var(--ink-2)" });
   // hover: one band per year
   ys.forEach((y, i) => {
     const vals = S.houses.map((h) => wozMap(h).get(y)).filter((v) => v != null);
     const sv = wozMap(S.self).get(y);
-    const x = X(y), half = (w - m.l - m.r) / (ys.length - 1) / 2;
+    const x = X(y), half = (X(ys[1]) - X(ys[0])) / 2;
     const tip = `<b>${y}</b><br>This house: <b>${sv != null ? eur(sv) : "–"}</b><br>Median: ${vals.length ? eur(Math.round(median(vals))) : "–"}<br>Range: ${vals.length ? kEur(Math.min(...vals)) + " – " + kEur(Math.max(...vals)) : "–"}`;
     g += `<rect x="${x - half}" y="${m.t}" width="${half * 2}" height="${H - m.t - m.b}" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
@@ -231,21 +270,26 @@ function growthChart(S) {
   const sm = wozMap(S.self), from = S.years.find((y) => sm.has(y) && S.houses.some((h) => wozMap(h).has(y)));
   if (from == null || from >= S.Y) return empty(box, "Needs WOZ values from more than one year.");
   const g0 = (h) => { const mm = wozMap(h); return mm.has(from) && mm.has(S.Y) ? (mm.get(S.Y) / mm.get(from) - 1) * 100 : null; };
-  const items = S.houses.map((h) => ({ name: h.name, g: g0(h) })).filter((i) => i.g != null).concat([{ name: S.self.name, g: g0(S.self), me: true }]).filter((i) => i.g != null).sort((a, b) => b.g - a.g);
-  $("nbGrowthNote").textContent = `How much each WOZ value grew from ${from} to ${S.Y}.`;
-  const w = W(box), dense = items.length > 30, rh = dense ? 12 : 19, lw = Math.min(130, w * 0.36), top = 6;
+  const ask = askNow();
+  const items = S.houses.map((h) => ({ name: h.name, g: g0(h) })).filter((i) => i.g != null)
+    .concat([{ name: S.self.name, g: g0(S.self), me: true }], ask && sm.has(from) ? [{ name: ASK_NAME, g: (ask / sm.get(from) - 1) * 100, ask: true }] : [])
+    .filter((i) => i.g != null).sort((a, b) => b.g - a.g);
+  $("nbGrowthNote").textContent = `How much each WOZ value grew from ${from} to ${S.Y}.` + (ask && sm.has(from) ? ` Dashed: from this house's ${from} WOZ (${kEur(sm.get(from))}) to its asking price now.` : "");
+  const w = W(box), dense = items.length > 30, rh = dense ? 12 : 19, lw = Math.min(140, w * 0.38), top = 6;
   const x0 = lw + 8, x1 = w - 46;
   const lo = Math.min(0, ...items.map((i) => i.g)), hi = Math.max(...items.map((i) => i.g));
   const X = (v) => x0 + ((v - lo) / (hi - lo || 1)) * (x1 - x0);
   let g = `<line x1="${X(0)}" x2="${X(0)}" y1="${top}" y2="${top + items.length * rh}" stroke="var(--axis)"/>`;
   items.forEach((it, i) => {
     const y = top + i * rh + rh / 2;
-    const c = it.me ? "var(--s1)" : "var(--nb)";
-    g += T(lw, y, short(it.name, 18), { a: "end", db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 700 : null, fs: dense ? 10 : 11.5 });
-    g += `<line x1="${X(0)}" x2="${X(it.g)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="2"/>`;
-    g += `<circle cx="${X(it.g)}" cy="${y}" r="${it.me ? 5 : 4}" fill="${c}" stroke="var(--surface)" stroke-width="1.5"/>`;
-    if (!dense || it.me) g += T(X(it.g) + 8, y, pct(it.g, 0), { db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 650 : null });
-    g += `<rect x="${x0 - 4}" y="${y - rh / 2}" width="${x1 - x0 + 8}" height="${rh}" fill="transparent" data-tip="${esc(`<b>${esc(it.name)}</b>${it.me ? " (this house)" : ""}<br>${from} → ${S.Y}: <b>${pct(it.g)}</b>`)}"/>`;
+    const hl = it.me || it.ask, c = hl ? "var(--s1)" : "var(--nb)";
+    g += T(lw, y, short(it.name, it.ask ? 24 : 18), { a: "end", db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null, fs: dense ? 10 : it.ask ? 10.5 : 11.5 });
+    g += `<line x1="${X(0)}" x2="${X(it.g)}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="2" ${it.ask ? 'stroke-dasharray="4 3"' : ""}/>`;
+    g += it.ask
+      ? `<path d="M${X(it.g)},${y - 6}L${X(it.g) + 6},${y}L${X(it.g)},${y + 6}L${X(it.g) - 6},${y}Z" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>`
+      : `<circle cx="${X(it.g)}" cy="${y}" r="${it.me ? 5 : 4}" fill="${c}" stroke="var(--surface)" stroke-width="1.5"/>`;
+    if (!dense || hl) g += T(X(it.g) + 9, y, pct(it.g, 0), { db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 650 : null });
+    g += `<rect x="${x0 - 4}" y="${y - rh / 2}" width="${x1 - x0 + 8}" height="${rh}" fill="transparent" data-tip="${esc(it.ask ? `<b>Asking price now</b><br>${from} WOZ → ${eur(ask)}: <b>${pct(it.g)}</b>` : `<b>${esc(it.name)}</b>${it.me ? " (this house)" : ""}<br>${from} → ${S.Y}: <b>${pct(it.g)}</b>`)}"/>`;
   });
   const H = top + items.length * rh + 6;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
@@ -289,29 +333,28 @@ function heatChart(S) {
 // ---------- 6. WOZ per m² ----------
 function m2Chart(S) {
   const box = $("cM2");
+  const ask = askNow();
+  const askM2 = ask && S.self.area > 15 ? ask / S.self.area : null;
   const items = S.rows.filter((r) => r.h.area > 15).map((r) => ({ name: r.h.name, v: r.v / r.h.area, r }))
-    .concat(S.sv != null && S.self.area > 15 ? [{ name: S.self.name, v: S.sv / S.self.area, me: true }] : []).sort((a, b) => b.v - a.v);
+    .concat(S.sv != null && S.self.area > 15 ? [{ name: S.self.name, v: S.sv / S.self.area, me: true }] : [], askM2 ? [{ name: ASK_NAME, v: askM2, ask: true }] : [])
+    .sort((a, b) => b.v - a.v);
   if (items.length < 2) return empty(box, "No living areas known (BAG) for these houses.");
-  const ask = DATA && readings().length ? readings().at(-1).price : null;
-  const askM2 = ask && S.self.area ? ask / S.self.area : null;
   const w = W(box), dense = items.length > 30, rh = dense ? 12 : 19, bh = dense ? 8 : 12, lw = Math.min(130, w * 0.36), top = 18;
   const x0 = lw + 6, x1 = w - 46, max = Math.max(...items.map((i) => i.v), askM2 || 0), X = (v) => x0 + (v / max) * (x1 - x0);
   let g = "";
   items.forEach((it, i) => {
     const y = top + i * rh;
-    g += T(lw, y + bh / 2, short(it.name, 18), { a: "end", db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 700 : null, fs: dense ? 10 : 11.5 });
-    g += hbar(x0, X(it.v), y, bh, it.me ? "var(--s1)" : "var(--nb)", `<b>${esc(it.name)}</b><br><b>${eur(Math.round(it.v))}</b> per m²<br>${eur(it.me ? S.sv : it.r.v)} / ${it.me ? S.self.area : it.r.h.area} m²`);
-    if (!dense || it.me) g += T(X(it.v) + 5, y + bh / 2, "€" + nf.format(Math.round(it.v)), { db: "middle", fill: it.me ? "var(--ink)" : "var(--ink-2)", w: it.me ? 650 : null });
+    const hl = it.me || it.ask;
+    g += T(lw, y + bh / 2, short(it.name, it.ask ? 24 : 18), { a: "end", db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null, fs: dense ? 10 : it.ask ? 10.5 : 11.5 });
+    const tip = it.ask ? `<b>Asking price now</b><br><b>${eur(Math.round(it.v))}</b> per m²<br>${eur(ask)} / ${S.self.area} m² (BAG)` : `<b>${esc(it.name)}</b><br><b>${eur(Math.round(it.v))}</b> per m²<br>${eur(it.me ? S.sv : it.r.v)} / ${it.me ? S.self.area : it.r.h.area} m²`;
+    g += hbar(x0, X(it.v), y, bh, it.ask ? ASK_FILL : it.me ? "var(--s1)" : "var(--nb)", tip, it.ask ? ASK_STYLE : "");
+    if (!dense || hl) g += T(X(it.v) + 5, y + bh / 2, "€" + nf.format(Math.round(it.v)), { db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 650 : null });
   });
-  if (askM2) {
-    const ax = X(askM2);
-    g += `<line x1="${ax}" x2="${ax}" y1="${top - 6}" y2="${top + items.length * rh}" stroke="var(--s1)" stroke-dasharray="4 3" stroke-width="1.5"/>` + T(Math.min(ax, w - 60), top - 8, "asking €" + nf.format(Math.round(askM2)), { a: "middle", fill: "var(--ink)", w: 650 });
-  }
   const H = top + items.length * rh + 4;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
-  const med = median(items.filter((i) => !i.me).map((i) => i.v));
+  const med = median(items.filter((i) => !i.me && !i.ask).map((i) => i.v));
   const fundaM2 = DATA && DATA.info && DATA.info.living;
-  $("nbM2Note").textContent = `WOZ ${S.Y} ÷ living area from the BAG, the same source for every house. Neighbours' median €${nf.format(Math.round(med))}/m²`
+  $("nbM2Note").textContent = `WOZ ${S.Y} ÷ living area from the BAG, the same source for every house; the dashed bar is the asking price now. Neighbours' median €${nf.format(Math.round(med))}/m²`
     + (askM2 ? `; asking price €${nf.format(Math.round(askM2))}/m².` : ".")
     + (fundaM2 && S.self.area && Math.abs(fundaM2 - S.self.area) > 2 ? ` (The BAG gives this house ${S.self.area} m², Funda ${fundaM2} m².)` : "");
 }
@@ -361,13 +404,19 @@ function distChart(S) {
   const pts = S.rows.filter((r) => r.h.dist != null).map((r) => ({ x: r.h.dist, y: r.v - S.sv, name: r.h.name, v: r.v }));
   if (pts.length < 2) return empty(box, "Waiting for the neighbours' WOZ values.");
   const w = W(box), H = 210, m = { l: 50, r: 14, t: 12, b: 34 };
-  const lim = Math.max(1000, ...pts.map((p) => Math.abs(p.y)));
+  const askD = askNow() ? askNow() - S.sv : 0;
+  const lim = Math.max(1000, Math.abs(askD) * 1.15, ...pts.map((p) => Math.abs(p.y)));
   const yt = niceTicks(-lim, lim, 4), xt = niceTicks(0, Math.max(150, ...pts.map((p) => p.x)), 5);
   const X = (v) => m.l + (v / xt.at(-1)) * (w - m.l - m.r), Y = (v) => m.t + (H - m.t - m.b) * (1 - (v - yt[0]) / (yt.at(-1) - yt[0]));
   let g = "";
   for (const v of yt) g += `<line x1="${m.l}" x2="${w - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? "var(--s1)" : "var(--grid)"}" ${v === 0 ? 'stroke-width="2"' : ""}/>` + T(m.l - 6, Y(v) + 4, v === 0 ? "same" : sEur(v), { a: "end", fill: v === 0 ? "var(--ink)" : "var(--muted)" });
   for (const v of xt) g += T(X(v), H - 18, v + " m", { a: "middle" });
   g += T((m.l + w - m.r) / 2, H - 3, "distance from this house", { a: "middle", fill: "var(--ink-2)" });
+  const ask = askNow();
+  if (ask && ask - S.sv > yt[0] && ask - S.sv < yt.at(-1)) {
+    const ay = Y(ask - S.sv);
+    g += `<line x1="${m.l}" x2="${w - m.r}" y1="${ay}" y2="${ay}" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="5 4"/>` + T(w - m.r, ay - 5, "asking price now " + kEur(ask), { a: "end", fill: "var(--ink)", w: 650 });
+  }
   for (const p of pts) g += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="4.5" fill="${p.y > 0 ? "var(--hi)" : "var(--lo)"}" stroke="var(--surface)" stroke-width="1.5" data-tip="${esc(`<b>${esc(p.name)}</b><br>${Math.round(p.x)} m away<br>WOZ ${eur(p.v)} (${sEur(p.y)})`)}"/>`;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
 }
@@ -387,7 +436,7 @@ const SCORE_F = [
 const W_STD = Object.fromEntries(SCORE_F.map((f) => [f.k, f.w]));
 let SW = { ...W_STD };
 try { const x = JSON.parse(localStorage.getItem("funda.w") || "null"); if (x) for (const k in W_STD) if (typeof x[k] === "number") SW[k] = x[k]; } catch {}
-const askPrice = () => (DATA && readings().length ? readings().at(-1).price : null);
+const askPrice = () => askNow();
 
 function scoreSet(S, y) {
   const base = mapScales(S).base;
@@ -450,7 +499,7 @@ function scoreCharts(S) {
     t("At its asking price", R.askE ? Math.round(R.askE.score) + '<span class="muted" style="font-size:14px;font-weight:600"> / 100</span>' : "–", R.askE ? `${eur(R.ask)} instead of the WOZ value` : "") +
     t("Neighbours' median", R.n > 1 ? String(Math.round(median(R.list.filter((e) => e.h !== S.self).map((e) => e.score)))) : "–", "the middle score around it") +
     t("Best value nearby", best ? Math.round(best.score) + "" : "–", best ? esc(best.h.name) + (best.h.dist != null ? ` · ${Math.round(best.h.dist)} m` : "") : "");
-  $("scoreNote").textContent = `Scores for ${S.Y}` + (R.askE && me ? `. The diamond shows this house at its asking price: ${Math.round(R.askE.score)} instead of ${Math.round(me.score)}, because the asking price is a ${R.ask > (wozAt(S.self, S.Y) || 0) ? "higher" : "lower"} price per m² than its WOZ value. WOZ values lag behind the market, so most houses would score lower at today's prices too.` : ".");
+  $("scoreNote").textContent = `Scores for ${S.Y}` + (R.askE && me ? `. The dashed bar is this house at its asking price now: ${Math.round(R.askE.score)} instead of ${Math.round(me.score)}, because the asking price is a ${R.ask > (wozAt(S.self, S.Y) || 0) ? "higher" : "lower"} price per m² than its WOZ value. WOZ values lag behind the market, so most houses would score lower at today's prices too.` : ".");
   scoreRankChart(S, R);
   factorChart(S, R);
 }
@@ -461,22 +510,22 @@ function partsTip(e) {
 function scoreRankChart(S, R) {
   const box = $("cScore");
   if (R.n < 2) return empty(box, "Waiting for the neighbours' WOZ values.");
-  const w = W(box), dense = R.n > 30, rh = dense ? 13 : 20, bh = dense ? 9 : 13, lw = Math.min(150, w * 0.36), top = 18;
+  const rows = R.list.map((e) => ({ e, name: e.h.name, score: e.score, me: e.h === S.self }))
+    .concat(R.askE ? [{ e: R.askE, name: ASK_NAME, score: R.askE.score, ask: true }] : []).sort((a, b) => b.score - a.score);
+  const n = rows.length;
+  const w = W(box), dense = n > 30, rh = dense ? 13 : 20, bh = dense ? 9 : 13, lw = Math.min(150, w * 0.36), top = 18;
   const x0 = lw + 6, x1 = w - (dense ? 10 : 34), X = (v) => x0 + (v / 100) * (x1 - x0);
   let g = "";
-  for (const v of [0, 25, 50, 75, 100]) g += `<line x1="${X(v)}" x2="${X(v)}" y1="${top - 4}" y2="${top + R.n * rh}" stroke="var(--grid)"/>` + T(X(v), top - 7, String(v), { a: "middle" });
-  R.list.forEach((e, i) => {
-    const y = top + i * rh, me = e.h === S.self;
-    const tip = `<b>${esc(e.h.name)}</b>${me ? " (this house)" : ""}<br>Score <b>${Math.round(e.score)}</b> · #${e.rank} of ${R.n}<br>${partsTip(e)}`;
-    g += T(lw, y + bh / 2, short(e.h.name, dense ? 22 : 20), { a: "end", db: "middle", fill: me ? "var(--ink)" : "var(--ink-2)", w: me ? 700 : null, fs: dense ? 10 : 11.5 });
-    g += hbar(x0, X(e.score), y, bh, me ? "var(--s1)" : "var(--nb)", tip);
-    if (!dense || me) g += T(X(e.score) + 5, y + bh / 2, String(Math.round(e.score)), { db: "middle", fill: me ? "var(--ink)" : "var(--ink-2)", w: me ? 700 : null });
-    if (me && R.askE) {
-      const cx = X(R.askE.score), cy = y + bh / 2, r = 6;
-      g += `<path d="M${cx},${cy - r}L${cx + r},${cy}L${cx},${cy + r}L${cx - r},${cy}Z" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" data-tip="${esc(`<b>This house at its asking price</b><br>Score <b>${Math.round(R.askE.score)}</b><br>${partsTip(R.askE)}`)}"/>`;
-    }
+  for (const v of [0, 25, 50, 75, 100]) g += `<line x1="${X(v)}" x2="${X(v)}" y1="${top - 4}" y2="${top + n * rh}" stroke="var(--grid)"/>` + T(X(v), top - 7, String(v), { a: "middle" });
+  rows.forEach((r, i) => {
+    const y = top + i * rh, hl = r.me || r.ask;
+    const tip = r.ask ? `<b>This house at its asking price now</b><br>${eur(R.ask)}<br>Score <b>${Math.round(r.score)}</b><br>${partsTip(r.e)}`
+      : `<b>${esc(r.name)}</b>${r.me ? " (this house, WOZ)" : ""}<br>Score <b>${Math.round(r.score)}</b> · #${r.e.rank} of ${R.n}<br>${partsTip(r.e)}`;
+    g += T(lw, y + bh / 2, short(r.name, dense ? 24 : 22), { a: "end", db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null, fs: dense ? 10 : r.ask ? 10.5 : 11.5 });
+    g += hbar(x0, X(r.score), y, bh, r.ask ? ASK_FILL : r.me ? "var(--s1)" : "var(--nb)", tip, r.ask ? ASK_STYLE : "");
+    if (!dense || hl) g += T(X(r.score) + 5, y + bh / 2, String(Math.round(r.score)), { db: "middle", fill: hl ? "var(--ink)" : "var(--ink-2)", w: hl ? 700 : null });
   });
-  const H = top + R.n * rh + 4;
+  const H = top + n * rh + 4;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
 }
 function factorChart(S, R) {
