@@ -110,6 +110,8 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
     }
     if (ok && a[0] != a[1] && a[1] != a[2] && a[0] != a[2]) for (int i = 0; i < 3; i++) { o.fox.ax[i] = a[i]; o.fox.sg[i] = g[i]; }
   }
+  JsonArrayConst z = x["zero"];
+  if (z.size() == 6) { for (int i = 0; i < 6; i++) o.fox.zero[i] = z[i] | 0.0f; o.fox.hasZero = true; }
   o.clock.motion = (k["motion"] | 0) != 0;
   o.clock.msens = constrain((int)(k["msens"] | 5), 1, 10);
   o.clock.mtime = constrain((int)(k["mtime"] | 60), 5, 3600);
@@ -628,14 +630,15 @@ void linkStep() {
   static uint32_t foxSentAt = 0;
   if (G.foxWatch > 0 && G.wsUp && millis() - foxSentAt >= 83) {
     foxSentAt = millis();
-    char p[200], b[300];
+    char p[200], b[400];
     bool go = false, raw = false;
-    float r[3];
+    float r[3], u[6];
     xSemaphoreTake(G.lock, portMAX_DELAY);
-    if (G.haveState && G.st.app == APP_FOX && G.foxHave) { foxJson(G.foxPose, p, sizeof(p)); memcpy(r, G.foxRaw, sizeof(r)); raw = G.foxRawOk; go = true; }
+    if (G.haveState && G.st.app == APP_FOX && G.foxHave) { foxJson(G.foxPose, p, sizeof(p)); memcpy(r, G.foxRaw, sizeof(r)); memcpy(u, G.foxU, sizeof(u)); raw = G.foxRawOk; go = true; }
     xSemaphoreGive(G.lock);
     if (go) {
-      if (raw) snprintf(b, sizeof(b), "{\"t\":\"fox\",\"p\":%s,\"r\":[%.3f,%.3f,%.3f]}", p, r[0], r[1], r[2]);
+      if (raw) snprintf(b, sizeof(b), "{\"t\":\"fox\",\"p\":%s,\"r\":[%.3f,%.3f,%.3f],\"u\":[%.3f,%.3f,%.3f,%.3f,%.3f,%.3f]}", p, r[0], r[1], r[2],
+                        u[0], u[1], u[2], u[3], u[4], u[5]);
       else snprintf(b, sizeof(b), "{\"t\":\"fox\",\"p\":%s}", p);
       if (!wsText(b)) { Serial.println("LINK: fox send failed"); linkDrop(); nextTry = millis() + 1000; }
     }

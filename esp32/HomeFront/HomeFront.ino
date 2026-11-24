@@ -170,6 +170,18 @@ void loop() {
     if (imu) for (int i = 0; i < 3; i++) { f[i] = st.fox.sg[i] * a[st.fox.ax[i]]; g[i] = st.fox.sg[i] * w[st.fox.ax[i]]; }
     float dt = foxAt ? (now - foxAt) / 1000.0f : 0;
     foxAt = now;
+    // its own position, smoothed, before CENTRE: the phone's CENTRE button takes this as the new 0
+    static float lp[6] = { 0, 1, 0, 0, 0, 0 };
+    if (imu) { float k = 1 - expf(-3 * dt); for (int i = 0; i < 3; i++) { lp[i] += (f[i] - lp[i]) * k; lp[3 + i] += (g[i] - lp[3 + i]) * k; } }
+    memcpy(G.foxU, lp, sizeof(lp));
+    // CENTRE: worked out again when it changes; then the fox doesn't take the change for a jolt
+    static FoxZero Z;
+    static float zKey[7] = { -9 };
+    float key[7] = { st.fox.hasZero ? 1.0f : 0.0f };
+    memcpy(key + 1, st.fox.zero, sizeof(st.fox.zero));
+    bool newZero = memcmp(key, zKey, sizeof(key)) != 0;
+    if (newZero) { memcpy(zKey, key, sizeof(key)); if (st.fox.hasZero) foxZeroOf(st.fox.zero, Z); else Z = FoxZero(); }
+    if (imu) { foxZeroApply(Z, f, g); if (newZero) memcpy(fox.gl, f, sizeof(fox.gl)); }
     foxStep(fox, imu ? f : nullptr, imu ? g : nullptr, dt);
     FoxPose fp;
     foxPoseOf(fox, fp);

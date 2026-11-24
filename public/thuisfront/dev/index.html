@@ -115,7 +115,7 @@ window.addEventListener('devicemotion', (e) => {
 // FOX: while a phone watches, send it the fox's pose 12 times a second
 let foxWatch = 0;
 setInterval(() => {
-  if (foxWatch > 0 && ws && ws.readyState === 1 && scr.state && scr.state.app === 'fox') ws.send(JSON.stringify({ t: 'fox', p: scr.foxPacket() }));
+  if (foxWatch > 0 && ws && ws.readyState === 1 && scr.state && scr.state.app === 'fox') ws.send(JSON.stringify({ t: 'fox', p: scr.foxPacket(), u: scr.foxLevel() || undefined }));
 }, 83);
 document.addEventListener('pointerdown', () => {
   if (!askedMotion && typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {   // iPhone / iPad ask first

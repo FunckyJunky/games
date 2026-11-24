@@ -217,6 +217,9 @@
       <div class="h">THE FOX <span id="xLive" class="small"></span></div>
       <p class="dimt small" id="xNote"></p>
       <div class="row" id="xSetupRow"><button class="btn" id="xSetup">SET UP MOTION</button></div>
+      <div class="h">CENTRE <span id="xZero" class="small"></span></div>
+      <div class="row"><button class="btn" id="xZeroB">CENTRE: THIS POSITION = 0</button><button class="btn" id="xZeroX">RESET</button></div>
+      <p class="dimt small">Put the screen how you want it to stand (also crooked), keep it still and press CENTRE: from then on that counts as level and still, and the fox feels tilting and turning from there.</p>
       <div class="h">COLOUR</div><div class="chips" id="xpals"></div>
       <p class="dimt small">Tilt the screen: the fox slides and holds on. Turn it round: the fox turns with it. Knock on it: it jumps. Shake or spin it: it gets dizzy. Turn it over: it tumbles. Leave it alone: it sits down, and after a while it sleeps; a nudge wakes it. What it does there, you see here.</p>
     </div>
@@ -663,7 +666,7 @@ const msensName = (v) => v + '/10';
 let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
 const EDEF = { from: 0, to: 0, text: '', pal: 0, done: 0, lang: 0 };
 let E = { ...EDEF };                                 // the ETA
-const FDEF = { pal: 0, axes: '' };
+const FDEF = { pal: 0, axes: '', zero: [] };
 let F = { ...FDEF }; const touchedF = {};             // the FOX
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
@@ -744,11 +747,13 @@ function foxWatchSync() {
   if (ctl && ctl.auth === 'ok' && ctl.watchSent !== want) { ctl.send({ t: 'watch', fox: want }); ctl.watchSent = want; }
 }
 const foxRaw = [];                                   // the board's sensor lately: [{at, r}] (for SET UP)
+const foxLvl = [];                                   // the screen's own position lately: [{at, u: up xyz + gyro xyz}] (for CENTRE)
 let foxLastAt = 0;
 function foxIn(m) {
   if (view !== 'comm' || curApp !== 'fox') return;
   pv.foxRemote(m.p); foxLastAt = performance.now();
   if (Array.isArray(m.r)) { foxRaw.push({ at: foxLastAt, r: m.r }); while (foxRaw.length > 40) foxRaw.shift(); }
+  if (Array.isArray(m.u) && m.u.length === 6) { foxLvl.push({ at: foxLastAt, u: m.u }); while (foxLvl.length > 20) foxLvl.shift(); }
   if (!foxIn.ui || foxLastAt - foxIn.ui > 1000) { foxIn.ui = foxLastAt; syncUI(); }
 }
 // SET UP MOTION (boards): which way the sensor sits behind the screen. 1: upright and still; 2: tilted to the right.
@@ -769,6 +774,15 @@ function axesFrom(a1, a2) {
   const ax = snap(right) + snap(up) + snap(out);
   return new Set([ax[1], ax[3], ax[5]]).size === 3 ? ax : null;
 }
+// CENTRE: the screen's position now (its smoothed "up" and resting gyro, before any CENTRE) becomes level and still
+$('xZeroB').onclick = () => {
+  const now = performance.now(), got = foxLvl.filter((x) => now - x.at < 700);
+  if (got.length < 3) { toast('WAITING FOR THE SCREEN'); return; }
+  const z = [0, 1, 2, 3, 4, 5].map((i) => got.reduce((a, x) => a + x.u[i], 0) / got.length);
+  if (Math.abs(Math.hypot(z[0], z[1], z[2]) - 1) > 0.3) { toast('KEEP IT STILL, THEN CENTRE'); return; }
+  fset({ zero: z.map((x) => Math.round(x * 1000) / 1000) }); toast('CENTRED: THIS IS 0 NOW');
+};
+$('xZeroX').onclick = () => { fset({ zero: [] }); toast('CENTRE RESET'); };
 $('xSetup').onclick = () => {
   let a1 = null;
   const step = (n) => {
@@ -787,7 +801,7 @@ $('xSetup').onclick = () => {
       }
       const ax = axesFrom(a1, r);
       if (!ax) { toast('TILT IT MORE, THEN DONE'); return; }
-      clearInterval(tick); unmodal(); fset({ axes: ax }); toast('MOTION SET UP');
+      clearInterval(tick); unmodal(); fset({ axes: ax, zero: [] }); toast('MOTION SET UP');   // a CENTRE was in the old directions
     };
   };
   step(1);
@@ -875,6 +889,9 @@ function syncUI() {
     const d = (ctl && ctl.dev) || {}, live = pv.foxLive(), board = d.kind === 'esp';
     $('xLive').textContent = live ? '· LIVE FROM THE SCREEN' : d.online === false ? '· THE SCREEN IS OFFLINE' : '· WAITING FOR THE SCREEN';
     $('xSetupRow').hidden = !(board && d.imu);
+    const zs = Array.isArray(F.zero) && F.zero.length === 6;
+    $('xZero').textContent = zs ? '· SET: ' + Math.round((Math.acos(Math.max(-1, Math.min(1, F.zero[1]))) * 180) / Math.PI) + '° FROM UPRIGHT' : '· NONE (UPRIGHT = LEVEL)';
+    $('xZeroX').disabled = !zs;
     $('xSetup').classList.toggle('on', board && d.imu && !F.axes);
     $('xSetup').textContent = F.axes ? 'SET UP MOTION AGAIN' : 'SET UP MOTION (2 STEPS)';
     $('xNote').textContent = board && d.imu === false ? 'THIS BOARD HAS NO MOTION SENSOR: THE FOX JUST LIVES THERE. (The 1.47B board has one.)'

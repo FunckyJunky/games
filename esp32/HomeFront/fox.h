@@ -21,6 +21,10 @@ struct FoxSim {
 // f: what the accelerometer feels, in g, in screen directions (x right, y up, z out of the screen), 1 g up when still;
 // w: turning in rad/s (same directions); nullptr = no sensor. dt: seconds.
 void foxStep(FoxSim& S, const float* f, const float* w, float dt);
+// CENTRE (as foxZero in fox.js): turn the "up" felt then to straight up, and take the resting gyro off
+struct FoxZero { bool on = false; float R[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 }, b[3] = { 0, 0, 0 }; };
+void foxZeroOf(const float* zero6, FoxZero& Z);
+void foxZeroApply(const FoxZero& Z, float* f, float* w);   // in place
 void foxPoseOf(const FoxSim& S, FoxPose& p);
 void scrFox(const FoxPose& p, float t, int pal);   // the whole screen
 int foxJson(const FoxPose& p, char* out, int n);  // "[px,pz,...]"

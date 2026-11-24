@@ -130,7 +130,7 @@ export function defaultState() {
     eta: { from: 0, to: 0, text: "", pal: 0, done: 0, lang: 0 },
     // FOX: a 3D fox that feels the screen move. axes: how the board's motion sensor sits behind its screen
     // ("+x+y+z" = screen right, up, out of the screen; set with SET UP on the phone), "" = not set yet
-    fox: { pal: 0, axes: "" },
+    fox: { pal: 0, axes: "", zero: [] },             // zero: CENTRE (the screen's "up" and resting gyro then), [] = none
   };
 }
 
@@ -172,6 +172,12 @@ function mergeState(s, p) {
   if (fx && typeof fx === "object") {
     if ("pal" in fx) set(fo, "pal", int(fx.pal, 0, 3, fo.pal));
     if ("axes" in fx && (fx.axes === "" || axesOk(fx.axes))) set(fo, "axes", String(fx.axes));
+    if ("zero" in fx && Array.isArray(fx.zero)) {
+      const z = fx.zero.slice(0, 6).map(Number), l = z.length === 6 ? Math.hypot(z[0], z[1], z[2]) : 0;
+      const ok = l > 0.5 && l < 1.5 && z.every(Number.isFinite) && Math.abs(z[3]) < 1 && Math.abs(z[4]) < 1 && Math.abs(z[5]) < 1;
+      const v = ok ? [z[0] / l, z[1] / l, z[2] / l, z[3], z[4], z[5]].map((x) => Math.round(x * 1000) / 1000) : [];
+      if (JSON.stringify(v) !== JSON.stringify(fo.zero || [])) { fo.zero = v; changed = true; }
+    }
   }
   const c = p.comm, o = s.comm;
   if (c && typeof c === "object") {
@@ -458,8 +464,9 @@ export class HomeFront extends DurableObject {
     if (m.t === "fox") {                         // the fox's pose (and the sensor, raw) for the phones watching it
       const p = Array.isArray(m.p) ? m.p.slice(0, 24).map((v) => (Number.isFinite(+v) ? Math.round(+v * 100) / 100 : 0)) : null;
       const r = Array.isArray(m.r) ? m.r.slice(0, 6).map((v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : 0)) : undefined;
+      const u = Array.isArray(m.u) ? m.u.slice(0, 6).map((v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : 0)) : undefined;   // for CENTRE
       if (!p) return;
-      const s = JSON.stringify({ t: "fox", p, r });
+      const s = JSON.stringify({ t: "fox", p, r, u });
       for (const o of this.ctlSocks(id)) if ((o.deserializeAttachment() || {}).watch) this.send(o, s);
       return;
     }

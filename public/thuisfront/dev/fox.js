@@ -161,6 +161,35 @@ export function foxLerp(a, b, u) {                  // between two poses (angles
   return p;
 }
 
+// ---------------- CENTRE: the screen's position now counts as level and still ----------------
+// zero = [up x, y, z, gyro x, y, z] in screen directions, as the screen felt them when CENTRE was pressed.
+// Turned into a rotation that brings that "up" to straight up (Rodrigues), and the gyro's resting value to take off.
+export function foxZero(zero) {
+  if (!Array.isArray(zero) || zero.length < 6) return null;
+  const l = Math.hypot(zero[0], zero[1], zero[2]);
+  if (!(l > 0.3)) return null;
+  const a = [zero[0] / l, zero[1] / l, zero[2] / l], c = a[1];
+  let R;
+  if (c > 0.99999) R = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  else if (c < -0.99999) R = [1, 0, 0, 0, -1, 0, 0, 0, -1];
+  else {
+    const v = [-a[2], 0, a[0]], k = (1 - c) / (1 - c * c);          // a x (0, 1, 0)
+    const K = [0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0];
+    R = [];
+    for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) {
+      let k2 = 0;
+      for (let m = 0; m < 3; m++) k2 += K[r * 3 + m] * K[m * 3 + q];
+      R.push((r === q ? 1 : 0) + K[r * 3 + q] + k2 * k);
+    }
+  }
+  return { R, b: [+zero[3] || 0, +zero[4] || 0, +zero[5] || 0] };
+}
+export function foxZeroApply(Z, f, w) {
+  if (!Z) return [f, w];
+  const R = Z.R, ap = (v) => [R[0] * v[0] + R[1] * v[1] + R[2] * v[2], R[3] * v[0] + R[4] * v[1] + R[5] * v[2], R[6] * v[0] + R[7] * v[1] + R[8] * v[2]];
+  return [ap(f), ap([w[0] - Z.b[0], w[1] - Z.b[1], w[2] - Z.b[2]])];
+}
+
 // ---------------- what the fox does ----------------
 export function foxNew() {
   return {

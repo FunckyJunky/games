@@ -738,6 +738,10 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   {t:"fox", p:[19 numbers], r:[raw sensor]} 12 times a second and the phone draws the same fox (foxLerp between poses).
   Boards: SET UP MOTION on the phone (upright, then tilted right) finds which sensor axis is the screen's right / up / out
   (state fox.axes, e.g. "-y+z-x"); browser screens use devicemotion (+ rotationRate) turned to the screen's orientation.
+  CENTRE (1.12): the screen sends its own smoothed position too (u = up xyz + resting gyro xyz, before CENTRE); the
+  phone's CENTRE button stores it as fox.zero, and the screen then turns that "up" to straight up (foxZero: Rodrigues)
+  and takes the resting gyro off, so a crooked screen counts as level and still. RESET = fox.zero []; a new SET UP
+  MOTION resets it too.
 - Time zone fix (1.9): configTime() for the internet time sets TZ to UTC; applyTz() now compares with getenv("TZ") and
   runs again right after configTime(), so the clock no longer shows UTC (an hour early in Amsterdam) after a restart.
   Ping reports lt (the board's HH:MM) and tz (its TZ), shown in /api/hf/list as lt / tzNow.

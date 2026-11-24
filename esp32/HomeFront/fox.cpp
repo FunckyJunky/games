@@ -115,6 +115,33 @@ void foxStep(FoxSim& S, const float* fin, const float* win, float dt) {
   S.ov = S.lf > 1.5f ? 1 : (S.startle > 0.6f || S.wake > 0) ? 2 : S.dizzy > 1 ? 3 : 0;
 }
 
+void foxZeroOf(const float* z, FoxZero& Z) {
+  Z = FoxZero();
+  float l = sqrtf(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
+  if (!(l > 0.3f)) return;
+  float a[3] = { z[0] / l, z[1] / l, z[2] / l }, c = a[1];
+  Z.on = true;
+  for (int i = 0; i < 3; i++) Z.b[i] = z[3 + i];
+  if (c > 0.99999f) return;
+  if (c < -0.99999f) { float R[9] = { 1, 0, 0, 0, -1, 0, 0, 0, -1 }; memcpy(Z.R, R, sizeof(R)); return; }
+  float v[3] = { -a[2], 0, a[0] }, k = (1 - c) / (1 - c * c);
+  float K[9] = { 0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0 };
+  for (int r = 0; r < 3; r++)
+    for (int q = 0; q < 3; q++) {
+      float k2 = 0;
+      for (int m = 0; m < 3; m++) k2 += K[r * 3 + m] * K[m * 3 + q];
+      Z.R[r * 3 + q] = (r == q ? 1 : 0) + K[r * 3 + q] + k2 * k;
+    }
+}
+void foxZeroApply(const FoxZero& Z, float* f, float* w) {
+  if (!Z.on) return;
+  float a[3] = { f[0], f[1], f[2] }, g[3] = { w[0] - Z.b[0], w[1] - Z.b[1], w[2] - Z.b[2] };
+  for (int r = 0; r < 3; r++) {
+    f[r] = Z.R[r * 3] * a[0] + Z.R[r * 3 + 1] * a[1] + Z.R[r * 3 + 2] * a[2];
+    w[r] = Z.R[r * 3] * g[0] + Z.R[r * 3 + 1] * g[1] + Z.R[r * 3 + 2] * g[2];
+  }
+}
+
 void foxPoseOf(const FoxSim& S, FoxPose& p) {
   p = { S.px, S.pz, S.hop, S.hd, S.rl, S.pt, S.tb, S.lf, S.hy, S.hp, S.el, S.er, S.ta, S.tu, S.wp, S.wa, S.ey, S.md, S.ov };
 }

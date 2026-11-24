@@ -5,7 +5,7 @@
 // The screen is 320x172. Every pixel is an index into a 64-colour table:
 //   0-15 text levels, 16-31 video levels, 32-47 ERROR-DOS green (menus), 48 black, 49 red, 50 white,
 //   255 = "see the colour picture underneath" (a photo, or colour video).
-import { foxNew, foxStep, foxPose, foxPack, foxUnpack, foxLerp, drawFox } from './fox.js';
+import { foxNew, foxStep, foxPose, foxPack, foxUnpack, foxLerp, drawFox, foxZero, foxZeroApply } from './fox.js';
 
 export const W = 320, H = 172;
 export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
@@ -370,15 +370,25 @@ export class Screen {
     this.foxA = this.foxB ? this.foxNow(now) : p; this.foxB = p; this.foxBAt = now;
   }
   foxLive() { return !!this.foxB && performance.now() - this.foxBAt < 1500; }   // poses are coming in
-  foxNow(now) {                                     // the pose to draw now
+  foxNow(now, zero) {                               // the pose to draw now (zero: CENTRE, see foxZero)
     if (this.foxB && now - this.foxBAt < 1500) return foxLerp(this.foxA, this.foxB, Math.min(1, (now - this.foxBAt) / this.foxGap));
     const dt = this.foxAt ? (now - this.foxAt) / 1000 : 0;
     this.foxAt = now;
     const sens = this.foxIn && now - this.foxIn.at < 1000 ? this.foxIn : null;
-    foxStep(this.foxS, sens ? sens.f : null, sens ? sens.w : null, dt);
+    let f = sens ? sens.f : null, w = sens ? sens.w : null;
+    if (sens) {                                     // the screen's own position, smoothed (for the phone's CENTRE button)
+      const x = [...f, ...w], k = 1 - Math.exp(-3 * dt);
+      this.foxLevelLp = this.foxLevelLp ? this.foxLevelLp.map((v, i) => v + (x[i] - v) * k) : x;
+    }
+    const key = JSON.stringify(zero || null);
+    if (key !== this.foxZeroKey) { this.foxZeroKey = key; this.foxZ = foxZero(zero); this.foxNewZero = true; }
+    if (sens && this.foxZ) [f, w] = foxZeroApply(this.foxZ, f, w);
+    if (sens && this.foxNewZero) { this.foxS.gl = [...f]; this.foxNewZero = false; }   // a new CENTRE is not a jolt
+    foxStep(this.foxS, f, w, dt);
     return foxPose(this.foxS);
   }
   foxPacket() { return foxPack(foxPose(this.foxS)); }   // what a screen sends to the phones
+  foxLevel() { return this.foxLevelLp ? this.foxLevelLp.map((v) => Math.round(v * 1000) / 1000) : null; }
   setPhoto(p) { this.photo = p; this.photoKey = ''; this.photoPlanes = []; this.photoT0 = performance.now(); }   // p = {w, h, data, frames?: [{data, delay}]} or null
   setColorFrame(f) { this.color = filterPlane(f.data, f.w, f.h, NOFILTER); this.colorAt = performance.now(); }
   restart() { this.t0 = performance.now(); }
@@ -400,7 +410,7 @@ export class Screen {
       scan = fx && !!s.scan;
     }
     else if (s.app === 'fox') {
-      drawFox(fb, this.foxNow(now), now / 1000, fx);
+      drawFox(fb, this.foxNow(now, (s.fox || {}).zero), now / 1000, fx);
       this.setLut(T, textRamp((s.fox || {}).pal || 0, 0, 1));
       scan = fx && !!s.scan;
     }
