@@ -71,8 +71,11 @@ async function findSelf(info, trace = []) {
   if (!a || !info.postcode) throw new Error("no address for this listing yet");
   const pc = String(info.postcode).replace(/\s+/g, "").toUpperCase();
   const norm = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const full = norm(info.address);
   const score = (d) => {
     let sc = 0;
+    // street names can end in a number ("Rozengaard 11" + house 4 = "Rozengaard 11 4"): compare the whole thing too
+    if (norm(`${d.straatnaam || ""}${d.huis_nlt || d.huisnummer || ""}`) === full) sc += 10;
     if (norm(d.postcode) === pc) sc += 4;
     if (norm(d.straatnaam) === norm(a.street)) sc += 3;
     if (String(d.huisnummer) === a.nr) sc += 4;
