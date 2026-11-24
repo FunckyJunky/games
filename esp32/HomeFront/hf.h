@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "freertos/semphr.h"
 #include "screen.h"
+#include "fox.h"
 
 struct HfState {                   // the web app's state, as error.blue sends it
   uint32_t rev = 0;
@@ -17,6 +18,7 @@ struct HfState {                   // the web app's state, as error.blue sends i
   CommSet comm;
   ClockSet clock;
   EtaSet eta;
+  FoxSet fox;
   char ptz[64] = "";               // the clock's time zone, POSIX style (STD-1DST-2,M3.5.0/2,M10.5.0/3)
 };
 
@@ -25,6 +27,11 @@ struct Shared {
   // device
   char id[16] = "";
   bool imu = false;                // the motion sensor is there (1.47B)
+  // FOX: how many phones watch (the pose goes to them 12 times a second), and the latest pose / raw sensor
+  int foxWatch = 0;
+  FoxPose foxPose;
+  float foxRaw[3] = { 0, 0, 0 };
+  bool foxHave = false, foxRawOk = false;
   // WiFi (written by the network task)
   volatile bool staUp = false, everStaUp = false, apOn = false, joining = false, joinLow = false;
   volatile int apClients = 0;

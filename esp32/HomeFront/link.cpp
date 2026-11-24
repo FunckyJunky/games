@@ -61,7 +61,7 @@ static uint8_t* loadFile(const char* path, size_t& n) {
   return d;
 }
 
-static const char* const APPS[] = { "", "comm", "clock", "eta" };
+static const char* const APPS[] = { "", "comm", "clock", "eta", "fox" };
 static const char* const MODES[] = { "text", "video", "both", "photo" };
 static const char* const ANIMS[] = { "static", "scroll", "rise", "type", "blink", "wave", "glitch", "pulse" };
 static uint8_t pickIdx(const char* v, const char* const* list, int n) { for (int i = 0; i < n; i++) if (v && !strcmp(v, list[i])) return i; return 0; }
@@ -73,7 +73,7 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   JsonObjectConst s = doc["state"];
   if (s.isNull()) return false;
   o.rev = s["rev"] | 0;
-  o.app = pickIdx(s["app"] | "", APPS, 4);
+  o.app = pickIdx(s["app"] | "", APPS, 5);
   o.screen = (s["screen"] | 1) != 0;
   o.bright = constrain((int)(s["bright"] | 80), 5, 100);
   o.scan = (s["scan"] | 0) != 0;
@@ -99,6 +99,17 @@ static bool parseState(const uint8_t* d, size_t n, HfState& o) {
   o.clock.sec = constrain((int)(k["sec"] | 1), 0, 2);
   o.clock.date = (k["date"] | 1) != 0;
   strlcpy(o.ptz, k["ptz"] | "", sizeof(o.ptz));
+  JsonObjectConst x = s["fox"];
+  o.fox.pal = constrain((int)(x["pal"] | 0), 0, 3);
+  const char* ax = x["axes"] | "";                // "+x-z+y": the sensor axis (and sign) for the screen's right, up, out
+  if (strlen(ax) == 6) {
+    int8_t a[3], g[3]; bool ok = true;
+    for (int i = 0; i < 3; i++) {
+      g[i] = ax[2 * i] == '-' ? -1 : 1; a[i] = ax[2 * i + 1] - 'x';
+      if ((ax[2 * i] != '+' && ax[2 * i] != '-') || a[i] < 0 || a[i] > 2) ok = false;
+    }
+    if (ok && a[0] != a[1] && a[1] != a[2] && a[0] != a[2]) for (int i = 0; i < 3; i++) { o.fox.ax[i] = a[i]; o.fox.sg[i] = g[i]; }
+  }
   o.clock.motion = (k["motion"] | 0) != 0;
   o.clock.msens = constrain((int)(k["msens"] | 5), 1, 10);
   o.clock.mtime = constrain((int)(k["mtime"] | 60), 5, 3600);
@@ -442,6 +453,7 @@ static bool wsOpen() {
 void linkDrop() {
   if (G.wsUp || tls.connected()) { tls.stop(); }
   G.wsUp = false;
+  G.foxWatch = 0;                                // error.blue tells again who watches when it says hi
 }
 
 static void handleState(const uint8_t* d, size_t n) {
@@ -486,7 +498,15 @@ static void handleState(const uint8_t* d, size_t n) {
 }
 
 static void handleMessage() {
-  if (msgOp == 1) { if (!parseOta(msg, msgLen)) handleState(msg, msgLen); return; }
+  if (msgOp == 1) {
+    if (msgLen < 48 && memmem(msg, msgLen, "\"watch\"", 7)) {   // {"t":"watch","fox":n}: phones watching the FOX
+      JsonDocument doc;
+      if (!deserializeJson(doc, (const char*)msg, msgLen)) G.foxWatch = doc["fox"] | 0;
+      return;
+    }
+    if (!parseOta(msg, msgLen)) handleState(msg, msgLen);
+    return;
+  }
   if (msgOp != 2 || msgLen < 12) return;
   if (!memcmp(msg, "HFV1", 4)) {
     int w = msg[4] | msg[5] << 8, h = msg[6] | msg[7] << 8;
@@ -603,5 +623,21 @@ void linkStep() {
     snprintf(b, sizeof(b), "{\"t\":\"ping\",\"rssi\":%d,\"fps\":%d,\"heap\":%u,\"psram\":%u,\"anim\":%d,\"lt\":\"%s\",\"tz\":\"%s\"}", WiFi.RSSI(), G.renderFps,
              (unsigned)ESP.getFreeHeap(), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >> 10), G.animN, lt, tz);
     if (!wsText(b)) { Serial.println("LINK: ping failed"); linkDrop(); nextTry = millis() + 1000; }
+  }
+  // FOX: while a phone watches, its pose 12 times a second (and the raw sensor, for SET UP MOTION)
+  static uint32_t foxSentAt = 0;
+  if (G.foxWatch > 0 && G.wsUp && millis() - foxSentAt >= 83) {
+    foxSentAt = millis();
+    char p[200], b[300];
+    bool go = false, raw = false;
+    float r[3];
+    xSemaphoreTake(G.lock, portMAX_DELAY);
+    if (G.haveState && G.st.app == APP_FOX && G.foxHave) { foxJson(G.foxPose, p, sizeof(p)); memcpy(r, G.foxRaw, sizeof(r)); raw = G.foxRawOk; go = true; }
+    xSemaphoreGive(G.lock);
+    if (go) {
+      if (raw) snprintf(b, sizeof(b), "{\"t\":\"fox\",\"p\":%s,\"r\":[%.3f,%.3f,%.3f]}", p, r[0], r[1], r[2]);
+      else snprintf(b, sizeof(b), "{\"t\":\"fox\",\"p\":%s}", p);
+      if (!wsText(b)) { Serial.println("LINK: fox send failed"); linkDrop(); nextTry = millis() + 1000; }
+    }
   }
 }

@@ -71,7 +71,7 @@ const FLOW_MS = 1500;              // a frame the device never "got" is given up
 const PW_ITER = 10000;             // PBKDF2 rounds for device passwords
 const KEYS_MAX = 30;               // browsers that know the password, per device
 
-const APPS = ["", "comm", "clock", "eta"];
+const APPS = ["", "comm", "clock", "eta", "fox"];
 const TZ_RE = /^[A-Za-z0-9_+\-\/]{1,40}$/;                     // an IANA time zone, for browsers
 const PTZ_RE = /^[A-Z]{3}[-+]?\d{1,2}(:\d\d)?([A-Z]{3}([-+]?\d{1,2}(:\d\d)?)?(,M\d{1,2}\.\d\.\d(\/\d{1,2}(:\d\d)?)?){2})?$/;   // the same as a POSIX TZ, for the board
 const MODES = ["text", "video", "both", "photo"];
@@ -128,6 +128,9 @@ export function defaultState() {
     clock: { pal: 0, bg: 0, h24: 1, sec: 1, date: 1, tz: "", ptz: "", motion: 0, msens: 5, mtime: 60 },
     // ETA: when I arrive (unix seconds from / to), a description, a progress bar; done = I'm here
     eta: { from: 0, to: 0, text: "", pal: 0, done: 0, lang: 0 },
+    // FOX: a 3D fox that feels the screen move. axes: how the board's motion sensor sits behind its screen
+    // ("+x+y+z" = screen right, up, out of the screen; set with SET UP on the phone), "" = not set yet
+    fox: { pal: 0, axes: "" },
   };
 }
 
@@ -165,6 +168,11 @@ function mergeState(s, p) {
     if ("pal" in e) set(r, "pal", int(e.pal, 0, 3, r.pal));
     if ("done" in e) set(r, "done", e.done ? 1 : 0);
   }
+  const fx = p.fox, fo = s.fox;
+  if (fx && typeof fx === "object") {
+    if ("pal" in fx) set(fo, "pal", int(fx.pal, 0, 3, fo.pal));
+    if ("axes" in fx && (fx.axes === "" || axesOk(fx.axes))) set(fo, "axes", String(fx.axes));
+  }
   const c = p.comm, o = s.comm;
   if (c && typeof c === "object") {
     if ("mode" in c) set(o, "mode", pick(c.mode, MODES, o.mode));
@@ -200,6 +208,11 @@ function mergeState(s, p) {
   return changed;
 }
 
+// "+x-z+y": which sensor axis (with its sign) points to the screen's right, up and out; each axis once
+function axesOk(a) {
+  const m = /^([+-])([xyz])([+-])([xyz])([+-])([xyz])$/.exec(String(a));
+  return !!m && new Set([m[2], m[4], m[6]]).size === 3;
+}
 const magic = (u8) => (u8.length >= 4 ? String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) : "");
 
 export class HomeFront extends DurableObject {
@@ -224,6 +237,7 @@ export class HomeFront extends DurableObject {
       s.comm = { ...defaultState().comm, ...(s.comm || {}) };
       s.clock = { ...defaultState().clock, ...(s.clock || {}) };
       s.eta = { ...defaultState().eta, ...(s.eta || {}) };
+      s.fox = { ...defaultState().fox, ...(s.fox || {}) };
       this.states.set(id, s);
     }
     return this.states.get(id);
@@ -427,6 +441,7 @@ export class HomeFront extends DurableObject {
       if (s.comm.pb && m.pb !== s.comm.pb) { const p = await this.loadPhoto(id); if (p && p.tb === s.comm.pb) this.send(ws, p.data); }
       this.send(ws, { t: "state", state: { ...s, name: d.name } });
       if (m.ota) this.offerFirmware(id, ws, m.otafail === FIRMWARE.ver ? 60 * 60000 : 10 * 60000);
+      this.watchTell(id);
       this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
       return;
     }
@@ -438,6 +453,14 @@ export class HomeFront extends DurableObject {
       if (d && now - (d.seen || 0) > 5 * 60 * 1000) { d.seen = now; await this.saveDev(d); }   // "last seen", now and then
       if (!wasOn || this.socks("ctl", id).length) this.toCtl(id, { t: "dev", dev: await this.devInfo(id) });
       this.offerFirmware(id, ws, 10 * 60000);   // new firmware also reaches boards that stay connected (a deploy keeps them on)
+      return;
+    }
+    if (m.t === "fox") {                         // the fox's pose (and the sensor, raw) for the phones watching it
+      const p = Array.isArray(m.p) ? m.p.slice(0, 24).map((v) => (Number.isFinite(+v) ? Math.round(+v * 100) / 100 : 0)) : null;
+      const r = Array.isArray(m.r) ? m.r.slice(0, 6).map((v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : 0)) : undefined;
+      if (!p) return;
+      const s = JSON.stringify({ t: "fox", p, r });
+      for (const o of this.ctlSocks(id)) if ((o.deserializeAttachment() || {}).watch) this.send(o, s);
       return;
     }
     if (m.t === "got") {
@@ -552,9 +575,19 @@ export class HomeFront extends DurableObject {
       d.name = name; await this.saveDev(d);
       return this.pushState(id, false, false);
     }
+    if (m.t === "watch") {                      // a phone opened (1) or left (0) the FOX view: the screen sends poses only then
+      const a = ws.deserializeAttachment() || {};
+      a.watch = m.fox ? 1 : 0; ws.serializeAttachment(a);
+      return this.watchTell(id);
+    }
     if (m.t === "hello") this.send(ws, { t: "state", state: { ...(await this.state(id)), name: (await this.dev(id)).name }, dev: await this.devInfo(id) });
   }
 
+  // how many phones watch the fox -> the screen (it streams its pose only while someone watches)
+  watchTell(id) {
+    const n = this.ctlSocks(id).filter((o) => (o.deserializeAttachment() || {}).watch).length, d = this.devSock(id);
+    if (d) this.send(d, { t: "watch", fox: n });
+  }
   async webSocketClose(ws, code, reason) {
     await this.gone(ws);
     try { ws.close(code, reason); } catch { /* closed */ }
@@ -562,6 +595,7 @@ export class HomeFront extends DurableObject {
   async webSocketError(ws) { await this.gone(ws); }
   async gone(ws) {
     const a = ws.deserializeAttachment() || {};
+    if (a.role === "ctl" && a.id && a.watch) { a.watch = 0; ws.serializeAttachment(a); return this.watchTell(a.id); }
     if (a.role !== "dev" || !a.id) return;
     ws.serializeAttachment({ ...a, seen: 0 });
     this.flow.delete(a.id);

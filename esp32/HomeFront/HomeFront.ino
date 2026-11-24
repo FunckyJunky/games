@@ -161,6 +161,23 @@ void loop() {
     scan = st.scan && st.fx;
     bl = st.bright;
     if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
+  } else if (appOn && st.app == APP_FOX) {
+    // FOX: the sensor in screen directions (as SET UP MOTION found), the fox feels it, and is drawn
+    static FoxSim fox;
+    static uint32_t foxAt = 0;
+    float a[3] = { 0, 0, 0 }, w[3] = { 0, 0, 0 }, f[3], g[3];
+    bool imu = motionRead(a, w);
+    if (imu) for (int i = 0; i < 3; i++) { f[i] = st.fox.sg[i] * a[st.fox.ax[i]]; g[i] = st.fox.sg[i] * w[st.fox.ax[i]]; }
+    float dt = foxAt ? (now - foxAt) / 1000.0f : 0;
+    foxAt = now;
+    foxStep(fox, imu ? f : nullptr, imu ? g : nullptr, dt);
+    FoxPose fp;
+    foxPoseOf(fox, fp);
+    scrFox(fp, tNow, st.fox.pal);
+    G.foxPose = fp; memcpy(G.foxRaw, a, sizeof(G.foxRaw)); G.foxRawOk = imu; G.foxHave = true;
+    scan = st.scan && st.fx;
+    bl = st.bright;
+    if (!G.wsUp && G.everStaUp) scrOfflineDot(now);
   } else if (appOn && st.app == APP_COMM && st.comm.motion &&
              moveAsleep(st.rev, st.comm.msens, st.comm.mtime, now, (st.comm.mode == M_VIDEO || st.comm.mode == M_BOTH) &&
                         ((G.frameAt && now - G.frameAt < 1500) || (G.colorAt && now - G.colorAt < 1500)))) {

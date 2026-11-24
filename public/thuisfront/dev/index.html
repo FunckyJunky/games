@@ -94,6 +94,13 @@ if (last && last.comm && last.comm.pb && store.get('photopb', '') === last.comm.
 }
 // this device's movement (phones and tablets), for CLOCK "on when moved"; a tap on the screen wakes it too
 let grav = null, askedMotion = false;
+// iPhones report accelerationIncludingGravity the other way round (down instead of up)
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// device directions -> screen directions (the page may be turned sideways)
+function toScreen(v) {
+  const a = (((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]];
+}
 window.addEventListener('devicemotion', (e) => {
   const a = e.accelerationIncludingGravity;
   if (!a || a.x == null || a.y == null || a.z == null) return;
@@ -101,7 +108,15 @@ window.addEventListener('devicemotion', (e) => {
   if (!grav) grav = { x, y, z };
   scr.motion(Math.hypot(x - grav.x, y - grav.y, z - grav.z));
   grav.x += (x - grav.x) * 0.04; grav.y += (y - grav.y) * 0.04; grav.z += (z - grav.z) * 0.04;
+  // FOX: what is felt (1 g up when still) and the turning, in screen directions
+  const sg = IOS ? -1 : 1, r = e.rotationRate || {}, d2r = Math.PI / 180;
+  scr.foxSensor(toScreen([x * sg, y * sg, z * sg]), toScreen([(r.beta || 0) * d2r, (r.gamma || 0) * d2r, (r.alpha || 0) * d2r]));
 });
+// FOX: while a phone watches, send it the fox's pose 12 times a second
+let foxWatch = 0;
+setInterval(() => {
+  if (foxWatch > 0 && ws && ws.readyState === 1 && scr.state && scr.state.app === 'fox') ws.send(JSON.stringify({ t: 'fox', p: scr.foxPacket() }));
+}, 83);
 document.addEventListener('pointerdown', () => {
   if (!askedMotion && typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {   // iPhone / iPad ask first
     askedMotion = true; DeviceMotionEvent.requestPermission().catch(() => {});
@@ -141,6 +156,7 @@ function connect() {
       return;
     }
     let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.t === 'watch') { foxWatch = m.fox | 0; return; }
     if (m.t !== 'state') return;
     const s = m.state;
     if (pendingText && s.comm && s.comm.tb) {

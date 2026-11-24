@@ -728,6 +728,16 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   tablets; iOS asks on the first tap) and stays on when it never feels anything. Without a sensor: always on.
   COMM has the same, with its own comm.motion / msens / mtime (firmware 1.10; SCREEN ON block under the COMM tabs);
   there new text, a new photo or incoming video also keep it awake.
+- **FOX** (web app, firmware 1.11): a low-poly 3D fox in a box, DOS green on black. public/thuisfront/dev/fox.js has the
+  shape (lofts of rings; tools/hf-foxmesh.mjs writes the same tables to esp32/HomeFront/fox_mesh.h), what it does
+  (foxStep: tilt = slide / hold on, turning the box turns it, a knock = jump, shaking / spinning = dizzy, upside down =
+  tumbling, still = sit, 45 s still = sleep) and the drawing (drawFox: floor grid, shadow, flat-shaded triangles far
+  first with outlined ring edges, eyes, zzz / ! / stars, a top bar with its mood). fox.cpp is the same in C (poses and
+  pixels checked equal with the host simulator). The screen with a motion sensor runs the fox; while a phone has the
+  FOX view open ({t:"watch", fox:1} -> the server tells the screen {t:"watch", fox:n}) the screen sends
+  {t:"fox", p:[19 numbers], r:[raw sensor]} 12 times a second and the phone draws the same fox (foxLerp between poses).
+  Boards: SET UP MOTION on the phone (upright, then tilted right) finds which sensor axis is the screen's right / up / out
+  (state fox.axes, e.g. "-y+z-x"); browser screens use devicemotion (+ rotationRate) turned to the screen's orientation.
 - Time zone fix (1.9): configTime() for the internet time sets TZ to UTC; applyTz() now compares with getenv("TZ") and
   runs again right after configTime(), so the clock no longer shows UTC (an hour early in Amsterdam) after a restart.
   Ping reports lt (the board's HH:MM) and tz (its TZ), shown in /api/hf/list as lt / tzNow.

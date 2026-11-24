@@ -5,6 +5,7 @@
 // The screen is 320x172. Every pixel is an index into a 64-colour table:
 //   0-15 text levels, 16-31 video levels, 32-47 ERROR-DOS green (menus), 48 black, 49 red, 50 white,
 //   255 = "see the colour picture underneath" (a photo, or colour video).
+import { foxNew, foxStep, foxPose, foxPack, foxUnpack, foxLerp, drawFox } from './fox.js';
 
 export const W = 320, H = 172;
 export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
@@ -325,6 +326,8 @@ export class Screen {
     this.phase = 'connecting'; this.phaseAt = performance.now();
     this.info = { name: '', wifi: '', ip: '', online: false, id: '' };
     this.offline = false;
+    this.foxS = foxNew(); this.foxAt = 0; this.foxIn = null;           // FOX: its own fox (with this device's sensor, if any)
+    this.foxA = null; this.foxB = null; this.foxBAt = 0; this.foxGap = 83;   // or the screen's, from its poses (phone)
     this.lastPal = '';
     this.setLut(U, uiRamp());
     this.lutSet(BLACK, [0, 0, 0]); this.lutSet(RED, [255, 40, 40]); this.lutSet(WHITE, [255, 255, 255]);
@@ -358,6 +361,24 @@ export class Screen {
     this.movePeak = 0;
     return now - this.movedAt >= (k.mtime || 60) * 1000;
   }
+  // FOX: this device's motion (f in g, w in rad/s, screen directions); a pose from the screen (phones)
+  foxSensor(f, w) { this.foxIn = { f, w, at: performance.now() }; }
+  foxRemote(arr) {
+    const p = foxUnpack(arr), now = performance.now();
+    if (!p) return;
+    if (this.foxB) this.foxGap = Math.max(40, Math.min(400, now - this.foxBAt));
+    this.foxA = this.foxB ? this.foxNow(now) : p; this.foxB = p; this.foxBAt = now;
+  }
+  foxLive() { return !!this.foxB && performance.now() - this.foxBAt < 1500; }   // poses are coming in
+  foxNow(now) {                                     // the pose to draw now
+    if (this.foxB && now - this.foxBAt < 1500) return foxLerp(this.foxA, this.foxB, Math.min(1, (now - this.foxBAt) / this.foxGap));
+    const dt = this.foxAt ? (now - this.foxAt) / 1000 : 0;
+    this.foxAt = now;
+    const sens = this.foxIn && now - this.foxIn.at < 1000 ? this.foxIn : null;
+    foxStep(this.foxS, sens ? sens.f : null, sens ? sens.w : null, dt);
+    return foxPose(this.foxS);
+  }
+  foxPacket() { return foxPack(foxPose(this.foxS)); }   // what a screen sends to the phones
   setPhoto(p) { this.photo = p; this.photoKey = ''; this.photoPlanes = []; this.photoT0 = performance.now(); }   // p = {w, h, data, frames?: [{data, delay}]} or null
   setColorFrame(f) { this.color = filterPlane(f.data, f.w, f.h, NOFILTER); this.colorAt = performance.now(); }
   restart() { this.t0 = performance.now(); }
@@ -376,6 +397,11 @@ export class Screen {
       const e = s.eta || {}, tz = (s.clock || {}).tz, at = (sec) => (sec ? clockNow(tz, sec * 1000) : null);
       drawEta(fb, e, this.nowMs ? this.nowMs() : Date.now(), true, at(e.to), at(e.from), fx);
       this.setLut(T, textRamp(e.pal || 0, 0, 1));
+      scan = fx && !!s.scan;
+    }
+    else if (s.app === 'fox') {
+      drawFox(fb, this.foxNow(now), now / 1000, fx);
+      this.setLut(T, textRamp((s.fox || {}).pal || 0, 0, 1));
       scan = fx && !!s.scan;
     }
     else if (s.app === 'clock') {

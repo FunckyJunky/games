@@ -41,6 +41,7 @@ static void setTextRamp(int pal, int bg, float k) {
     lutSet(IX_T + v, c);
   }
 }
+void scrTextRamp(int pal) { setTextRamp(pal, 0, 1); }   // the 16 text levels in this DOS colour, on black (FOX)
 static int vidPal = -1;
 static void setVideoRamp(int pal) {
   if (pal == vidPal) return;

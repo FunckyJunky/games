@@ -213,6 +213,14 @@
       <p class="dimt small" data-t="note">The screen counts down by itself, also when this page is closed. Latin and Cyrillic letters (also Ukrainian), numbers and signs. A train in the description (TRAIN, TREIN, ПОТЯГ, ПОТЯЗІ, ПОЇЗД) makes the bar a train going to the station; a car (CAR, AUTO, АВТІВКА, АВТІВКОЮ, МАШИНА) or a taxi (TAXI, ТАКСІ) drives home instead.</p>
     </div>
 
+    <div class="sec" id="pFox" hidden>
+      <div class="h">THE FOX <span id="xLive" class="small"></span></div>
+      <p class="dimt small" id="xNote"></p>
+      <div class="row" id="xSetupRow"><button class="btn" id="xSetup">SET UP MOTION</button></div>
+      <div class="h">COLOUR</div><div class="chips" id="xpals"></div>
+      <p class="dimt small">Tilt the screen: the fox slides and holds on. Turn it round: the fox turns with it. Knock on it: it jumps. Shake or spin it: it gets dizzy. Turn it over: it tumbles. Leave it alone: it sits down, and after a while it sleeps; a nudge wakes it. What it does there, you see here.</p>
+    </div>
+
     <div class="sec" id="pClock" hidden>
       <div class="h">COLOUR</div><div class="chips" id="kpals"></div>
       <div class="h">BACKGROUND</div><div class="chips" id="kbgs"></div>
@@ -272,6 +280,7 @@ const APPS = [
   { id: 'comm', name: 'COMM', what: 'Autonomous communication: big text in any font and animation, a photo or animated GIF with text on it, and live video from this phone, with DOS filters or real colours.' },
   { id: 'clock', name: 'CLOCK', what: 'The time, big, in dot-matrix DOS style. Seconds, date, 24 or 12 hours, DOS colours.' },
   { id: 'eta', name: 'ETA', what: "When I'll be there: a countdown to your arrival, a description and a progress bar that fills up." },
+  { id: 'fox', name: 'FOX', what: 'A little 3D fox living in the screen. Tilt, turn, knock or shake the screen and it reacts; this phone shows the same fox, live.' },
 ];
 // this phone's time zone, for the CLOCK (IANA name for browsers, POSIX string for the board)
 function tzHere() { let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { /* old browser */ } return { tz, ptz: tz ? posixTZ(tz) : '' }; }
@@ -287,7 +296,7 @@ class Ctl {
     u.search = '?id=' + encodeURIComponent(this.id) + '&home=' + encodeURIComponent(home);
     const ws = this.ws = new WebSocket(u);
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => { this.retry = 800; this.auth = 'wait'; this.send({ t: 'auth', key: keyOf(this.id) }); this.emit('open'); };
+    ws.onopen = () => { this.retry = 800; this.auth = 'wait'; this.watchSent = -1; this.send({ t: 'auth', key: keyOf(this.id) }); this.emit('open'); };
     ws.onmessage = (ev) => {
       if (typeof ev.data !== 'string') {               // binary: the screen's photo ("HFP1" + JPEG)
         const u8 = new Uint8Array(ev.data);
@@ -299,6 +308,7 @@ class Ctl {
       if (m.t === 'state') { this.auth = 'ok'; this.state = m.state; if (m.dev) this.dev = m.dev; this.emit('state', m.state); if (m.dev) this.emit('dev', m.dev); }
       else if (m.t === 'dev') { this.dev = m.dev; this.emit('dev', m.dev); }
       else if (m.t === 'got') this.emit('got', m.s);
+      else if (m.t === 'fox') this.emit('fox', m);
       else if (m.t === 'err') this.emit('err', m.msg);
       else if (m.t === 'authok') { this.auth = 'ok'; if (m.key) keySet(this.id, m.key); this.emit('auth'); }
       else if (m.t === 'locked') { this.auth = 'locked'; this.state = null; this.photo = null; keySet(this.id, ''); if (m.dev) this.dev = m.dev; this.emit('locked', m.dev); }
@@ -395,8 +405,9 @@ function openCtl(id) {
   ctl = id ? new Ctl(id) : null;
   if (ctl) {
     ctl.onx('dev', (d) => { const i = devices.findIndex((x) => x.id === d.id); if (i >= 0) devices[i] = { ...devices[i], ...d }; if (view === 'list') drawStrip(); else commDev(d); });
-    ctl.onx('state', (s) => { if (view === 'comm') commState(s); });
+    ctl.onx('state', (s) => { if (view === 'comm') commState(s); foxWatchSync(); });
     ctl.onx('got', (s) => camGot(s));
+    ctl.onx('fox', (m) => foxIn(m));
     ctl.onx('photo', (u8) => { if (view === 'comm') photoIn(u8); });
     ctl.onx('err', (m) => toast(m.toUpperCase()));
     ctl.onx('open', () => { if (view === 'comm') { commDev(ctl.dev || {}); if (unsent && liveSend && loadedFromServer) sendText(); } });
@@ -559,6 +570,11 @@ function model(d, t) {
       for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2, b = ((i + 1) / 12) * Math.PI * 2; scr.push([[cx + Math.sin(a) * r * 0.6, cy + Math.cos(a) * r], [cx + Math.sin(b) * r * 0.6, cy + Math.cos(b) * r]]); }
       const hand = (f, len) => [[cx, cy], [cx + Math.sin(f * Math.PI * 2) * len * 0.6, cy + Math.cos(f * Math.PI * 2) * len]];
       scr.push(hand(((now.getHours() % 12) + now.getMinutes() / 60) / 12, r * 0.55), hand(now.getMinutes() / 60, r * 0.85));
+    } else if (d.app === 'fox') {                                // a fox face, ears twitching
+      const tw = Math.sin(t * 3) > 0.92 ? 0.05 : 0;
+      scr.push([[0.32, 0.4], [0.35, 0.1 + tw]], [[0.35, 0.1 + tw], [0.45, 0.33]], [[0.68, 0.4], [0.65, 0.1]], [[0.65, 0.1], [0.55, 0.33]]);
+      scr.push([[0.32, 0.4], [0.5, 0.88]], [[0.68, 0.4], [0.5, 0.88]], [[0.32, 0.4], [0.68, 0.4]]);
+      scr.push([[0.41, 0.53], [0.44, 0.53]], [[0.56, 0.53], [0.59, 0.53]], [[0.48, 0.8], [0.52, 0.8]]);
     } else if (d.app === 'comm' && d.mode !== 'video') {        // text going by
       const off = (t * 0.25) % 1;
       for (let k = 0; k < 3; k++) { const x0 = 1 - ((off + k / 3) % 1) * 1.6; scr.push([[x0, 0.5], [x0 + 0.5, 0.5]]); }
@@ -616,6 +632,7 @@ function drawCards(now) {
       s.scr.setState({ app: 'eta', screen: 1, scan: 1, eta: { from: 1e9, to: 1e9 + 900, text: 'ON MY WAY', pal: 0, done: 0 }, clock: { tz: 'UTC' } });
       s.scr.nowMs = () => (1e9 + 120) * 1000 + (performance.now() % 700000); s.scr.setPhase('run');
     }
+    if (!s.t && cv.dataset.icon === 'fox') { s.t = true; s.scr.setState({ app: 'fox', screen: 1, scan: 1, fox: { pal: 0 } }); s.scr.setPhase('run'); }
     if (!s.t && cv.dataset.icon === 'clock') {
       s.t = true;
       s.scr.setState({ app: 'clock', screen: 1, scan: 1, clock: { pal: 0, bg: 1, h24: 1, sec: 1, date: 1, tz: '' } }); s.scr.setPhase('run');
@@ -646,6 +663,8 @@ const msensName = (v) => v + '/10';
 let K = { ...KDEF }, curApp = 'comm';               // the CLOCK settings; the web app this page shows
 const EDEF = { from: 0, to: 0, text: '', pal: 0, done: 0, lang: 0 };
 let E = { ...EDEF };                                 // the ETA
+const FDEF = { pal: 0, axes: '' };
+let F = { ...FDEF }; const touchedF = {};             // the FOX
 let liveSend = store.get('live', 1), unsent = false, textTimer = 0, textBusy = false, textAgain = false, loadedFromServer = false;
 const TEXT_KEYS = ['text', 'font', 'size', 'align', 'valign', 'style', 'caps', 'anim'];
 
@@ -715,6 +734,64 @@ let eTextT = 0;
 $('eText').addEventListener('input', () => { E.text = etaText($('eText').value); touchedE.text = performance.now(); syncUI(); clearTimeout(eTextT); eTextT = setTimeout(() => eset({ text: E.text }), 400); });
 $('elangs').innerHTML = [[0, 'ENGLISH'], [1, 'УКРАЇНСЬКА']].map(([v, n]) => `<button class="chip" data-v="${v}">${n}</button>`).join('');
 for (const b of $('elangs').children) b.onclick = () => eset({ lang: Number(b.dataset.v) });
+// ---------- FOX ----------
+function fset(p) { Object.assign(F, p); for (const k in p) touchedF[k] = performance.now(); syncUI(); if (!ctl || !ctl.set({ fox: p })) toast('NOT CONNECTED: TRY AGAIN'); }
+$('xpals').innerHTML = PALS.map((p, i) => `<button class="chip" data-v="${i}"><i class="sw" style="background:${swatch(p)}"></i>${p.name}</button>`).join('');
+for (const b of $('xpals').children) b.onclick = () => fset({ pal: Number(b.dataset.v) });
+// the screen sends the fox's pose (and, a board, its sensor raw) only while a phone watches the FOX view
+function foxWatchSync() {
+  const want = view === 'comm' && curApp === 'fox' ? 1 : 0;
+  if (ctl && ctl.auth === 'ok' && ctl.watchSent !== want) { ctl.send({ t: 'watch', fox: want }); ctl.watchSent = want; }
+}
+const foxRaw = [];                                   // the board's sensor lately: [{at, r}] (for SET UP)
+let foxLastAt = 0;
+function foxIn(m) {
+  if (view !== 'comm' || curApp !== 'fox') return;
+  pv.foxRemote(m.p); foxLastAt = performance.now();
+  if (Array.isArray(m.r)) { foxRaw.push({ at: foxLastAt, r: m.r }); while (foxRaw.length > 40) foxRaw.shift(); }
+  if (!foxIn.ui || foxLastAt - foxIn.ui > 1000) { foxIn.ui = foxLastAt; syncUI(); }
+}
+// SET UP MOTION (boards): which way the sensor sits behind the screen. 1: upright and still; 2: tilted to the right.
+// The sensor feels 1 g upwards when still, so step 1 gives "up"; tilting right moves that towards the screen's left.
+function rawNow() {
+  const now = performance.now(), got = foxRaw.filter((x) => now - x.at < 700);
+  if (got.length < 3) return null;
+  return [0, 1, 2].map((i) => got.reduce((a, x) => a + x.r[i], 0) / got.length);
+}
+function axesFrom(a1, a2) {
+  const n = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  const up = n(a1), d = a2.map((x, i) => x - a1[i]), along = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+  const perp = d.map((x, i) => x - along * up[i]);
+  if (Math.hypot(...perp) < 0.3) return null;
+  const right = n(perp).map((x) => -x);
+  const out = [right[1] * up[2] - right[2] * up[1], right[2] * up[0] - right[0] * up[2], right[0] * up[1] - right[1] * up[0]];
+  const snap = (v) => { let i = 0; for (let k = 1; k < 3; k++) if (Math.abs(v[k]) > Math.abs(v[i])) i = k; return (v[i] < 0 ? '-' : '+') + 'xyz'[i]; };
+  const ax = snap(right) + snap(up) + snap(out);
+  return new Set([ax[1], ax[3], ax[5]]).size === 3 ? ax : null;
+}
+$('xSetup').onclick = () => {
+  let a1 = null;
+  const step = (n) => {
+    modal(`<h2>SET UP MOTION · ${n}/2</h2><p>${n === 1 ? 'Stand the screen upright, the way you look at it, and keep it still. Then press NEXT.'
+      : 'Now tilt it to the right (the top towards the right), about a quarter turn, and hold it there. Then press DONE.'}</p>
+      <p class="dimt small" id="suRaw">WAITING FOR THE SENSOR...</p>
+      <div class="row"><button class="btn big" id="suOk">${n === 1 ? 'NEXT' : 'DONE'}</button><button class="btn" id="suX">CANCEL</button></div>`);
+    const tick = setInterval(() => { const r = rawNow(); if (!$('suRaw')) { clearInterval(tick); return; } $('suRaw').textContent = r ? 'SENSOR: ' + r.map((x) => (x >= 0 ? '+' : '') + x.toFixed(2)).join(' ') + ' G' : 'WAITING FOR THE SENSOR... (is the screen online, on FOX?)'; }, 200);
+    $('suX').onclick = () => { clearInterval(tick); unmodal(); };
+    $('suOk').onclick = () => {
+      const r = rawNow();
+      if (!r) { toast('NO SENSOR DATA YET'); return; }
+      if (n === 1) {
+        if (Math.abs(Math.hypot(...r) - 1) > 0.25) { toast('KEEP IT STILL'); return; }
+        a1 = r; clearInterval(tick); step(2); return;
+      }
+      const ax = axesFrom(a1, r);
+      if (!ax) { toast('TILT IT MORE, THEN DONE'); return; }
+      clearInterval(tick); unmodal(); fset({ axes: ax }); toast('MOTION SET UP');
+    };
+  };
+  step(1);
+};
 $('epals').innerHTML = PALS.map((p, i) => `<button class="chip" data-v="${i}"><i class="sw" style="background:${swatch(p)}"></i>${p.name}</button>`).join('');
 for (const b of $('epals').children) b.onclick = () => eset({ pal: Number(b.dataset.v) });
 
@@ -792,7 +869,20 @@ function syncUI() {
   if (document.activeElement !== $('cSens')) { $('cSens').value = C.msens || 5; $('cSensO').textContent = msensName(C.msens || 5); }
   if (document.activeElement !== $('cTime')) { $('cTime').value = mtimeIdx(C.mtime || 60); $('cTimeO').textContent = mtimeName(C.mtime || 60); }
   $('cMotNote').textContent = motionNote(C.motion, C.mtime);
-  $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock'; $('pEta').hidden = curApp !== 'eta';
+  $('commUI').hidden = curApp !== 'comm'; $('pClock').hidden = curApp !== 'clock'; $('pEta').hidden = curApp !== 'eta'; $('pFox').hidden = curApp !== 'fox';
+  for (const b of $('xpals').children) b.classList.toggle('on', String(F.pal) === b.dataset.v);
+  {
+    const d = (ctl && ctl.dev) || {}, live = pv.foxLive(), board = d.kind === 'esp';
+    $('xLive').textContent = live ? '· LIVE FROM THE SCREEN' : d.online === false ? '· THE SCREEN IS OFFLINE' : '· WAITING FOR THE SCREEN';
+    $('xSetupRow').hidden = !(board && d.imu);
+    $('xSetup').classList.toggle('on', board && d.imu && !F.axes);
+    $('xSetup').textContent = F.axes ? 'SET UP MOTION AGAIN' : 'SET UP MOTION (2 STEPS)';
+    $('xNote').textContent = board && d.imu === false ? 'THIS BOARD HAS NO MOTION SENSOR: THE FOX JUST LIVES THERE. (The 1.47B board has one.)'
+      : board && !F.axes ? 'FIRST: SET UP MOTION, so the fox knows which way is up on this board.'
+      : d.kind === 'web' ? 'A browser screen feels motion only on a phone or tablet (it may ask once). On a computer the fox just lives there.'
+      : '';
+  }
+  foxWatchSync();
   for (const b of $('epals').children) b.classList.toggle('on', String(E.pal) === b.dataset.v);
   if (document.activeElement !== $('eText')) $('eText').value = E.text;
   $('eCount').textContent = E.text ? E.text.length + '/60' : '';
@@ -834,7 +924,7 @@ function syncUI() {
   $('sFx').textContent = S.fx === 0 ? 'EFFECTS: OFF' : 'EFFECTS: ON'; $('sFx').classList.toggle('on', S.fx !== 0);
   $('fxNote').hidden = S.fx !== 0; $('animOff').hidden = S.fx !== 0;
   $('vStart').textContent = cam.on ? 'STOP CAMERA' : 'START CAMERA'; $('vStart').classList.toggle('on', cam.on);
-  pv.setState({ app: curApp, screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() }, clock: { ...K }, eta: { ...E } });
+  pv.setState({ app: curApp, screen: 1, scan: S.scan, fx: S.fx, bright: S.bright, comm: { ...C, tb: textKey() }, clock: { ...K }, eta: { ...E }, fox: { ...F } });
 }
 const textKey = () => TEXT_KEYS.map((k) => C[k]).join('\u0001');
 
@@ -1082,6 +1172,7 @@ function commState(s) {
   $('cName').textContent = curApp.toUpperCase() + ' · ' + (s.name || (ctl && ctl.id) || '');
   const nowK = performance.now();
   for (const k of Object.keys(KDEF)) if (s.clock && k in s.clock && (!loadedFromServer || nowK - (touchedK[k] || -1e9) > 3000)) K[k] = s.clock[k];
+  for (const k of Object.keys(FDEF)) if (s.fox && k in s.fox && (!loadedFromServer || nowK - (touchedF[k] || -1e9) > 3000)) F[k] = s.fox[k];
   for (const k of Object.keys(EDEF)) {
     if (!s.eta || !(k in s.eta)) continue;
     if (loadedFromServer && (nowK - (touchedE[k] || -1e9) < 3000 || (k === 'text' && document.activeElement === $('eText')))) continue;
@@ -1206,7 +1297,7 @@ let view = 'list', lock = null;
 async function wake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => (lock = null); } } catch { /* fine */ } }
 document.addEventListener('visibilitychange', () => { if (view === 'comm') wake(); });
 function route() {
-  const m = location.hash.match(/^#(comm|clock|eta)=([A-Z0-9-]+)$/);
+  const m = location.hash.match(/^#(comm|clock|eta|fox)=([A-Z0-9-]+)$/);
   if (m) {
     view = 'comm'; curApp = m[1]; $('vList').hidden = true; $('vComm').hidden = false;
     if (curApp !== 'comm') camStop();
@@ -1217,7 +1308,7 @@ function route() {
     clearInterval(listTimer); wake(); scrollTo(0, 0);
     syncUI();
   } else {
-    view = 'list'; camStop(); $('vComm').hidden = true; $('vList').hidden = false;
+    view = 'list'; camStop(); $('vComm').hidden = true; $('vList').hidden = false; foxWatchSync();
     if (lock) { lock.release().catch(() => {}); lock = null; }
     loadList(); clearInterval(listTimer); listTimer = setInterval(loadList, 4000);
   }
