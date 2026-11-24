@@ -399,6 +399,12 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- plant a bouquet (Moves > Flowers > Plant the bouquet, 3 or more flowers): you bend down and lay it in
+  front of you; it glows, sparkles in its flowers' colours spiral up, a ring of light runs over the
+  ground and a bell tune rises while it grows into a big flower bush (about 1.5 m) of the same
+  flowers, the blossoms opening one by one. Glows softly at night and with music nearby. A decoration
+  of its own (kind 10: [x, z, 0, seed, 10, mix], mix = the bouquet's flower counts, 25 per step); up to
+  6, saved with your camp; others see it grow when they're there, and later just see the bush
 - you come back where you left: your spot and the way you faced are saved every few seconds and when
   you leave (`wt.place`, with the world seed; from inside a tent, just outside its door), and you
   start there instead of at the meeting point. Everything you put down comes back with it: your
