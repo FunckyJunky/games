@@ -1,8 +1,8 @@
-/* FUNDA WATCH (error.blue/other/funda) as an installed web app.
+/* Funda EYE (error.blue/other/funda, formerly FUNDA WATCH) as an installed web app.
    - opens without a connection: the page, icons and the last readings are kept
    - always tries the network first, so new readings and page updates show straight away
    - shows the notifications the server sends (price, status, saves, every N views) */
-const CACHE = "funda-v7";
+const CACHE = "funda-v8";
 const SHELL = ["/other/funda/", "/other/funda/buren.js", "/other/funda/manifest.webmanifest", "/other/funda/icon-192.png", "/other/funda/apple-touch-icon.png", "/other/funda/badge-96.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -27,7 +27,7 @@ self.addEventListener("fetch", (e) => {
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(d.title || "FUNDA WATCH", {
+  e.waitUntil(self.registration.showNotification(d.title || "Funda EYE", {
     body: d.body || "",
     tag: d.tag || "funda",
     renotify: true,

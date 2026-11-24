@@ -1,4 +1,4 @@
-// FUNDA WATCH: error.blue/other/funda keeps an eye on a house for sale on funda.nl.
+// Funda EYE (was FUNDA WATCH): error.blue/other/funda keeps an eye on a house for sale on funda.nl.
 //
 //   GET    /api/funda/<id>            the listing + every reading so far (price, views, saves, status)
 //   POST   /api/funda/<id>/check      read Funda right now (at most once every 5 minutes)
@@ -367,7 +367,7 @@ async function handleNotify(request, env, id, push, test) {
     if (!row) return json({ error: "notifications are not on for this phone" }, 404);
     const last = await env.DB.prepare(`SELECT price, views, saves FROM funda_snap WHERE id = ? ORDER BY ts DESC LIMIT 1`).bind(id).first();
     const status = await push.send(env, row, {
-      title: "🏠 FUNDA WATCH works",
+      title: "🏠 Funda EYE works",
       body: last ? `${money(last.price)} · ${nl(last.views)} views · ${nl(last.saves)} saves` : "You'll get a message when something changes.",
       tag: "funda-test", url: "/other/funda/", icon: "/other/funda/icon-192.png",
     });

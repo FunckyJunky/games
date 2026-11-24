@@ -1,17 +1,32 @@
 {
   "id": "/other/funda/",
-  "name": "FUNDA WATCH",
-  "short_name": "Funda Watch",
-  "description": "Follows a house on funda.nl: asking price, views and saves over time, with notifications when something changes.",
+  "name": "Funda EYE",
+  "short_name": "Funda EYE",
+  "description": "Keeps an eye on a house on funda.nl: asking price, views and saves over time, the neighbours' WOZ values, a 3D map and notifications. Unofficial, not made by Funda.",
   "start_url": "/other/funda/",
   "scope": "/other/funda/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f9f9f7",
-  "theme_color": "#2a78d6",
+  "background_color": "#f4f9fc",
+  "theme_color": "#f7a11a",
   "icons": [
-    { "src": "/other/funda/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/other/funda/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/other/funda/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/other/funda/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/other/funda/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/other/funda/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

@@ -69,7 +69,7 @@ public/                 the website
                         connected or not, app in use, live preview, show/hide apps, HUD settings, GeoLock settings and
                         saved spots, Святий Миколайчик and Yaro-Vission pages. Uses /api/hud/<CODE> and the live link.
                         Edit public/hud/ directly (index.html, sw.js, manifest.webmanifest, icons)
-  other/funda/          FUNDA WATCH (error.blue/other/funda): price, views and saves of a house on funda.nl over time,
+  other/funda/          Funda EYE (error.blue/other/funda, was FUNDA WATCH): price, views and saves of a house on funda.nl over time,
                         earlier prices (3D bars), notifications (price, status, saves, every N views) and how often
                         to check (once a day by default), set at the bottom of the page. Installable web app (sw.js,
                         manifest). The server reads Funda from the cron in wrangler.jsonc (src/funda.js); the houses

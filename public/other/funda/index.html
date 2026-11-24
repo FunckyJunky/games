@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FUNDA WATCH · Rozengaard 11 4, Lelystad</title>
+<title>Funda EYE · Rozengaard 11 4, Lelystad</title>
 <meta name="robots" content="noindex">
 <link rel="manifest" href="/other/funda/manifest.webmanifest">
 <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/other/funda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Funda Watch">
+<meta name="apple-mobile-web-app-title" content="Funda EYE">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 15 16 5l12 10v13H4z' fill='%232a78d6'/%3E%3Cpath d='M13 28v-8h6v8' fill='%23fff'/%3E%3C/svg%3E">
 <style>
@@ -41,6 +41,7 @@
     }
   }
   * { box-sizing: border-box; }
+  html { scroll-padding-top: 76px; scroll-behavior: smooth; }
   html, body { margin: 0; background: var(--page); color: var(--ink); }
   body {
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -227,15 +228,119 @@
   #installBtn[hidden] { display: none; }
   footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 18px; }
   footer code { font-size: 12px; }
+  /* ===== Funda EYE look (body.eye): orange bar, sky, white cards, orange tabs and buttons ===== */
+  :root { --eye-orange: #f7a11a; --eye-blue: #0071b3; }
+  body:not(.eye) .eye-only { display: none !important; }
+  body.eye .classic-only { display: none !important; }
+  body.eye {
+    color-scheme: light;
+    --page: #f4f9fc; --surface: #ffffff; --card-edge: #dcdcdc;
+    --ink: #333333; --ink-2: #555555; --muted: #7d7d7d; --grid: #e8e8e8; --axis: #c8c8c8;
+    --s1: #0071b3; --s1-soft: rgba(0,113,179,.12);
+    --tip: #333333; --tip-ink: #ffffff; --warn-bg: #fff4dc; --warn-edge: #f0c766; --good: #2f8a3e;
+    font-family: "Proxima Nova", "Avenir Next", "Helvetica Neue", Arial, system-ui, sans-serif;
+    background: linear-gradient(#e3f4fb 0, #eef8fc 260px, #f6f6f6 640px);
+    padding-top: 0;
+  }
+  body.eye a { color: var(--eye-blue); }
+  .eyebar {
+    position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 8px;
+    background: var(--eye-orange); color: #fff;
+    margin: 0 calc(-1 * max(14px, env(safe-area-inset-right))) 0 calc(-1 * max(14px, env(safe-area-inset-left)));
+    padding: max(8px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+    box-shadow: 0 1px 0 rgba(0,0,0,.06);
+  }
+  body.eye .eyebar a { color: #fff; text-decoration: none; }
+  .eyelogo { display: flex; align-items: center; gap: 7px; flex: none; }
+  .eyeword { font-size: 22px; font-weight: 500; letter-spacing: -.01em; line-height: 1; white-space: nowrap; }
+  .eyeword b { font-weight: 800; letter-spacing: .04em; }
+  .eyenav { flex: 1; display: flex; justify-content: flex-end; gap: 2px; }
+  .eyenav a { display: grid; justify-items: center; gap: 3px; font-size: 12.5px; padding: 4px 7px; border-radius: 6px; min-width: 50px; }
+  .eyenav a:hover { background: rgba(255,255,255,.15); }
+  .eyenav svg { width: 25px; height: 25px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  @media (max-width: 420px) { .eyeword { font-size: 19px; } .eyenav a { min-width: 0; padding: 4px 4px; font-size: 11.5px; } .eyenav svg { width: 22px; height: 22px; } .eyelogo svg { width: 34px; } }
+  .eyehero { height: 150px; margin: 0 calc(-1 * max(14px, env(safe-area-inset-right))) 0 calc(-1 * max(14px, env(safe-area-inset-left))); overflow: hidden; }
+  .eyehero { position: relative; }
+  .eyehero svg { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; display: block; }
+  .eyehero svg.deco { left: 50%; width: min(100%, 560px); transform: translateX(-50%); }
+  body.eye .wrap { display: flex; flex-direction: column; margin-top: -46px; position: relative; }
+  body.eye .wrap > * { order: 2; }
+  body.eye .eyetabs { order: -3; }
+  body.eye .house { order: -2; }
+  body.eye .top, body.eye #warn { order: -1; }
+  .eyetabs { display: flex; overflow-x: auto; background: var(--surface); border: 1px solid var(--card-edge); border-bottom: 0; border-radius: 8px 8px 0 0; scrollbar-width: none; }
+  .eyetabs::-webkit-scrollbar { display: none; }
+  .eyetabs a { flex: 1 0 auto; text-align: center; padding: 15px 16px 13px; font-size: 17px; color: #555 !important; text-decoration: none; border-bottom: 2px solid #e8e8e8; white-space: nowrap; }
+  .eyetabs a[aria-current="true"] { color: #333 !important; font-weight: 700; border-bottom: 4px solid var(--eye-orange); padding-bottom: 11px; }
+  body.eye .card { border-radius: 8px; border-color: var(--card-edge); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  body.eye .house { border-radius: 0 0 8px 8px; margin-bottom: 12px; }
+  body.eye .house h1 { font-size: 24px; color: #333; }
+  body.eye .specs li { border-radius: 4px; background: #f4f9fc; }
+  body.eye .open { color: var(--eye-blue); }
+  body.eye .top .spacer { display: none; }
+  body.eye .top .live { flex: 1; }
+  body.eye .top button.check { padding: 8px 11px; }
+  body.eye .top { margin: 0 0 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--card-edge); border-radius: 8px; }
+  body.eye button.check, body.eye .btn, body.eye .seg button, body.eye select.yr { border-radius: 4px; }
+  body.eye #checkBtn, body.eye .btn.primary, body.eye .timebar .play { background: var(--eye-orange); border-color: var(--eye-orange); color: #fff; }
+  body.eye .seg button[aria-pressed="true"] { background: var(--eye-blue); border-color: var(--eye-blue); color: #fff; }
+  body.eye .panel h2 { font-size: 19px; color: #333; }
+  body.eye .tile .k { color: #7d7d7d; }
+  body.eye .tile .v { color: #333; }
+  body.eye .pill { border-radius: 4px; background: #eaf6ea; border-color: #cfe8cf; color: #2f6b36; }
+  body.eye .info3d, body.eye .nb-tiles .tile, body.eye .hset, body.eye .tip-box { background: #f4f9fc; }
+  body.eye .timebar input[type=range], body.eye .hset input, body.eye .wrow input, body.eye .checks input { accent-color: var(--eye-orange); }
+  body.eye footer { color: #7d7d7d; }
+  button.check.look { font-weight: 600; }
 </style>
 </head>
 <body>
+<header class="eyebar eye-only" id="top">
+  <a class="eyelogo" href="#top" aria-label="Funda EYE, to the top">
+    <svg viewBox="0 0 44 40" width="40" height="36" aria-hidden="true">
+      <path d="M4 19 22 4l18 15" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 16v20h26V16" fill="none" stroke="#fff" stroke-width="3.6" stroke-linejoin="round"/>
+      <path d="M12.5 26c3-4.4 6.3-6.4 9.5-6.4s6.5 2 9.5 6.4c-3 4.4-6.3 6.4-9.5 6.4s-6.5-2-9.5-6.4z" fill="#fff"/>
+      <circle cx="22" cy="26" r="3.7" fill="var(--eye-orange)"/><circle cx="23" cy="25" r="1.3" fill="#fff"/>
+    </svg>
+    <span class="eyeword">Funda <b>EYE</b></span>
+  </a>
+  <nav class="eyenav" aria-label="Sections">
+    <a href="#overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>Price</a>
+    <a href="#nbPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 20v-8l5-4 5 4v8zM12 20v-9l5-4 5 4v9M7 20v-4M17 20v-4"/></svg>Nearby</a>
+    <a href="#mapPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></svg>Map</a>
+    <a href="#settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4"/></svg>Alerts</a>
+  </nav>
+</header>
+<div class="eyehero eye-only" aria-hidden="true">
+  <svg class="hills" viewBox="0 0 400 130" preserveAspectRatio="none">
+    <path d="M0 108C60 78 120 74 182 92s120 10 218-18v56H0z" fill="#9edcc0"/>
+    <path d="M0 122c70-34 150-36 220-14 70 22 120 14 180-6v28H0z" fill="#ffc04d"/>
+  </svg>
+  <svg class="deco" viewBox="0 0 400 130" preserveAspectRatio="xMidYMax meet">
+    <circle cx="318" cy="38" r="17" fill="#ffd66b" opacity=".85"/>
+    <ellipse cx="92" cy="26" rx="26" ry="7" fill="#fff" opacity=".8"/><ellipse cx="112" cy="21" rx="16" ry="7" fill="#fff" opacity=".8"/>
+    <g fill="#fff" stroke="#e48a1a" stroke-width="1.6" stroke-linejoin="round">
+      <path d="M150 92V76l10-9 10 9v16z"/><path d="M172 92V72l12-11 12 11v20z"/><path d="M198 92V78l9-8 9 8v14z"/>
+    </g>
+    <g fill="#e48a1a"><rect x="157" y="82" width="6" height="10"/><rect x="180" y="80" width="8" height="7"/><rect x="204" y="84" width="6" height="8"/></g>
+    <g fill="#3fae7c"><path d="M120 100l5-16 5 16z"/><path d="M262 96l6-19 6 19z"/><path d="M276 98l4-12 4 12z"/></g>
+  </svg>
+</div>
 <div class="wrap">
 
+  <nav class="eyetabs eye-only" id="eyetabs" aria-label="Sections">
+    <a href="#overview" aria-current="true">Overview</a>
+    <a href="#nbPanel">Neighbours</a>
+    <a href="#mapPanel">3D map</a>
+    <a href="#settings">Settings</a>
+  </nav>
+
   <div class="top">
-    <div class="crumb"><a href="/">error.blue</a> / other / <b>funda watch</b></div>
+    <div class="crumb classic-only"><a href="/">error.blue</a> / other / <b>funda eye</b></div>
     <div class="spacer"></div>
     <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Loading…</span></div>
+    <button class="check look" id="lookBtn" type="button">👁 Funda EYE look</button>
     <button class="check" id="installBtn" type="button" hidden>Install app</button>
     <button class="check" id="checkBtn" type="button">Check now</button>
   </div>
@@ -254,7 +359,7 @@
     </div>
   </section>
 
-  <section class="tiles">
+  <section class="tiles" id="overview">
     <div class="card tile"><div class="k">Asking price</div><div class="v" id="tPrice">–</div><div class="d" id="tPriceD"></div><div class="d" id="tPriceM"></div></div>
     <div class="card tile"><div class="k">Views</div><div class="v" id="tViews">–</div><div class="d" id="tViewsD"></div><div class="d" id="tViewsA"></div></div>
     <div class="card tile"><div class="k">Saves</div><div class="v" id="tSaves">–</div><div class="d" id="tSavesD"></div><div class="d" id="tSavesR"></div></div>
@@ -323,7 +428,7 @@
     <div class="nb-tiles" id="nbTiles"></div>
   </section>
 
-  <section class="card panel">
+  <section class="card panel" id="mapPanel">
     <h2>3D map · 150 m around the house</h2>
     <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ. With a height chosen, the highest house is two houses tall and the rest are in proportion.</p>
     <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px"><span class="muted" style="font-size:12.5px;align-self:center;margin-right:2px">Colour:</span>
@@ -439,11 +544,16 @@
     <div id="notifyBox"><p class="line">Loading…</p></div>
 
     <hr class="sep">
+    <h3>Look</h3>
+    <div class="seg" id="lookSeg" role="group" aria-label="Look"><button type="button" data-v="eye">Funda EYE</button><button type="button" data-v="classic">Classic</button></div>
+
+    <hr class="sep">
     <h3>App</h3>
     <div id="appBox"></div>
   </section>
 
   <footer>
+    <span class="eye-only">Funda EYE is a personal tool on error.blue that keeps an eye on one Funda listing. Unofficial: not made by or linked to Funda.<br></span>
     <span id="footEvery">The watcher reads Funda on its own, also when this page is closed.</span><br>
     <span id="foot"></span>
   </footer>
@@ -731,7 +841,7 @@ function render() {
   const addr = info.address || "Funda listing " + ID;
   $("addr").textContent = addr;
   $("place").textContent = [info.postcode, info.city].filter(Boolean).join(" ") + (info.neighbourhood ? " · " + info.neighbourhood : "");
-  document.title = "FUNDA WATCH · " + addr + (info.city ? ", " + info.city : "");
+  document.title = "Funda EYE · " + addr + (info.city ? ", " + info.city : "");
   $("openLink").href = info.url || d.url;
   const specs = [];
   if (info.living) specs.push(info.living + " m² living");
@@ -1220,9 +1330,9 @@ if (isIOS && !standalone) $("installBtn").hidden = false;
 
 function renderApp() {
   const box = $("appBox");
-  if (standalone) { box.innerHTML = '<p class="line"><span class="ok">Installed ✓</span> You are using FUNDA WATCH as an app.</p>'; return; }
-  if (installEvt) { box.innerHTML = '<div class="row"><button class="btn primary" id="installBtn2" type="button">Install FUNDA WATCH</button></div><p class="line">Puts it on your home screen as its own app, and it opens without a connection too.</p>'; $("installBtn2").onclick = install; return; }
-  if (isIOS) { box.innerHTML = '<div class="tip-box">On iPhone or iPad: tap <b>Share</b> <span aria-hidden="true">⎙</span> in Safari, then <b>Add to Home Screen</b>. Open FUNDA WATCH from your home screen; notifications only work from there.</div>'; return; }
+  if (standalone) { box.innerHTML = '<p class="line"><span class="ok">Installed ✓</span> You are using Funda EYE as an app.</p>'; return; }
+  if (installEvt) { box.innerHTML = '<div class="row"><button class="btn primary" id="installBtn2" type="button">Install Funda EYE</button></div><p class="line">Puts it on your home screen as its own app, and it opens without a connection too.</p>'; $("installBtn2").onclick = install; return; }
+  if (isIOS) { box.innerHTML = '<div class="tip-box">On iPhone or iPad: tap <b>Share</b> <span aria-hidden="true">⎙</span> in Safari, then <b>Add to Home Screen</b>. Open Funda EYE from your home screen; notifications only work from there.</div>'; return; }
   box.innerHTML = '<p class="line">Use your browser menu → <b>Install app</b> or <b>Add to Home screen</b> to put it on your home screen.</p>';
 }
 renderApp();
@@ -1295,7 +1405,7 @@ function renderNotify() {
   const msg = NOTE.msg === "saved" ? '<span class="ok">Saved ✓</span>' : NOTE.msg === "test sent" ? '<span class="ok">Test sent ✓ It should pop up in a few seconds.</span>' : esc(NOTE.msg);
   if (!supported) {
     box.innerHTML = isIOS && !standalone
-      ? '<div class="tip-box">On iPhone, notifications work once FUNDA WATCH is on your home screen: tap <b>Share</b> → <b>Add to Home Screen</b>, open it from there, and turn them on here.</div>'
+      ? '<div class="tip-box">On iPhone, notifications work once Funda EYE is on your home screen: tap <b>Share</b> → <b>Add to Home Screen</b>, open it from there, and turn them on here.</div>'
       : '<p class="line">This browser can\'t show notifications from web pages. Try Chrome, Edge, Firefox or Safari (on iPhone: from the home screen).</p>';
     return;
   }
@@ -1338,6 +1448,37 @@ function renderNotify() {
   $("nOff").onclick = turnOff;
   notifyHint();
 }
+
+// ---------- the look: Funda EYE (default) or classic ----------
+let LOOK = "eye";
+try { const v = localStorage.getItem("funda.look"); if (v === "eye" || v === "classic") LOOK = v; } catch {}
+function setLook(v, save) {
+  LOOK = v;
+  document.body.classList.toggle("eye", v === "eye");
+  if (save) { try { localStorage.setItem("funda.look", v); } catch {} }
+  $("lookBtn").textContent = v === "eye" ? "Classic look" : "👁 Funda EYE look";
+  document.querySelectorAll("#lookSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v));
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => m.setAttribute("content", v === "eye" ? "#f7a11a" : i ? "#0d0d0d" : "#f9f9f7"));
+  // colours of the charts and the map come from the look: draw them again
+  if (DATA) render();
+  if (typeof drawBuren === "function" && typeof NB !== "undefined" && NB.data) drawBuren();
+}
+setLook(LOOK, false);
+$("lookBtn").addEventListener("click", () => setLook(LOOK === "eye" ? "classic" : "eye", true));
+$("lookSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setLook(b.dataset.v, true); });
+// the tab of the section on screen is underlined
+(() => {
+  const ids = ["overview", "nbPanel", "mapPanel", "settings"];
+  const tabs = [...document.querySelectorAll("#eyetabs a")];
+  const seen = new Map();
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) seen.set(e.target.id, e.isIntersecting ? e.intersectionRatio : 0);
+    let best = ids[0], r = -1;
+    for (const id of ids) { const v = seen.get(id) || 0; if (v > r + 0.01) { r = v; best = id; } }
+    if (r > 0) tabs.forEach((a) => a.setAttribute("aria-current", a.getAttribute("href") === "#" + best));
+  }, { threshold: [0, 0.15, 0.4, 0.7] });
+  ids.forEach((id) => { const el = document.getElementById(id); if (el) io.observe(el); });
+})();
 
 async function load() {
   try {
