@@ -126,7 +126,7 @@
 <div id="near" class="ov hide"><div class="box">
   <h2>⚇ NEARBY</h2>
   <p>See other ZONE players who are within <b>200 m</b> of you, walking or on their light bikes, with their names, and they see you.</p>
-  <p class="dim">While NEARBY is on and you play with GPS (GPS or AUTO), ZONE sends your live position, name and bike colour to ZONE players around you. In FREE roam or DEMO you only watch. Turn it off any time: then nothing is sent.</p>
+  <p class="dim">While NEARBY is on and you play with GPS (GPS or AUTO), ZONE sends your live position, name and bike colour to ZONE players around you. In FREE roam or DEMO no position is sent: the others see you as AWAY at your last spot. Turn it off any time: then nothing is sent.</p>
   <div class="lab" style="color:var(--m);font-size:18px">YOUR NAME</div>
   <input id="nearName" maxlength="12" autocomplete="off" spellcheck="false">
   <div id="nearList" style="margin-top:10px"></div>
@@ -816,7 +816,7 @@ function updateSpot(t) {
    Rooms on error.blue (/api/room/zone/<CELL>) by 420 m map cell. You listen in the (up to) 4 cells
    around you and send in your own cell, so everyone within 200 m hears you; further away is ignored. */
 const NEAR_R = 200, CELL = 420;
-const MP = { rooms: new Map(), peers: new Map(), u: Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => (b % 36).toString(36)).join(''), lastSend: 0, lastBlock: 0, myCell: '', sending: false };
+const MP = { rooms: new Map(), peers: new Map(), seen: new Map(), u: Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => (b % 36).toString(36)).join(''), lastSend: 0, lastBlock: 0, myCell: '', sending: false };
 const b36 = (n, w) => Math.max(0, n).toString(36).toUpperCase().padStart(w, '0').slice(-w);
 function cellCode(lat, lon) {
   const dLat = CELL / 110540, iy = Math.floor((lat + 90) / dLat), rl = (iy + 0.5) * dLat - 90;
@@ -833,8 +833,11 @@ const cleanName = (n) => String(n || '').toUpperCase().replace(/[^A-Z0-9ÄÖÜÀ
 function myName() { if (!S.name) { let g = ''; try { g = localStorage.getItem('gamelab-player-name') || ''; } catch (e) {} S.name = cleanName(g) || 'RUNNER-' + MP.u.slice(0, 2).toUpperCase(); saveS(); } return S.name; }
 // where the others see you: only while you play with GPS
 function mySpot() {
-  if (!REAL.ok || performance.now() - REAL.t > 30000 || REAL.acc > 120) return null;
-  if (src === 'gps' && F.init && O) { const [la, lo] = toLatLon(mode === 'bike' ? B.x : P.x, mode === 'bike' ? B.z : P.z); return { la, lo, live: true }; }
+  if (!REAL.ok) return null;
+  if (src === 'gps') {
+    if (F.init && O) { const [la, lo] = toLatLon(mode === 'bike' ? B.x : P.x, mode === 'bike' ? B.z : P.z); return { la, lo, live: true }; }
+    return { la: REAL.lat, lo: REAL.lon, live: true };
+  }
   return { la: REAL.lat, lo: REAL.lon, live: false };
 }
 function mpJoin(code) {
@@ -857,43 +860,54 @@ function mpJoin(code) {
   e.close = () => { e.dead = true; clearInterval(e.ping); try { e.ws && e.ws.close(1000, 'bye'); } catch (er) {} };
   open(); MP.rooms.set(code, e);
 }
-function mpLeaveAll() {
-  for (const e of MP.rooms.values()) { e.send({ t: 'bye', u: MP.u }); e.close(); }
-  MP.rooms.clear(); for (const u of [...MP.peers.keys()]) dropPeer(u); MP.sending = false;
+function mpLeaveAll(sayBye) {
+  for (const e of MP.rooms.values()) { if (sayBye) e.send({ t: 'bye', u: MP.u }); e.close(); }
+  MP.rooms.clear(); for (const u of [...MP.peers.keys()]) dropPeer(u, true); MP.sending = false;
 }
+function mpRoom() { const e = MP.rooms.get(MP.myCell); if (e && e.live) return e; for (const r of MP.rooms.values()) if (r.live) return r; return null; }
 function mpTick(now) {
-  if (!S.mp || document.visibilityState !== 'visible') { if (MP.rooms.size) mpLeaveAll(); return; }
+  if (!S.mp) { if (MP.rooms.size) mpLeaveAll(true); return; }
   const me = mySpot();
-  if (!me) { if (MP.sending) { for (const e of MP.rooms.values()) e.send({ t: 'bye', u: MP.u }); MP.sending = false; } return; }
+  if (!me) return;
   if (now - MP.lastBlock > 2000) {
     MP.lastBlock = now; MP.myCell = cellCode(me.la, me.lo);
     const want = new Set(blockCodes(me.la, me.lo));
     for (const [code, e] of MP.rooms) if (!want.has(code)) { e.close(); MP.rooms.delete(code); }
     for (const code of want) if (!MP.rooms.has(code)) mpJoin(code);
   }
-  if (!me.live) { if (MP.sending) { for (const e of MP.rooms.values()) e.send({ t: 'bye', u: MP.u }); MP.sending = false; } }
-  else {
+  if (!me.live) {                                   // FREE / DEMO: no position, just "still here, away"
+    if (MP.sending && now - MP.lastSend > 3000) { const e = mpRoom(); if (e) { MP.lastSend = now; e.send({ t: 'away', u: MP.u }); } }
+  } else {
     const moving = mode === 'bike' || Math.hypot(vel.x, vel.z) > 0.4;
     if (now - MP.lastSend > (moving ? 250 : 1000)) {
-      const e = MP.rooms.get(MP.myCell);
-      if (e && e.live) {
+      const e = mpRoom();
+      if (e) {
         MP.lastSend = now; MP.sending = true;
         const spd = mode === 'bike' ? Math.abs(B.v) : Math.hypot(vel.x, vel.z);
         e.send({ t: 's', u: MP.u, n: myName(), la: +me.la.toFixed(6), lo: +me.lo.toFixed(6), y: +(mode === 'bike' ? B.yaw : camYaw()).toFixed(2), m: mode === 'bike' ? 1 : 0, v: +spd.toFixed(1), c: S.color });
       }
     }
   }
-  for (const [u, p] of MP.peers) { p.dist = geoDist(me.la, me.lo, p.la, p.lo); if (Date.now() - p.at > 12000 || p.dist > NEAR_R + 30) dropPeer(u); }
+  for (const [u, p] of MP.peers) {
+    p.dist = geoDist(me.la, me.lo, p.la, p.lo);
+    if (Date.now() - p.at > 25000) dropPeer(u);                 // silent for 25 s: really gone
+    else if (p.dist > NEAR_R + 30) dropPeer(u, true);           // walked out of range: no "left" toast
+  }
 }
 function mpMsg(d) {
   if (!d || typeof d !== 'object' || d.u === MP.u || typeof d.u !== 'string') return;
   if (d.t === 'bye') { dropPeer(d.u); return; }
+  if (d.t === 'away') { const q = MP.peers.get(d.u); if (q) { q.at = Date.now(); q.away = true; } return; }
   if (d.t !== 's' || !Number.isFinite(d.la) || !Number.isFinite(d.lo)) return;
   const me = mySpot(); if (!me) return;
   const dist = geoDist(me.la, me.lo, d.la, d.lo);
   let p = MP.peers.get(d.u);
   if (dist > NEAR_R) { if (p && dist > NEAR_R + 30) dropPeer(d.u); if (!p) return; }
-  if (!p) { p = newPeer(d.u); MP.peers.set(d.u, p); toast((cleanName(d.n) || 'SOMEONE') + ' NEARBY', Math.round(dist) + ' m away · ' + (d.m ? 'on a light bike' : 'on foot'), 2200); glitch(0.5); }
+  if (!p) {
+    p = newPeer(d.u); MP.peers.set(d.u, p);
+    if (Date.now() - (MP.seen.get(d.u) || 0) > 60000) { toast((cleanName(d.n) || 'SOMEONE') + ' NEARBY', Math.round(dist) + ' m away · ' + (d.m ? 'on a light bike' : 'on foot'), 2200); glitch(0.5); }
+  }
+  MP.seen.set(d.u, Date.now()); p.away = false;
   const n = cleanName(d.n) || 'RUNNER', c = BIKE_COL[d.c] ? d.c : 'cyan';
   if (n !== p.name || c !== p.c) { p.name = n; p.c = c; peerLook(p); }
   Object.assign(p, { la: d.la, lo: d.lo, y: Number.isFinite(d.y) ? d.y : 0, m: d.m ? 1 : 0, v: clamp(+d.v || 0, 0, 80), at: Date.now(), dist });
@@ -926,30 +940,31 @@ function peerLook(p) {
   const t = texFor(p.name, css); p.label.material.map = t.clone(); p.label.material.map.needsUpdate = true; p.label.material.needsUpdate = true;
   const w = 2 + t.userData.w * 6; p.label.scale.set(w, w / 4, 1);
 }
-function dropPeer(u) {
+function dropPeer(u, quiet) {
   const p = MP.peers.get(u); if (!p) return;
   scene.remove(p.walker.g, p.label, p.pillar, p.bike.g, p.trail.m);
   for (const o of [p.walker.g, p.bike.g, p.pillar, p.trail.m]) o.traverse((x) => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); });
   if (p.label.material.map) p.label.material.map.dispose(); p.label.material.dispose();
   MP.peers.delete(u);
-  if (p.name) toast(p.name + ' LEFT', '', 1400);
+  if (p.name && !quiet) toast(p.name + ' LEFT', '', 1400);
 }
 function updatePeers(dt, t) {
   for (const p of MP.peers.values()) {
     if (!O) continue;
     let [tx, tz] = toLocal(p.la, p.lo);
     const age = Math.min(0.8, (Date.now() - p.at) / 1000);
-    if (p.m && p.v > 0.5) { tx += Math.sin(p.y) * p.v * age; tz -= Math.cos(p.y) * p.v * age; }
+    if (p.m && p.v > 0.5 && !p.away) { tx += Math.sin(p.y) * p.v * age; tz -= Math.cos(p.y) * p.v * age; }
     if (p.x == null || Math.hypot(tx - p.x, tz - p.z) > 60) { p.x = tx; p.z = tz; p.dy = p.y; p.trail.reset(); }
     else { const k = 1 - Math.exp(-dt * 6); p.x += (tx - p.x) * k; p.z += (tz - p.z) * k; p.dy += wrapA(p.y - p.dy) * Math.min(1, dt * 6); }
-    const dMe = Math.hypot(p.x - P.x, p.z - P.z), inZone = dMe < R - 4, far = dMe > 3000, onBike = p.m === 1;
+    const dMe = Math.hypot(p.x - P.x, p.z - P.z), inZone = dMe < R - 4, far = dMe > 3000, onBike = p.m === 1 && !p.away;
+    if (p.away !== p.wasAway) { p.wasAway = p.away; p.label.material.opacity = p.away ? 0.45 : 1; p.walker.lineM.opacity = p.away ? 0.35 : 1; p.walker.lineM.transparent = !!p.away; p.walker.lineM.needsUpdate = true; p.trail.reset(); }
     p.walker.g.visible = inZone && !onBike; p.bike.g.visible = inZone && onBike; p.label.visible = inZone; p.pillar.visible = !far;
     if (onBike) {
       p.bike.g.position.set(p.x, 0, p.z); p.bike.g.rotation.y = -p.dy; p.ph += p.v * dt / 0.47; for (const w of p.bike.wheels) w.rotation.x = -p.ph;
       p.trail.add(p.x - Math.sin(p.dy) * 1.3, p.z + Math.cos(p.dy) * 1.3, t);
     } else {
       p.walker.g.position.set(p.x, 0, p.z); p.walker.g.rotation.y = -p.dy;
-      const sw = p.v > 0.4 ? Math.sin(t * 7) * 0.55 * Math.min(1, p.v / 1.4) : 0;
+      const sw = p.v > 0.4 && !p.away ? Math.sin(t * 7) * 0.55 * Math.min(1, p.v / 1.4) : 0;
       p.walker.legs[0].rotation.x = sw; p.walker.legs[1].rotation.x = -sw; p.walker.arms[0].rotation.x = -sw * 0.8; p.walker.arms[1].rotation.x = sw * 0.8;
     }
     p.label.position.set(p.x, onBike ? 2.6 : 2.5, p.z); p.pillar.material.uniforms.uK.value = clamp((dMe - 25) / 110, 0.15, 1);
@@ -961,7 +976,7 @@ function nearList() {
   const el = $('nearList'); el.innerHTML = '';
   if (!S.mp) { el.innerHTML = '<div class="dim">NEARBY is off.</div>'; return; }
   if (!MP.peers.size) { const d = document.createElement('div'); d.className = 'dim'; d.textContent = mySpot() ? 'Nobody within 200 m right now. They show up by themselves.' : 'Waiting for a GPS fix…'; el.appendChild(d); return; }
-  for (const p of MP.peers.values()) { const d = document.createElement('div'); d.textContent = '● ' + p.name + ' · ' + Math.round(p.dist || 0) + ' m · ' + (p.m ? 'light bike' : 'on foot'); d.style.color = '#' + new THREE.Color(...(BIKE_COL[p.c] || BIKE_COL.cyan)).getHexString(); el.appendChild(d); }
+  for (const p of MP.peers.values()) { const d = document.createElement('div'); d.textContent = '● ' + p.name + ' · ' + Math.round(p.dist || 0) + ' m · ' + (p.away ? 'away' : p.m ? 'light bike' : 'on foot'); d.style.color = '#' + new THREE.Color(...(BIKE_COL[p.c] || BIKE_COL.cyan)).getHexString(); el.appendChild(d); }
 }
 $('bNear').onclick = () => openNear();
 $('nearOn').onclick = () => {
@@ -970,9 +985,15 @@ $('nearOn').onclick = () => {
   if (!was) toast('NEARBY ON', REAL.ok ? 'players within 200 m show up here' : 'needs your GPS: tap GPS', 2400);
   if (!REAL.ok) startGps();
 };
-$('nearOff').onclick = () => { S.mp = false; saveS(); mpLeaveAll(); $('near').classList.add('hide'); updateButtons(); toast('NEARBY OFF', 'nothing is sent'); };
+$('nearOff').onclick = () => { S.mp = false; saveS(); mpLeaveAll(true); $('near').classList.add('hide'); updateButtons(); toast('NEARBY OFF', 'nothing is sent'); };
 $('near').addEventListener('click', (e) => { if (e.target.id === 'near') $('near').classList.add('hide'); });
 addEventListener('pagehide', () => { for (const e of MP.rooms.values()) e.send({ t: 'bye', u: MP.u }); });
+let mpHiddenT = 0;
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(mpHiddenT);
+  if (document.visibilityState === 'hidden') mpHiddenT = setTimeout(() => { for (const e of MP.rooms.values()) e.close(); MP.rooms.clear(); }, 20000);
+  else MP.lastBlock = 0;
+});
 
 /* ---------- player state ---------- */
 const P = { x: 0, z: 0 };             // where you are (ground)
