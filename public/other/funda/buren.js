@@ -27,7 +27,7 @@ $("nbN").addEventListener("click", (e) => {
   nbButtons();
   loadBuren();
 });
-$("nbYear").addEventListener("change", () => { NB.year = +$("nbYear").value; drawBuren(); });
+$("nbYear").addEventListener("change", () => { NB.year = +$("nbYear").value; if (MAP.playing) stopPlay(); MAP.year = NB.year; drawBuren(); });
 
 async function loadBuren() {
   const gen = ++NB.gen;
@@ -372,7 +372,7 @@ function distChart(S) {
 }
 
 // ---------- the 3D map (MapLibre, PDOK map / aerial photo, extruded BAG buildings) ----------
-const MAP = { map: null, loading: null, base: "map", height: "flat", spin: true, S: null, ready: false };
+const MAP = { map: null, loading: null, base: "map", height: "flat", spin: true, S: null, ready: false, mode: "diff", year: null, playing: false };
 // each base map has a list of tile addresses: when one keeps failing, the next one is tried
 const BASES = {
   map: [
@@ -414,46 +414,133 @@ function circle(c, r, n = 72) {
   return out;
 }
 // colour of a building: WOZ difference with this house (green lower, red higher); this house blue; grey unknown
+// ----- colours: difference (green - grey - red), WOZ value (orange ramp), growth (violet ramp) -----
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const rgbS = (c) => `rgb(${c.join(",")})`;
+const clamp01 = (k) => Math.max(0, Math.min(1, k));
 function diffColor(d, lim) {
   const lo = [27, 175, 122], mid = [216, 214, 206], hi = [227, 73, 72];
   const t = Math.max(-1, Math.min(1, d / lim));
-  const to = t < 0 ? lo : hi, k = Math.abs(t);
-  const c = mid.map((v, i) => Math.round(v + (to[i] - v) * k));
-  return `rgb(${c.join(",")})`;
+  return rgbS(mix(mid, t < 0 ? lo : hi, Math.abs(t)));
 }
+const RAMPS = {
+  value: [[253, 230, 210], [235, 104, 52], [110, 36, 8]],
+  growth: [[230, 224, 250], [98, 80, 214], [34, 20, 104]],
+};
+function rampColor(name, k) {
+  const r = RAMPS[name]; k = clamp01(k);
+  return rgbS(k < 0.5 ? mix(r[0], r[1], k * 2) : mix(r[1], r[2], (k - 0.5) * 2));
+}
+const GREY = "#d9d8d2";
+
+// WOZ of a house at a (fractional) year: a straight line between the yearly values
+function wozAt(h, y) {
+  const w = h && h.woz; if (!w || !w.length) return null;
+  if (y < w[0][0] - 1e-6) return null;
+  for (let i = w.length - 1; i >= 0; i--) {
+    if (w[i][0] <= y + 1e-6) {
+      const b = w[i + 1];
+      return b && b[0] > w[i][0] ? w[i][1] + (b[1] - w[i][1]) * ((y - w[i][0]) / (b[0] - w[i][0])) : w[i][1];
+    }
+  }
+  return null;
+}
+
+// the scales stay the same for every year, so playing through the years shows the change
+function mapScales(S) {
+  if (S._scales) return S._scales;
+  const all = [S.self, ...S.houses].filter((h) => h && h.woz && h.woz.length);
+  const base = (S.self.woz && S.self.woz.length ? S.self.woz[0][0] : S.years[0]);
+  const last = S.years[S.years.length - 1];
+  const vals = all.flatMap((h) => h.woz.map((x) => x[1]));
+  let lim = 15000, gmax = 0.01;
+  for (const y of S.years) {
+    const sv = wozAt(S.self, y);
+    for (const h of all) {
+      const v = wozAt(h, y); if (v == null) continue;
+      if (sv != null && h !== S.self) lim = Math.max(lim, Math.abs(v - sv));
+      const b0 = wozAt(h, base); if (b0) gmax = Math.max(gmax, v / b0 - 1);
+    }
+  }
+  return (S._scales = { base, first: S.years[0], last, vmin: Math.min(...vals), vmax: Math.max(...vals), lim, gmax, all });
+}
+const growthAt = (h, y, base) => { const v = wozAt(h, y), b = wozAt(h, base); return v != null && b ? v / b - 1 : null; };
+
 function mapFeatures(S) {
   const d = NB.data;
   const byPand = new Map();
-  const add = (h, isSelf) => { if (!h.pand) return; if (!byPand.has(h.pand)) byPand.set(h.pand, []); byPand.get(h.pand).push({ h, isSelf }); };
-  if (d.self) add(d.self, true);
-  for (const h of d.houses) add(h, false);
-  for (const h of d.others || []) add(h, false);
-  const lim = S && S.sv != null && S.rows.length ? Math.max(15000, ...S.rows.map((r) => Math.abs(r.v - S.sv))) : 50000;
-  const maxV = S ? Math.max(S.sv || 0, ...S.rows.map((r) => r.v)) : 1;
+  const add = (h, isSelf, cmp) => { if (!h.pand) return; if (!byPand.has(h.pand)) byPand.set(h.pand, []); byPand.get(h.pand).push({ h, isSelf, cmp }); };
+  if (d.self) add(d.self, true, true);
+  for (const h of d.houses) add(h, false, true);
+  for (const h of d.others || []) add(h, false, false);
+  const sc = S ? mapScales(S) : null;
+  const Y = MAP.year != null ? MAP.year : S ? S.Y : null;
+  const sv = S ? wozAt(S.self, Y) : null;
   const feats = d.panden.map((p) => {
     const list = byPand.get(p.id) || [];
     const me = list.some((x) => x.isSelf);
-    const vals = list.map((x) => (S && x.h.woz ? wozMap(x.h).get(S.Y) : null)).filter((v) => v != null);
-    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-    const color = me ? cssv("--s1") || "#2a78d6" : avg != null && S && S.sv != null ? diffColor(avg - S.sv, lim) : "#d9d8d2";
+    const known = list.filter((x) => x.cmp && x.h.woz && x.h.woz.length);
+    const vs = S ? known.map((x) => wozAt(x.h, Y)).filter((v) => v != null) : [];
+    const gs = S ? known.map((x) => growthAt(x.h, Y, sc.base)).filter((v) => v != null) : [];
+    const v = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+    const g = gs.length ? gs.reduce((a, b) => a + b, 0) / gs.length : null;
+    let color = GREY;
+    if (S && MAP.mode === "diff") color = me ? (cssv("--s1") || "#2a78d6") : v != null && sv != null ? diffColor(v - sv, sc.lim) : GREY;
+    else if (S && MAP.mode === "value") color = v != null ? rampColor("value", (v - sc.vmin) / (sc.vmax - sc.vmin || 1)) : GREY;
+    else if (S && MAP.mode === "growth") color = g != null ? rampColor("growth", g / sc.gmax) : GREY;
     const flatH = 6 + Math.min(6, Math.max(0, list.length - 1)) * 1.2;
-    const wozH = avg != null ? 3 + 30 * (avg / maxV) : me && S && S.sv ? 3 + 30 * (S.sv / maxV) : 2;
+    const wozH = v != null && sc ? 3 + 30 * (v / sc.vmax) : 2;
     const names = list.map((x) => x.h.name);
     return {
       type: "Feature",
-      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, avg: avg || 0, n: list.length, known: vals.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)), more: Math.max(0, names.length - 6) },
+      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, v: v || 0, g: g == null ? -99 : g, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
       geometry: { type: "Polygon", coordinates: [p.ring] },
     };
   });
   return { type: "FeatureCollection", features: feats };
 }
+
+// the 3 houses whose WOZ grew most (up to the year on the slider): labels on the map in "Most changed"
+function topGrowth(S, n = 3) {
+  const sc = mapScales(S);
+  return sc.all.map((h) => ({ h, g: growthAt(h, MAP.year, sc.base) })).filter((x) => x.g != null && x.h.lon != null).sort((a, b) => b.g - a.g).slice(0, n);
+}
+function updatePins() {
+  MAP.pins = MAP.pins || [];
+  const S = MAP.S;
+  const top = MAP.mode === "growth" && S && MAP.ready ? topGrowth(S) : [];
+  while (MAP.pins.length < top.length) {
+    const el = document.createElement("div"); el.className = "chg-pin";
+    MAP.pins.push({ el, m: new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -14] }) });
+  }
+  MAP.pins.forEach((pn, i) => {
+    const t = top[i];
+    if (!t) { pn.m.remove(); pn.on = false; return; }
+    pn.el.innerHTML = `<b>#${i + 1}</b> ${pct(t.g * 100, 0)}`;
+    pn.el.title = t.h.name;
+    pn.m.setLngLat([t.h.lon, t.h.lat]);
+    if (!pn.on) { pn.m.addTo(MAP.map); pn.on = true; }
+  });
+}
+
+function refreshMap() {
+  if (!MAP.map) return;
+  if (!MAP.ready) { if (!MAP.map.isStyleLoaded()) return; MAP.ready = true; const m = $("mapMsg"); if (m) m.remove(); spin(); }
+  MAP.map.getSource("panden").setData(mapFeatures(MAP.S));
+  updatePins();
+  legendMap(MAP.S);
+  const yi = Math.round(MAP.year || 0);
+  $("mapYearBig").textContent = MAP.year != null ? String(MAP.playing ? Math.floor(MAP.year + 1e-6) : yi) : "";
+}
+
 async function drawMap(S) {
   MAP.S = S;
   const d = NB.data;
   if (!d || !d.center) return;
   const box = $("map3d");
   if (!d.panden || !d.panden.length) { $("mapMsg").textContent = "No building outlines found for this spot."; return; }
-  if (MAP.map) { if (MAP.ready) MAP.map.getSource("panden").setData(mapFeatures(S)); legendMap(S); return; }
+  if (S) setupSlider(S);
+  if (MAP.map) { refreshMap(); return; }
   if (MAP.starting) return;
   MAP.starting = true;
   try { await loadMapLib(); } catch (e) { $("mapMsg").textContent = "The map couldn't load (" + e.message + ")."; MAP.starting = false; return; }
@@ -469,7 +556,7 @@ async function drawMap(S) {
       sources: {
         base: baseSrc(),
         ring: { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circle(c, d.radius)] } } },
-        panden: { type: "geojson", data: mapFeatures(S) },
+        panden: { type: "geojson", data: mapFeatures(MAP.S) },
       },
       layers: [
         { id: "bg", type: "background", paint: { "background-color": "#e9e8e3" } },
@@ -487,7 +574,14 @@ async function drawMap(S) {
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   const pin = document.createElement("div"); pin.className = "me-pin"; pin.textContent = "This house";
   new maplibregl.Marker({ element: pin, anchor: "bottom", offset: [0, -24] }).setLngLat(d.self ? [d.self.lon, d.self.lat] : c).addTo(map);
-  map.on("load", () => { MAP.ready = true; $("mapMsg").remove(); map.getSource("panden").setData(mapFeatures(MAP.S)); legendMap(MAP.S); spin(); });
+  // ready as soon as the style is there (the "load" event can wait forever when base-map tiles fail)
+  const onReady = () => {
+    if (MAP.ready || !map.isStyleLoaded()) return;
+    MAP.ready = true;
+    const m = $("mapMsg"); if (m) m.remove();
+    refreshMap(); spin();
+  };
+  map.on("load", onReady); map.on("idle", onReady); map.on("styledata", () => setTimeout(onReady, 0));
   map.on("error", (e) => {
     if (!e || e.sourceId !== "base") return;
     // tiles of this base map keep failing: try its next address
@@ -499,11 +593,15 @@ async function drawMap(S) {
     const f = e.features && e.features[0]; if (!f) return;
     const p = f.properties, S2 = MAP.S;
     let names = []; try { names = JSON.parse(p.names); } catch {}
-    const lines = [];
-    lines.push(`<b>${esc(names[0] || "Building")}</b>${p.n > 1 ? ` <span style="color:#52514e">+ ${p.n - 1} more address${p.n > 2 ? "es" : ""}</span>` : ""}`);
-    if (p.me) lines.push("This house" + (S2 && S2.sv ? `: WOZ ${S2.Y} <b>${eur(S2.sv)}</b>` : ""));
-    else if (p.known && S2) lines.push(`WOZ ${S2.Y}: <b>${eur(Math.round(p.avg))}</b>${p.known > 1 ? " (average)" : ""}` + (S2.sv ? `<br>${sEur(p.avg - S2.sv)} (${pct((p.avg / S2.sv - 1) * 100)}) vs this house` : ""));
-    else lines.push(`<span style="color:#52514e">Not compared. Choose more houses above to include it.</span>`);
+    const yr = Math.round(MAP.year || (S2 && S2.Y) || 0);
+    const lines = [`<b>${esc(names[0] || "Building")}</b>${p.n > 1 ? ` <span style="color:#52514e">+ ${p.n - 1} more address${p.n > 2 ? "es" : ""}</span>` : ""}`];
+    if (p.known && S2) {
+      const sc = mapScales(S2);
+      const v = p.v, svy = wozAt(S2.self, yr);
+      lines.push(`WOZ ${yr}: <b>${eur(Math.round(p.v / 1000) * 1000)}</b>${p.known > 1 ? " (average)" : ""}${p.me ? " · this house" : ""}`);
+      if (!p.me && svy) lines.push(`${sEur(v - svy)} (${pct((v / svy - 1) * 100)}) vs this house`);
+      if (p.g > -50) lines.push(`Grew ${pct(p.g * 100, 0)} since ${sc.base}`);
+    } else lines.push(`<span style="color:#52514e">Not compared. Choose more houses above to include it.</span>`);
     if (p.built) lines.push(`Built ${p.built}`);
     new maplibregl.Popup({ closeButton: true, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML(lines.join("<br>")).addTo(map);
   });
@@ -515,14 +613,74 @@ function spin() {
   map.easeTo({ bearing: map.getBearing() + 24, duration: 6000, easing: (t) => t });
   map.once("moveend", () => { if (MAP.spin) spin(); });
 }
+const sq = (bg) => `<i style="background:${bg};display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px"></i>`;
 function legendMap(S) {
-  if (!S || S.sv == null || !S.rows.length) { $("mapScale").innerHTML = ""; return; }
-  const lim = Math.max(15000, ...S.rows.map((r) => Math.abs(r.v - S.sv)));
-  $("mapScale").innerHTML = `<span>WOZ ${S.Y} vs this house:</span><span>${sEur(-lim)}</span>`
-    + `<span class="bar" style="background:linear-gradient(90deg, ${diffColor(-lim, lim)}, ${diffColor(0, lim)}, ${diffColor(lim, lim)})"></span><span>${sEur(lim)}</span>`
-    + `<span><i class="sq" style="background:var(--s1);display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px"></i> this house</span>`
-    + `<span><i class="sq" style="background:#d9d8d2;display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px"></i> not compared</span>`;
+  const el = $("mapScale");
+  if (!S || !S.rows.length) { el.innerHTML = ""; return; }
+  const sc = mapScales(S), yr = Math.round(MAP.year != null ? MAP.year : S.Y);
+  let h = "";
+  if (MAP.mode === "diff") {
+    h = `<span>WOZ ${yr} vs this house:</span><span>${sEur(-sc.lim)}</span><span class="bar" style="background:linear-gradient(90deg, ${diffColor(-sc.lim, sc.lim)}, ${diffColor(0, sc.lim)}, ${diffColor(sc.lim, sc.lim)})"></span><span>${sEur(sc.lim)}</span><span>${sq("var(--s1)")} this house</span>`;
+  } else if (MAP.mode === "value") {
+    h = `<span>WOZ value ${yr}:</span><span>${kEur(sc.vmin)}</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("value", 0)}, ${rampColor("value", 0.5)}, ${rampColor("value", 1)})"></span><span>${kEur(sc.vmax)}</span>`;
+  } else {
+    const top = topGrowth(S);
+    h = `<span>Growth ${sc.base} → ${yr}:</span><span>0%</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("growth", 0)}, ${rampColor("growth", 0.5)}, ${rampColor("growth", 1)})"></span><span>${pct(sc.gmax * 100, 0)}</span>`
+      + (top.length ? `<span style="flex-basis:100%">Most changed: ${top.map((t, i) => `<b>#${i + 1}</b> ${esc(t.h.name)}${t.h === S.self ? " (this house)" : ""} ${pct(t.g * 100, 0)}`).join(" · ")}</span>` : "");
+  }
+  el.innerHTML = h + `<span>${sq(GREY)} not compared</span>`;
 }
+
+// ----- time slider + play -----
+function setupSlider(S) {
+  const sc = mapScales(S);
+  const r = $("mapYear");
+  if (+r.min !== sc.first || +r.max !== sc.last) { r.min = sc.first; r.max = sc.last; }
+  if (MAP.year == null || MAP.year < sc.first || MAP.year > sc.last) MAP.year = sc.last;
+  if (!MAP.playing) r.value = MAP.year;
+  $("mapYearMin").textContent = sc.first; $("mapYearMax").textContent = sc.last;
+  $("timebar").hidden = sc.first === sc.last;
+}
+function setYear(y) {
+  MAP.year = y;
+  $("mapYear").value = y;
+  refreshMap();
+}
+function stopPlay() {
+  MAP.playing = false;
+  cancelAnimationFrame(MAP.raf);
+  $("mapPlay").textContent = "▶"; $("mapPlay").setAttribute("aria-label", "Play the years");
+  if (MAP.year != null) setYear(Math.round(MAP.year));
+}
+function play() {
+  const S = MAP.S; if (!S) return;
+  const sc = mapScales(S);
+  if (MAP.year >= sc.last - 0.01) MAP.year = sc.first;
+  MAP.playing = true;
+  $("mapPlay").textContent = "❚❚"; $("mapPlay").setAttribute("aria-label", "Pause");
+  let last = performance.now(), drawn = 0;
+  const PER_YEAR = 1100; // ms
+  const step = (now) => {
+    if (!MAP.playing) return;
+    MAP.year = Math.min(sc.last, MAP.year + (now - last) / PER_YEAR);
+    last = now;
+    $("mapYear").value = MAP.year;
+    if (now - drawn > 45) { drawn = now; refreshMap(); } // about 20 updates a second
+    if (MAP.year >= sc.last) { stopPlay(); return; }
+    MAP.raf = requestAnimationFrame(step);
+  };
+  MAP.raf = requestAnimationFrame(step);
+}
+$("mapPlay").addEventListener("click", () => (MAP.playing ? stopPlay() : play()));
+$("mapYear").addEventListener("input", () => { if (MAP.playing) stopPlay(); MAP.year = +$("mapYear").value; refreshMap(); });
+$("mapYear").addEventListener("change", () => setYear(Math.round(+$("mapYear").value)));
+$("mapMode").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  MAP.mode = b.dataset.v;
+  $("mapMode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  refreshMap();
+});
+
 $("mapBase").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   MAP.base = b.dataset.v;

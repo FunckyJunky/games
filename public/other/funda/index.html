@@ -167,6 +167,15 @@
   .map3d .maplibregl-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0b0b0b; border-radius: 10px; padding: 10px 12px; max-width: 240px; }
   .map3d .maplibregl-popup-content b { font-weight: 650; }
   .me-pin { background: var(--s1); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; pointer-events: none; }
+  .map-year { position: absolute; left: 12px; bottom: 10px; z-index: 2; font: 800 34px/1 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
+    text-shadow: 0 0 6px rgba(255,255,255,.9), 0 0 2px rgba(255,255,255,.9); pointer-events: none; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .chg-pin { background: #3b2a9e; color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; pointer-events: none; }
+  .chg-pin b { font-weight: 800; opacity: .8; margin-right: 2px; }
+  .timebar { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
+  .timebar[hidden] { display: none; }
+  .timebar input[type=range] { flex: 1; accent-color: var(--s1); height: 28px; }
+  .timebar .play { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--s1); color: #fff; font-size: 15px; cursor: pointer; flex: none; display: grid; place-items: center; }
+  .timebar .muted { font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .scale { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; flex-wrap: wrap; }
   .scale .bar { height: 10px; width: 160px; border-radius: 5px; }
   .nbc { position: relative; margin-top: 4px; }
@@ -297,13 +306,25 @@
 
   <section class="card panel">
     <h2>3D map · 150 m around the house</h2>
-    <p class="note">Every building within 150 m. Coloured by WOZ value compared with this house; grey = not compared. Drag to move, two fingers to turn and tilt, tap a building for its WOZ.</p>
+    <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ.</p>
+    <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px">
+      <button type="button" data-v="diff" aria-pressed="true">vs this house</button>
+      <button type="button" data-v="value" aria-pressed="false">WOZ value</button>
+      <button type="button" data-v="growth" aria-pressed="false">Most changed</button>
+    </div>
     <div class="map3d" id="map3d">
+      <div class="map-year" id="mapYearBig" aria-hidden="true"></div>
       <div class="ctl">
         <div class="seg" id="mapBase"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="photo" aria-pressed="false">Aerial</button></div>
         <div class="seg" id="mapH"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">Height = WOZ</button></div>
       </div>
       <div class="msg" id="mapMsg">Loading the map…</div>
+    </div>
+    <div class="timebar" id="timebar">
+      <button type="button" class="play" id="mapPlay" aria-label="Play the years">▶</button>
+      <span class="muted" id="mapYearMin"></span>
+      <input type="range" id="mapYear" min="2014" max="2025" step="any" value="2025" aria-label="Year">
+      <span class="muted" id="mapYearMax"></span>
     </div>
     <div class="scale" id="mapScale"></div>
   </section>

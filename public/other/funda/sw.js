@@ -2,7 +2,7 @@
    - opens without a connection: the page, icons and the last readings are kept
    - always tries the network first, so new readings and page updates show straight away
    - shows the notifications the server sends (price, status, saves, every N views) */
-const CACHE = "funda-v2";
+const CACHE = "funda-v3";
 const SHELL = ["/other/funda/", "/other/funda/buren.js", "/other/funda/manifest.webmanifest", "/other/funda/icon-192.png", "/other/funda/apple-touch-icon.png", "/other/funda/badge-96.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
