@@ -90,6 +90,7 @@ function drawBuren() {
   if (sel.innerHTML !== want) sel.innerHTML = want;
   tiles(S);
   drawMap(S);
+  scoreCharts(S);
   rankChart(S); diffChart(S); yearsChart(S); growthChart(S); heatChart(S); m2Chart(S); scatterChart(S); distChart(S);
 }
 
@@ -371,6 +372,161 @@ function distChart(S) {
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
 }
 
+// ---------- value score: every house against all the chosen neighbours ----------
+// Per factor a house gets its place among the others (0 = worst, 1 = best: the mid-rank percentile),
+// then the factors are mixed with the weights below. Factors a house has no data for are left out of its mix.
+const SCORE_F = [
+  { k: "m2", name: "Price per m²", hint: "WOZ value ÷ living area (BAG). Lower is better.", better: -1, w: 35,
+    val: (h, y) => { const v = wozAt(h, y); return v != null && h.area > 15 ? v / h.area : null; }, fmt: (v) => "€" + nf.format(Math.round(v)) + "/m²" },
+  { k: "area", name: "Living area", hint: "More m² is better.", better: 1, w: 20, val: (h) => (h.area > 15 ? h.area : null), fmt: (v) => Math.round(v) + " m²" },
+  { k: "plot", name: "Plot size", hint: "Land with the house (WOZ). Bigger is better.", better: 1, w: 15, val: (h) => (h.ground > 0 ? h.ground : null), fmt: (v) => Math.round(v) + " m²" },
+  { k: "growth", name: "Value growth", hint: "How much the WOZ value grew since the first year. More is better.", better: 1, w: 15,
+    val: (h, y, base) => growthAt(h, y, base), fmt: (v) => pct(v * 100, 0) },
+  { k: "built", name: "Build year", hint: "Newer is better.", better: 1, w: 15, val: (h) => (h.built > 1000 ? h.built : null), fmt: (v) => String(Math.round(v)) },
+];
+const W_STD = Object.fromEntries(SCORE_F.map((f) => [f.k, f.w]));
+let SW = { ...W_STD };
+try { const x = JSON.parse(localStorage.getItem("funda.w") || "null"); if (x) for (const k in W_STD) if (typeof x[k] === "number") SW[k] = x[k]; } catch {}
+const askPrice = () => (DATA && readings().length ? readings().at(-1).price : null);
+
+function scoreSet(S, y) {
+  const base = mapScales(S).base;
+  const hs = [S.self, ...S.houses].filter((h) => h && h.woz && h.woz.length && wozAt(h, y) != null);
+  const raw = {}, sorted = {};
+  for (const f of SCORE_F) { raw[f.k] = hs.map((h) => f.val(h, y, base)); sorted[f.k] = raw[f.k].filter((v) => v != null); }
+  const place = (f, x) => {
+    const arr = sorted[f.k];
+    if (x == null || arr.length < 2) return null;
+    let lt = 0, eq = 0;
+    for (const v of arr) { if (v < x - 1e-9) lt++; else if (Math.abs(v - x) <= 1e-9) eq++; }
+    const p = (lt + 0.5 * eq) / arr.length;
+    return f.better < 0 ? 1 - p : p;
+  };
+  const mixIt = (xs) => {
+    let acc = 0, sw = 0; const parts = {};
+    SCORE_F.forEach((f, i) => { const x = xs[i], p = place(f, x); parts[f.k] = { x, p }; const w = SW[f.k] || 0; if (p != null && w > 0) { acc += w * p; sw += w; } });
+    return { score: sw ? (100 * acc) / sw : null, parts };
+  };
+  const list = hs.map((h, i) => ({ h, ...mixIt(SCORE_F.map((f) => raw[f.k][i])) })).filter((e) => e.score != null);
+  list.sort((a, b) => b.score - a.score);
+  list.forEach((e, i) => { e.rank = i + 1; });
+  const byNid = new Map(list.map((e) => [e.h.nid, e]));
+  // this house at its asking price (asking price ÷ living area instead of WOZ ÷ living area)
+  const ask = askPrice();
+  let askE = null;
+  if (ask && S.self.area > 15) askE = mixIt(SCORE_F.map((f) => (f.k === "m2" ? ask / S.self.area : f.val(S.self, y, base))));
+  return { list, byNid, ask, askE, n: list.length, raw, sorted, base };
+}
+
+function weightsUI() {
+  const box = $("wSliders");
+  if (box.children.length) return;
+  box.innerHTML = SCORE_F.map((f) => `<div class="wrow"><label for="w-${f.k}">${f.name}</label><output id="wo-${f.k}"></output><small>${f.hint}</small>
+    <input type="range" id="w-${f.k}" min="0" max="100" step="5" value="${SW[f.k]}"></div>`).join("");
+  const show = () => { const tot = SCORE_F.reduce((a, f) => a + (SW[f.k] || 0), 0) || 1; SCORE_F.forEach((f) => { $("wo-" + f.k).textContent = SW[f.k] ? Math.round((100 * SW[f.k]) / tot) + "% of the score" : "not counted"; }); };
+  show();
+  let t = 0;
+  box.addEventListener("input", (e) => {
+    const k = e.target.id.replace("w-", ""); if (!(k in SW)) return;
+    SW[k] = +e.target.value; show();
+    try { localStorage.setItem("funda.w", JSON.stringify(SW)); } catch {}
+    clearTimeout(t); t = setTimeout(() => { const S = nbSet(); if (S) { scoreCharts(S); refreshMap(); } }, 60);
+  });
+  $("wReset").addEventListener("click", () => {
+    SW = { ...W_STD }; try { localStorage.removeItem("funda.w"); } catch {}
+    SCORE_F.forEach((f) => { $("w-" + f.k).value = SW[f.k]; }); show();
+    const S = nbSet(); if (S) { scoreCharts(S); refreshMap(); }
+  });
+}
+
+function scoreCharts(S) {
+  weightsUI();
+  const R = scoreSet(S, S.Y);
+  const me = R.byNid.get(S.self.nid);
+  const best = R.list.find((e) => e.h !== S.self);
+  const t = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d || ""}</div></div>`;
+  $("scoreTiles").innerHTML =
+    t("This house · " + S.Y, me ? Math.round(me.score) + '<span class="muted" style="font-size:14px;font-weight:600"> / 100</span>' : "–", me ? `#${me.rank} of ${R.n} houses` : "") +
+    t("At its asking price", R.askE ? Math.round(R.askE.score) + '<span class="muted" style="font-size:14px;font-weight:600"> / 100</span>' : "–", R.askE ? `${eur(R.ask)} instead of the WOZ value` : "") +
+    t("Neighbours' median", R.n > 1 ? String(Math.round(median(R.list.filter((e) => e.h !== S.self).map((e) => e.score)))) : "–", "the middle score around it") +
+    t("Best value nearby", best ? Math.round(best.score) + "" : "–", best ? esc(best.h.name) + (best.h.dist != null ? ` · ${Math.round(best.h.dist)} m` : "") : "");
+  $("scoreNote").textContent = `Scores for ${S.Y}` + (R.askE && me ? `. The diamond shows this house at its asking price: ${Math.round(R.askE.score)} instead of ${Math.round(me.score)}, because the asking price is a ${R.ask > (wozAt(S.self, S.Y) || 0) ? "higher" : "lower"} price per m² than its WOZ value. WOZ values lag behind the market, so most houses would score lower at today's prices too.` : ".");
+  scoreRankChart(S, R);
+  factorChart(S, R);
+}
+
+function partsTip(e) {
+  return SCORE_F.filter((f) => SW[f.k] > 0).map((f) => { const q = e.parts[f.k]; return q && q.p != null ? `${f.name}: ${f.fmt(q.x)} → ${Math.round(q.p * 100)}` : `${f.name}: –`; }).join("<br>");
+}
+function scoreRankChart(S, R) {
+  const box = $("cScore");
+  if (R.n < 2) return empty(box, "Waiting for the neighbours' WOZ values.");
+  const w = W(box), dense = R.n > 30, rh = dense ? 13 : 20, bh = dense ? 9 : 13, lw = Math.min(150, w * 0.36), top = 18;
+  const x0 = lw + 6, x1 = w - (dense ? 10 : 34), X = (v) => x0 + (v / 100) * (x1 - x0);
+  let g = "";
+  for (const v of [0, 25, 50, 75, 100]) g += `<line x1="${X(v)}" x2="${X(v)}" y1="${top - 4}" y2="${top + R.n * rh}" stroke="var(--grid)"/>` + T(X(v), top - 7, String(v), { a: "middle" });
+  R.list.forEach((e, i) => {
+    const y = top + i * rh, me = e.h === S.self;
+    const tip = `<b>${esc(e.h.name)}</b>${me ? " (this house)" : ""}<br>Score <b>${Math.round(e.score)}</b> · #${e.rank} of ${R.n}<br>${partsTip(e)}`;
+    g += T(lw, y + bh / 2, short(e.h.name, dense ? 22 : 20), { a: "end", db: "middle", fill: me ? "var(--ink)" : "var(--ink-2)", w: me ? 700 : null, fs: dense ? 10 : 11.5 });
+    g += hbar(x0, X(e.score), y, bh, me ? "var(--s1)" : "var(--nb)", tip);
+    if (!dense || me) g += T(X(e.score) + 5, y + bh / 2, String(Math.round(e.score)), { db: "middle", fill: me ? "var(--ink)" : "var(--ink-2)", w: me ? 700 : null });
+    if (me && R.askE) {
+      const cx = X(R.askE.score), cy = y + bh / 2, r = 6;
+      g += `<path d="M${cx},${cy - r}L${cx + r},${cy}L${cx},${cy + r}L${cx - r},${cy}Z" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" data-tip="${esc(`<b>This house at its asking price</b><br>Score <b>${Math.round(R.askE.score)}</b><br>${partsTip(R.askE)}`)}"/>`;
+    }
+  });
+  const H = top + R.n * rh + 4;
+  put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
+}
+function factorChart(S, R) {
+  const box = $("cFactors");
+  const me = R.byNid.get(S.self.nid);
+  if (!me || R.n < 2) return empty(box, "Waiting for the neighbours' WOZ values.");
+  const w = W(box), rowH = 64, top = 4, x0 = 14, x1 = w - 14;
+  let g = "", row = 0;
+  for (const f of SCORE_F) {
+    const vals = R.sorted[f.k];
+    const my = me.parts[f.k];
+    const y = top + row * rowH;
+    const wt = SW[f.k] || 0, tot = SCORE_F.reduce((a, q) => a + (SW[q.k] || 0), 0) || 1;
+    g += T(x0, y + 12, f.name + (wt ? ` · ${Math.round((100 * wt) / tot)}%` : " · not counted"), { fill: wt ? "var(--ink)" : "var(--muted)", w: 650, fs: 12.5 });
+    if (my && my.p != null) g += T(x1, y + 12, `better than ${Math.round(my.p * 100)}%`, { a: "end", fill: "var(--ink)", w: 650, fs: 12 });
+    if (vals.length < 2 || !my || my.x == null) { g += T(x1, y + 12, "no data", { a: "end", fs: 11.5 }); row++; continue; }
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const askX = f.k === "m2" && R.askE ? R.askE.parts.m2.x : null;
+    if (askX != null) { lo = Math.min(lo, askX); hi = Math.max(hi, askX); }
+    if (hi === lo) { lo -= 1; hi += 1; }
+    // right is always better: flip the axis when lower is better
+    const X = (v) => (f.better < 0 ? x1 - ((v - lo) / (hi - lo)) * (x1 - x0) : x0 + ((v - lo) / (hi - lo)) * (x1 - x0));
+    const ly = y + 34;
+    g += `<line x1="${x0}" x2="${x1}" y1="${ly}" y2="${ly}" stroke="var(--axis)"/>`;
+    const med = median(vals);
+    g += `<line x1="${X(med)}" x2="${X(med)}" y1="${ly - 9}" y2="${ly + 9}" stroke="var(--ink-2)" stroke-width="1.5"/>`;
+    // neighbours: small dots, nudged up/down when they would overlap
+    const used = [];
+    R.list.forEach((e) => {
+      const q = e.parts[f.k]; if (e.h === S.self || !q || q.x == null) return;
+      const cx = X(q.x); let k = 0;
+      while (used.some((u) => Math.abs(u[0] - cx) < 6 && u[1] === k) && k < 4) k++;
+      used.push([cx, k]);
+      const cy = ly + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 6;
+      g += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="var(--nb)" data-tip="${esc(`<b>${esc(e.h.name)}</b><br>${f.name}: ${f.fmt(q.x)}`)}"/>`;
+    });
+    if (askX != null) {
+      const cx = X(askX), r = 6;
+      g += `<path d="M${cx},${ly - r}L${cx + r},${ly}L${cx},${ly + r}L${cx - r},${ly}Z" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" data-tip="${esc(`<b>This house at its asking price</b><br>${f.fmt(askX)}`)}"/>`;
+    }
+    g += `<circle cx="${X(my.x)}" cy="${ly}" r="6" fill="var(--s1)" stroke="var(--surface)" stroke-width="2" data-tip="${esc(`<b>This house</b><br>${f.name}: ${f.fmt(my.x)}<br>Neighbours' median: ${f.fmt(med)}<br>Better than ${Math.round(my.p * 100)}% of them`)}"/>`;
+    const left = f.better < 0 ? hi : lo, right = f.better < 0 ? lo : hi;
+    g += T(x0, ly + 21, f.fmt(left), { fs: 10.5 }) + T(x1, ly + 21, f.fmt(right) + " →", { a: "end", fs: 10.5 });
+    g += T((x0 + x1) / 2, ly + 21, "this house " + f.fmt(my.x), { a: "middle", fs: 11, fill: "var(--ink)", w: 600 });
+    row++;
+  }
+  const H = top + row * rowH + 4;
+  put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
+}
+
 // ---------- the 3D map (MapLibre, PDOK map / aerial photo, extruded BAG buildings) ----------
 const MAP = { map: null, loading: null, base: "map", height: "flat", spin: true, S: null, ready: false, mode: "diff", year: null, playing: false };
 // each base map has a list of tile addresses: when one keeps failing, the next one is tried
@@ -426,6 +582,7 @@ function diffColor(d, lim) {
 const RAMPS = {
   value: [[253, 230, 210], [235, 104, 52], [110, 36, 8]],
   growth: [[230, 224, 250], [98, 80, 214], [34, 20, 104]],
+  score: [[221, 243, 235], [27, 175, 122], [6, 78, 52]],
 };
 function rampColor(name, k) {
   const r = RAMPS[name]; k = clamp01(k);
@@ -462,10 +619,15 @@ function mapScales(S) {
       const b0 = wozAt(h, base); if (b0) gmax = Math.max(gmax, v / b0 - 1);
     }
   }
-  return (S._scales = { base, first: S.years[0], last, vmin: Math.min(...vals), vmax: Math.max(...vals), lim, gmax, all });
+  const ask = askPrice();
+  // sized on the latest year: older years simply show as (much) lower than today's asking price
+  const lastVals = all.map((h) => wozAt(h, last)).filter((v) => v != null);
+  const askLim = ask ? Math.max(15000, ...lastVals.map((v) => Math.abs(v - ask))) : 50000;
+  return (S._scales = { base, first: S.years[0], last, vmin: Math.min(...vals), vmax: Math.max(...vals), lim, gmax, all, ask, askLim });
 }
 const growthAt = (h, y, base) => { const v = wozAt(h, y), b = wozAt(h, base); return v != null && b ? v / b - 1 : null; };
 
+const heightProp = () => ["get", MAP.height === "woz" ? "hWoz" : MAP.height === "score" ? "hScore" : "hFlat"];
 function mapFeatures(S) {
   const d = NB.data;
   const byPand = new Map();
@@ -476,6 +638,8 @@ function mapFeatures(S) {
   const sc = S ? mapScales(S) : null;
   const Y = MAP.year != null ? MAP.year : S ? S.Y : null;
   const sv = S ? wozAt(S.self, Y) : null;
+  const R = S && (MAP.mode === "score" || MAP.height === "score") ? scoreSet(S, Y) : null;
+  MAP.R = R;
   const feats = d.panden.map((p) => {
     const list = byPand.get(p.id) || [];
     const me = list.some((x) => x.isSelf);
@@ -484,16 +648,20 @@ function mapFeatures(S) {
     const gs = S ? known.map((x) => growthAt(x.h, Y, sc.base)).filter((v) => v != null) : [];
     const v = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
     const g = gs.length ? gs.reduce((a, b) => a + b, 0) / gs.length : null;
+    const ss = R ? known.map((x) => R.byNid.get(x.h.nid)).filter(Boolean).map((e) => e.score) : [];
+    const score = ss.length ? ss.reduce((a, b) => a + b, 0) / ss.length : null;
     let color = GREY;
     if (S && MAP.mode === "diff") color = me ? (cssv("--s1") || "#2a78d6") : v != null && sv != null ? diffColor(v - sv, sc.lim) : GREY;
     else if (S && MAP.mode === "value") color = v != null ? rampColor("value", (v - sc.vmin) / (sc.vmax - sc.vmin || 1)) : GREY;
     else if (S && MAP.mode === "growth") color = g != null ? rampColor("growth", g / sc.gmax) : GREY;
+    else if (S && MAP.mode === "ask") color = v != null && sc.ask ? diffColor(v - sc.ask, sc.askLim) : GREY;
+    else if (S && MAP.mode === "score") color = score != null ? rampColor("score", score / 100) : GREY;
     const flatH = 6 + Math.min(6, Math.max(0, list.length - 1)) * 1.2;
     const wozH = v != null && sc ? 3 + 30 * (v / sc.vmax) : 2;
     const names = list.map((x) => x.h.name);
     return {
       type: "Feature",
-      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, v: v || 0, g: g == null ? -99 : g, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
+      properties: { id: p.id, color, me, hFlat: me ? flatH + 1 : flatH, hWoz: wozH, hScore: score != null ? 2 + 0.3 * score : 2, v: v || 0, g: g == null ? -99 : g, s: score == null ? -1 : score, n: list.length, known: vs.length, built: p.built || 0, names: JSON.stringify(names.slice(0, 6)) },
       geometry: { type: "Polygon", coordinates: [p.ring] },
     };
   });
@@ -508,7 +676,8 @@ function topGrowth(S, n = 3) {
 function updatePins() {
   MAP.pins = MAP.pins || [];
   const S = MAP.S;
-  const top = MAP.mode === "growth" && S && MAP.ready ? topGrowth(S) : [];
+  const top = !S || !MAP.ready ? [] : MAP.mode === "growth" ? topGrowth(S).map((t) => ({ h: t.h, txt: pct(t.g * 100, 0) }))
+    : MAP.mode === "score" && MAP.R ? MAP.R.list.filter((e) => e.h.lon != null).slice(0, 3).map((e) => ({ h: e.h, txt: Math.round(e.score) + " pts" })) : [];
   while (MAP.pins.length < top.length) {
     const el = document.createElement("div"); el.className = "chg-pin";
     MAP.pins.push({ el, m: new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -14] }) });
@@ -516,7 +685,8 @@ function updatePins() {
   MAP.pins.forEach((pn, i) => {
     const t = top[i];
     if (!t) { pn.m.remove(); pn.on = false; return; }
-    pn.el.innerHTML = `<b>#${i + 1}</b> ${pct(t.g * 100, 0)}`;
+    pn.el.innerHTML = `<b>#${i + 1}</b> ${t.txt}`;
+    pn.el.style.background = MAP.mode === "score" ? "#06604a" : "#3b2a9e";
     pn.el.title = t.h.name;
     pn.m.setLngLat([t.h.lon, t.h.lat]);
     if (!pn.on) { pn.m.addTo(MAP.map); pn.on = true; }
@@ -565,7 +735,7 @@ async function drawMap(S) {
         { id: "ring-line", type: "line", source: "ring", paint: { "line-color": "#2a78d6", "line-width": 2, "line-dasharray": [2, 2], "line-opacity": 0.8 } },
         { id: "b3d", type: "fill-extrusion", source: "panden", paint: {
           "fill-extrusion-color": ["get", "color"],
-          "fill-extrusion-height": ["get", MAP.height === "woz" ? "hWoz" : "hFlat"],
+          "fill-extrusion-height": heightProp(),
           "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true } },
       ],
     },
@@ -600,7 +770,11 @@ async function drawMap(S) {
       const v = p.v, svy = wozAt(S2.self, yr);
       lines.push(`WOZ ${yr}: <b>${eur(Math.round(p.v / 1000) * 1000)}</b>${p.known > 1 ? " (average)" : ""}${p.me ? " · this house" : ""}`);
       if (!p.me && svy) lines.push(`${sEur(v - svy)} (${pct((v / svy - 1) * 100)}) vs this house`);
+      if (sc.ask) lines.push(`${sEur(v - sc.ask)} vs the asking price of this house`);
       if (p.g > -50) lines.push(`Grew ${pct(p.g * 100, 0)} since ${sc.base}`);
+      const R = MAP.R || scoreSet(S2, yr);
+      const e = names.length ? R.list.find((x) => x.h.name === names[0]) : null;
+      if (e) lines.push(`Value score <b>${Math.round(e.score)}</b> · #${e.rank} of ${R.n}`);
     } else lines.push(`<span style="color:#52514e">Not compared. Choose more houses above to include it.</span>`);
     if (p.built) lines.push(`Built ${p.built}`);
     new maplibregl.Popup({ closeButton: true, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML(lines.join("<br>")).addTo(map);
@@ -623,6 +797,13 @@ function legendMap(S) {
     h = `<span>WOZ ${yr} vs this house:</span><span>${sEur(-sc.lim)}</span><span class="bar" style="background:linear-gradient(90deg, ${diffColor(-sc.lim, sc.lim)}, ${diffColor(0, sc.lim)}, ${diffColor(sc.lim, sc.lim)})"></span><span>${sEur(sc.lim)}</span><span>${sq("var(--s1)")} this house</span>`;
   } else if (MAP.mode === "value") {
     h = `<span>WOZ value ${yr}:</span><span>${kEur(sc.vmin)}</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("value", 0)}, ${rampColor("value", 0.5)}, ${rampColor("value", 1)})"></span><span>${kEur(sc.vmax)}</span>`;
+  } else if (MAP.mode === "ask") {
+    h = sc.ask ? `<span>WOZ ${yr} vs this house's asking price ${kEur(sc.ask)}:</span><span>${sEur(-sc.askLim)}</span><span class="bar" style="background:linear-gradient(90deg, ${diffColor(-sc.askLim, sc.askLim)}, ${diffColor(0, sc.askLim)}, ${diffColor(sc.askLim, sc.askLim)})"></span><span>${sEur(sc.askLim)}</span>` : "<span>No asking price yet.</span>";
+  } else if (MAP.mode === "score") {
+    const R = MAP.R || scoreSet(S, MAP.year != null ? MAP.year : S.Y);
+    const me = R.byNid.get(S.self.nid);
+    h = `<span>Value score ${yr}:</span><span>0</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("score", 0)}, ${rampColor("score", 0.5)}, ${rampColor("score", 1)})"></span><span>100</span>`
+      + `<span style="flex-basis:100%">${me ? `This house: <b>${Math.round(me.score)}</b> (#${me.rank} of ${R.n}) · ` : ""}Best: ${R.list.slice(0, 3).map((e, i) => `<b>#${i + 1}</b> ${esc(e.h.name)}${e.h === S.self ? " (this house)" : ""} ${Math.round(e.score)}`).join(" · ")}</span>`;
   } else {
     const top = topGrowth(S);
     h = `<span>Growth ${sc.base} → ${yr}:</span><span>0%</span><span class="bar" style="background:linear-gradient(90deg, ${rampColor("growth", 0)}, ${rampColor("growth", 0.5)}, ${rampColor("growth", 1)})"></span><span>${pct(sc.gmax * 100, 0)}</span>`
@@ -691,10 +872,10 @@ $("mapH").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   MAP.height = b.dataset.v;
   $("mapH").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
-  if (MAP.map && MAP.ready) MAP.map.setPaintProperty("b3d", "fill-extrusion-height", ["get", MAP.height === "woz" ? "hWoz" : "hFlat"]);
+  if (MAP.map && MAP.ready) { MAP.map.setPaintProperty("b3d", "fill-extrusion-height", heightProp()); refreshMap(); }
 });
 
 // start when the section comes near the screen (keeps the first load light)
 new IntersectionObserver((es, ob) => { if (es.some((x) => x.isIntersecting)) { ob.disconnect(); loadBuren(); } }, { rootMargin: "600px" }).observe($("nbPanel"));
 let nbRz = 0;
-addEventListener("resize", () => { clearTimeout(nbRz); nbRz = setTimeout(() => { if (NB.data) { const S = nbSet(); if (S) { rankChart(S); diffChart(S); yearsChart(S); growthChart(S); heatChart(S); m2Chart(S); scatterChart(S); distChart(S); } } }, 150); });
+addEventListener("resize", () => { clearTimeout(nbRz); nbRz = setTimeout(() => { if (NB.data) { const S = nbSet(); if (S) { scoreCharts(S); rankChart(S); diffChart(S); yearsChart(S); growthChart(S); heatChart(S); m2Chart(S); scatterChart(S); distChart(S); } } }, 150); });

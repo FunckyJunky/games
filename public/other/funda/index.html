@@ -160,7 +160,8 @@
   .prog { font-size: 13px; color: var(--ink-2); min-height: 18px; margin: 6px 0 0; }
   .map3d { position: relative; height: 420px; border-radius: 12px; overflow: hidden; background: var(--grid); margin-top: 6px; }
   @media (max-width: 480px) { .map3d { height: 360px; } }
-  .map3d .ctl { position: absolute; left: 8px; top: 8px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 60px); }
+  .map3d .maplibregl-popup { z-index: 3; }
+  .map3d .ctl { position: absolute; left: 8px; top: 8px; z-index: 1; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 60px); }
   .map3d .ctl .seg button { background: rgba(252,252,251,.92); color: #0b0b0b; border-color: rgba(0,0,0,.12); padding: 6px 10px; font-size: 12.5px; }
   .map3d .ctl .seg button[aria-pressed="true"] { background: #0b0b0b; color: #fff; }
   .map3d .msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--ink-2); font-size: 14px; }
@@ -185,6 +186,14 @@
   .nb-grid .panel { margin-bottom: 0; }
   @media (max-width: 760px) { .nb-grid { grid-template-columns: 1fr; } }
   .muted { color: var(--muted); }
+  .subh { font-size: 14px; margin: 18px 0 2px; }
+  .weights { margin: 12px 0 4px; }
+  .weights summary { font-size: 14px; }
+  .wrow { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; margin: 10px 0 0; }
+  .wrow label { font-size: 14px; font-weight: 600; }
+  .wrow small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; margin-top: -2px; }
+  .wrow input { grid-column: 1 / -1; width: 100%; accent-color: var(--s1); }
+  .wrow output { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   /* settings */
   .set h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
   .set h3:first-of-type { margin-top: 8px; }
@@ -307,16 +316,21 @@
   <section class="card panel">
     <h2>3D map · 150 m around the house</h2>
     <p class="note">Every building within 150 m. Choose what the colours show, then slide through the years or press ▶. Drag to move, two fingers to turn and tilt, tap a building for its WOZ.</p>
-    <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px">
+    <div class="seg small" id="mapMode" role="group" aria-label="Colour the houses by" style="margin:8px 0 2px"><span class="muted" style="font-size:12.5px;align-self:center;margin-right:2px">Colour:</span>
       <button type="button" data-v="diff" aria-pressed="true">vs this house</button>
+      <button type="button" data-v="ask" aria-pressed="false">vs asking price</button>
       <button type="button" data-v="value" aria-pressed="false">WOZ value</button>
       <button type="button" data-v="growth" aria-pressed="false">Most changed</button>
+      <button type="button" data-v="score" aria-pressed="false">Score</button>
+    </div>
+    <div class="row" style="margin:6px 0 2px;gap:6px"><span class="muted" style="font-size:12.5px">Height:</span>
+      <div class="seg small" id="mapH" role="group" aria-label="Building height"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">WOZ value</button><button type="button" data-v="score" aria-pressed="false">Score</button></div>
     </div>
     <div class="map3d" id="map3d">
       <div class="map-year" id="mapYearBig" aria-hidden="true"></div>
       <div class="ctl">
         <div class="seg" id="mapBase"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="photo" aria-pressed="false">Aerial</button></div>
-        <div class="seg" id="mapH"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">Height = WOZ</button></div>
+
       </div>
       <div class="msg" id="mapMsg">Loading the map…</div>
     </div>
@@ -327,6 +341,23 @@
       <span class="muted" id="mapYearMax"></span>
     </div>
     <div class="scale" id="mapScale"></div>
+  </section>
+
+  <section class="card panel" id="scorePanel">
+    <h2>Value score</h2>
+    <p class="note">A score from 0 to 100 for every house, made by comparing it with all the neighbours you chose: more house for the money scores higher. You decide what counts.</p>
+    <div class="nb-tiles" id="scoreTiles"></div>
+    <details class="weights" id="weights">
+      <summary>What counts in the score</summary>
+      <div id="wSliders"></div>
+      <div class="row" style="margin-top:6px"><button class="btn" type="button" id="wReset">Back to the standard mix</button></div>
+    </details>
+    <h3 class="subh">Score of every house</h3>
+    <p class="note" id="scoreNote"></p>
+    <div class="nbc" id="cScore"></div>
+    <h3 class="subh">This house against the neighbours, factor by factor</h3>
+    <p class="note">Each grey dot is a neighbour, the blue dot is this house. Right is better.</p>
+    <div class="nbc" id="cFactors"></div>
   </section>
 
   <section class="card panel">
