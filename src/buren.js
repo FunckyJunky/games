@@ -3,6 +3,7 @@
 //   GET /api/funda/<id>/buren?n=20     the house + the n nearest addresses (n = 1 ... 100), their WOZ values,
 //                                      and the outlines of every building within 150 m (for the 3D map)
 //   GET /api/funda/<id>/buren?debug=1  also shows a sample of what each source answered
+//   GET /api/funda/<id>/forsale        houses for sale on Funda around it (asking prices), kept 6 hours
 //
 // Sources (public, no key):
 //   PDOK Locatieserver (free + reverse)        the address, its point, the addresses around it
@@ -32,6 +33,7 @@ function schema(env) {
     ready = env.DB.batch([
       env.DB.prepare(`CREATE TABLE IF NOT EXISTS funda_area (id TEXT PRIMARY KEY, data TEXT NOT NULL, fetched INTEGER NOT NULL)`),
       env.DB.prepare(`CREATE TABLE IF NOT EXISTS funda_woz (nid TEXT PRIMARY KEY, data TEXT NOT NULL, fetched INTEGER NOT NULL)`),
+      env.DB.prepare(`CREATE TABLE IF NOT EXISTS funda_forsale (id TEXT PRIMARY KEY, data TEXT NOT NULL, fetched INTEGER NOT NULL)`),
     ]).catch((e) => { ready = null; throw e; });
   }
   return ready;
@@ -308,4 +310,86 @@ async function buren(request, env, url, id, info, trace) {
   };
   if (debug) body.debug = { trace, sample: area.sample, woz: rawSample, total: area.total };
   return json(body);
+}
+
+// ---------- houses for sale around it (Funda's own search, the one the phone app uses) ----------
+const FORSALE_TTL = 6 * 3600000;
+const hexs = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+const digs = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => String(b % 10)).join("").replace(/^0/, "1");
+async function fundaSearch(params) {
+  const trace = digs(19), parent = hexs(7);
+  const body = JSON.stringify({ index: "listings-wonen-searcher-alias-prod" }) + "\n" + JSON.stringify({ id: "search_result_20260227", params }) + "\n";
+  const res = await fetch("https://listing-search-wonen.funda.io/_msearch/template", {
+    method: "POST",
+    headers: {
+      "user-agent": "Dart/3.11 (dart:io)", "content-type": "application/json", accept: "application/json", referer: "https://www.funda.nl/",
+      "x-datadog-sampling-priority": "0", "x-datadog-origin": "rum", "x-datadog-parent-id": trace, tracestate: `dd=s:0;o:rum;p:${parent}`,
+      traceparent: `00-${Math.floor(Date.now() / 1000).toString(16)}00000000${trace.slice(0, 16)}-${parent}-00`,
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`Funda search answered ${res.status}`);
+  const d = await res.json();
+  const r0 = (d.responses || [])[0] || {};
+  if (r0.error) throw new Error("Funda search: " + JSON.stringify(r0.error).slice(0, 160));
+  return { hits: (r0.hits && r0.hits.hits) || [], total: r0.hits && r0.hits.total ? (r0.hits.total.value ?? r0.hits.total) : null };
+}
+const first = (v) => (Array.isArray(v) ? v[0] : v);
+function hitToHouse(h) {
+  const src = h._source || h;
+  const a = src.address || {};
+  const price = src.price || {};
+  const amount = first(price.selling_price);
+  const loc = src.location || src.coordinates || src.centroid || src.geo || null;
+  let lon = null, lat = null;
+  if (loc) {
+    const l = first(loc);
+    if (l && typeof l === "object") { lat = +(l.lat ?? l.latitude ?? (Array.isArray(l.coordinates) ? l.coordinates[1] : NaN)); lon = +(l.lon ?? l.lng ?? l.longitude ?? (Array.isArray(l.coordinates) ? l.coordinates[0] : NaN)); }
+    else if (typeof l === "string" && l.includes(",")) { const [x, y] = l.split(",").map(Number); lat = x; lon = y; }
+  }
+  const url = src.object_detail_page_relative_url ? "https://www.funda.nl" + src.object_detail_page_relative_url : null;
+  return {
+    street: a.street_name || null, nr: a.house_number ?? null, suffix: a.house_number_suffix || null, pc: (a.postal_code || "").replace(/\s+/g, "").toUpperCase() || null,
+    city: a.city || null, ids: (a.identifiers || []).map((x) => String(x)), price: amount != null ? +amount : null,
+    priceType: price.selling_price_condition || null, area: first(src.floor_area) != null ? +first(src.floor_area) : null,
+    status: first(src.availability) || null, url, lon: Number.isFinite(lon) ? lon : null, lat: Number.isFinite(lat) ? lat : null,
+    tiny: url ? (url.match(/\/(\d{7,9})\/?$/) || [])[1] || null : null,
+  };
+}
+export async function handleForSale(request, env, url, id, info) {
+  await schema(env);
+  const debug = url.searchParams.get("debug") === "1";
+  const now = Date.now();
+  const row = await env.DB.prepare(`SELECT data, fetched FROM funda_forsale WHERE id = ?`).bind(id).first();
+  if (row && now - row.fetched < FORSALE_TTL && !debug) {
+    try { return json({ ...JSON.parse(row.data), cached: true, fetched: row.fetched }); } catch {}
+  }
+  const pc = String(info.postcode || "").replace(/\s+/g, "").toLowerCase();
+  const city = String(info.city || "").toLowerCase();
+  const base = { availability: ["available", "negotiations"], type: ["single"], zoning: ["residential"], object_type: ["house", "apartment"],
+    publication_date: { no_preference: true }, offering_type: "buy", sort: { field: null, order: null } };
+  const trace = [];
+  const tries = [
+    pc && ["postcode, 1 km", { radius_search: { index: "geo-wonen-alias-prod", id: pc + "-0", path: "area_with_radius.1" } }],
+    pc && ["postcode area, 1 km", { radius_search: { index: "geo-wonen-alias-prod", id: pc.slice(0, 4) + "-0", path: "area_with_radius.1" } }],
+    pc && ["postcode", { selected_area: [pc] }],
+    pc && ["postcode area", { selected_area: [pc.slice(0, 4)] }],
+  ].filter(Boolean);
+  let list = [], used = null, raw = null;
+  for (const [name, where] of tries) {
+    try {
+      const out = [];
+      for (let page = 0; page < 4; page++) {
+        const { hits, total } = await fundaSearch({ ...base, ...where, page: { from: page * 15 } });
+        if (!raw && hits[0]) raw = hits[0];
+        out.push(...hits.map(hitToHouse));
+        if (hits.length < 15 || (total != null && out.length >= total)) break;
+      }
+      trace.push(`${name}: ${out.length} for sale`);
+      if (out.length) { list = out; used = name; break; }
+    } catch (e) { trace.push(`${name}: ${e.message || e}`); }
+  }
+  const body = { list, used, count: list.length };
+  if (list.length || !row) await env.DB.prepare(`INSERT OR REPLACE INTO funda_forsale (id, data, fetched) VALUES (?, ?, ?)`).bind(id, JSON.stringify(body), now).run();
+  return json({ ...body, fetched: now, trace: debug ? trace : undefined, sample: debug ? raw : undefined });
 }
