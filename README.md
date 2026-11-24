@@ -72,6 +72,10 @@ public/                 the website
                         pinch/wheel distance), HELICOPTER (a director cuts or swings between chase shots: trailing, side track, reverse,
                         overhead, orbit, roadside fly-by, wide telephoto; letterbox + REC; tap = next shot), TOP DOWN (pinch = height).
                         In AUTO/GPS the left half of the screen looks around instead of switching to FREE.
+                        SET has two tabs. GRAPHICS: STYLE (NEON, TRON, VAPOR, MATRIX, BLUEPRINT = colour grading in the post pass),
+                        COLOUR FILTER (VHS, NIGHT VISION, THERMAL, B&W + strength), sliders: lens distortion, fisheye, wide angle (FOV),
+                        grain, mist (fog), rain, bloom, colour split, scanlines, glitch; TIME OF DAY: REAL (the real sun at the map spot,
+                        so night there = night in the game) or SET (slider, local solar time); day lights the city, lamps go off, sun/moon.
                         Tap the radar (or M) = MAP: the 3D camera goes up above the city (drag = move, pinch = height, N↑/heading-up,
                         ◎ = back to you). Tap a player (or their chip) or any spot, then TELEPORT: you land there in FREE and walk
                         around with the others. GPS = summon yourself back to your real spot.

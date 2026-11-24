@@ -68,6 +68,17 @@
   #settings .lab { font-size: 18px; color: var(--m); margin-top: 10px; }
   #settings .row { justify-content: flex-start; margin: 4px 0; }
   #settings a { color: var(--c); }
+  #settings .tabs { margin: -4px 0 6px; } #settings .tabs .sm { font-size: 19px; }
+  #settings.gfx { background: linear-gradient(rgba(6,1,15,0) 30%, rgba(6,1,15,.55)); }
+  #settings.gfx .box { margin: auto auto 0; max-height: 56vh; overflow: auto; background: rgba(6,1,20,.8); }
+  .sl { display: grid; grid-template-columns: 8.6em 1fr 3.4em; align-items: center; gap: 8px; margin: 2px 0; }
+  .sl span { font-size: 16px; color: var(--m); white-space: nowrap; } .sl b { font-weight: 400; font-size: 17px; color: #fff; text-align: right; }
+  .sl.off { opacity: .35; }
+  .sl input { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; margin: 0; }
+  .sl input::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(90deg, var(--c), var(--m)); box-shadow: 0 0 6px rgba(0,240,255,.6); }
+  .sl input::-moz-range-track { height: 4px; background: linear-gradient(90deg, var(--c), var(--m)); }
+  .sl input::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; background: #fff; border: 2px solid var(--c); box-shadow: 0 0 8px var(--c); transform: rotate(45deg); }
+  .sl input::-moz-range-thumb { width: 14px; height: 14px; background: #fff; border: 2px solid var(--c); box-shadow: 0 0 8px var(--c); }
   @media (max-width: 480px) { #hud { font-size: 15px; max-width: 58vw; } #hud .t { font-size: 12px; letter-spacing: 2px; } #hud .st { font-size: 17px; } #radar { width: 112px; height: 112px; } }
   @media (max-height: 500px) { #btns { gap: 5px; } .b { height: 38px; width: 56px; font-size: 15px; } .b i { font-size: 15px; } }
   #tele { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(44px, calc(env(safe-area-inset-bottom) + 36px)); z-index: 3; padding: 10px 16px; font: 900 14px var(--hd); letter-spacing: 2px; color: #fff;
@@ -190,17 +201,28 @@
 </div></div>
 
 <div id="settings" class="ov hide"><div class="box">
-  <h2>SETTINGS</h2>
+  <div class="row tabs"><button class="sm on" id="tabGame">GAME</button><button class="sm" id="tabGfx">GRAPHICS</button><button class="sm" id="sClose2" style="margin-left:auto">✕</button></div>
+  <div id="setGame">
   <div class="lab">LOOK AROUND</div><div class="row" data-k="look"><button class="sm" data-v="gyro">GYRO</button><button class="sm" data-v="touch">DRAG</button></div>
-  <div class="lab">EFFECTS</div><div class="row" data-k="fx"><button class="sm" data-v="high">HIGH</button><button class="sm" data-v="low">LOW</button><button class="sm" data-v="off">OFF</button></div>
   <div class="lab">CITY HEIGHT</div><div class="row" data-k="city"><button class="sm" data-v="1">REAL ×1</button><button class="sm" data-v="1.6">NEO ×1.6</button><button class="sm" data-v="2.5">MEGA ×2.5</button></div>
   <div class="lab">BIKE CAMERA</div><div class="row" data-k="cam"><button class="sm" data-v="chase">CHASE</button><button class="sm" data-v="fpv">COCKPIT</button><button class="sm" data-v="orbit">LOOK AROUND</button><button class="sm" data-v="heli">HELICOPTER</button><button class="sm" data-v="top">TOP DOWN</button></div>
   <div class="lab">BIKE COLOUR</div><div class="row" data-k="color"><button class="sm" data-v="cyan">CYAN</button><button class="sm" data-v="magenta">MAGENTA</button><button class="sm" data-v="amber">AMBER</button><button class="sm" data-v="lime">LIME</button></div>
   <div class="lab">DEMO RUN</div><div class="row" data-k="demo"><button class="sm" data-v="drive">DRIVE</button><button class="sm" data-v="walk">WALK</button></div>
   <div class="lab">APP</div><div class="row"><button class="sm" id="sFull">FULL SCREEN</button><button class="sm hide" id="sInstall">INSTALL APP</button></div>
   <p class="dim" id="sAppTip"></p>
-  <div class="lab">RAIN · SOUND</div><div class="row"><button class="sm" id="sRain">RAIN</button><button class="sm" id="sSound">SOUND</button><button class="sm" id="sTrim">RESET COMPASS</button></div>
+  <div class="lab">SOUND · COMPASS</div><div class="row"><button class="sm" id="sSound">SOUND</button><button class="sm" id="sTrim">RESET COMPASS</button></div>
   <p class="dim" id="sInfo"></p>
+  </div>
+  <div id="setGfx" class="hide">
+  <div class="lab">STYLE</div><div class="row" data-k="style"><button class="sm" data-v="neon">NEON</button><button class="sm" data-v="tron">TRON</button><button class="sm" data-v="vapor">VAPOR</button><button class="sm" data-v="matrix">MATRIX</button><button class="sm" data-v="blueprint">BLUEPRINT</button></div>
+  <div class="lab">COLOUR FILTER</div><div class="row" data-k="filt"><button class="sm" data-v="none">NONE</button><button class="sm" data-v="vhs">VHS</button><button class="sm" data-v="night">NIGHT VISION</button><button class="sm" data-v="thermal">THERMAL</button><button class="sm" data-v="bw">B&amp;W</button></div>
+  <div id="sliders"></div>
+  <div class="lab">TIME OF DAY</div><div class="row" data-k="timeMode"><button class="sm" data-v="auto">REAL TIME</button><button class="sm" data-v="set">SET TIME</button></div>
+  <div class="sl" id="timeRow"><span>TIME</span><input type="range" id="timeSl" min="0" max="24" step="0.25"><b id="timeVal"></b></div>
+  <p class="dim" id="sunInfo"></p>
+  <div class="lab">QUALITY</div><div class="row" data-k="fx"><button class="sm" data-v="high">HIGH</button><button class="sm" data-v="low">LOW</button><button class="sm" data-v="off">OFF</button></div>
+  <div class="row"><button class="sm" id="gfxReset">RESET GRAPHICS</button></div>
+  </div>
   <div class="row" style="justify-content:space-between;margin-top:14px"><a class="sm back" href="/" style="text-decoration:none">&lt; ERROR-DOS</a><button class="sm on" id="sClose">BACK TO MApP</button></div>
 </div></div>
 
@@ -217,8 +239,11 @@ const CH = 64;                       // chunk size, same as the worker
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
 
 /* ---------- settings ---------- */
-const S = Object.assign({ look: IS_TOUCH ? 'gyro' : 'touch', fx: 'high', city: '1.6', cam: 'chase', color: 'cyan', demo: 'drive', rain: true, sound: true, auto: false, mp: false, name: '' }, (() => { try { return JSON.parse(localStorage.getItem('zone.settings')) || {}; } catch (e) { return {}; } })());
+const S = Object.assign({ look: IS_TOUCH ? 'gyro' : 'touch', fx: 'high', city: '1.6', cam: 'chase', color: 'cyan', demo: 'drive', rain: 50, sound: true, auto: false, mp: false, name: '' }, (() => { try { return JSON.parse(localStorage.getItem('zone.settings')) || {}; } catch (e) { return {}; } })());
 if (Q.get('fx')) S.fx = Q.get('fx');
+const GFX = { style: 'neon', filt: 'none', fstr: 70, lens: 0, fish: 0, fov: 72, grain: 25, mist: 50, rain: 50, bloom: 100, split: 30, scan: 50, glitchAmt: 50, timeMode: 'auto', timeSet: 22 };
+if (typeof S.rain === 'boolean') S.rain = S.rain ? 50 : 0;
+for (const k in GFX) if (S[k] == null) S[k] = GFX[k];
 const saveS = () => { try { localStorage.setItem('zone.settings', JSON.stringify(S)); } catch (e) {} };
 const BIKE_COL = { cyan: [0, 0.94, 1], magenta: [1, 0.17, 0.84], amber: [1, 0.66, 0.12], lime: [0.55, 1, 0.1] };
 
@@ -239,11 +264,14 @@ camera.rotation.order = 'YXZ';
 const U = {
   uTime: { value: 0 }, uRadius: { value: R }, uPlayer: { value: new THREE.Vector3() }, uCam: { value: new THREE.Vector3() },
   uFog: { value: FOG }, uFogD: { value: FOGD }, uGlitch: { value: 0 }, uPR: { value: PR },
+  uDay: { value: 0 }, uTwi: { value: 0 }, uSun: { value: new THREE.Vector3(0, -1, 0) }, uSunCol: { value: new THREE.Vector3(1, .9, .8) }, uRain: { value: .5 },
 };
 
 /* ---------- shaders ---------- */
 const COMMON = /* glsl */`
-uniform float uTime, uRadius, uFogD, uGlitch;
+uniform float uTime, uRadius, uFogD, uGlitch, uDay, uTwi;
+uniform vec3 uSun, uSunCol;
+vec3 sunLight(vec3 n) { return vec3(.42, .48, .58) + uSunCol * max(dot(n, uSun), 0.) * .8; }
 uniform vec3 uPlayer, uCam, uFog;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 vec3 pal(float t) { t = fract(t); return t < .25 ? vec3(0., 1., .95) : t < .5 ? vec3(1., .12, .78) : t < .75 ? vec3(1., .62, .1) : vec3(.6, .32, 1.); }
@@ -279,6 +307,7 @@ void main() {
   vec3 n = normalize(vN), col = vec3(0.);
   float sd = vK.w;
   vec3 neon = pal(sd * 3.7);
+  vec3 alb = vec3(.3); float keep = .5;           // daylight: surface colour, and how much of the neon still shows
   if (k == 4) {                                   // wall
     float h = vK.y, L = vK.z; vec2 uv = vUV;
     float light = .5 + .5 * abs(n.x * .85 + n.z * .35);
@@ -287,7 +316,7 @@ void main() {
     vec2 q = vec2(uv.x / cw, uv.y / fh), cell = floor(q), f = fract(q);
     float win = step(.2, f.x) * step(f.x, .8) * step(.3, f.y) * step(f.y, .78);
     float r = h21(cell + sd * 91.7);
-    float lit = step(.6, r);
+    float lit = step(.6 + uDay * .33, r);
     float fl = step(.04, h21(cell + floor(uTime * 1.5 + r * 9.)));
     vec3 wc = mix(pal(r * 2. + sd), vec3(1., .86, .62), step(.82, r));
     col = base + win * (lit * fl * wc * (.45 + .6 * h21(cell * 3.1)) + (1. - lit) * vec3(.012, .02, .05));
@@ -298,10 +327,11 @@ void main() {
     float edge = max(1. - smoothstep(0., .1 + aw * 1.2, cd), 1. - smoothstep(0., .16 + aw * 1.2, td));
     col = mix(col, neon * 1.4, edge);
     col += neon * smoothstep(.985, 1., fract(uv.y * .04 - uTime * .12 + sd * 7.)) * .45;
+    alb = mix(vec3(.36, .37, .42) * mix(vec3(1.), neon, .12), vec3(.1, .14, .21), win * (1. - clamp(max(fq.x, fq.y) * 2.2 - .35, 0., .9))); keep = .55;
   } else if (k == 5) {                            // roof
     vec2 g = abs(fract(vUV / 4.) - .5); float aw = fwidth(vUV.x) / 4.;
     float line = 1. - smoothstep(0., .015 + aw * 1.5, .5 - max(g.x, g.y));
-    col = vec3(.03, .032, .06) + neon * line * .14;
+    col = vec3(.03, .032, .06) + neon * line * .14; alb = vec3(.4, .41, .44); keep = .35;
   } else if (k == 2) {                            // road
     float cls = vK.y, w = vK.z, ac = abs(vUV.y), hw = w * .5, de = (1. - ac) * hw, s = vUV.x;
     float aw = fwidth(de) + .03;
@@ -315,7 +345,7 @@ void main() {
       if (w > 7.5) { float lane = abs(cd - hw * .5); col += vec3(.7, .8, 1.) * (1. - smoothstep(.05, .05 + aw, lane)) * step(.6, fract(s / 5.)) * .35; }
     }
     float pulse = smoothstep(.93, 1., fract(s / 45. - uTime * .35 + sd * 3.)) * (1. - smoothstep(.1, .5, ac));
-    col += ec * pulse * .7;
+    col += ec * pulse * .7; alb = vec3(.12, .12, .14); keep = .6;
   } else if (k == 3) {                            // path / cycleway
     float ac = abs(vUV.y), s = vUV.x;
     bool cyc = vK.y > 9.5;
@@ -323,7 +353,7 @@ void main() {
     float aw = fwidth(ac) * 1.5;
     vec3 c = cyc ? vec3(1., .2, .6) : vec3(0., .8, .85);
     col += c * .9 * (1. - smoothstep(.0, .2 + aw, ac)) * step(.55, fract(s / 1.6));
-    col += c * .35 * (1. - smoothstep(.8, .95 + aw, 1. - ac));
+    col += c * .35 * (1. - smoothstep(.8, .95 + aw, 1. - ac)); alb = cyc ? vec3(.38, .2, .22) : vec3(.3, .3, .28); keep = .6;
   } else if (k == 0) {                            // ground areas
     float sub = vK.y; vec2 p = vUV;
     vec3 base = vec3(.01, .035, .02), c = vec3(0., 1., .45);
@@ -339,27 +369,29 @@ void main() {
     vec2 g = abs(fract(p / sc) - .5); float aw = fwidth(p.x) / sc;
     float hexl = 1. - smoothstep(0., .02 + aw * 1.5, .5 - max(g.x, g.y));
     col = base + c * hexl * .18;
-    col += c * .25 * step(.992, h21(floor(p / sc) + floor(uTime * .8)));
+    col += c * .25 * step(.992, h21(floor(p / sc) + floor(uTime * .8))); alb = base * 6. + .05; keep = .4;
   } else if (k == 1) {                            // water
     vec2 p = vW.xz;
     col = vec3(.0, .03, .09);
     float wv = sin(p.x * .6 + uTime * 1.1) * sin(p.y * .45 - uTime * .8);
     col += vec3(0., .5, 1.) * smoothstep(.85, 1., wv) * .6;
-    col += vec3(0., .25, .5) * step(.97, fract(p.y * .25 + uTime * .2)) * .5;
+    col += vec3(0., .25, .5) * step(.97, fract(p.y * .25 + uTime * .2)) * .5; alb = vec3(.07, .24, .42); keep = .6;
   } else if (k == 6) {                            // tree crown
     float t = vUV.y;
     vec3 tc = sd < .06 ? vec3(1., .2, .8) : sd < .18 ? vec3(0., .9, 1.) : vec3(.1, 1., .45);
     float facet = .35 + .65 * clamp(dot(n, normalize(vec3(.4, .8, .3))) * .5 + .5, 0., 1.);
     col = mix(tc * .06, tc * .6, t) * facet;
-    col += tc * .7 * smoothstep(.985, 1., fract(t * 1.5 - uTime * .4 + sd * 5.));
+    col += tc * .7 * smoothstep(.985, 1., fract(t * 1.5 - uTime * .4 + sd * 5.)); alb = (sd < .18 ? tc * .3 + .04 : vec3(.1, .33, .12)) * (.75 + .5 * t); keep = .2;
   } else if (k == 7) {                            // poles, trunks
-    col = vec3(.03, .03, .05) * (.6 + .4 * abs(n.x));
+    col = vec3(.03, .03, .05) * (.6 + .4 * abs(n.x)); alb = vec3(.24, .23, .25); keep = .3;
   } else if (k == 8) {                            // lamps and beacons
     float c = vK.y;
     col = c < .5 ? vec3(1., .2, .85) : c < 1.5 ? vec3(0., 1., 1.) : c < 2.5 ? vec3(1., .7, .2) : vec3(1., .1, .1);
     col *= 2.2;
     if (vK.z > .5) col *= step(.55, fract(uTime * .9 + sd * 7.));
+    alb = vec3(.5); keep = c > 2.5 ? .8 : .12;      // street lamps off by day, red beacons still blink
   }
+  if (uDay > .001) col = mix(col, alb * sunLight(n) + col * keep, uDay);
   if (vSp < 1.) { vec3 sc = vec3(0., 1., .9) * step(.5, fract(vW.y * 2.5 - uTime * 8.)) * 1.4; col = mix(sc, col, vSp); }
   if (rim > 0.) col = mix(col, pal(floor(vW.y * .7) * .25 + uTime * .35) * 1.2, rim * .8);
   float fd = length(vW - uCam);
@@ -403,6 +435,7 @@ void main() {
     col = cc * pow(max(0., 1. - d), 2.2) * .55;
   }
   col *= 1. - rim;
+  col *= 1. - .65 * uDay;
   col *= exp(-length(vW - uCam) * uFogD);
   gl_FragColor = vec4(col, 1.);
 }`;
@@ -426,6 +459,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(2 * R + 60, 2 * R + 60).ro
     float ping = fract(uTime / 3.6) * uRadius;
     col += vec3(0., .9, 1.) * (1. - smoothstep(0., 1.4, abs(d - ping))) * .55 * (1. - ping / uRadius);
     col += vec3(0., 1., .95) * (1. - smoothstep(0., .7, abs(d - uRadius))) * 1.6;
+    col = mix(col, vec3(.2, .205, .22) * sunLight(vec3(0., 1., 0.)) + (col - vec3(.008, .006, .02)) * .45, uDay);
     col = mix(col, uFog, 1. - exp(-length(vW - uCam) * uFogD));
     gl_FragColor = vec4(col, 1.);
   }`,
@@ -447,6 +481,7 @@ const wall = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 46, 120, 1, true).t
     vec3 col = c * (stream * .32 + .045) * fade;
     col += c * step(.975, h21(vec2(floor(y * 2.), floor(t * 7.)))) * .3 * fade;
     col *= .5 + .5 * exp(-length(vW - uCam) * uFogD);
+    col *= 1. - .55 * uDay;
     gl_FragColor = vec4(col, 1.);
   }`,
 }));
@@ -458,13 +493,20 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1100, 32, 16), new THREE.Sha
   vertexShader: `varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
   fragmentShader: COMMON + `varying vec3 vD;
   void main() {
-    vec3 d = normalize(vD); float y = d.y;
+    vec3 d = normalize(vD); float y = d.y, night = 1. - uDay;
     vec3 col = mix(vec3(.17, .02, .2), vec3(.035, .01, .08), smoothstep(0., .2, y));
     col = mix(col, vec3(0., 0., .015), smoothstep(.15, .75, y));
-    col += vec3(1., .12, .65) * exp(-abs(y) * 38.) * .45;
+    col += vec3(1., .12, .65) * exp(-abs(y) * 38.) * .45 * (1. - uTwi * .5);
+    float sw = dot(normalize(vec3(d.x, 0., d.z) + 1e-5), normalize(vec3(uSun.x, 0., uSun.z) + 1e-5)) * .5 + .5;
+    vec3 twi = mix(mix(vec3(.2, .1, .3), vec3(1., .42, .2), sw * sw), vec3(.1, .08, .28), smoothstep(0., .45, y));
+    col = mix(col, twi, uTwi * night);
+    col = mix(col, mix(vec3(.72, .82, .93), vec3(.26, .48, .86), smoothstep(0., .6, y)), uDay);
+    float sd2 = max(dot(d, uSun), 0.), md = max(dot(d, -uSun), 0.);
+    col += uSunCol * (pow(sd2, 1800.) * 5. + pow(sd2, 30.) * .3 * (uDay + uTwi)) * step(-.06, uSun.y);
+    col += vec3(.8, .86, 1.) * (pow(md, 2600.) * 2.5 + pow(md, 60.) * .06) * night * step(-.06, -uSun.y);
     vec2 sp = vec2(atan(d.z, d.x) * 70., y * 70.); float s = h21(floor(sp));
-    col += vec3(.7, .85, 1.) * step(.996, s) * smoothstep(.12, .4, y) * (.5 + .5 * sin(uTime * 2. + s * 60.));
-    col += vec3(0., .4, .5) * step(.995, fract(y * 18. - uTime * .05)) * smoothstep(.05, .5, y) * .3;
+    col += vec3(.7, .85, 1.) * step(.996, s) * smoothstep(.12, .4, y) * (.5 + .5 * sin(uTime * 2. + s * 60.)) * night * (1. - uTwi * .7);
+    col += vec3(0., .4, .5) * step(.995, fract(y * 18. - uTime * .05)) * smoothstep(.05, .5, y) * .3 * night;
     if (y < 0.) col = mix(col, uFog, smoothstep(0., -.08, y));
     gl_FragColor = vec4(col, 1.);
   }`,
@@ -473,7 +515,7 @@ sky.renderOrder = -10;
 scene.add(sky);
 
 const rain = (() => {
-  const N = 1400, a = new Float32Array(N * 2 * 4), pos = new Float32Array(N * 2 * 3);
+  const N = 2600, a = new Float32Array(N * 2 * 4), pos = new Float32Array(N * 2 * 3);
   for (let i = 0; i < N; i++) { const x = Math.random(), z = Math.random(), p = Math.random(); a.set([x, z, p, 0, x, z, p, 1], i * 8); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aR', new THREE.BufferAttribute(a, 4));
   const m = new THREE.LineSegments(g, new THREE.ShaderMaterial({
@@ -483,7 +525,7 @@ const rain = (() => {
       p.x = c.x + (fract(aR.x - c.x / S) - .5) * S; p.z = c.z + (fract(aR.y - c.z / S) - .5) * S;
       p.y = c.y - 18. + fract(aR.z - uTime * .5) * 52. + aR.w * 1.1; p.x += aR.w * .18;
       vA = aR.w; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.); }`,
-    fragmentShader: `varying float vA; void main() { gl_FragColor = vec4(vec3(.25, .55, .85) * (.15 + .45 * vA) * .55, 1.); }`,
+    fragmentShader: `uniform float uRain; varying float vA; void main() { gl_FragColor = vec4(vec3(.25, .55, .85) * (.15 + .45 * vA) * (.35 + uRain * .5), 1.); }`,
   }));
   m.frustumCulled = false; m.renderOrder = 7; scene.add(m); return m;
 })();
@@ -505,7 +547,7 @@ const traffic = (() => {           // flying cars: light streaks on sky lanes
       vec3 p = vec3(uAnchor.x + aL.x + dir.x * along, aL.w, uAnchor.z + aL.y + dir.y * along);
       gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.);
       vC = (aC.z < .5 ? vec3(1., .12, .3) : aC.z < 1.5 ? vec3(.8, .9, 1.) : vec3(0., 1., .9)) * (1. - aC.w);
-      vF = exp(-length(p - uCam) * .0045); }`,
+      vF = exp(-length(p - uCam) * .0045) * (1. - .55 * uDay); }`,
     fragmentShader: `varying vec3 vC; varying float vF; void main() { gl_FragColor = vec4(vC * 1.6 * vF, 1.); }`,
   });
   const m = new THREE.LineSegments(g, mat); m.frustumCulled = false; m.renderOrder = 7; scene.add(m); return m;
@@ -526,23 +568,53 @@ function makeRTs() {
   const bw = Math.max(2, v.x >> 2), bh = Math.max(2, v.y >> 2);
   rtA = new THREE.WebGLRenderTarget(bw, bh, { type: rtType }); rtB = new THREE.WebGLRenderTarget(bw, bh, { type: rtType });
 }
-const brightMat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() } }, vertexShader: FS_VERT,
-  fragmentShader: `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
+const brightMat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uTh: { value: .5 } }, vertexShader: FS_VERT,
+  fragmentShader: `uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uTh; varying vec2 vUv;
   void main() { vec3 c = vec3(0.);
     c += texture2D(tSrc, vUv + uTexel * vec2(-1., -1.)).rgb; c += texture2D(tSrc, vUv + uTexel * vec2(1., -1.)).rgb;
     c += texture2D(tSrc, vUv + uTexel * vec2(-1., 1.)).rgb; c += texture2D(tSrc, vUv + uTexel * vec2(1., 1.)).rgb; c *= .25;
-    gl_FragColor = vec4(max(c - .5, 0.) * 1.3, 1.); }` });
+    gl_FragColor = vec4(max(c - uTh, 0.) * 1.3, 1.); }` });
 const blurMat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } }, vertexShader: FS_VERT,
   fragmentShader: `uniform sampler2D tSrc; uniform vec2 uDir; varying vec2 vUv;
   void main() { vec3 c = texture2D(tSrc, vUv).rgb * .227;
     c += (texture2D(tSrc, vUv + uDir * 1.385).rgb + texture2D(tSrc, vUv - uDir * 1.385).rgb) * .316;
     c += (texture2D(tSrc, vUv + uDir * 3.231).rgb + texture2D(tSrc, vUv - uDir * 3.231).rgb) * .07;
     gl_FragColor = vec4(c, 1.); }` });
-const compMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 1 }, uAberr: { value: .0015 }, uTime: U.uTime, uGlitch: U.uGlitch }, vertexShader: FS_VERT,
-  fragmentShader: `uniform sampler2D tScene, tBloom; uniform float uBloom, uAberr, uTime, uGlitch; varying vec2 vUv;
+const compMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 1 }, uAberr: { value: .0015 }, uTime: U.uTime, uGlitch: U.uGlitch,
+    uK: { value: 0 }, uFish: { value: 0 }, uGrain: { value: .03 }, uScan: { value: .07 }, uStyle: { value: 0 }, uFilter: { value: 0 }, uFStr: { value: .7 }, uAspect: { value: 1 } }, vertexShader: FS_VERT,
+  fragmentShader: `uniform sampler2D tScene, tBloom; uniform float uBloom, uAberr, uTime, uGlitch, uK, uFish, uGrain, uScan, uStyle, uFilter, uFStr, uAspect; varying vec2 vUv;
   float h(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  vec3 grade(vec3 c) {                                   // the 5 styles
+    if (uStyle < .5) return c;                                                                  // NEON
+    float l = dot(c, vec3(.299, .587, .114));
+    if (uStyle < 1.5) { c = max(mat3(.951, .281, -.19, .071, .797, .844, .052, .056, .165) * c, 0.); return c * vec3(.95, 1., 1.08) + vec3(0., .01, .035) * (1. - smoothstep(0., .2, l)); }  // TRON
+    if (uStyle < 2.5) return max(mat3(.845, .209, .337, .224, .827, .37, .165, .182, .537) * c, 0.) * .92 + vec3(.05, .02, .08);   // VAPOR
+    if (uStyle < 3.5) return vec3(.1, 1., .35) * pow(clamp(l * 1.4, 0., 4.), .85) + vec3(0., .035, .012);                         // MATRIX
+    return mix(vec3(.04, .13, .34), vec3(.86, .95, 1.), smoothstep(.03, .5, l)) + vec3(.5, .7, 1.) * max(l - .9, 0.) * .5;       // BLUEPRINT
+  }
+  vec3 filt(vec3 c, vec2 uv) {                           // colour filters
+    if (uFilter < .5) return c;
+    float l = dot(c, vec3(.299, .587, .114)); vec3 f;
+    if (uFilter < 1.5) {                                                                        // VHS
+      vec3 sm = texture2D(tScene, uv + vec2(.005, 0.)).rgb;
+      f = vec3(c.r * .85 + sm.r * .3, c.g, c.b * .8 + sm.b * .25) * vec3(1.06, 1., .9);
+      f = mix(f, vec3(l), .3) + (h(vec2(floor(uv.y * 240.), floor(uTime * 30.))) - .5) * .07 + step(.985, fract(uv.y * 1.3 - uTime * .23)) * .22;
+    } else if (uFilter < 2.5) {                                                                 // NIGHT VISION
+      f = vec3(.25, 1., .35) * pow(clamp(l * 2.4, 0., 2.), .75) + (h(uv * 500. + fract(uTime) * 37.) - .5) * .14;
+      vec2 q = (uv - .5) * vec2(uAspect, 1.); f *= smoothstep(.78, .38, length(q));
+    } else if (uFilter < 3.5) {                                                                 // THERMAL
+      float t = clamp(l * 1.7, 0., 1.);
+      f = t < .25 ? mix(vec3(0., 0., .12), vec3(.38, 0., .62), t * 4.) : t < .5 ? mix(vec3(.38, 0., .62), vec3(.95, .1, .15), (t - .25) * 4.) : t < .75 ? mix(vec3(.95, .1, .15), vec3(1., .8, 0.), (t - .5) * 4.) : mix(vec3(1., .8, 0.), vec3(1.), (t - .75) * 4.);
+    } else f = vec3(smoothstep(.02, .85, l));                                                    // B&W
+    return mix(c, f, uFStr);
+  }
   void main() {
-    vec2 uv = vUv; float g = uGlitch;
+    vec2 d = vUv - .5; d.x *= uAspect;                   // lens: barrel (+) / pincushion (-), fisheye
+    float r2 = dot(d, d), k = uK + uFish * .75, rm = .25 * (uAspect * uAspect + 1.);
+    vec2 dd = d * (1. + k * r2 + uFish * .6 * r2 * r2) / mix(1., 1. + max(k, 0.) * rm, 1. - uFish * .7);
+    dd.x /= uAspect; vec2 uv = dd + .5;
+    float inside = step(0., uv.x) * step(uv.x, 1.) * step(0., uv.y) * step(uv.y, 1.);
+    float g = uGlitch;
     float band = floor(uv.y * (14. + 40. * h(vec2(floor(uTime * 18.), 3.))));
     float r = h(vec2(band, floor(uTime * 24.)));
     if (r < g * .45) uv.x += (h(vec2(band, floor(uTime * 31.) + 1.)) - .5) * .14 * g;
@@ -550,18 +622,20 @@ const compMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: null }, 
     vec2 dir = uv - .5; float ab = uAberr + g * .014;
     vec3 c = vec3(texture2D(tScene, uv + dir * ab).r, texture2D(tScene, uv).g, texture2D(tScene, uv - dir * ab).b);
     c += texture2D(tBloom, uv).rgb * uBloom;
-    c *= .93 + .07 * sin(gl_FragCoord.y * 1.7);
-    c += (h(gl_FragCoord.xy + fract(uTime) * 91.) - .5) * .03;
-    c *= 1. - dot(dir, dir) * .55;
+    c = grade(c); c = filt(c, uv);
+    c *= 1. - uScan + uScan * (.5 + .5 * sin(gl_FragCoord.y * 1.7));
+    c += (h(gl_FragCoord.xy + fract(uTime) * 91.) - .5) * uGrain;
+    vec2 vq = vUv - .5; c *= 1. - dot(vq, vq) * (.55 + uFish * 1.6);
+    c *= inside;
     if (g > .3 && h(vec2(floor(uTime * 15.), 9.)) < g * .18) c = c.gbr;
     c = c / (1. + max(c - 1., 0.) * .6);
     gl_FragColor = vec4(c, 1.); }` });
 function renderFrame() {
-  if (S.fx === 'off') { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+  if (S.fx === 'off' && S.style === 'neon' && S.filt === 'none' && !+S.lens && !+S.fish) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
   renderer.setRenderTarget(rtScene); renderer.render(scene, camera);
-  const bloom = S.fx === 'high';
+  const bloom = S.fx === 'high' && S.bloom > 0;
   if (bloom) {
-    fsQuad.material = brightMat; brightMat.uniforms.tSrc.value = rtScene.texture; brightMat.uniforms.uTexel.value.set(1 / rtScene.width, 1 / rtScene.height);
+    fsQuad.material = brightMat; brightMat.uniforms.uTh.value = .5 + .4 * U.uDay.value; brightMat.uniforms.tSrc.value = rtScene.texture; brightMat.uniforms.uTexel.value.set(1 / rtScene.width, 1 / rtScene.height);
     renderer.setRenderTarget(rtA); renderer.render(fsScene, fsCam);
     for (let i = 0; i < 2; i++) {
       fsQuad.material = blurMat; blurMat.uniforms.tSrc.value = rtA.texture; blurMat.uniforms.uDir.value.set((1 + i) / rtA.width, 0);
@@ -570,7 +644,7 @@ function renderFrame() {
       renderer.setRenderTarget(rtA); renderer.render(fsScene, fsCam);
     }
   }
-  fsQuad.material = compMat; compMat.uniforms.tScene.value = rtScene.texture; compMat.uniforms.tBloom.value = rtA.texture; compMat.uniforms.uBloom.value = bloom ? 1.15 : 0;
+  fsQuad.material = compMat; compMat.uniforms.tScene.value = rtScene.texture; compMat.uniforms.tBloom.value = rtA.texture; compMat.uniforms.uBloom.value = bloom ? 1.15 * S.bloom / 100 * (1 - .4 * U.uDay.value) : 0;
   renderer.setRenderTarget(null); renderer.render(fsScene, fsCam);
 }
 function resize() {
@@ -580,9 +654,46 @@ function resize() {
 }
 addEventListener('resize', resize);
 
+/* ---------- time of day: the real sun at the map spot, or a time you set ---------- */
+const STYLES = ['neon', 'tron', 'vapor', 'matrix', 'blueprint'], FILTERS = ['none', 'vhs', 'night', 'thermal', 'bw'];
+let lastSun = -1e9, SUN = { el: -30, az: 0 };
+function sunAt(date, lat, lon) {                       // low-precision solar position (good to a fraction of a degree)
+  const rd = Math.PI / 180, d = date.getTime() / 86400000 - 10957.5;
+  const g = (357.529 + 0.98560028 * d) * rd, q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rd, e = (23.439 - 0.00000036 * d) * rd;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24, ha = (gmst * 15 + lon) * rd - ra, la = lat * rd;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { el: el / rd, az: ((az / rd) % 360 + 360) % 360 };
+}
+const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function sunDate() {                                   // SET: that hour of local solar time at the map spot, today
+  const lon = O ? O.lon : 5;
+  if (S.timeMode !== 'set') return new Date();
+  const n = new Date(); return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) + (S.timeSet - lon / 15) * 3600000);
+}
+function updateSun() {
+  const lat = O ? O.lat : 52, lon = O ? O.lon : 5, sp = sunAt(sunDate(), lat, lon), rd = Math.PI / 180;
+  SUN = sp;
+  U.uSun.value.set(Math.sin(sp.az * rd) * Math.cos(sp.el * rd), Math.sin(sp.el * rd), -Math.cos(sp.az * rd) * Math.cos(sp.el * rd));
+  const day = sm(-5, 8, sp.el), twi = sm(-11, -2, sp.el) * (1 - sm(4, 14, sp.el));
+  U.uDay.value = day; U.uTwi.value = twi;
+  const w = sm(2, 25, sp.el); U.uSunCol.value.set(1, 0.55 + 0.41 * w, 0.32 + 0.56 * w);
+  const fog = [0.05 + (0.42 - 0.05) * twi, 0.014 + (0.24 - 0.014) * twi, 0.09 + (0.32 - 0.09) * twi].map((v, i) => v + ([0.68, 0.76, 0.86][i] - v) * day);
+  FOG.set(fog[0], fog[1], fog[2]); scene.fog.color.setRGB(fog[0], fog[1], fog[2]); scene.background.setRGB(fog[0], fog[1], fog[2]);
+}
+function clockText() {
+  let hh, mm;
+  if (S.timeMode === 'set') { hh = Math.floor(S.timeSet) % 24; mm = Math.round((S.timeSet % 1) * 60); }
+  else { const n = new Date(); hh = n.getHours(); mm = n.getMinutes(); }
+  const ph = SUN.el > 6 ? 'DAY' : SUN.el > -7 ? (SUN.az < 180 ? 'DAWN' : 'DUSK') : 'NIGHT';
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ' ' + ph;
+}
+
 /* ---------- glitch + toasts ---------- */
 let glitchV = 0;
-function glitch(s) { glitchV = Math.max(glitchV, s); if (s > 0.4) sfx.blip(s); }
+function glitch(s) { s *= S.glitchAmt / 50; glitchV = Math.max(glitchV, s); if (s > 0.4) sfx.blip(s); }
 let toastT = 0;
 function toast(msg, sub, ms) { const t = $('toast'); t.innerHTML = ''; t.append(msg); if (sub) { const s = document.createElement('small'); s.textContent = sub; t.append(s); } t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms || 2600); }
 
@@ -608,7 +719,7 @@ let mapSrc = 'ofm', tileStat = { loading: 0, loaded: 0, failed: 0 }, firstChunk 
 const chunkDist = (key, x, z) => { const [cx, cz] = key.split(',').map(Number); const dx = Math.max(cx * CH - x, 0, x - cx * CH - CH), dz = Math.max(cz * CH - z, 0, z - cz * CH - CH); return Math.hypot(dx, dz); };
 function makeMat(frag, spawn, add) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: U.uTime, uRadius: U.uRadius, uPlayer: U.uPlayer, uCam: U.uCam, uFog: U.uFog, uFogD: U.uFogD, uGlitch: U.uGlitch, uSpawn: { value: spawn } },
+    uniforms: { uTime: U.uTime, uRadius: U.uRadius, uPlayer: U.uPlayer, uCam: U.uCam, uFog: U.uFog, uFogD: U.uFogD, uGlitch: U.uGlitch, uDay: U.uDay, uTwi: U.uTwi, uSun: U.uSun, uSunCol: U.uSunCol, uSpawn: { value: spawn } },
     vertexShader: CHUNK_VERT, fragmentShader: frag,
     transparent: !!add, depthWrite: !add, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
@@ -1472,19 +1583,50 @@ function updateButtons() {
 function syncSettings() {
   for (const row of document.querySelectorAll('#settings .row[data-k]')) { const k = row.dataset.k; for (const b of row.children) b.classList.toggle('on', String(S[k]) === b.dataset.v); }
   if (typeof appUI === 'function') appUI();
-  $('sRain').classList.toggle('on', S.rain); $('sSound').classList.toggle('on', S.sound);
+  $('sSound').classList.toggle('on', S.sound); gfxSync();
   $('sInfo').textContent = `map: ${mapSrc === 'ofm' ? 'OpenFreeMap (OpenStreetMap)' : mapSrc === 'ovp' ? 'Overpass (OpenStreetMap)' : 'simulated sector (offline)'} · compass: ${look.gyro || 'none'}${look.trim ? ' (trimmed)' : ''} · quality ${PR.toFixed(2)}x`;
 }
 for (const row of document.querySelectorAll('#settings .row[data-k]')) row.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return; const k = row.dataset.k, v = b.dataset.v, old = S[k];
   S[k] = v; saveS(); syncSettings();
   if (k === 'fx') makeRTs();
+  if (k === 'timeMode') { updateSun(); gfxSync(); }
+  if (k === 'style' || k === 'filt') glitch(0.6);
   if (k === 'city' && old !== v) { worker.postMessage({ t: 'scale', hScale: +v }); for (const key of [...chunks.keys()]) dropChunk(key); lastWant = 0; glitch(1); }
   if (k === 'color') applyBikeColor();
   if (k === 'cam') setView(v);
   if (k === 'look' && v === 'gyro') { const p = startSensors(); if (p && p.then) p.catch(() => {}); }
 });
-$('sRain').onclick = () => { S.rain = !S.rain; saveS(); syncSettings(); };
+/* ---------- GRAPHICS tab ---------- */
+const SLIDERS = [['lens', 'LENS DISTORT', -100, 100, 1, (v) => (v > 0 ? '+' : '') + v], ['fish', 'FISHEYE', 0, 100, 1], ['fov', 'WIDE ANGLE', 50, 110, 1, (v) => v + '°'],
+  ['grain', 'GRAIN', 0, 100, 1], ['mist', 'MIST', 0, 100, 1], ['rain', 'RAIN', 0, 100, 1], ['bloom', 'BLOOM', 0, 150, 1], ['split', 'COLOUR SPLIT', 0, 100, 1],
+  ['scan', 'SCANLINES', 0, 100, 1], ['glitchAmt', 'GLITCH', 0, 100, 1], ['fstr', 'FILTER STRENGTH', 0, 100, 1]];
+const slEls = {};
+for (const [k, label, mn, mx, st, fmt] of SLIDERS) {
+  const row = document.createElement('div'); row.className = 'sl';
+  row.innerHTML = `<span>${label}</span><input type="range" min="${mn}" max="${mx}" step="${st}"><b></b>`;
+  const inp = row.querySelector('input'), val = row.querySelector('b');
+  inp.addEventListener('input', () => { S[k] = +inp.value; val.textContent = fmt ? fmt(S[k]) : S[k]; if (k === 'fstr') gfxSync(); });
+  inp.addEventListener('change', saveS);
+  $('sliders').appendChild(row); slEls[k] = { row, inp, val, fmt };
+}
+const fmtTime = (h) => String(Math.floor(h) % 24).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
+$('timeSl').addEventListener('input', () => { S.timeSet = +$('timeSl').value; $('timeVal').textContent = fmtTime(S.timeSet); if (S.timeMode !== 'set') { S.timeMode = 'set'; gfxSync(); } updateSun(); sunText(); });
+$('timeSl').addEventListener('change', saveS);
+function sunText() { $('sunInfo').textContent = (S.timeMode === 'set' ? 'Set time ' : 'Real time ') + clockText().toLowerCase() + ' · the sun is ' + Math.abs(Math.round(SUN.el)) + '° ' + (SUN.el >= 0 ? 'above' : 'below') + ' the horizon at the map spot'; }
+function gfxSync() {
+  for (const k in slEls) { const e = slEls[k]; e.inp.value = S[k]; e.val.textContent = e.fmt ? e.fmt(S[k]) : S[k]; }
+  slEls.fstr.row.classList.toggle('off', S.filt === 'none');
+  $('timeSl').value = S.timeSet; $('timeVal').textContent = fmtTime(S.timeSet); $('timeRow').classList.toggle('off', S.timeMode !== 'set');
+  sunText();
+}
+function setTab(g) {
+  $('setGame').classList.toggle('hide', g); $('setGfx').classList.toggle('hide', !g); $('settings').classList.toggle('gfx', g);
+  $('tabGame').classList.toggle('on', !g); $('tabGfx').classList.toggle('on', g); if (g) gfxSync();
+}
+$('tabGame').onclick = () => setTab(false); $('tabGfx').onclick = () => setTab(true);
+$('sClose2').onclick = () => $('settings').classList.add('hide');
+$('gfxReset').onclick = () => { Object.assign(S, GFX); saveS(); syncSettings(); updateSun(); makeRTs(); glitch(0.8); toast('GRAPHICS RESET'); };
 /* ---------- full screen web app ---------- */
 const STANDALONE = (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
 const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1721,7 +1863,7 @@ function drawHud(now) {
   const [la, lo] = O ? toLatLon(P.x, P.z) : [0, 0];
   const spd = mode === 'bike' ? (src === 'free' ? Math.abs(B.v) : F.spd) : Math.hypot(vel.x, vel.z);
   const live = tileStat.loading ? ' ▮▯▮ LOADING' : '';
-  $('hSrc').textContent = (mapSrc === 'ofm' ? '● OSM' : mapSrc === 'ovp' ? '● OVP' : '● SIM') + live;
+  $('hSrc').textContent = (mapSrc === 'ofm' ? '● OSM' : mapSrc === 'ovp' ? '● OVP' : '● SIM') + ' · ' + clockText() + live;
   $('hPos').textContent = `${Math.abs(la).toFixed(5)}${la >= 0 ? 'N' : 'S'} ${Math.abs(lo).toFixed(5)}${lo >= 0 ? 'E' : 'W'}` + (src === 'gps' && gpsOk ? ` ±${Math.round(F.acc)}M` : src === 'demo' ? ' ▶DEMO' : src === 'free' ? ' ✥' : '');
   $('hMode').textContent = (mode === 'bike' ? (S.auto && src !== 'free' ? '⟳ AUTO DRIVE' : '⚡ LIGHT BIKE') : '◆ ON FOOT') + ' · ' + Math.round(spd * 3.6) + ' KM/H';
   if (spot) {
@@ -1822,7 +1964,7 @@ function frame(now) {
       let ly2 = look.bYaw, lp2 = look.bPitch, lr2 = 0;
       if (headOn()) { const e = devEuler(); if (!look.bRef) look.bRef = e; ly2 += wrapA(e.yaw - look.bRef.yaw); lp2 += e.pitch - look.bRef.pitch; lr2 = clamp(wrapA(e.roll - look.bRef.roll) * 0.8, -0.6, 0.6); }
       camera.rotation.set(clamp(-0.16 + lp2 + inp.ly * -0.5, -1.35, 1.35), -B.yaw + ly2 + inp.lx * -1.2, -B.lean * 0.6 + lr2);
-      camera.fov = lerp(camera.fov, 76 + Math.min(14, Math.abs(B.v) * 0.4), dt * 2);
+      camera.fov = lerp(camera.fov, S.fov + 4 + Math.min(14, Math.abs(B.v) * 0.4), dt * 2);
       if (now - (look.dashAt || 0) > 200) { look.dashAt = now; const c3 = BIKE_COL[S.color] || BIKE_COL.cyan; bike.drawDash(Math.abs(B.v) * 3.6, B.yaw * 180 / Math.PI, S.auto && src !== 'free' ? 'AUTO' : src === 'free' ? 'MANUAL' : 'GPS', `rgb(${c3.map((v) => Math.round(v * 255)).join(',')})`); }
     } else if (view === 'heli') {
       heliCam(dt, t);
@@ -1845,7 +1987,7 @@ function frame(now) {
       camTarget.set(B.x + fx * 6, 1.1, B.z + fz * 6);
       camera.up.set(Math.sin(B.lean) * 0.15 * Math.cos(B.yaw), 1, Math.sin(B.lean) * 0.15 * Math.sin(B.yaw)).normalize();
       camera.lookAt(camTarget); camera.up.set(0, 1, 0);
-      camera.fov = lerp(camera.fov, 72 + Math.min(16, Math.abs(B.v) * 0.45), dt * 2);
+      camera.fov = lerp(camera.fov, S.fov + Math.min(16, Math.abs(B.v) * 0.45), dt * 2);
     }
     sfx.engine(true, Math.abs(B.v));
   } else {
@@ -1860,27 +2002,34 @@ function frame(now) {
       look.yaw -= inp.lx * dt * 2.2; look.pitch = clamp(look.pitch - inp.ly * dt * 1.8, -1.3, 1.3);
       camera.rotation.set(look.pitch, look.yaw, 0);
     }
-    camera.fov = lerp(camera.fov, 72, dt * 3);
+    camera.fov = lerp(camera.fov, S.fov, dt * 3);
     sfx.engine(false, 0);
   }
   if (MV.open) mapCamera(dt);
-  U.uRadius.value = MV.open ? mapR() : R; U.uFogD.value = MV.open ? 0.0013 : FOGD; scene.fog.density = U.uFogD.value;
+  U.uRadius.value = MV.open ? mapR() : R; U.uFogD.value = MV.open ? 0.0013 : FOGD * (0.12 + S.mist / 50 * 0.88) * (1 - 0.3 * U.uDay.value); scene.fog.density = U.uFogD.value;
+  const baseFov = camera.fov; if (!MV.open && S.fish > 0) camera.fov = Math.min(150, baseFov + S.fish / 100 * 55);   // fisheye sees wider, the lens pass bends it
   camera.updateProjectionMatrix();
   U.uCam.value.copy(camera.position);
   { const gx = MV.open ? MV.fx : P.x, gz = MV.open ? MV.fz : P.z; ground.position.set(Math.round(gx / 2) * 2, 0, Math.round(gz / 2) * 2); ground.scale.setScalar(MV.open ? (2 * mapR() + 60) / (2 * R + 60) : 1); }
   wall.position.set(P.x, 0, P.z); wall.visible = !MV.open;
   updateSpot(t); mpTick(now); updatePeers(dt, t);
   sky.position.copy(camera.position);
-  rain.visible = S.rain && !MV.open;
+  rain.visible = S.rain > 0 && !MV.open; rain.geometry.setDrawRange(0, 2 * Math.round(2600 * S.rain / 100)); U.uRain.value = S.rain / 100;
   const anc = traffic.material.uniforms.uAnchor.value; if (Math.hypot(anc.x - P.x, anc.z - P.z) > 220) anc.set(P.x, 0, P.z);
 
   // glitch: decays, random small hits, more at speed
-  if (Math.random() < dt * (0.08 + spd * 0.004)) glitch(0.15 + Math.random() * 0.25);
+  if (Math.random() < dt * (0.08 + spd * 0.004) * S.glitchAmt / 50) glitch(0.15 + Math.random() * 0.25);
   glitchV *= Math.exp(-dt * 3.2); U.uGlitch.value = glitchV;
-  compMat.uniforms.uAberr.value = 0.0012 + (mode === 'bike' ? Math.min(0.004, Math.abs(B.v) * 0.00015) : 0);
+  { const cu = compMat.uniforms;
+    cu.uAberr.value = S.split / 100 * 0.004 + (mode === 'bike' ? Math.min(0.004, Math.abs(B.v) * 0.00015) * S.split / 30 : 0);
+    cu.uK.value = MV.open ? 0 : S.lens / 100 * 0.35; cu.uFish.value = MV.open ? 0 : S.fish / 100;
+    cu.uGrain.value = S.grain / 100 * 0.12; cu.uScan.value = S.scan / 100 * 0.14; cu.uAspect.value = innerWidth / innerHeight;
+    cu.uStyle.value = STYLES.indexOf(S.style); cu.uFilter.value = FILTERS.indexOf(S.filt); cu.uFStr.value = S.fstr / 100; }
+  if (now - lastSun > 1000) { lastSun = now; updateSun(); }
 
   updateChunks(now); updateSigns(now); animSigns(t); drawRadar(now); drawHud(now);
   renderFrame(); if (MV.open) drawMapOverlay(now);
+  camera.fov = baseFov;
 
   // keep it smooth: lower the resolution, then the bloom, if frames are slow
   frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
