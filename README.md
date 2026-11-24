@@ -399,6 +399,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- settings in tabs (Mistwalkers): Game (camp info, change explorer or camp, change your look, keys),
+  Graphics (quality and phone fix, lighting and map, picture, lens, draw distances, copy my settings),
+  World (time, weather, forests), Sound (music for everyone, hearing distance, volume, ambient sound),
+  VR (XREAL, desktop only); the last tab is remembered (`wt.ptab`)
+- realism: bark grain and darker cracks on trunks up close, leaf clumps in slightly different greens,
+  crowns that glow softly when the sun is behind them, fine relief on rock, sand and paths up close,
+  and dust specks in the air that catch the light when you look toward the sun (src `motes.js`).
+  Lighter on the computer: camps clear grass and flowers 5 times a second instead of every frame,
+  decorations further than 180 m aren't animated
 - character designer (src `look.js`; Moves: Change your look, or "Design your explorer" on the start
   card): the camera turns to face you, a panel with Body (figure, height, build, 8 skin tones), Face
   (eyes and eye colour, brows, nose, mouth, cheeks, beard), Hair (10 styles, 10 colours), Clothes (field
