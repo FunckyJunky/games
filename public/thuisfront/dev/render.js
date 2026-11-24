@@ -5,7 +5,7 @@
 // The screen is 320x172. Every pixel is an index into a 64-colour table:
 //   0-15 text levels, 16-31 video levels, 32-47 ERROR-DOS green (menus), 48 black, 49 red, 50 white,
 //   255 = "see the colour picture underneath" (a photo, or colour video).
-import { foxNew, foxStep, foxPose, foxPack, foxUnpack, foxLerp, drawFox, foxZero, foxZeroApply } from './fox.js';
+import { foxNew, foxStep, foxPose, foxPack, foxUnpack, foxLerp, drawFox, foxZero, foxZeroApply, foxGo, foxFloorAt } from './fox.js';
 
 export const W = 320, H = 172;
 export const T = 0, V = 16, U = 32, BLACK = 48, RED = 49, WHITE = 50, PLANE = 255;
@@ -363,6 +363,8 @@ export class Screen {
   }
   // FOX: this device's motion (f in g, w in rad/s, screen directions); a pose from the screen (phones)
   foxSensor(f, w) { this.foxIn = { f, w, at: performance.now() }; }
+  foxGo(x, z) { foxGo(this.foxS, x, z); }          // a tap: its own fox goes to that spot on the floor
+  foxTap(sx, sy) { const [x, z] = foxFloorAt(sx, sy); this.foxGo(x, z); return [x, z]; }   // a tap at screen pixel sx, sy
   foxRemote(arr) {
     const p = foxUnpack(arr), now = performance.now();
     if (!p) return;

@@ -28,12 +28,12 @@ static const float FOX_TAIL_R[5][2] = { { 0.06f, 0.06f }, { 0.14f, 0.13f }, { 0.
 static const float FOX_TAIL_L[4] = { 0.18f, 0.25f, 0.25f, 0.22f };
 static const int8_t FOX_TAIL_SHADE[4] = { 0, 0, 1, 4 };
 #define FOX_HS 1.25f
-static const float FOX_CAM[3] = { 0.0f, 1.9f, 5.0f }, FOX_CF[3] = { 0.0f, -0.278698f, -0.960379f }, FOX_CR[3] = { 1.0f, 0.0f, 0.0f }, FOX_CU[3] = { 0.0f, 0.960379f, -0.278698f };
+static const float FOX_CAM[3] = { 0.0f, 1.5f, 5.6f }, FOX_CF[3] = { 0.0f, -0.151282f, -0.988491f }, FOX_CR[3] = { 1.0f, 0.0f, 0.0f }, FOX_CU[3] = { 0.0f, 0.988491f, -0.151282f };
 static const float FOX_LIGHT[3] = { -0.406164f, 0.767199f, 0.496423f };
-#define FOX_FOC 370.0f
+#define FOX_FOC 330.0f
 #define FOX_CX 160.0f
-#define FOX_CY 100.0f
-#define FOX_BOX_X 2.3f
-#define FOX_BOX_ZB -1.5f
-#define FOX_BOX_ZF 1.2f
-#define FOX_BOX_H 2.2f
+#define FOX_CY 94.0f
+#define FOX_BOX_X 2.15f
+#define FOX_BOX_ZB -1.35f
+#define FOX_BOX_ZF 1.05f
+#define FOX_BOX_H 1.75f

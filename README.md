@@ -742,6 +742,22 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   phone's CENTRE button stores it as fox.zero, and the screen then turns that "up" to straight up (foxZero: Rodrigues)
   and takes the resting gyro off, so a crooked screen counts as level and still. RESET = fox.zero []; a new SET UP
   MOTION resets it too.
+  1.13, a world with physics: "up" in the box is tracked with the gyro (the accelerometer pulls it back slowly, only
+  when it feels ~1 g); what the fox feels is that gravity plus the box's big jerks (small ones ignored, big ones made
+  bigger). On its floor (or its ceiling, upside down) it stands while pressed against it, slides when the slope beats
+  friction, and otherwise flies: bounces off walls / floor / ceiling, spins, turns its feet down like a cat, lands
+  (dizzy, OOF!). The box (camera, BOX) now fits the screen: walls and ceiling are visible. The tail is a springy joint
+  with its own weight (ta / tu with velocities, pulled by gravity minus the body's acceleration and by turning), so it
+  trails behind when the fox runs off and floats when it flies. Left alone it lives on its own: walks to spots, sniffs,
+  sits, and does tricks (foxAct 1-9: scratching an ear with a hind leg, turning round its spot and lying down
+  (COMFY), chasing its tail (then dizzy), a backflip (TA-DA!), playing dead on its side, a play bow (sometimes then
+  ZOOMIES!), mousing (a high pounce nose first into the floor, MISSED!), a yawn with a stretch); with a sensor and 3
+  minutes untouched it naps. TAP: a tap on the phone's preview -> foxFloorAt (ray to the floor) -> {t:"foxgo", x, z}
+  -> server -> screen (board: link.cpp sets G.foxGo*; browser screen: scr.foxGo); tapping a browser screen itself does
+  the same. foxGo: a ring marks the spot, a careful look first (HMM? / ?), then one of 4 ways: stalking low with a
+  pounce, a row of jumps, sniffing its way in zig-zags, or rolling over the floor; FOUND IT! The pose has 27 numbers
+  now (+ cr gx gz gm sc fp bw dd; foxUnpack still takes an old screen's 19). foxstep C vs JS: equal (same random
+  numbers, foxRnd hook; dt not a multiple of the thresholds), pixels equal (foxcmp).
 - Time zone fix (1.9): configTime() for the internet time sets TZ to UTC; applyTz() now compares with getenv("TZ") and
   runs again right after configTime(), so the clock no longer shows UTC (an hour early in Amsterdam) after a restart.
   Ping reports lt (the board's HH:MM) and tz (its TZ), shown in /api/hf/list as lt / tzNow.

@@ -182,6 +182,7 @@ void loop() {
     bool newZero = memcmp(key, zKey, sizeof(key)) != 0;
     if (newZero) { memcpy(zKey, key, sizeof(key)); if (st.fox.hasZero) foxZeroOf(st.fox.zero, Z); else Z = FoxZero(); }
     if (imu) { foxZeroApply(Z, f, g); if (newZero) memcpy(fox.gl, f, sizeof(fox.gl)); }
+    if (G.foxGoNew) { G.foxGoNew = false; foxGo(fox, G.foxGoX, G.foxGoZ); }   // a tap on a phone (the lock is held here)
     foxStep(fox, imu ? f : nullptr, imu ? g : nullptr, dt);
     FoxPose fp;
     foxPoseOf(fox, fp);

@@ -216,12 +216,13 @@
     <div class="sec" id="pFox" hidden>
       <div class="h">THE FOX <span id="xLive" class="small"></span></div>
       <p class="dimt small" id="xNote"></p>
+      <p class="small">TAP THE PICTURE ABOVE: THE FOX GOES THERE.</p>
       <div class="row" id="xSetupRow"><button class="btn" id="xSetup">SET UP MOTION</button></div>
       <div class="h">CENTRE <span id="xZero" class="small"></span></div>
       <div class="row"><button class="btn" id="xZeroB">CENTRE: THIS POSITION = 0</button><button class="btn" id="xZeroX">RESET</button></div>
       <p class="dimt small">Put the screen how you want it to stand (also crooked), keep it still and press CENTRE: from then on that counts as level and still, and the fox feels tilting and turning from there.</p>
       <div class="h">COLOUR</div><div class="chips" id="xpals"></div>
-      <p class="dimt small">Tilt the screen: the fox slides and holds on. Turn it round: the fox turns with it. Knock on it: it jumps. Shake or spin it: it gets dizzy. Turn it over: it tumbles. Leave it alone: it sits down, and after a while it sleeps; a nudge wakes it. What it does there, you see here.</p>
+      <p class="dimt small">Tilt the screen: the fox slides and holds on. Turn it round: the fox turns with it. Knock on it: it jumps. Shake or spin it: it gets dizzy. Turn it over: it tumbles. Left alone it lives its own life: walks about, sniffs, scratches an ear, chases its tail, does a backflip, plays dead, bows to play, gets the zoomies, pounces on mice, turns round its spot and lies down; after a while it sleeps, and a nudge wakes it. TAP the picture above: the fox goes there (sneaking, jumping, sniffing or rolling). What it does there, you see here.</p>
     </div>
 
     <div class="sec" id="pClock" hidden>
@@ -1067,6 +1068,13 @@ function photoPlace(m, z) {
 function photoMoved() { clearTimeout(ph.timer); ph.timer = 0; remakePhoto(0); }   // the whole picture (every GIF frame), sent when LIVE
 const pvEl = $('pv');
 pvEl.addEventListener('pointerdown', (e) => {
+  if (curApp === 'fox') {                                      // FOX: a tap sends the fox to that spot on its floor
+    e.preventDefault();
+    const q = pvPoint(e), [x, z] = pv.foxTap(q.x + W / 2, q.y + H / 2);
+    const d = (ctl && ctl.dev) || {};
+    if (!d.online || !ctl.send({ t: 'foxgo', x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 })) toast('SCREEN NOT ONLINE: ONLY THIS PREVIEW');
+    return;
+  }
   if (!photoMovable()) { if (curApp === 'comm' && C.mode === 'photo' && ph.have) toast('PICK THE PHOTO AGAIN TO MOVE IT'); return; }
   e.preventDefault();
   try { pvEl.setPointerCapture(e.pointerId); } catch { /* fine */ }

@@ -462,7 +462,7 @@ export class HomeFront extends DurableObject {
       return;
     }
     if (m.t === "fox") {                         // the fox's pose (and the sensor, raw) for the phones watching it
-      const p = Array.isArray(m.p) ? m.p.slice(0, 24).map((v) => (Number.isFinite(+v) ? Math.round(+v * 100) / 100 : 0)) : null;
+      const p = Array.isArray(m.p) ? m.p.slice(0, 32).map((v) => (Number.isFinite(+v) ? Math.round(+v * 100) / 100 : 0)) : null;
       const r = Array.isArray(m.r) ? m.r.slice(0, 6).map((v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : 0)) : undefined;
       const u = Array.isArray(m.u) ? m.u.slice(0, 6).map((v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : 0)) : undefined;   // for CENTRE
       if (!p) return;
@@ -586,6 +586,12 @@ export class HomeFront extends DurableObject {
       const a = ws.deserializeAttachment() || {};
       a.watch = m.fox ? 1 : 0; ws.serializeAttachment(a);
       return this.watchTell(id);
+    }
+    if (m.t === "foxgo") {                      // a tap on the phone's FOX preview: the fox goes to that spot on its floor
+      const x = Number(m.x), z = Number(m.z), d = this.devSock(id);
+      if (!d || !Number.isFinite(x) || !Number.isFinite(z)) return;
+      const r = (v) => Math.round(Math.max(-3, Math.min(3, v)) * 100) / 100;
+      return this.send(d, { t: "foxgo", x: r(x), z: r(z) });
     }
     if (m.t === "hello") this.send(ws, { t: "state", state: { ...(await this.state(id)), name: (await this.dev(id)).name }, dev: await this.devInfo(id) });
   }

@@ -33,6 +33,8 @@ struct Shared {
   float foxRaw[3] = { 0, 0, 0 };
   float foxU[6] = { 0, 1, 0, 0, 0, 0 };          // its own position, smoothed, before CENTRE (the phone's CENTRE takes it)
   bool foxHave = false, foxRawOk = false;
+  bool foxGoNew = false;                          // a tap on a phone: go to foxGoX, foxGoZ on the floor
+  float foxGoX = 0, foxGoZ = 0;
   // WiFi (written by the network task)
   volatile bool staUp = false, everStaUp = false, apOn = false, joining = false, joinLow = false;
   volatile int apClients = 0;

@@ -117,6 +117,12 @@ let foxWatch = 0;
 setInterval(() => {
   if (foxWatch > 0 && ws && ws.readyState === 1 && scr.state && scr.state.app === 'fox') ws.send(JSON.stringify({ t: 'fox', p: scr.foxPacket(), u: scr.foxLevel() || undefined }));
 }, 83);
+// FOX: a tap on the screen sends the fox to that spot on its floor
+cv.addEventListener('pointerdown', (e) => {
+  if (!scr.state || scr.state.app !== 'fox') return;
+  const r = cv.getBoundingClientRect();
+  if (r.width > 0) scr.foxTap(((e.clientX - r.left) * 320) / r.width, ((e.clientY - r.top) * 172) / r.height);
+});
 document.addEventListener('pointerdown', () => {
   if (!askedMotion && typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {   // iPhone / iPad ask first
     askedMotion = true; DeviceMotionEvent.requestPermission().catch(() => {});
@@ -157,6 +163,7 @@ function connect() {
     }
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     if (m.t === 'watch') { foxWatch = m.fox | 0; return; }
+    if (m.t === 'foxgo') { scr.foxGo(+m.x || 0, +m.z || 0); return; }   // a tap on a phone's FOX preview
     if (m.t !== 'state') return;
     const s = m.state;
     if (pendingText && s.comm && s.comm.tb) {

@@ -501,6 +501,15 @@ static void handleState(const uint8_t* d, size_t n) {
 
 static void handleMessage() {
   if (msgOp == 1) {
+    if (msgLen < 64 && memmem(msg, msgLen, "\"foxgo\"", 7)) {   // {"t":"foxgo","x":..,"z":..}: a tap on a phone's FOX preview
+      JsonDocument doc;
+      if (!deserializeJson(doc, (const char*)msg, msgLen)) {
+        xSemaphoreTake(G.lock, portMAX_DELAY);
+        G.foxGoX = doc["x"] | 0.0f; G.foxGoZ = doc["z"] | 0.0f; G.foxGoNew = true;
+        xSemaphoreGive(G.lock);
+      }
+      return;
+    }
     if (msgLen < 48 && memmem(msg, msgLen, "\"watch\"", 7)) {   // {"t":"watch","fox":n}: phones watching the FOX
       JsonDocument doc;
       if (!deserializeJson(doc, (const char*)msg, msgLen)) G.foxWatch = doc["fox"] | 0;
@@ -630,7 +639,7 @@ void linkStep() {
   static uint32_t foxSentAt = 0;
   if (G.foxWatch > 0 && G.wsUp && millis() - foxSentAt >= 83) {
     foxSentAt = millis();
-    char p[200], b[400];
+    char p[256], b[440];
     bool go = false, raw = false;
     float r[3], u[6];
     xSemaphoreTake(G.lock, portMAX_DELAY);
