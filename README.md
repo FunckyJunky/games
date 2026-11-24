@@ -399,6 +399,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- drone (src `drone.js`; Moves > Launch drone, or G): you fly it in first person through FPV goggles
+  while your explorer stands holding the remote (others see the goggles, the remote and the drone).
+  W A S D fly, mouse looks, Space / E up, Q / C down, Shift fast; on a phone the left stick flies,
+  drag looks, up and down buttons. Up to 300 m from you, 120 m above the ground. G or Back to me: your
+  own view again; the drone hovers and flies home by itself after 5 minutes (or Call it back), then
+  lands in your pack. B drops one beacon lantern below it (with a beam of light; another one moves
+  it); with your explorer an arrow at the top points to it with the distance. Night vision (N) at
+  night. Presence `dr`: [x, y, z, yaw, mode 1 flying / 2 waiting / 3 coming home], `bc`: [x, z].
+  The beacon is kept in the browser (`wt.beacon`); the drone's buzz has its own mixer slider
 - recorded sound (src `bgm.js`, files in `public/games/mistwalkers/audio/`): ambient music (ambient.mp3),
   rain and storm outside (rain.mp3, follows the weather), rain on the tent instead of it while you're in
   a tent (tent-rain.mp3), and the campfire (campfire.mp3: half as loud at 4 m, a quarter at 8 m, gone by
