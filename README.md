@@ -399,6 +399,12 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- you come back where you left: your spot and the way you faced are saved every few seconds and when
+  you leave (`wt.place`, with the world seed; from inside a tent, just outside its door), and you
+  start there instead of at the meeting point. Everything you put down comes back with it: your
+  camp (fire, up to 3 tents, lights), decorations, tarp and hammock (per camp name, no longer
+  forgotten after 4 days), instruments on the ground (`wt.rig`), your beacon (`wt.beacon`), your
+  bouquet. Fixed: since the drone update the beacon saved an empty camp before yours was restored
 - drone (src `drone.js`; Moves > Launch drone, or G): you fly it in first person through FPV goggles
   while your explorer stands holding the remote (others see the goggles, the remote and the drone).
   W A S D fly, mouse looks, Space / E up, Q / C down, Shift fast; on a phone the left stick flies,
