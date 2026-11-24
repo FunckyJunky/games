@@ -309,7 +309,10 @@ function m2Chart(S) {
   const H = top + items.length * rh + 4;
   put(box, `<svg viewBox="0 0 ${w} ${H}" height="${H}">${g}</svg>`);
   const med = median(items.filter((i) => !i.me).map((i) => i.v));
-  $("nbM2Note").textContent = `WOZ ${S.Y} ÷ living area. Neighbours' median €${nf.format(Math.round(med))}/m²` + (askM2 ? `; this house's asking price is €${nf.format(Math.round(askM2))}/m².` : ".");
+  const fundaM2 = DATA && DATA.info && DATA.info.living;
+  $("nbM2Note").textContent = `WOZ ${S.Y} ÷ living area from the BAG, the same source for every house. Neighbours' median €${nf.format(Math.round(med))}/m²`
+    + (askM2 ? `; asking price €${nf.format(Math.round(askM2))}/m².` : ".")
+    + (fundaM2 && S.self.area && Math.abs(fundaM2 - S.self.area) > 2 ? ` (The BAG gives this house ${S.self.area} m², Funda ${fundaM2} m².)` : "");
 }
 
 // ---------- 7. living area vs WOZ (scatter + trend) ----------
