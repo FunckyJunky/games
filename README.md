@@ -66,6 +66,11 @@ public/                 the website
                         AUTO = the bike stays on and rides exactly on your GPS spot (no road snap). Riding/walking away by hand:
                         an amber pillar + radar marker + HUD line show your real GPS spot, TELEPORT TO ME jumps back.
                         LEVEL (or double-tap right half, R) = look straight ahead; with phone sensors it takes how you hold it now.
+                        On the bike, VIEW (or C / pad Y): CHASE (drag swings round; stays put in AUTO/GPS), COCKPIT (you sit on it:
+                        dashboard, the phone's sensors are your head, relative to how you hold it at LEVEL), LOOK AROUND (drag all round,
+                        pinch/wheel distance), HELICOPTER (a director cuts or swings between chase shots: trailing, side track, reverse,
+                        overhead, orbit, roadside fly-by, wide telephoto; letterbox + REC; tap = next shot), TOP DOWN (pinch = height).
+                        In AUTO/GPS the left half of the screen looks around instead of switching to FREE.
                         Tap the radar (or M) = MAP: the 3D camera goes up above the city (drag = move, pinch = height, N↑/heading-up,
                         ◎ = back to you). Tap a player (or their chip) or any spot, then TELEPORT: you land there in FREE and walk
                         around with the others. GPS = summon yourself back to your real spot.

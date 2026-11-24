@@ -66,9 +66,20 @@
     background: rgba(40,20,0,.6); border: 1px solid #ffc040; box-shadow: 0 0 14px rgba(255,190,60,.55), inset 0 0 10px rgba(255,190,60,.3); text-shadow: 0 0 6px #ffc040; cursor: pointer; white-space: nowrap;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
   #tele span { font-family: var(--ui); font-size: 17px; font-weight: 400; color: #ffd36a; }
-  #level { position: fixed; right: max(10px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 136px); width: 128px; padding: 6px 0; font: 17px var(--ui); letter-spacing: 1px; color: var(--c);
+  #camctl { position: fixed; right: max(10px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 136px); width: 128px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
+  #viewMenu { display: flex; flex-direction: column; gap: 4px; }
+  #viewMenu button { padding: 7px 4px; font: 17px var(--ui); color: var(--c); background: rgba(6,1,20,.88); border: 1px solid rgba(0,240,255,.45); cursor: pointer; text-align: left; }
+  #viewMenu button.on { color: #fff; border-color: var(--m); background: rgba(60,0,50,.85); }
+  #viewBtn { color: #ffd36a !important; border-color: rgba(255,200,70,.6) !important; text-shadow: 0 0 5px rgba(255,190,60,.8) !important; }
+  #cine { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  #cine::before, #cine::after { content: ''; position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+  #cine::before { top: 0; } #cine::after { bottom: 0; }
+  #cineRec { position: absolute; left: 50%; transform: translateX(-50%); top: calc(9vh + 6px); font: 17px var(--ui); color: #fff; letter-spacing: 2px; text-shadow: 0 0 4px #000; white-space: nowrap; }
+  #cineRec b { color: #ff3040; font-weight: 400; }
+  #cineTc { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(9vh + 6px); font: 17px var(--ui); color: rgba(255,255,255,.85); letter-spacing: 2px; text-shadow: 0 0 4px #000; }
+  #level, #viewBtn { width: 100%; padding: 6px 0; font: 17px var(--ui); letter-spacing: 1px; color: var(--c);
     background: rgba(6,1,20,.6); border: 1px solid rgba(0,240,255,.55); cursor: pointer; text-shadow: 0 0 5px rgba(0,240,255,.8); }
-  @media (max-width: 480px) { #level { width: 112px; top: calc(max(10px, env(safe-area-inset-top)) + 120px); } }
+  @media (max-width: 480px) { #camctl { width: 112px; top: calc(max(10px, env(safe-area-inset-top)) + 120px); } }
   @media (max-height: 500px) { #btns { flex-direction: row-reverse; } }
   #near .box { text-align: left; background: rgba(6,1,20,.88); border: 1px solid rgba(150,255,60,.6); padding: 16px; }
   #near h2 { font: 900 18px var(--hd); letter-spacing: 4px; color: #fff; margin: 0 0 10px; text-shadow: 0 0 8px #8f4; }
@@ -76,7 +87,7 @@
   #near input { width: 100%; font: 22px var(--ui); padding: 6px 8px; background: #050012; color: #fff; border: 1px solid rgba(0,240,255,.6); text-transform: uppercase; }
   #nearList div { font-size: 19px; color: #fff; padding: 2px 0; }
   #bigmap { position: fixed; inset: 0; z-index: 8; touch-action: none; }
-  body.mapmode #hud, body.mapmode #radar, body.mapmode #btns, body.mapmode #tele, body.mapmode #level, body.mapmode #hint, body.mapmode #stick { display: none !important; }
+  body.mapmode #hud, body.mapmode #radar, body.mapmode #btns, body.mapmode #tele, body.mapmode #camctl, body.mapmode #cine, body.mapmode #hint, body.mapmode #stick { display: none !important; }
   #mapGo { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px); padding: 12px 18px; font: 900 15px var(--hd); letter-spacing: 2px; color: #fff;
     background: rgba(60,0,50,.75); border: 1px solid var(--m); box-shadow: 0 0 16px rgba(255,43,214,.6), inset 0 0 10px rgba(255,43,214,.35); text-shadow: 0 0 6px var(--m); cursor: pointer; white-space: nowrap;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
@@ -120,7 +131,8 @@
   <button class="b" id="bFree"><i>✥</i>FREE</button>
   <button class="b" id="bGps"><i>◎</i>GPS</button>
 </div>
-<button id="level" class="hide">⊙ LEVEL</button>
+<div id="cine" class="hide"><div id="cineRec"></div><div id="cineTc"></div></div>
+<div id="camctl"><button id="viewBtn" class="hide">⊡ VIEW</button><div id="viewMenu" class="hide"></div><button id="level" class="hide">⊙ LEVEL</button></div>
 <button id="tele" class="hide">⤓ TELEPORT TO ME <span id="teleD"></span></button>
 <div id="stick"><div id="knob"></div></div>
 <div id="bigmap" class="hide">
@@ -165,7 +177,7 @@
   <div class="lab">LOOK AROUND</div><div class="row" data-k="look"><button class="sm" data-v="gyro">GYRO</button><button class="sm" data-v="touch">DRAG</button></div>
   <div class="lab">EFFECTS</div><div class="row" data-k="fx"><button class="sm" data-v="high">HIGH</button><button class="sm" data-v="low">LOW</button><button class="sm" data-v="off">OFF</button></div>
   <div class="lab">CITY HEIGHT</div><div class="row" data-k="city"><button class="sm" data-v="1">REAL ×1</button><button class="sm" data-v="1.6">NEO ×1.6</button><button class="sm" data-v="2.5">MEGA ×2.5</button></div>
-  <div class="lab">BIKE CAMERA</div><div class="row" data-k="cam"><button class="sm" data-v="chase">CHASE</button><button class="sm" data-v="fpv">FIRST PERSON</button></div>
+  <div class="lab">BIKE CAMERA</div><div class="row" data-k="cam"><button class="sm" data-v="chase">CHASE</button><button class="sm" data-v="fpv">COCKPIT</button><button class="sm" data-v="orbit">LOOK AROUND</button><button class="sm" data-v="heli">HELICOPTER</button><button class="sm" data-v="top">TOP DOWN</button></div>
   <div class="lab">BIKE COLOUR</div><div class="row" data-k="color"><button class="sm" data-v="cyan">CYAN</button><button class="sm" data-v="magenta">MAGENTA</button><button class="sm" data-v="amber">AMBER</button><button class="sm" data-v="lime">LIME</button></div>
   <div class="lab">DEMO RUN</div><div class="row" data-k="demo"><button class="sm" data-v="drive">DRIVE</button><button class="sm" data-v="walk">WALK</button></div>
   <div class="lab">RAIN · SOUND</div><div class="row"><button class="sm" id="sRain">RAIN</button><button class="sm" id="sSound">SOUND</button><button class="sm" id="sTrim">RESET COMPASS</button></div>
@@ -737,7 +749,7 @@ function animSigns(t) {
 }
 
 /* ---------- the light bike ---------- */
-function makeBike() {
+function makeBike(dash) {
   const g = new THREE.Group(), lean = new THREE.Group(); g.add(lean);
   const body = new THREE.Shape();
   body.moveTo(-1.25, 0.35); body.lineTo(-1.05, 0.95); body.lineTo(-0.35, 1.08); body.lineTo(0.2, 0.86); body.lineTo(0.85, 0.98); body.lineTo(1.3, 0.62); body.lineTo(1.2, 0.3); body.lineTo(-1.1, 0.2); body.lineTo(-1.25, 0.35);
@@ -756,6 +768,27 @@ function makeBike() {
     w.add(disc, ring, spoke); lean.add(w); wheels.push(w);
   }
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.12), new THREE.MeshBasicMaterial({ color: 0xffffff })); head.position.set(0, 0.78, -1.28); lean.add(head);
+  // cockpit: handlebars with glowing grips, a windshield, and (on your bike) a live dashboard
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.035, 0.035), dark); bar.position.set(0, 1.13, -0.5); lean.add(bar);
+  for (const x of [-0.33, 0.33]) { const gp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.05), ringM); gp.position.set(x, 1.13, -0.5); lean.add(gp); }
+  const shield = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.24), new THREE.MeshBasicMaterial({ color: 0x0c3340, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  shield.position.set(0, 1.2, -0.72); shield.rotation.x = -0.55; lean.add(shield);
+  const shieldEdge = new THREE.LineSegments(new THREE.EdgesGeometry(shield.geometry), neonM); shieldEdge.position.copy(shield.position); shieldEdge.rotation.copy(shield.rotation); lean.add(shieldEdge);
+  let dashCv = null, dashTex = null;
+  if (dash) {
+    dashCv = document.createElement('canvas'); dashCv.width = 256; dashCv.height = 112; dashTex = new THREE.CanvasTexture(dashCv);
+    const dm = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.13), new THREE.MeshBasicMaterial({ map: dashTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    dm.position.set(0, 1.08, -0.4); dm.rotation.x = -0.75; lean.add(dm);
+  }
+  function drawDash(kmh, hdg, tag, col) {
+    if (!dashCv) return; const x = dashCv.getContext('2d'); x.clearRect(0, 0, 256, 112);
+    x.strokeStyle = col; x.lineWidth = 3; x.strokeRect(3, 3, 250, 106);
+    x.fillStyle = '#fff'; x.shadowColor = col; x.shadowBlur = 10; x.font = '900 62px Orbitron, VT323, sans-serif'; x.textAlign = 'left'; x.fillText(String(Math.round(kmh)).padStart(3, ' '), 14, 70);
+    x.shadowBlur = 0; x.fillStyle = col; x.font = '22px VT323, monospace'; x.fillText('KM/H', 146, 44); x.fillText(tag, 146, 70);
+    const d = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((hdg % 360) + 360) % 360 / 45) % 8]; x.fillText(d + ' ' + String(Math.round(((hdg % 360) + 360) % 360)).padStart(3, '0') + '°', 14, 100);
+    for (let i = 0; i < 12; i++) { x.fillStyle = i < Math.min(12, kmh / 10) ? col : 'rgba(255,255,255,.15)'; x.fillRect(146 + i * 9, 84, 6, 16); }
+    dashTex.needsUpdate = true;
+  }
   const cv = document.createElement('canvas'); cv.width = cv.height = 64; const cx = cv.getContext('2d'); const gr = cx.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = gr; cx.fillRect(0, 0, 64, 64);
   const glowM = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffffff });
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 5).rotateX(-Math.PI / 2), glowM); glow.position.y = 0.16; g.add(glow);
@@ -763,9 +796,9 @@ function makeBike() {
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 9).rotateX(-Math.PI / 2), poolM); pool.position.set(0, 0.17, -7); g.add(pool);
   g.visible = false; scene.add(g);
   function setColor(c) { const col = new THREE.Color(c[0], c[1], c[2]); neonM.color.copy(col).multiplyScalar(1.6); ringM.color.copy(col).multiplyScalar(1.8); glowM.color.copy(col).multiplyScalar(0.55); poolM.color.setRGB(0.55, 0.6, 0.65).lerp(col, 0.3).multiplyScalar(0.45); }
-  return { g, lean, wheels, setColor };
+  return { g, lean, wheels, setColor, drawDash };
 }
-const bike = makeBike();
+const bike = makeBike(true);
 function makeTrail(MAX) {
   const pos = new Float32Array(MAX * 12 * 3), at = new Float32Array(MAX * 12 * 2);
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aT', new THREE.BufferAttribute(at, 2));
@@ -1182,23 +1215,94 @@ function startSensors() {
   return p;
 }
 const gyroOn = () => S.look === 'gyro' && look.has && performance.now() - look.at < 1500;
+const headOn = () => look.has && performance.now() - look.at < 1500;   // cockpit: the phone is your head, whatever the walking setting
 // LEVEL: look straight ahead, level with the horizon. With the phone sensors it takes the way you hold the phone now as "straight ahead".
 const eul2 = new THREE.Euler(0, 0, 0, 'YXZ');
 look.pOff = 0; look.bYaw = 0; look.bPitch = 0; look.bRef = null;
 function devEuler() { qY.setFromAxisAngle(YAX, look.trim); tmpQ.copy(qY).multiply(look.q); eul2.setFromQuaternion(tmpQ, 'YXZ'); return { yaw: eul2.y, pitch: eul2.x, roll: eul2.z }; }
 function recenter() {
   if (mode === 'bike') {
-    look.orbit = 0; look.bYaw = 0; look.bPitch = 0;
-    look.bRef = gyroOn() ? devEuler() : null;
+    look.orbit = 0; look.bYaw = 0; look.bPitch = 0; look.cUp = 0; look.oYaw = 0.5; look.oPitch = 0.35; look.oDist = 9; look.tYaw = 0;
+    look.bRef = headOn() ? devEuler() : null;
   } else if (gyroOn()) {
     look.pOff = devEuler().pitch;
   } else {
     look.pitch = 0;
     if (Math.hypot(vel.x, vel.z) > 0.6) look.yaw = -Math.atan2(vel.x, -vel.z);
   }
-  glitch(0.35); toast('LEVELLED', mode === 'bike' ? 'looking straight down the road' : gyroOn() ? 'the way you hold your phone now = straight ahead' : 'looking straight ahead', 1400);
+  glitch(0.35); toast('LEVELLED', mode === 'bike' ? 'view back behind the bike' : gyroOn() ? 'the way you hold your phone now = straight ahead' : 'looking straight ahead', 1400);
 }
 $('level').onclick = (e) => { e.stopPropagation(); recenter(); };
+/* ---------- bike camera views ---------- */
+const VIEWS = [['chase', 'CHASE'], ['fpv', 'COCKPIT'], ['orbit', 'LOOK AROUND'], ['heli', 'HELICOPTER'], ['top', 'TOP DOWN']];
+Object.assign(look, { cUp: 0, oYaw: 0.5, oPitch: 0.35, oDist: 9, tH: 38, tYaw: 0 });
+function setView(v) {
+  if (!VIEWS.some((x) => x[0] === v)) v = 'chase';
+  S.cam = v; saveS(); look.bRef = null; HELI.shot = null; HELI.lastName = '';
+  $('viewMenu').classList.add('hide'); viewMenuSync(); glitch(0.45);
+  const tips = { chase: 'drag = swing round the bike · LEVEL = back behind it', fpv: 'you sit on the bike · move the phone like your head · LEVEL = look ahead', orbit: 'drag = look all round · pinch = closer/further', heli: 'a film crew in a helicopter · tap = next shot', top: 'drag = turn · pinch = height' };
+  toast(VIEWS.find((x) => x[0] === v)[1], tips[v], 2000);
+}
+function viewMenuSync() {
+  const m = $('viewMenu'); m.innerHTML = '';
+  for (const [v, n] of VIEWS) { const b = document.createElement('button'); b.textContent = (S.cam === v ? '▸ ' : '  ') + n; b.classList.toggle('on', S.cam === v); b.onclick = (e) => { e.stopPropagation(); setView(v); }; m.appendChild(b); }
+  $('viewBtn').textContent = '⊡ ' + (VIEWS.find((x) => x[0] === S.cam) || VIEWS[0])[1];
+}
+$('viewBtn').onclick = (e) => { e.stopPropagation(); viewMenuSync(); $('viewMenu').classList.toggle('hide'); };
+const cycleView = () => { const i = VIEWS.findIndex((x) => x[0] === S.cam); setView(VIEWS[(i + 1) % VIEWS.length][0]); };
+
+// HELICOPTER: a director picks shots like a crew filming a chase; swings or cuts between them
+const HELI = { shot: null, t0: 0, dur: 0, cam: new THREE.Vector3(), look: new THREE.Vector3(), fixed: new THREE.Vector3(), cut: false, last: '', side: 1, a0: 0, lastName: '', rec0: performance.now(), bCheck: 0, lift: 0 };
+const _hb = new THREE.Vector3(), _ht = new THREE.Vector3(), _hl = new THREE.Vector3();
+const SHOTS = {
+  trail: { n: 'TRAILING', d: [7, 10], fov: [56, 48], k: 2.2 },
+  side:  { n: 'SIDE TRACK', d: [6, 9], fov: [44, 38], k: 3 },
+  front: { n: 'REVERSE', d: [5, 8], fov: [40, 30], k: 3 },
+  over:  { n: 'OVERHEAD', d: [6, 9], fov: [62, 52], k: 1.8 },
+  orbit: { n: 'ORBIT', d: [7, 10], fov: [50, 44], k: 3.5 },
+  flyby: { n: 'ROADSIDE', d: [5, 8], fov: [46, 34], k: 9, fixed: true },
+  wide:  { n: 'WIDE', d: [6, 9], fov: [30, 24], k: 1.4 },
+};
+function heliNext(t, forceCut) {
+  const keys = Object.keys(SHOTS).filter((k) => k !== HELI.last);
+  const k = HELI.shot ? keys[Math.floor(Math.random() * keys.length)] : 'trail';
+  const sh = SHOTS[k], fx = Math.sin(B.yaw), fz = -Math.cos(B.yaw), rx = Math.cos(B.yaw), rz = Math.sin(B.yaw);
+  HELI.cut = forceCut || !HELI.shot || Math.random() < 0.4; HELI.last = k; HELI.shot = sh; HELI.key = k; HELI.t0 = t;
+  HELI.dur = sh.d[0] + Math.random() * (sh.d[1] - sh.d[0]); HELI.side = Math.random() < 0.5 ? -1 : 1; HELI.a0 = Math.random() * 6.283; HELI.lift = 0;
+  if (sh.fixed) {                              // a camera at the roadside the bike will pass
+    const ahead = 30 + Math.min(40, Math.abs(B.v) * 2.2);
+    HELI.fixed.set(B.x + fx * ahead + rx * 7 * HELI.side, 1.7, B.z + fz * ahead + rz * 7 * HELI.side);
+    if (insideBuilding(HELI.fixed.x, HELI.fixed.z)) HELI.fixed.y = 22;
+  }
+  if (HELI.cut) glitch(0.3);
+}
+function heliCam(dt, t) {
+  if (!HELI.shot || t - HELI.t0 > HELI.dur) heliNext(t);
+  const fx = Math.sin(B.yaw), fz = -Math.cos(B.yaw), rx = Math.cos(B.yaw), rz = Math.sin(B.yaw), sd = HELI.side;
+  if (HELI.key === 'flyby' && (HELI.fixed.x - B.x) * fx + (HELI.fixed.z - B.z) * fz < -30) heliNext(t);
+  const sh = HELI.shot, k = HELI.key, s = clamp((t - HELI.t0) / HELI.dur, 0, 1);
+  _hb.set(B.x, 0, B.z);
+  if (k === 'trail') { _ht.set(B.x - fx * 26 + rx * 5 * sd, 16, B.z - fz * 26 + rz * 5 * sd); _hl.set(B.x + fx * 12, 0.5, B.z + fz * 12); }
+  else if (k === 'side') { const along = lerp(-9, 9, s); _ht.set(B.x + rx * 15 * sd + fx * along, 4.5, B.z + rz * 15 * sd + fz * along); _hl.set(B.x + fx * 2, 0.9, B.z + fz * 2); }
+  else if (k === 'front') { _ht.set(B.x + fx * 24 + rx * 3 * sd, 3.5 + s * 2, B.z + fz * 24 + rz * 3 * sd); _hl.set(B.x, 0.9, B.z); }
+  else if (k === 'over') { const a = HELI.a0 + s * 1.1; _ht.set(B.x + Math.cos(a) * 7, 48 - s * 8, B.z + Math.sin(a) * 7); _hl.set(B.x + fx * 6, 0, B.z + fz * 6); }
+  else if (k === 'orbit') { const a = HELI.a0 + s * 2.6 * sd, r = 19 - s * 5; _ht.set(B.x + Math.cos(a) * r, 7 + 4 * Math.sin(s * Math.PI), B.z + Math.sin(a) * r); _hl.set(B.x, 1, B.z); }
+  else if (k === 'flyby') { _ht.copy(HELI.fixed); _hl.set(B.x, 0.9, B.z); }
+  else { _ht.set(B.x - fx * 55 + rx * 45 * sd, 42, B.z - fz * 55 + rz * 45 * sd); _hl.set(B.x + fx * 6, 0.5, B.z + fz * 6); }
+  // a low camera inside a building? go up over the roofs
+  if (t - HELI.bCheck > 0.3) { HELI.bCheck = t; HELI.lift = _ht.y < 26 && insideBuilding(_ht.x, _ht.z) ? 26 - _ht.y : Math.max(0, HELI.lift - 4); }
+  _ht.y += HELI.lift;
+  if (HELI.cut) { HELI.cam.copy(_ht); HELI.look.copy(_hl); HELI.cut = false; }
+  else { HELI.cam.lerp(_ht, 1 - Math.exp(-dt * sh.k)); HELI.look.lerp(_hl, 1 - Math.exp(-dt * (sh.k + 2.5))); }
+  const calm = sh.fixed ? 0.12 : 1;              // rotor sway + a little vibration
+  camera.position.set(HELI.cam.x + (Math.sin(t * 0.7) * 0.5 + Math.sin(t * 1.9) * 0.15) * calm + (Math.random() - 0.5) * 0.02, HELI.cam.y + Math.sin(t * 0.9 + 1) * 0.35 * calm, HELI.cam.z + Math.cos(t * 0.6) * 0.45 * calm + (Math.random() - 0.5) * 0.02);
+  camera.up.set(0, 1, 0); camera.lookAt(HELI.look); camera.rotateZ(Math.sin(t * 0.45) * 0.025 * calm);
+  const e = s * s * (3 - 2 * s); camera.fov = lerp(sh.fov[0], sh.fov[1], e);
+  if (sh.n !== HELI.lastName) { HELI.lastName = sh.n; $('cineRec').innerHTML = '<b>●</b> REC · HELI-1 · ' + sh.n; }
+  const el = (performance.now() - HELI.rec0) / 1000, f2 = (n) => String(Math.floor(n)).padStart(2, '0');
+  $('cineTc').textContent = f2(el / 3600) + ':' + f2(el / 60 % 60) + ':' + f2(el % 60) + ':' + f2(el * 25 % 25);
+  $('cineRec').firstChild && ($('cineRec').firstChild.style.opacity = Math.sin(t * 6) > 0 ? 1 : 0.2);
+}
 const _dir = new THREE.Vector3();
 function camYaw() { camera.getWorldDirection(_dir); return Math.atan2(_dir.x, -_dir.z); }
 
@@ -1208,12 +1312,15 @@ const stickEl = $('stick'), knob = $('knob');
 canvas.addEventListener('pointerdown', (e) => {
   if (!O) return;
   const left = e.clientX < innerWidth * 0.45 && e.clientY > innerHeight * 0.3;
-  if (left && joy.id == null && e.pointerType !== 'mouse') {
+  if (!$('viewMenu').classList.contains('hide')) $('viewMenu').classList.add('hide');
+  if (left && joy.id == null && e.pointerType !== 'mouse' && !(mode === 'bike' && src !== 'free')) {
     joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.x = joy.y = 0;
     stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.display = 'block'; knob.style.transform = '';
     goFree();
+  } else if (drag.id != null && drag.id !== e.pointerId) {
+    drag.p2 = { id: e.pointerId, x: e.clientX, y: e.clientY }; drag.pd = 0;   // second finger: pinch
   } else if (drag.id == null) {
-    drag.id = e.pointerId; drag.x = e.clientX; drag.y = e.clientY;
+    drag.id = e.pointerId; drag.x = e.clientX; drag.y = e.clientY; drag.sx = e.clientX; drag.sy = e.clientY; drag.st = performance.now();
     const nowT = performance.now(); if (nowT - (drag.lastTap || 0) < 320 && Math.hypot(e.clientX - (drag.tx || 0), e.clientY - (drag.ty || 0)) < 40) { recenter(); drag.lastTap = 0; } else { drag.lastTap = nowT; drag.tx = e.clientX; drag.ty = e.clientY; }
   }
   canvas.setPointerCapture(e.pointerId);
@@ -1222,15 +1329,37 @@ canvas.addEventListener('pointermove', (e) => {
   if (e.pointerId === joy.id) {
     let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy; const l = Math.hypot(dx, dy), mx = 54; if (l > mx) { dx *= mx / l; dy *= mx / l; }
     joy.x = dx / mx; joy.y = dy / mx; knob.style.transform = `translate(${dx}px,${dy}px)`;
+  } else if (drag.p2 && (e.pointerId === drag.id || e.pointerId === drag.p2.id)) {
+    if (e.pointerId === drag.id) { drag.x = e.clientX; drag.y = e.clientY; } else { drag.p2.x = e.clientX; drag.p2.y = e.clientY; }
+    const d = Math.hypot(drag.x - drag.p2.x, drag.y - drag.p2.y);
+    if (drag.pd) zoomView(drag.pd / d);
+    drag.pd = d;
   } else if (e.pointerId === drag.id) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
-    if (mode === 'bike' && S.cam !== 'fpv') look.orbit -= dx * 0.006;
+    if (mode === 'bike' && S.cam === 'chase') { look.orbit -= dx * 0.006; look.cUp = clamp(look.cUp + dy * 0.03, -1.5, 14); }
+    else if (mode === 'bike' && S.cam === 'orbit') { look.oYaw -= dx * 0.006; look.oPitch = clamp(look.oPitch + dy * 0.005, 0.03, 1.45); }
+    else if (mode === 'bike' && S.cam === 'top') look.tYaw -= dx * 0.005;
+    else if (mode === 'bike' && S.cam === 'heli') {}
     else if (mode === 'bike') { look.bYaw -= dx * 0.004; look.bPitch = clamp(look.bPitch - dy * 0.004, -1.2, 1.2); }
     else if (gyroOn()) look.trim -= dx * 0.004;
     else { look.yaw -= dx * 0.0042; look.pitch = clamp(look.pitch - dy * 0.0042, -1.3, 1.3); }
   }
 });
-const endPtr = (e) => { if (e.pointerId === joy.id) { joy.id = null; joy.x = joy.y = 0; stickEl.style.display = 'none'; } if (e.pointerId === drag.id) drag.id = null; };
+function zoomView(f) {
+  if (mode !== 'bike') return;
+  if (S.cam === 'orbit') look.oDist = clamp(look.oDist * f, 3.5, 70);
+  else if (S.cam === 'top') look.tH = clamp(look.tH * f, 12, 160);
+  else if (S.cam === 'chase') look.cUp = clamp(look.cUp + (f - 1) * 8, -1.5, 14);
+}
+canvas.addEventListener('wheel', (e) => { if (mode === 'bike') { e.preventDefault(); zoomView(Math.exp(e.deltaY * 0.0015)); } }, { passive: false });
+const endPtr = (e) => {
+  if (e.pointerId === joy.id) { joy.id = null; joy.x = joy.y = 0; stickEl.style.display = 'none'; }
+  if (drag.p2 && e.pointerId === drag.p2.id) { drag.p2 = null; drag.pd = 0; }
+  if (e.pointerId === drag.id) {
+    if (mode === 'bike' && S.cam === 'heli' && !drag.p2 && performance.now() - drag.st < 300 && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 10) heliNext(U.uTime.value, true);
+    drag.id = null; if (drag.p2) { drag.id = drag.p2.id; drag.x = drag.p2.x; drag.y = drag.p2.y; drag.p2 = null; drag.pd = 0; }
+  }
+};
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
 addEventListener('keydown', (e) => {
   if (!O || e.target.tagName === 'INPUT') return;
@@ -1243,7 +1372,7 @@ addEventListener('keydown', (e) => {
   if (k === 'r') recenter();
   if (k === 'm') { MV.open ? closeMap() : openMap(); }
   if (k === 'escape' && MV.open) closeMap();
-  if (k === 'g') goGps(false); if (k === 'c') { S.cam = S.cam === 'fpv' ? 'chase' : 'fpv'; saveS(); syncSettings(); }
+  if (k === 'g') goGps(false); if (k === 'c') cycleView();
   if (k === 'f') { S.fx = S.fx === 'high' ? 'low' : S.fx === 'low' ? 'off' : 'high'; saveS(); makeRTs(); toast('FX ' + S.fx.toUpperCase()); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
@@ -1262,7 +1391,7 @@ function readInput() {
     lx = dz(p.axes[2] || 0); ly = dz(p.axes[3] || 0);
     thr = ((p.buttons[7] && p.buttons[7].value) || 0) - ((p.buttons[6] && p.buttons[6].value) || 0);
     const bt = p.buttons.map((b) => b.pressed);
-    if (bt[0] && !padPrev[0]) toggleBike(); if (bt[2] && !padPrev[2]) toggleAuto(); if (bt[1] && !padPrev[1]) goGps(false); if (bt[3] && !padPrev[3]) { S.cam = S.cam === 'fpv' ? 'chase' : 'fpv'; saveS(); }
+    if (bt[0] && !padPrev[0]) toggleBike(); if (bt[2] && !padPrev[2]) toggleAuto(); if (bt[1] && !padPrev[1]) goGps(false); if (bt[3] && !padPrev[3]) cycleView();
     padPrev = bt; break;
   }
   return { x: clamp(x, -1, 1), y: clamp(y, -1, 1), lx, ly, thr, run };
@@ -1332,7 +1461,7 @@ for (const row of document.querySelectorAll('#settings .row[data-k]')) row.addEv
   if (k === 'fx') makeRTs();
   if (k === 'city' && old !== v) { worker.postMessage({ t: 'scale', hScale: +v }); for (const key of [...chunks.keys()]) dropChunk(key); lastWant = 0; glitch(1); }
   if (k === 'color') applyBikeColor();
-  if (k === 'cam') bike.g.visible = mode === 'bike' && v !== 'fpv';
+  if (k === 'cam') setView(v);
   if (k === 'look' && v === 'gyro') { const p = startSensors(); if (p && p.then) p.catch(() => {}); }
 });
 $('sRain').onclick = () => { S.rain = !S.rain; saveS(); syncSettings(); };
@@ -1630,8 +1759,10 @@ function frame(now) {
     }
   }
   if (mode === 'bike' && src !== 'free') { P.x = B.x; P.z = B.z; }
-  bike.g.visible = mode === 'bike' && S.cam !== 'fpv';
-  { const showL = mode === 'walk' || S.cam === 'fpv'; if (showL === $('level').classList.contains('hide')) $('level').classList.toggle('hide', !showL); }
+  bike.g.visible = mode === 'bike';
+  { const showL = mode === 'walk' || S.cam === 'fpv' || S.cam === 'chase' || S.cam === 'orbit'; if (showL === $('level').classList.contains('hide')) $('level').classList.toggle('hide', !showL); }
+  { const showV = mode === 'bike'; if (showV === $('viewBtn').classList.contains('hide')) { $('viewBtn').classList.toggle('hide', !showV); if (showV) viewMenuSync(); else $('viewMenu').classList.add('hide'); } }
+  { const showC = mode === 'bike' && S.cam === 'heli'; if (showC === $('cine').classList.contains('hide')) $('cine').classList.toggle('hide', !showC); }
   if (mode !== 'bike' || S.cam !== 'fpv') look.bRef = null;
   vel.x = lerp(vel.x, (P.x - px0) / Math.max(dt, 1e-3), Math.min(1, dt * 4)); vel.z = lerp(vel.z, (P.z - pz0) / Math.max(dt, 1e-3), Math.min(1, dt * 4));
   const spd = Math.hypot(vel.x, vel.z);
@@ -1643,22 +1774,38 @@ function frame(now) {
     bike.g.position.set(B.x, 0, B.z); bike.g.rotation.y = -B.yaw; bike.lean.rotation.z = B.lean; for (const w of bike.wheels) w.rotation.x = -B.spin;
     trail.add(B.x - Math.sin(B.yaw) * 1.3, B.z + Math.cos(B.yaw) * 1.3, t);
     const fx = Math.sin(B.yaw), fz = -Math.cos(B.yaw);
-    if (S.cam === 'fpv') {
-      camera.position.set(B.x + fx * 0.2, 1.45, B.z + fz * 0.2);
-      let ly2 = look.bYaw, lp2 = look.bPitch;
-      if (gyroOn()) { const e = devEuler(); if (!look.bRef) look.bRef = e; ly2 += wrapA(e.yaw - look.bRef.yaw); lp2 += e.pitch - look.bRef.pitch; }
-      camera.rotation.set(clamp(-0.05 + lp2 + inp.ly * -0.5, -1.3, 1.3), -B.yaw + ly2 + inp.lx * -1.2, -B.lean * 0.6);
-    } else {
-      if (!drag.id) look.orbit *= Math.exp(-dt * 0.8);
+    const view = S.cam;
+    if (view === 'fpv') {                          // COCKPIT: you sit on the bike, the phone is your head
+      const shake = Math.min(1, Math.abs(B.v) / 12);
+      camera.position.set(B.x - fx * 0.3 + (Math.random() - 0.5) * 0.006 * shake, 1.44 + Math.sin(t * 11) * 0.005 * shake, B.z - fz * 0.3);
+      let ly2 = look.bYaw, lp2 = look.bPitch, lr2 = 0;
+      if (headOn()) { const e = devEuler(); if (!look.bRef) look.bRef = e; ly2 += wrapA(e.yaw - look.bRef.yaw); lp2 += e.pitch - look.bRef.pitch; lr2 = clamp(wrapA(e.roll - look.bRef.roll) * 0.8, -0.6, 0.6); }
+      camera.rotation.set(clamp(-0.16 + lp2 + inp.ly * -0.5, -1.35, 1.35), -B.yaw + ly2 + inp.lx * -1.2, -B.lean * 0.6 + lr2);
+      camera.fov = lerp(camera.fov, 76 + Math.min(14, Math.abs(B.v) * 0.4), dt * 2);
+      if (now - (look.dashAt || 0) > 200) { look.dashAt = now; const c3 = BIKE_COL[S.color] || BIKE_COL.cyan; bike.drawDash(Math.abs(B.v) * 3.6, B.yaw * 180 / Math.PI, S.auto && src !== 'free' ? 'AUTO' : src === 'free' ? 'MANUAL' : 'GPS', `rgb(${c3.map((v) => Math.round(v * 255)).join(',')})`); }
+    } else if (view === 'heli') {
+      heliCam(dt, t);
+    } else if (view === 'orbit') {                // LOOK AROUND: drag all round the bike, pinch closer or further
+      const a = B.yaw + look.oYaw, d = look.oDist, cp = Math.cos(look.oPitch);
+      camPos.set(B.x - Math.sin(a) * d * cp, 1 + d * Math.sin(look.oPitch), B.z + Math.cos(a) * d * cp);
+      camera.position.lerp(camPos, 1 - Math.exp(-dt * 10)); camera.up.set(0, 1, 0); camera.lookAt(B.x, 1, B.z);
+      camera.fov = lerp(camera.fov, 60, dt * 3);
+    } else if (view === 'top') {                  // TOP DOWN, heading up
+      const a = B.yaw + look.tYaw;
+      camPos.set(B.x - fx * look.tH * 0.06, look.tH, B.z - fz * look.tH * 0.06);
+      camera.position.lerp(camPos, 1 - Math.exp(-dt * 6)); camera.up.set(Math.sin(a), 0, -Math.cos(a)); camera.lookAt(B.x + fx * 4, 0, B.z + fz * 4); camera.up.set(0, 1, 0);
+      camera.fov = lerp(camera.fov, 55, dt * 3);
+    } else {                                      // CHASE (drag to swing round; in AUTO/GPS it stays where you leave it)
+      if (!drag.id && src === 'free') look.orbit *= Math.exp(-dt * 0.8);
       look.orbit += inp.lx * -dt * 2;
-      const oy = B.yaw + look.orbit, ofx = Math.sin(oy), ofz = -Math.cos(oy), back = 6.5 + Math.min(4, Math.abs(B.v) * 0.08);
-      camPos.set(B.x - ofx * back + Math.cos(oy) * 1.1, 2.9 + Math.min(1.5, Math.abs(B.v) * 0.03), B.z - ofz * back + Math.sin(oy) * 1.1);
+      const oy = B.yaw + look.orbit, ofx = Math.sin(oy), ofz = -Math.cos(oy), back = 6.5 + Math.min(4, Math.abs(B.v) * 0.08) + look.cUp * 0.25;
+      camPos.set(B.x - ofx * back + Math.cos(oy) * 1.1, 2.9 + look.cUp + Math.min(1.5, Math.abs(B.v) * 0.03), B.z - ofz * back + Math.sin(oy) * 1.1);
       camera.position.lerp(camPos, 1 - Math.exp(-dt * 6));
       camTarget.set(B.x + fx * 6, 1.1, B.z + fz * 6);
       camera.up.set(Math.sin(B.lean) * 0.15 * Math.cos(B.yaw), 1, Math.sin(B.lean) * 0.15 * Math.sin(B.yaw)).normalize();
       camera.lookAt(camTarget); camera.up.set(0, 1, 0);
+      camera.fov = lerp(camera.fov, 72 + Math.min(16, Math.abs(B.v) * 0.45), dt * 2);
     }
-    camera.fov = lerp(camera.fov, 72 + Math.min(16, Math.abs(B.v) * 0.45), dt * 2);
     sfx.engine(true, Math.abs(B.v));
   } else {
     if (spd > 0.4) bobPh += spd * dt * 5.2;
@@ -1731,7 +1878,7 @@ function enterGame() {
 }
 resize();
 requestAnimationFrame(frame);
-window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, MV, openMap, closeMap, MP, cellCode, blockCodes, recenter, look };
+window.ZONE = { P, B, F, chunks, demo, get mode() { return mode; }, get src() { return src; }, get mapSrc() { return mapSrc; }, tileStat: () => tileStat, onFix, demoStart, toggleBike, enterBike, goFree, goGps, initWorld, S, scene, bike, camera, setView, HELI, MV, openMap, closeMap, MP, cellCode, blockCodes, recenter, look };
 if (Q.get('auto') === '1') { const lat = parseFloat(Q.get('lat')) || 47.3769, lon = parseFloat(Q.get('lon')) || 8.5417; $('start').classList.add('hide'); startSensors(); initWorld(lat, lon); src = 'free'; enterGame(); }
 </script>
 </body>
