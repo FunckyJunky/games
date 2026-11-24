@@ -31,7 +31,9 @@
 //   GET  /api/hf/ws?id=HF-XXXX&home=CODE       HOME FRONT: the phone that controls one screen (WebSocket)
 //   GET  /api/hf/list?home=CODE                HOME FRONT: the screens with that home code
 //   GET  /api/funda/<id>                       FUNDA WATCH: a house on funda.nl, price/views over time (src/funda.js)
-//   POST /api/funda/<id>/check                 FUNDA WATCH: read Funda now (also every 30 min by the cron)
+//   POST /api/funda/<id>/check                 FUNDA WATCH: read Funda now (the cron reads it on its own schedule)
+//   PUT  /api/funda/<id>/settings {every}      FUNDA WATCH: how often to read Funda (minutes)
+//   POST /api/funda/<id>/notify {sub, prefs}   FUNDA WATCH: notifications for one phone (GET/DELETE too, /notify/test)
 //   GET  /api/health                           quick check that the server runs
 
 import { DurableObject } from "cloudflare:workers";
@@ -796,6 +798,8 @@ async function handlePush(request, env, url) {
   await db.prepare("INSERT OR REPLACE INTO push_subs (endpoint, p256dh, auth, created) VALUES (?, ?, ?, ?)").bind(endpoint, keys.p256dh, keys.auth, Date.now()).run();
   return json({ ok: true });
 }
+// FUNDA WATCH sends its notifications with the same Web Push code (src/funda.js)
+const fundaPush = (env) => ({ send: sendPush, ok: (endpoint) => pushEndpointOk(endpoint, env.PUSH_LOCAL_TEST === "1") });
 // someone typed their name in TUSA: tell every other phone that asked for it
 // (at most once every 10 minutes per friend, so reconnecting doesn't spam)
 const TUSA_HELLO = {
@@ -996,7 +1000,7 @@ export default {
 
       if (path.startsWith("/api/hud/")) return await handleHud(request, env, url);
 
-      if (path === "/api/funda" || path.startsWith("/api/funda/")) return await handleFunda(request, env, url);
+      if (path === "/api/funda" || path.startsWith("/api/funda/")) return await handleFunda(request, env, url, fundaPush(env));
 
       if (path === "/thuisfront/dev/ws" || path.startsWith("/api/hf/")) return env.HF.get(env.HF.idFromName("main")).fetch(request);
 
@@ -1048,7 +1052,7 @@ export default {
 
   // the cron in wrangler.jsonc (every 30 minutes): FUNDA WATCH reads funda.nl
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(fundaCron(env));
+    ctx.waitUntil(fundaCron(env, fundaPush(env)));
   },
 };
 

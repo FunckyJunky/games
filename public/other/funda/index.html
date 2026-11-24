@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FUNDA WATCH · Rozengaard 11 4, Lelystad</title>
 <meta name="robots" content="noindex">
+<link rel="manifest" href="/other/funda/manifest.webmanifest">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/other/funda/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Funda Watch">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 15 16 5l12 10v13H4z' fill='%232a78d6'/%3E%3Cpath d='M13 28v-8h6v8' fill='%23fff'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -13,6 +21,7 @@
     --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
     --grid: #e1e0d9; --axis: #c3c2b7;
     --s1: #2a78d6; --s1-soft: rgba(42,120,214,.12); --s2: #eb6834; --s2-soft: rgba(235,104,52,.12);
+    --s3: #1baf7a; --s7: #6250d6;
     --good: #006300; --bad: #d03b3b; --warn-bg: #fff4dc; --warn-edge: #f0c766;
     --tip: #0b0b0b; --tip-ink: #f0efec;
     --radius: 14px;
@@ -24,6 +33,7 @@
       --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
       --grid: #2c2c2a; --axis: #383835;
       --s1: #3987e5; --s1-soft: rgba(57,135,229,.16); --s2: #d95926; --s2-soft: rgba(217,89,38,.16);
+      --s3: #199e70; --s7: #9085e9;
       --good: #0ca30c; --bad: #e66767; --warn-bg: #2e2510; --warn-edge: #6b5316;
       --tip: #f0efec; --tip-ink: #0b0b0b;
     }
@@ -122,6 +132,40 @@
   th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
   th:first-child, td:first-child { text-align: left; }
   td.src { color: var(--muted); font-size: 12px; }
+  /* 3D price history */
+  .c3d { position: relative; height: 300px; margin: 6px -6px 0; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .c3d.drag { cursor: grabbing; }
+  .c3d canvas { display: block; width: 100%; height: 100%; }
+  .c3d .hint { position: absolute; right: 8px; top: 6px; font-size: 12px; color: var(--muted); pointer-events: none; transition: opacity .4s; }
+  .c3d .reset { position: absolute; left: 8px; top: 4px; font: 600 12px/1 inherit; font-family: inherit; color: var(--ink-2); background: var(--surface);
+    border: 1px solid var(--card-edge); border-radius: 999px; padding: 6px 10px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .c3d .reset.on { opacity: 1; pointer-events: auto; }
+  @media (max-width: 480px) { .c3d { height: 250px; } }
+  .legend .sq { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+  .legend .sq.ghost { opacity: .35; outline: 1.5px dashed var(--ink-2); outline-offset: -1.5px; }
+  .info3d { font-size: 14px; min-height: 42px; margin: 6px 0 4px; padding: 9px 12px; border-radius: 10px; background: var(--page); color: var(--ink-2); }
+  .info3d b { color: var(--ink); }
+  /* settings */
+  .set h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
+  .set h3:first-of-type { margin-top: 8px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .btn {
+    font: 600 13.5px/1 inherit; font-family: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--card-edge); border-radius: 999px; padding: 9px 13px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .btn.primary { background: var(--s1); border-color: var(--s1); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .set .line { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .set .sep { border: 0; border-top: 1px solid var(--grid); margin: 16px 0 4px; }
+  .checks { display: grid; gap: 2px; margin: 4px 0 6px; }
+  .checks label { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14.5px; cursor: pointer; }
+  .checks input { width: 20px; height: 20px; accent-color: var(--s1); margin: 0; flex: none; }
+  .checks small { color: var(--muted); font-size: 12.5px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ok { color: var(--good); font-weight: 600; font-size: 13.5px; }
+  .tip-box { font-size: 13.5px; background: var(--page); border-radius: 10px; padding: 10px 12px; color: var(--ink-2); margin: 6px 0; }
+  #installBtn[hidden] { display: none; }
   footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 18px; }
   footer code { font-size: 12px; }
 </style>
@@ -133,6 +177,7 @@
     <div class="crumb"><a href="/">error.blue</a> / other / <b>funda watch</b></div>
     <div class="spacer"></div>
     <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Loading…</span></div>
+    <button class="check" id="installBtn" type="button" hidden>Install app</button>
     <button class="check" id="checkBtn" type="button">Check now</button>
   </div>
 
@@ -191,8 +236,14 @@
 
   <section class="card panel" id="histPanel" hidden>
     <h2>Earlier prices of this address</h2>
-    <p class="note">From Walter Living's price history (asking prices, sales, WOZ).</p>
-    <div class="tbl"><table><thead><tr><th>Date</th><th>What</th><th>Price</th></tr></thead><tbody id="histBody"></tbody></table></div>
+    <p class="note">WOZ values and Funda prices over the years, from Walter Living's price history. Drag to turn, tap a bar for details.</p>
+    <div class="c3d" id="c3d"><canvas id="cv3d" aria-label="3D bar chart of earlier prices of this address" role="img"></canvas><span class="hint" id="hint3d">Drag to turn ⟲</span><button class="reset" id="reset3d" type="button">Reset view</button></div>
+    <div class="legend" id="legend3d"></div>
+    <div class="info3d" id="info3d"></div>
+    <details style="margin-top:8px"><summary>As a table</summary>
+      <div class="tbl"><table><thead><tr><th>Date</th><th>What</th><th>Price</th></tr></thead><tbody id="histBody"></tbody></table></div>
+    </details>
+    <p class="note" id="walterLink" style="margin-top:8px"></p>
   </section>
 
   <section class="card panel">
@@ -202,8 +253,24 @@
     </details>
   </section>
 
+  <section class="card panel set" id="settings">
+    <h2>Settings</h2>
+
+    <h3>Check Funda automatically</h3>
+    <div class="seg" id="everySeg" role="group" aria-label="How often to check Funda"></div>
+    <p class="line" id="everyLine"></p>
+
+    <hr class="sep">
+    <h3>Notifications on this device</h3>
+    <div id="notifyBox"><p class="line">Loading…</p></div>
+
+    <hr class="sep">
+    <h3>App</h3>
+    <div id="appBox"></div>
+  </section>
+
   <footer>
-    The watcher reads Funda every 30 minutes, also when this page is closed.<br>
+    <span id="footEvery">The watcher reads Funda on its own, also when this page is closed.</span><br>
     <span id="foot"></span>
   </footer>
 </div>
@@ -449,12 +516,25 @@ function dailyViews(rs) {
   }
   return out;
 }
+// when a Walter Living entry happened: "30 okt 2026" / "1 jan 2025" (its ts is sometimes just the year)
+const MON = { jan: 0, feb: 1, mrt: 2, maa: 2, mar: 2, apr: 3, mei: 4, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, okt: 9, oct: 9, nov: 10, dec: 11 };
+function histTime(c) {
+  const m = String(c.date || "").toLowerCase().match(/(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(\d{4})/);
+  if (m && MON[m[2]] != null) return Date.UTC(+m[3], MON[m[2]], +m[1], 11);
+  if (c.ts > 1e11) return c.ts;
+  if (c.ts > 1e8) return c.ts * 1000;
+  if (c.ts > 1900 && c.ts < 3000) return Date.UTC(c.ts, 0, 1, 11);
+  const t = Date.parse(c.date);
+  return isNaN(t) ? null : t;
+}
+const histKind = (c) => /woz/i.test(c.status || c.badge || "") ? "woz" : /verkocht|sold/i.test(c.status || c.badge || "") ? "sold" : /vraagprijs|asking|te koop/i.test(c.status || c.badge || "") ? "asking" : "other";
+const KIND_NAME = { woz: "WOZ value", sold: "Sold", asking: "Asking price", other: "Price" };
 // asking-price changes from Walter Living's history between the listing date and the first reading
 function earlierAsking(d, listed, until) {
   const ch = d.history && Array.isArray(d.history.changes) ? d.history.changes : [];
   return ch
-    .filter((c) => c.price && c.ts && /vraagprijs|asking/i.test(c.status || ""))
-    .map((c) => ({ t: c.ts * (c.ts < 1e12 ? 1000 : 1), price: c.price }))
+    .filter((c) => c.price && histKind(c) === "asking")
+    .map((c) => ({ t: histTime(c), price: c.price }))
     .filter((c) => listed && c.t >= listed - 2 * DAY && c.t < until)
     .sort((a, b) => a.t - b.t);
 }
@@ -495,12 +575,13 @@ function render() {
   }
 
   // live status
-  const okRecent = d.lastOk && Date.now() - d.lastOk < 2 * 3600000;
+  const okRecent = d.lastOk && Date.now() - d.lastOk < ((d.every || 1440) + 90) * 60000;
   $("dot").className = "dot " + (okRecent ? "on" : d.lastTry ? "off" : "");
   $("liveTxt").textContent = d.lastOk ? "Checked " + ago(d.lastOk) : "Waiting for the first check";
   const failing = d.lastTry && (!d.lastOk || d.lastTry > d.lastOk);
+  renderEvery();
   $("warn").innerHTML = failing
-    ? `<b>Funda didn't answer the last check</b> (${esc(fWhen(d.lastTry))}). ${esc(d.lastError || "")}<br>The watcher keeps trying every 30 minutes; the numbers below are from the last good reading.`
+    ? `<b>Funda didn't answer the last check</b> (${esc(fWhen(d.lastTry))}). ${esc(d.lastError || "")}<br>The watcher tries again within the hour; the numbers below are from the last good reading.`
     : "";
 
   // tiles
@@ -565,7 +646,7 @@ function render() {
   const sEst = savePts.length && listed && listed < savePts[0].t ? [{ t: listed, v: 0, est: true }] : [];
   lineChart($("cSaves"), { pts: savePts, est: sEst, color: "var(--s2)", soft: "var(--s2-soft)", yFmt: num, zero: true, marks, label: "total saves over time", tip: tipCounter("saves") });
 
-  barChart($("cDaily"), dailyViews(rs), { empty: "Needs two readings. The first bars appear after the next check (every 30 minutes)." });
+  barChart($("cDaily"), dailyViews(rs), { empty: "Needs two readings. The first bars appear after the next check." });
 
   // what changed
   const ev = [];
@@ -600,11 +681,13 @@ function render() {
   ev.sort((a, b) => b.t - a.t);
   $("log").innerHTML = ev.map((e) => `<li><time>${e.before ? "before " + fDate(e.t + 1) : e.day || e.t === listed ? fDateY(e.t) : fWhen(e.t)}</time><span class="what">${e.html}</span></li>`).join("");
 
-  // Walter Living history
+  // Walter Living history: 3D chart + table
   const h = d.history && Array.isArray(d.history.changes) ? d.history.changes.filter((c) => c.price || c.text) : [];
   $("histPanel").hidden = !h.length;
   if (h.length) {
-    $("histBody").innerHTML = h.map((c) => `<tr><td>${esc(c.date || (c.ts ? fDateY(c.ts * (c.ts < 1e12 ? 1000 : 1)) : ""))}</td><td>${esc(c.badge || c.status || "")}</td><td>${c.price ? eur(c.price) : esc(c.text)}</td></tr>`).join("");
+    $("histBody").innerHTML = h.map((c) => { const t = histTime(c); return `<tr><td>${t ? fDateY(t) : esc(c.date || "")}</td><td>${esc(KIND_NAME[histKind(c)] === "Price" ? (c.badge || c.status || "") : KIND_NAME[histKind(c)])}</td><td>${c.price ? eur(c.price) : esc(c.text)}</td></tr>`; }).join("");
+    $("walterLink").innerHTML = d.history.report ? `<a href="${esc(d.history.report)}" target="_blank" rel="noopener">Full report on Walter Living ↗</a>` : "";
+    Chart3D.set(h, { listed, price: last.price, orig: origPrice });
   }
 
   // all readings
@@ -612,6 +695,474 @@ function render() {
   $("rows").innerHTML = rs.slice().reverse().map((r) => `<tr><td>${fWhen(r.t)}</td><td>${eur(r.price)}</td><td>${num(r.views)}</td><td>${num(r.saves)}</td><td>${esc(r.status || "")}</td><td class="src">${SRC[r.src] || esc(r.src || "")}</td></tr>`).join("");
 
   $("foot").innerHTML = d.lastOk ? "Last good reading " + esc(fWhen(d.lastOk)) + (d.source ? " via " + (SRC[d.source] || d.source) : "") : "";
+}
+
+// ---------- 3D bars: earlier prices of this address (plain canvas, no library) ----------
+// Two rows of bars, one slot per year: WOZ values in front, Funda prices (asking, sold) behind.
+// The current asking price gets a faded cap up to the original asking price.
+const Chart3D = (() => {
+  const box = $("c3d"), cv = $("cv3d"), ctx = cv.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const YAW0 = 0.3, PITCH0 = 0.36, YAW_MAX = 0.75, PITCH_MIN = 0.12, PITCH_MAX = 0.85;
+  let bars = [], years = [], lanes = [], ticks = [], hMax = 1;
+  let yaw = YAW0, pitch = PITCH0, vYaw = 0, touched = false, sel = null, hover = null;
+  let W = 0, H = 0, dpr = 1, fit = null, grow = reduce ? 1 : 0, growStart = 0, visible = false, raf = 0, t0 = performance.now();
+  const SLOT = 1, BW = 0.62, LANE_D = 1.1, BAR_D = 0.62, HEIGHT = 4.6;
+
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const rgb = (hex) => { const m = hex.replace("#", ""); const n = parseInt(m.length === 3 ? m.replace(/./g, "$&$&") : m, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const shade = (c, k, a = 1) => `rgba(${c.map((v) => Math.round(Math.min(255, v * k))).join(",")},${a})`;
+  const short = (v) => "€" + Math.round(v / 1000) + "k";
+
+  function set(changes, cur) {
+    const rows = changes.filter((c) => c.price).map((c) => ({ t: histTime(c), v: c.price, kind: histKind(c), c })).filter((r) => r.t);
+    const yearOf = (t) => new Date(t).getUTCFullYear();
+    // this listing's own asking prices are drawn as one bar: now, with a cap up to the original price
+    const own = (r) => r.kind === "asking" && cur.listed && r.t >= cur.listed - 2 * DAY;
+    const list = [];
+    for (const r of rows) if (!own(r)) list.push({ lane: r.kind === "woz" ? 0 : 1, year: yearOf(r.t), v: r.v, kind: r.kind, t: r.t, name: KIND_NAME[r.kind] });
+    if (cur.price) list.push({ lane: 1, year: yearOf(Date.now()), v: cur.price, ghost: cur.orig && cur.orig > cur.price ? cur.orig : null, kind: "asking", t: Date.now(), name: "Asking price now", now: true, listed: cur.listed, orig: cur.orig });
+    if (!list.length) return;
+    const y0 = Math.min(...list.map((b) => b.year)), y1 = Math.max(...list.map((b) => b.year));
+    years = []; for (let y = y0; y <= y1; y++) years.push(y);
+    // several bars in one year and row share the slot
+    const groups = {};
+    for (const b of list) (groups[b.lane + ":" + b.year] ||= []).push(b);
+    for (const k in groups) groups[k].sort((a, b) => a.t - b.t).forEach((b, i, g) => { b.w = BW / g.length; b.dx = -BW / 2 + b.w * (i + 0.5); });
+    const xMid = (y0 + y1) / 2;
+    for (const b of list) { b.x = (b.year - xMid) * SLOT + b.dx; b.z = b.lane * LANE_D; }
+    // change vs the bar before it in the same row
+    for (const lane of [0, 1]) list.filter((b) => b.lane === lane).sort((a, b) => a.t - b.t).forEach((b, i, arr) => { b.prev = i ? arr[i - 1] : null; });
+    // keep the tapped bar selected when the page reloads its data
+    const key = (b) => b && (b.now ? "now" : b.kind + ":" + b.t);
+    const was = key(sel);
+    sel = was ? list.find((b) => key(b) === was) || null : null;
+    hover = null;
+    bars = list;
+    lanes = [{ z: 0, name: "WOZ value" }, { z: LANE_D, name: "On Funda" }];
+    const vmax = Math.max(...list.map((b) => b.ghost || b.v));
+    ticks = niceTicks(0, vmax, 5).filter((v) => v > 0);
+    hMax = ticks[ticks.length - 1];
+    const woz = list.filter((b) => b.kind === "woz").sort((a, b) => a.t - b.t);
+    // labels on a few bars only: first and last WOZ, every Funda bar
+    for (const b of list) b.label = b.lane === 1 || b === woz[0] || b === woz[woz.length - 1];
+    legend(list); info();
+    layout();
+  }
+
+  function legend(list) {
+    const kinds = new Set(list.map((b) => b.kind));
+    const items = [];
+    if (kinds.has("woz")) items.push('<span><i class="sq" style="background:var(--s3)"></i>WOZ value (1 Jan of each year)</span>');
+    if (kinds.has("asking")) items.push('<span><i class="sq" style="background:var(--s1)"></i>Asking price</span>');
+    if (list.some((b) => b.ghost)) items.push('<span><i class="sq ghost" style="background:var(--s1)"></i>Original asking price</span>');
+    if (kinds.has("sold")) items.push('<span><i class="sq" style="background:var(--s7)"></i>Sold</span>');
+    $("legend3d").innerHTML = items.join("");
+  }
+
+  function info() {
+    const el = $("info3d");
+    const b = sel;
+    if (b) {
+      let txt = `<b>${esc(b.name)}</b> · ${b.now ? "today" : b.kind === "woz" ? "1 Jan " + b.year : fDateY(b.t)}: <b>${eur(b.v)}</b>`;
+      if (b.ghost) txt += ` (listed at ${eur(b.ghost)} on ${b.listed ? fDateY(b.listed) : "Funda"}, ${sign(b.v - b.ghost, eur)})`;
+      if (b.prev && !b.now) txt += ` · ${sign(b.v - b.prev.v, eur)} (${((b.v / b.prev.v - 1) * 100).toFixed(1).replace("-", "−")}%) vs ${b.prev.year}`;
+      const lastWoz = bars.filter((x) => x.kind === "woz").sort((a, c) => c.t - a.t)[0];
+      if (b.lane === 1 && lastWoz) txt += ` · ${((b.v / lastWoz.v - 1) * 100).toFixed(0)}% ${b.v >= lastWoz.v ? "above" : "below"} the ${lastWoz.year} WOZ value`;
+      el.innerHTML = txt;
+      return;
+    }
+    const woz = bars.filter((x) => x.kind === "woz").sort((a, c) => a.t - c.t);
+    const now = bars.find((x) => x.now);
+    const parts = [];
+    if (woz.length > 1) {
+      const a = woz[0], z = woz[woz.length - 1];
+      parts.push(`WOZ value went from <b>${eur(a.v)}</b> (${a.year}) to <b>${eur(z.v)}</b> (${z.year}): <b>${sign(Math.round((z.v / a.v - 1) * 100))}%</b>.`);
+      if (now) parts.push(`The asking price now is <b>${Math.round((now.v / z.v - 1) * 100)}% ${now.v >= z.v ? "above" : "below"}</b> the ${z.year} WOZ value.`);
+    }
+    el.innerHTML = parts.join(" ") || "Tap a bar for details.";
+  }
+
+  // ----- camera -----
+  function basis(yw, pt) {
+    const D = 18;
+    const T = [0, HEIGHT * 0.38, LANE_D / 2];
+    const cam = [T[0] + D * Math.sin(yw) * Math.cos(pt), T[1] + D * Math.sin(pt), T[2] - D * Math.cos(yw) * Math.cos(pt)];
+    let f = [T[0] - cam[0], T[1] - cam[1], T[2] - cam[2]];
+    const fl = Math.hypot(...f); f = f.map((v) => v / fl);
+    let r = [f[2], 0, -f[0]]; const rl = Math.hypot(...r); r = r.map((v) => v / rl);
+    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]];
+    return { cam, f, r, u };
+  }
+  function proj(B, p) {
+    const d = [p[0] - B.cam[0], p[1] - B.cam[1], p[2] - B.cam[2]];
+    const z = d[0] * B.f[0] + d[1] * B.f[1] + d[2] * B.f[2];
+    const x = (d[0] * B.r[0] + d[1] * B.r[1] + d[2] * B.r[2]) / z;
+    const y = (d[0] * B.u[0] + d[1] * B.u[1] + d[2] * B.u[2]) / z;
+    return fit ? [fit.cx + x * fit.s, fit.cy - y * fit.s, z] : [x, y, z];
+  }
+  // the scale that keeps the whole chart inside the canvas at every angle the user can turn to
+  function layout() {
+    const r = box.getBoundingClientRect();
+    dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    if (!bars.length) return;
+    fit = null;
+    const xs = years.length * SLOT / 2 + 0.4;
+    const pts = [];
+    for (const x of [-xs - 2.4, xs + 0.2]) for (const y of [-0.2, HEIGHT * 1.1]) for (const z of [-0.9, LANE_D + 0.6]) pts.push([x, y, z]);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const yw of [YAW0 - 0.2, YAW0, YAW0 + 0.2]) for (const pt of [PITCH0 - 0.05, PITCH0 + 0.05]) {
+      const B = basis(yw, pt);
+      for (const p of pts) { const [x, y] = proj(B, p); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    }
+    const s = Math.min((W - 12) / (x1 - x0), (H - 12) / (y1 - y0)); // fits the resting view; turning far may crop a little
+    fit = { s, cx: W / 2 - ((x0 + x1) / 2) * s, cy: H / 2 + ((y0 + y1) / 2) * s };
+    draw();
+  }
+
+  // ----- drawing -----
+  const L = (() => { const v = [-0.45, 1, -0.6]; const l = Math.hypot(...v); return v.map((x) => x / l); })();
+  function poly(ps, fill, stroke, lw = 1, dash) {
+    ctx.beginPath(); ps.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.setLineDash(dash || []); ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); ctx.setLineDash([]); }
+  }
+  function boxFaces(B, x0, x1, y0, y1, z0, z1) {
+    const P = (x, y, z) => proj(B, [x, y, z]);
+    const faces = [
+      { n: [0, 1, 0], c: [(x0 + x1) / 2, y1, (z0 + z1) / 2], p: [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]] },
+      { n: [0, 0, -1], c: [(x0 + x1) / 2, (y0 + y1) / 2, z0], p: [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]] },
+      { n: [0, 0, 1], c: [(x0 + x1) / 2, (y0 + y1) / 2, z1], p: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]] },
+      { n: [-1, 0, 0], c: [x0, (y0 + y1) / 2, (z0 + z1) / 2], p: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]] },
+      { n: [1, 0, 0], c: [x1, (y0 + y1) / 2, (z0 + z1) / 2], p: [[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0]] },
+    ];
+    return faces.filter((f) => f.n[0] * (B.cam[0] - f.c[0]) + f.n[1] * (B.cam[1] - f.c[1]) + f.n[2] * (B.cam[2] - f.c[2]) > 0)
+      .map((f) => ({ n: f.n, p: f.p.map((q) => P(...q)) }));
+  }
+  function inPoly(x, y, ps) {
+    let inside = false;
+    for (let i = 0, j = ps.length - 1; i < ps.length; j = i++) {
+      const [xi, yi] = ps[i], [xj, yj] = ps[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function label(text, x, y, color, bold) {
+    ctx.font = `${bold ? 650 : 500} 11.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.lineWidth = 3.5; ctx.strokeStyle = css("--surface"); ctx.lineJoin = "round"; ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  }
+
+  function draw() {
+    if (!fit || !bars.length) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const B = basis(yaw, pitch);
+    const ink = css("--ink"), ink2 = css("--ink-2"), muted = css("--muted"), grid = css("--grid"), axis = css("--axis");
+    const col = { woz: rgb(css("--s3")), asking: rgb(css("--s1")), sold: rgb(css("--s7")), other: rgb(css("--muted")) };
+    const xs = years.length * SLOT / 2;
+    const zF = -0.55, zB = LANE_D + 0.42;
+    const Y = (v) => (v / hMax) * HEIGHT;
+    const P = (x, y, z) => proj(B, [x, y, z]);
+
+    // floor, one strip per row
+    for (const ln of lanes) poly([P(-xs, 0, ln.z - 0.45), P(xs, 0, ln.z - 0.45), P(xs, 0, ln.z + 0.45), P(-xs, 0, ln.z + 0.45)], shade(rgb(css("--grid")), 1, 0.55));
+    poly([P(-xs, 0, zF), P(xs, 0, zF), P(xs, 0, zB), P(-xs, 0, zB)], null, axis, 1);
+    // back wall with the price lines
+    poly([P(-xs, 0, zB), P(xs, 0, zB), P(xs, HEIGHT * 1.02, zB), P(-xs, HEIGHT * 1.02, zB)], shade(rgb(css("--grid")), 1, 0.18), null);
+    let lastLabelY = Infinity;
+    for (const v of ticks) {
+      const a = P(-xs, Y(v), zB), b = P(xs, Y(v), zB);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.stroke();
+      // price at the left end of the wall
+      const q = P(-xs, Y(v), zB);
+      if (lastLabelY - q[1] < 14) continue; // too close to the one below: skip
+      lastLabelY = q[1];
+      ctx.font = "500 11px system-ui, sans-serif"; ctx.fillStyle = muted; ctx.textBaseline = "middle"; ctx.textAlign = "right";
+      ctx.fillText(short(v), q[0] - 6, q[1]);
+    }
+    // years along the front edge
+    const step = years.length > 9 && W < 560 ? 2 : 1;
+    ctx.font = "500 11px system-ui, sans-serif"; ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    years.forEach((y, i) => {
+      if ((years.length - 1 - i) % step) return;
+      const q = P((i - (years.length - 1) / 2) * SLOT, 0, zF - 0.15);
+      ctx.fillText(step === 2 || W < 420 ? "’" + String(y).slice(2) : String(y), q[0], q[1] + 2);
+    });
+
+    // bars, far ones first
+    const now = performance.now();
+    const order = bars.map((b, i) => ({ b, i, d: Math.hypot(B.cam[0] - b.x, B.cam[1] - HEIGHT / 3, B.cam[2] - b.z) })).sort((a, c) => c.d - a.d);
+    const hitList = [];
+    for (const { b, i } of order) {
+      const g = reduce ? 1 : Math.max(0, Math.min(1, (now - growStart - i * 45) / 650));
+      const e = 1 - Math.pow(1 - g, 3);
+      const h = Y(b.v) * e;
+      const x0 = b.x - b.w / 2 + 0.02, x1 = b.x + b.w / 2 - 0.02, z0 = b.z - BAR_D / 2, z1 = b.z + BAR_D / 2;
+      const c = col[b.kind] || col.other;
+      const on = b === sel || b === hover;
+      const faces = boxFaces(B, x0, x1, 0, Math.max(0.001, h), z0, z1);
+      for (const f of faces) {
+        const lit = 0.62 + 0.42 * Math.max(0, f.n[0] * L[0] + f.n[1] * L[1] + f.n[2] * L[2]);
+        poly(f.p, shade(c, lit * (on ? 1.12 : 1)), shade(c, lit * 0.8), 0.6);
+      }
+      hitList.push({ b, faces });
+      if (b.ghost && e > 0.98) {
+        const gf = boxFaces(B, x0, x1, h, Y(b.ghost), z0, z1);
+        for (const f of gf) poly(f.p, shade(c, 1, 0.16), shade(c, 0.9, 0.9), 1.2, [4, 3]);
+        hitList.push({ b, faces: gf });
+      }
+      if (on) for (const f of faces) poly(f.p, null, ink, 1.6);
+      b._top = P(b.x, Math.max(h, b.ghost && e > 0.98 ? Y(b.ghost) : 0), b.z);
+      b._e = e;
+    }
+    // value labels (text in ink colours, never the bar colour)
+    for (const b of bars) {
+      if (!(b.label || b === sel || b === hover) || b._e < 0.9) continue;
+      const [x, y] = b._top;
+      if (b.ghost) {
+        label((b.now ? "now " : "") + short(b.v), x, y - 4, ink, true);
+        label("was " + short(b.ghost), x, y - 18, muted, false);
+      } else label(short(b.v), x, y - 4, b === sel || b === hover ? ink : ink2, b === sel || b === hover);
+    }
+    draw.hits = hitList;
+    if (!(reduce || now - growStart > 650 + bars.length * 45 + 50)) queue();
+  }
+  function hitTest(ev) {
+    const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const hs = draw.hits || [];
+    for (let i = hs.length - 1; i >= 0; i--) for (const f of hs[i].faces) if (inPoly(x, y, f.p)) return hs[i].b;
+    return null;
+  }
+
+  // ----- motion: a slow sway until touched, drag to turn with a little inertia -----
+  function queue() { if (!raf) raf = requestAnimationFrame(tick); }
+  function tick(now) {
+    raf = 0;
+    if (!visible) return;
+    let moving = false;
+    if (!touched && !reduce) { yaw = YAW0 + Math.sin((now - t0) / 4200) * 0.16; moving = true; }
+    else if (Math.abs(vYaw) > 0.0004 && !drag) { yaw = Math.max(-YAW_MAX, Math.min(YAW_MAX, yaw + vYaw)); vYaw *= 0.92; moving = true; }
+    draw();
+    if (moving) queue();
+  }
+  let drag = null;
+  box.addEventListener("pointerdown", (ev) => {
+    drag = { x: ev.clientX, y: ev.clientY, yaw, pitch, moved: false, id: ev.pointerId, last: ev.clientX, lt: performance.now() };
+    vYaw = 0;
+  });
+  box.addEventListener("pointermove", (ev) => {
+    if (drag && ev.pointerId === drag.id) {
+      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      if (!drag.moved && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) { drag.moved = true; box.setPointerCapture(ev.pointerId); box.classList.add("drag"); touched = true; $("hint3d").style.opacity = 0; $("reset3d").classList.add("on"); }
+      if (drag.moved) {
+        ev.preventDefault();
+        yaw = Math.max(-YAW_MAX, Math.min(YAW_MAX, drag.yaw - dx * 0.008));
+        pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, drag.pitch + dy * 0.006));
+        const t = performance.now(); vYaw = -(ev.clientX - drag.last) * 0.008 * Math.min(1, 16 / Math.max(1, t - drag.lt)); drag.last = ev.clientX; drag.lt = t;
+        draw();
+      }
+      return;
+    }
+    if (ev.pointerType === "mouse") { const b = hitTest(ev); if (b !== hover) { hover = b; draw(); } }
+  });
+  const end = (ev) => {
+    if (!drag) return;
+    if (!drag.moved) { const b = hitTest(ev); sel = b === sel ? null : b; info(); draw(); }
+    else queue();
+    box.classList.remove("drag");
+    drag = null;
+  };
+  box.addEventListener("pointerup", end);
+  box.addEventListener("pointercancel", () => { drag = null; box.classList.remove("drag"); });
+  box.addEventListener("pointerleave", () => { if (hover) { hover = null; draw(); } });
+  $("reset3d").addEventListener("click", (ev) => { ev.stopPropagation(); touched = false; t0 = performance.now() - Math.asin(0) ; yaw = YAW0; pitch = PITCH0; vYaw = 0; sel = null; info(); $("reset3d").classList.remove("on"); $("hint3d").style.opacity = 1; queue(); });
+  $("reset3d").addEventListener("pointerdown", (ev) => ev.stopPropagation());
+
+  new IntersectionObserver((es) => {
+    visible = es[0].isIntersecting;
+    if (visible) { if (!growStart) growStart = performance.now(); queue(); }
+  }, { threshold: 0.25 }).observe(box);
+  let rz = 0;
+  addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(layout, 100); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  return { set };
+})();
+
+// ---------- settings: how often to check ----------
+const EVERY_NAME = { 30: "Every 30 min", 60: "Every hour", 180: "Every 3 hours", 360: "Every 6 hours", 720: "Twice a day", 1440: "Once a day" };
+const everyText = (m) => ({ 30: "every 30 minutes", 60: "every hour", 180: "every 3 hours", 360: "every 6 hours", 720: "twice a day", 1440: "once a day" })[m] || "every " + m + " minutes";
+function renderEvery() {
+  const d = DATA; if (!d) return;
+  const seg = $("everySeg");
+  if (!seg.children.length) {
+    seg.innerHTML = (d.choices || [30, 60, 180, 360, 720, 1440]).map((m) => `<button type="button" data-m="${m}">${EVERY_NAME[m] || m + " min"}</button>`).join("");
+    seg.addEventListener("click", async (ev) => {
+      const b = ev.target.closest("button"); if (!b) return;
+      const m = +b.dataset.m;
+      [...seg.children].forEach((x) => x.setAttribute("aria-pressed", x === b));
+      $("everyLine").textContent = "Saving…";
+      try {
+        const r = await fetch(API + "/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ every: m }) });
+        const nd = await r.json();
+        if (!r.ok) throw new Error(nd.error || "HTTP " + r.status);
+        DATA = nd; render();
+        $("everyLine").innerHTML = '<span class="ok">Saved ✓</span> ' + esc($("everyLine").textContent);
+      } catch (e) { $("everyLine").textContent = "Couldn't save: " + e.message; }
+    });
+  }
+  [...seg.children].forEach((x) => x.setAttribute("aria-pressed", +x.dataset.m === d.every));
+  const parts = [];
+  if (d.next) parts.push("Next check about " + (dayStart(d.next) === dayStart(Date.now()) ? fTime(d.next) : fWhen(d.next)));
+  if (d.lastOk) parts.push("last " + fWhen(d.lastOk));
+  $("everyLine").textContent = parts.join(" · ") + ". Check now (top) works any time.";
+  $("footEvery").textContent = "The watcher reads Funda " + everyText(d.every) + ", also when this page is closed.";
+  notifyHint();
+}
+
+// ---------- web app: service worker, install, notifications ----------
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let swReg = null, installEvt = null, NOTE = { on: false, prefs: null, sub: null, busy: false, msg: "" };
+const PREF_DEFAULT = { price: true, status: true, saves: true, views: 100 };
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/other/funda/sw.js", { scope: "/other/funda/" })
+    .then((r) => { swReg = r; return navigator.serviceWorker.ready; })
+    .then(() => loadNotify())
+    .catch(() => { renderNotify(); });
+} else setTimeout(renderNotify, 0);
+
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; $("installBtn").hidden = false; renderApp(); });
+addEventListener("appinstalled", () => { installEvt = null; $("installBtn").hidden = true; renderApp(); });
+async function install() {
+  if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $("installBtn").hidden = true; renderApp(); }
+  else document.getElementById("settings").scrollIntoView({ behavior: "smooth" });
+}
+$("installBtn").addEventListener("click", install);
+if (isIOS && !standalone) $("installBtn").hidden = false;
+
+function renderApp() {
+  const box = $("appBox");
+  if (standalone) { box.innerHTML = '<p class="line"><span class="ok">Installed ✓</span> You are using FUNDA WATCH as an app.</p>'; return; }
+  if (installEvt) { box.innerHTML = '<div class="row"><button class="btn primary" id="installBtn2" type="button">Install FUNDA WATCH</button></div><p class="line">Puts it on your home screen as its own app, and it opens without a connection too.</p>'; $("installBtn2").onclick = install; return; }
+  if (isIOS) { box.innerHTML = '<div class="tip-box">On iPhone or iPad: tap <b>Share</b> <span aria-hidden="true">⎙</span> in Safari, then <b>Add to Home Screen</b>. Open FUNDA WATCH from your home screen; notifications only work from there.</div>'; return; }
+  box.innerHTML = '<p class="line">Use your browser menu → <b>Install app</b> or <b>Add to Home screen</b> to put it on your home screen.</p>';
+}
+renderApp();
+
+const b64uToBytes = (s) => { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; const b = atob(s); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+async function loadNotify() {
+  try {
+    NOTE.sub = swReg && swReg.pushManager ? await swReg.pushManager.getSubscription() : null;
+    if (NOTE.sub) {
+      const r = await fetch(API + "/notify?endpoint=" + encodeURIComponent(NOTE.sub.endpoint), { cache: "no-store" });
+      const d = await r.json();
+      NOTE.on = !!d.on; NOTE.prefs = d.prefs;
+      // the browser still has it but the server forgot it (or the reverse): put it back
+      if (!NOTE.on && Notification.permission === "granted") await saveNotify(Object.assign({}, PREF_DEFAULT, JSON.parse(localStorage.getItem("funda.prefs") || "null") || {}), true);
+    }
+  } catch (e) { NOTE.msg = "Couldn't read the notification settings."; }
+  renderNotify();
+}
+async function saveNotify(prefs, quiet) {
+  NOTE.busy = true; if (!quiet) renderNotify();
+  try {
+    if (!NOTE.sub) {
+      const key = (await (await fetch("/api/push")).json()).key;
+      NOTE.sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
+    }
+    const r = await fetch(API + "/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub: NOTE.sub.toJSON(), prefs }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
+    NOTE.on = true; NOTE.prefs = d.prefs; NOTE.msg = quiet ? "" : "saved";
+    try { localStorage.setItem("funda.prefs", JSON.stringify(d.prefs)); } catch {}
+  } catch (e) { NOTE.msg = "Couldn't turn notifications on: " + e.message; }
+  NOTE.busy = false; renderNotify();
+}
+async function turnOn() {
+  if (!("Notification" in window) || !swReg || !swReg.pushManager) { NOTE.msg = "This browser can't show notifications from web pages."; renderNotify(); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { NOTE.msg = perm === "denied" ? "Notifications are blocked for error.blue. Allow them in your browser or phone settings, then try again." : "You didn't allow notifications."; renderNotify(); return; }
+  let saved = null; try { saved = JSON.parse(localStorage.getItem("funda.prefs") || "null"); } catch {}
+  await saveNotify(Object.assign({}, PREF_DEFAULT, saved || {}));
+}
+async function turnOff() {
+  NOTE.busy = true; renderNotify();
+  try {
+    if (NOTE.sub) {
+      await fetch(API + "/notify", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: NOTE.sub.endpoint }) });
+      await NOTE.sub.unsubscribe().catch(() => {});
+    }
+    NOTE.sub = null; NOTE.on = false; NOTE.msg = "";
+  } catch (e) { NOTE.msg = "Couldn't turn them off: " + e.message; }
+  NOTE.busy = false; renderNotify();
+}
+async function sendTest() {
+  NOTE.msg = "Sending…"; renderNotify();
+  try {
+    const r = await fetch(API + "/notify/test", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: NOTE.sub.endpoint }) });
+    const d = await r.json();
+    NOTE.msg = r.ok && d.ok ? "test sent" : "The test didn't go through (" + (d.error || d.status) + ").";
+  } catch (e) { NOTE.msg = "The test didn't go through: " + e.message; }
+  renderNotify();
+}
+function notifyHint() {
+  const el = $("viewsHint"); if (!el || !DATA || !NOTE.prefs) return;
+  const step = NOTE.prefs.views, every = DATA.every || 1440;
+  const perDay = (() => { const rs = readings().filter((r) => r.views != null); if (rs.length < 2) return null; const a = rs[0], z = rs[rs.length - 1]; return z.t - a.t > 3 * 3600000 ? (z.views - a.views) / ((z.t - a.t) / DAY) : null; })();
+  el.textContent = step && every >= 360 ? `Views are only seen when Funda is checked (${everyText(every)}), so several steps can arrive together in one message.` + (perDay ? ` Right now it gets about ${Math.round(perDay)} views a day.` : "") : "";
+}
+function renderNotify() {
+  const box = $("notifyBox");
+  const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const msg = NOTE.msg === "saved" ? '<span class="ok">Saved ✓</span>' : NOTE.msg === "test sent" ? '<span class="ok">Test sent ✓ It should pop up in a few seconds.</span>' : esc(NOTE.msg);
+  if (!supported) {
+    box.innerHTML = isIOS && !standalone
+      ? '<div class="tip-box">On iPhone, notifications work once FUNDA WATCH is on your home screen: tap <b>Share</b> → <b>Add to Home Screen</b>, open it from there, and turn them on here.</div>'
+      : '<p class="line">This browser can\'t show notifications from web pages. Try Chrome, Edge, Firefox or Safari (on iPhone: from the home screen).</p>';
+    return;
+  }
+  if (!NOTE.on) {
+    box.innerHTML = `<p class="line" style="margin-top:0">Get a message on this ${isIOS || /Android/.test(navigator.userAgent) ? "phone" : "device"} when the price or status changes, when someone saves the house, or every 50 / 100 views.</p>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="nOn" type="button" ${NOTE.busy ? "disabled" : ""}>${NOTE.busy ? "Turning on…" : "Turn on notifications"}</button></div>
+      ${msg ? `<p class="line">${msg}</p>` : ""}`;
+    $("nOn").onclick = turnOn;
+    return;
+  }
+  const p = NOTE.prefs || PREF_DEFAULT;
+  box.innerHTML = `<p class="line" style="margin-top:0"><span class="ok">On ✓</span> Tell me when:</p>
+    <div class="checks">
+      <label><input type="checkbox" data-k="price" ${p.price ? "checked" : ""}><span>The asking price changes</span></label>
+      <label><input type="checkbox" data-k="status" ${p.status ? "checked" : ""}><span>The status changes <small>(onder bod, verkocht…)</small></span></label>
+      <label><input type="checkbox" data-k="saves" ${p.saves ? "checked" : ""}><span>Someone saves the house <small>(Bewaard goes up)</small></span></label>
+    </div>
+    <div class="row" style="margin:2px 0 4px"><span style="font-size:14.5px;margin-right:4px">Views:</span>
+      <div class="seg" id="vSeg">${[0, 50, 100, 250, 500].map((v) => `<button type="button" data-v="${v}" aria-pressed="${p.views === v}">${v ? "every " + v : "off"}</button>`).join("")}</div>
+    </div>
+    <p class="line" id="viewsHint"></p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="nTest" type="button">Send a test</button>
+      <button class="btn" id="nOff" type="button" ${NOTE.busy ? "disabled" : ""}>Turn off</button>
+      ${msg ? `<span class="line" style="margin:0">${msg}</span>` : ""}
+    </div>`;
+  const read = () => {
+    const q = {};
+    box.querySelectorAll("input[data-k]").forEach((i) => { q[i.dataset.k] = i.checked; });
+    q.views = +(box.querySelector('#vSeg [aria-pressed="true"]') || { dataset: { v: 0 } }).dataset.v;
+    return q;
+  };
+  box.querySelectorAll("input[data-k]").forEach((i) => i.addEventListener("change", () => saveNotify(read())));
+  $("vSeg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button"); if (!b) return;
+    $("vSeg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    saveNotify(read());
+  });
+  $("nTest").onclick = sendTest;
+  $("nOff").onclick = turnOff;
+  notifyHint();
 }
 
 async function load() {
