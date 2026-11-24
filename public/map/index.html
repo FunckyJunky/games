@@ -66,17 +66,25 @@
     background: rgba(40,20,0,.6); border: 1px solid #ffc040; box-shadow: 0 0 14px rgba(255,190,60,.55), inset 0 0 10px rgba(255,190,60,.3); text-shadow: 0 0 6px #ffc040; cursor: pointer; white-space: nowrap;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
   #tele span { font-family: var(--ui); font-size: 17px; font-weight: 400; color: #ffd36a; }
-  #camctl { position: fixed; right: max(10px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 136px); width: 128px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
+  #camctl { position: fixed; right: max(10px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 136px); width: 128px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
   #viewMenu { display: flex; flex-direction: column; gap: 4px; }
   #viewMenu button { padding: 7px 4px; font: 17px var(--ui); color: var(--c); background: rgba(6,1,20,.88); border: 1px solid rgba(0,240,255,.45); cursor: pointer; text-align: left; }
   #viewMenu button.on { color: #fff; border-color: var(--m); background: rgba(60,0,50,.85); }
   #viewBtn { color: #ffd36a !important; border-color: rgba(255,200,70,.6) !important; text-shadow: 0 0 5px rgba(255,190,60,.8) !important; }
+  /* HELICOPTER: a camera viewfinder (corner marks, REC, timecode); nothing covers the picture or the buttons */
   #cine { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
-  #cine::before, #cine::after { content: ''; position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
-  #cine::before { top: 0; } #cine::after { bottom: 0; }
-  #cineRec { position: absolute; left: 50%; transform: translateX(-50%); top: calc(9vh + 6px); font: 17px var(--ui); color: #fff; letter-spacing: 2px; text-shadow: 0 0 4px #000; white-space: nowrap; }
+  #cine i { position: absolute; width: 28px; height: 28px; border: 0 solid rgba(255,255,255,.6); }
+  #cine i:nth-of-type(1) { left: max(8px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); border-left-width: 2px; border-top-width: 2px; }
+  #cine i:nth-of-type(2) { right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); border-right-width: 2px; border-top-width: 2px; }
+  #cine i:nth-of-type(3) { left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom)); border-left-width: 2px; border-bottom-width: 2px; }
+  #cine i:nth-of-type(4) { right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); border-right-width: 2px; border-bottom-width: 2px; }
+  #cineRec { position: absolute; left: calc(max(8px, env(safe-area-inset-left)) + 16px); top: calc(max(8px, env(safe-area-inset-top)) + 12px); font: 16px/1.15 var(--ui); color: #fff; letter-spacing: 1px; text-shadow: 0 0 4px #000, 0 0 2px #000; white-space: nowrap; max-width: 58vw; overflow: hidden; }
   #cineRec b { color: #ff3040; font-weight: 400; }
-  #cineTc { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(9vh + 6px); font: 17px var(--ui); color: rgba(255,255,255,.85); letter-spacing: 2px; text-shadow: 0 0 4px #000; }
+  #cineRec span { color: rgba(255,255,255,.8); }
+  #cineRec em { font-style: normal; }
+  body.cinema #hud { display: none; }
+  #c { z-index: 0; }
+  #hud, #radar, #btns, #tele, #attr, #hint, #toast, #stick, #load { z-index: 3; }
   #level, #viewBtn { width: 100%; padding: 6px 0; font: 17px var(--ui); letter-spacing: 1px; color: var(--c);
     background: rgba(6,1,20,.6); border: 1px solid rgba(0,240,255,.55); cursor: pointer; text-shadow: 0 0 5px rgba(0,240,255,.8); }
   @media (max-width: 480px) { #camctl { width: 112px; top: calc(max(10px, env(safe-area-inset-top)) + 120px); } }
@@ -131,7 +139,7 @@
   <button class="b" id="bFree"><i>✥</i>FREE</button>
   <button class="b" id="bGps"><i>◎</i>GPS</button>
 </div>
-<div id="cine" class="hide"><div id="cineRec"></div><div id="cineTc"></div></div>
+<div id="cine" class="hide"><i></i><i></i><i></i><i></i><div id="cineRec"><b>●</b> REC · <em id="cineShot"></em><br><span id="cineTc"></span></div></div>
 <div id="camctl"><button id="viewBtn" class="hide">⊡ VIEW</button><div id="viewMenu" class="hide"></div><button id="level" class="hide">⊙ LEVEL</button></div>
 <button id="tele" class="hide">⤓ TELEPORT TO ME <span id="teleD"></span></button>
 <div id="stick"><div id="knob"></div></div>
@@ -1246,7 +1254,7 @@ function setView(v) {
 function viewMenuSync() {
   const m = $('viewMenu'); m.innerHTML = '';
   for (const [v, n] of VIEWS) { const b = document.createElement('button'); b.textContent = (S.cam === v ? '▸ ' : '  ') + n; b.classList.toggle('on', S.cam === v); b.onclick = (e) => { e.stopPropagation(); setView(v); }; m.appendChild(b); }
-  $('viewBtn').textContent = '⊡ ' + (VIEWS.find((x) => x[0] === S.cam) || VIEWS[0])[1];
+  $('viewBtn').textContent = '⊡ ' + ({ chase: 'CHASE', fpv: 'COCKPIT', orbit: 'LOOK', heli: 'HELI', top: 'TOP' }[S.cam] || 'VIEW');
 }
 $('viewBtn').onclick = (e) => { e.stopPropagation(); viewMenuSync(); $('viewMenu').classList.toggle('hide'); };
 const cycleView = () => { const i = VIEWS.findIndex((x) => x[0] === S.cam); setView(VIEWS[(i + 1) % VIEWS.length][0]); };
@@ -1298,10 +1306,10 @@ function heliCam(dt, t) {
   camera.position.set(HELI.cam.x + (Math.sin(t * 0.7) * 0.5 + Math.sin(t * 1.9) * 0.15) * calm + (Math.random() - 0.5) * 0.02, HELI.cam.y + Math.sin(t * 0.9 + 1) * 0.35 * calm, HELI.cam.z + Math.cos(t * 0.6) * 0.45 * calm + (Math.random() - 0.5) * 0.02);
   camera.up.set(0, 1, 0); camera.lookAt(HELI.look); camera.rotateZ(Math.sin(t * 0.45) * 0.025 * calm);
   const e = s * s * (3 - 2 * s); camera.fov = lerp(sh.fov[0], sh.fov[1], e);
-  if (sh.n !== HELI.lastName) { HELI.lastName = sh.n; $('cineRec').innerHTML = '<b>●</b> REC · HELI-1 · ' + sh.n; }
+  if (sh.n !== HELI.lastName) { HELI.lastName = sh.n; $('cineShot').textContent = sh.n; }
   const el = (performance.now() - HELI.rec0) / 1000, f2 = (n) => String(Math.floor(n)).padStart(2, '0');
-  $('cineTc').textContent = f2(el / 3600) + ':' + f2(el / 60 % 60) + ':' + f2(el % 60) + ':' + f2(el * 25 % 25);
-  $('cineRec').firstChild && ($('cineRec').firstChild.style.opacity = Math.sin(t * 6) > 0 ? 1 : 0.2);
+  $('cineTc').textContent = f2(el / 3600) + ':' + f2(el / 60 % 60) + ':' + f2(el % 60) + ':' + f2(el * 25 % 25) + ' · ' + Math.round(Math.abs(B.v) * 3.6) + ' KM/H';
+  $('cineRec').firstChild.style.opacity = Math.sin(t * 6) > 0 ? 1 : 0.2;
 }
 const _dir = new THREE.Vector3();
 function camYaw() { camera.getWorldDirection(_dir); return Math.atan2(_dir.x, -_dir.z); }
@@ -1762,7 +1770,7 @@ function frame(now) {
   bike.g.visible = mode === 'bike';
   { const showL = mode === 'walk' || S.cam === 'fpv' || S.cam === 'chase' || S.cam === 'orbit'; if (showL === $('level').classList.contains('hide')) $('level').classList.toggle('hide', !showL); }
   { const showV = mode === 'bike'; if (showV === $('viewBtn').classList.contains('hide')) { $('viewBtn').classList.toggle('hide', !showV); if (showV) viewMenuSync(); else $('viewMenu').classList.add('hide'); } }
-  { const showC = mode === 'bike' && S.cam === 'heli'; if (showC === $('cine').classList.contains('hide')) $('cine').classList.toggle('hide', !showC); }
+  { const showC = mode === 'bike' && S.cam === 'heli' && !MV.open; if (showC === $('cine').classList.contains('hide')) { $('cine').classList.toggle('hide', !showC); document.body.classList.toggle('cinema', showC); } }
   if (mode !== 'bike' || S.cam !== 'fpv') look.bRef = null;
   vel.x = lerp(vel.x, (P.x - px0) / Math.max(dt, 1e-3), Math.min(1, dt * 4)); vel.z = lerp(vel.z, (P.z - pz0) / Math.max(dt, 1e-3), Math.min(1, dt * 4));
   const spd = Math.hypot(vel.x, vel.z);
