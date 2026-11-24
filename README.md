@@ -399,6 +399,15 @@ pine woods, in 3D. Listed in ERROR-DOS under ONLINE (MISTWALK), with the `mist` 
   Each has styles, eight steps (two beats each, four bars) and a 🎲 Surprise me button. Tempo, key,
   scale and chords are shared: anyone can change them (newest change wins). Instruments get quieter
   with distance (Advanced: hearing distance). Characters groove to what they hear
+- character designer (src `look.js`; Moves: Change your look, or "Design your explorer" on the start
+  card): the camera turns to face you, a panel with Body (figure, height, build, 8 skin tones), Face
+  (eyes and eye colour, brows, nose, mouth, cheeks, beard), Hair (10 styles, 10 colours), Clothes (field
+  jacket, hoodie, flannel, sweater, raincoat, puffer vest; cargo, jeans, shorts, skirt; boots, sneakers,
+  wellies; each in its own colour) and Extras (bucket hat, beanie, cap, ranger hat, flower crown,
+  headband; glasses; scarf, bandana, necklace; backpack; earrings). Turn, Random, Undo all, Done.
+  Face and Hair zoom to the face; no depth of field while designing. Saved with your name
+  (`wt.explorer`); presence `lk`: 22 numbers in a fixed order (look.js `LK`) beside the old g, c, s, hr.
+  Older looks come out as they were (the first colours of each palette are the old ones)
 - up to 3 instruments on the ground per explorer (drum machine, synth, e-piano), each playing by itself
   where it stands, with its own steps and sound (Music: Set it down and play; a 4th waits until one is
   picked up or packed away). Walk up to one (or sit at it) and the Music sheet works on that one: Sit at
