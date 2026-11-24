@@ -801,7 +801,24 @@ function sceneHome(t, seg) {
   for (let k = 0; k < 3; k++) { const x = -1.55 - ((off + k / 3) % 1) * 1.35; seg.push([[x, 0.55, z - 0.08], [Math.max(-3.15, x - 0.35), 0.55, z - 0.08]]); }
   return { yaw: -0.45 + Math.sin(t * 0.3) * 0.35, pitch: 0.2, dist: 9.2, ty: 1.3 };
 }
-const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket, home: sceneHome };
+function sceneZone(t, seg) {
+  // ZONE: a grid city inside the zone ring, a light bike circling with its light wall behind it
+  for (let i = -5; i <= 5; i++) { seg.push([[-5, 0, i], [5, 0, i]]); seg.push([[i, 0, -5], [i, 0, 5]]); }
+  const N = 48, RR = 4.6;
+  for (let k = 0; k < N; k++) { const a0 = k / N * 6.2832, a1 = (k + 1) / N * 6.2832; seg.push([[Math.cos(a0) * RR, 0.02, Math.sin(a0) * RR], [Math.cos(a1) * RR, 0.02, Math.sin(a1) * RR]]); }
+  for (const [x, z, h] of [[-2.0, -1.3, 1.8], [-0.9, -2.4, 2.8], [1.2, -1.6, 1.3], [2.2, -0.2, 3.2], [-2.3, 0.9, 1.2], [0.4, 1.0, 2.2], [1.6, 1.6, 1.0], [-0.6, -0.3, 1.5]]) cubeEdges(x, h / 2, z, 0.8, h, 0.8, 0, seg);
+  const r = 3.4, a = t * 0.9, bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+  cubeEdges(bx, 0.2, bz, 0.26, 0.32, 0.8, -a, seg);                                   // the bike
+  let px = bx, pz = bz;
+  for (let k = 1; k <= 16; k++) {                                                      // its light wall
+    const ak = a - k * 0.11, x = Math.cos(ak) * r, z = Math.sin(ak) * r;
+    seg.push([[px, 0.02, pz], [x, 0.02, z]], [[px, 0.42, pz], [x, 0.42, z]]);
+    if (k % 3 === 0) seg.push([[x, 0.02, z], [x, 0.42, z]]);
+    px = x; pz = z;
+  }
+  return { yaw: t * 0.12, pitch: 0.5, dist: 11, ty: 0.9 };
+}
+const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket, home: sceneHome, zone: sceneZone };
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);

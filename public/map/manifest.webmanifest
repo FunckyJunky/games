@@ -1,0 +1,39 @@
+{
+  "id": "/map/",
+  "name": "MApP",
+  "short_name": "MApP",
+  "description": "The 150 m around you, rebuilt as a glitchy low-poly neon city. Walk it, ride a light bike, meet players within 200 m.",
+  "start_url": "/map/",
+  "scope": "/map/",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "any",
+  "background_color": "#06010f",
+  "theme_color": "#06010f",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "/map/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/map/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/map/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

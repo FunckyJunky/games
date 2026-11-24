@@ -3,15 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
-<title>ZONE</title>
+<title>MApP</title>
 <meta name="theme-color" content="#06010f">
+<link rel="manifest" href="/map/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/map/icon-192.png">
+<link rel="apple-touch-icon" href="/map/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MApP">
 <meta name="description" content="The 150 m around you, rebuilt as a glitchy low-poly neon city. Walk it, and ride a light bike when you're on the road.">
 <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=VT323&display=swap" rel="stylesheet">
 <script src="/lib/nozoom.js"></script>
-<script src="/lib/online.js" defer data-detail="ZONE"></script>
+<script src="/lib/fullscreen.js"></script>
+<script src="/lib/online.js" defer data-detail="MApP"></script>
 <style>
   :root { --c: #00f0ff; --m: #ff2bd6; --a: #ffb020; --bg: #06010f; --ui: 'VT323', ui-monospace, Menlo, monospace; --hd: 'Orbitron', 'VT323', sans-serif; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -119,7 +127,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud" class="hide">
-  <div class="t">ZONE//150M <span id="hSrc" class="s"></span></div>
+  <div class="t">MApP//150M <span id="hSrc" class="s"></span></div>
   <div id="hPos"></div>
   <div id="hMode" class="mode"></div>
   <div id="hStreet" class="st"></div>
@@ -153,13 +161,14 @@
 <div id="attr" class="hide"></div>
 
 <div id="start" class="ov"><div class="box">
-  <h1>ZONE</h1>
+  <h1>MApP</h1>
   <p class="tag">The 150 m around you, rebuilt as a neon grid.<br>Walk it. Hit the road and a light bike drops in.</p>
   <button class="big" id="go">JACK IN</button>
   <div class="dim">uses your location and motion sensors</div>
   <div class="lab" style="margin-top:18px;color:var(--m)">or drop into a demo city</div>
   <div class="row" id="cities"></div>
   <p class="note">Keep your eyes up when you cross a street.<br>Driving or riding? Hand the phone to a passenger.</p>
+  <p class="dim" id="startTip"></p>
   <p class="dim">Map © OpenStreetMap contributors · OpenFreeMap · OpenMapTiles</p>
 </div></div>
 
@@ -171,8 +180,8 @@
 
 <div id="near" class="ov hide"><div class="box">
   <h2>⚇ NEARBY</h2>
-  <p>See other ZONE players who are within <b>200 m</b> of you, walking or on their light bikes, with their names, and they see you.</p>
-  <p class="dim">Who counts as near is decided by your real GPS. While NEARBY is on, ZONE sends your name, bike colour, where your avatar is (your GPS spot, or where you walk or teleport to in FREE) and your rough real position to ZONE players within reach. In a far-away demo city you show as AWAY. Turn it off any time: then nothing is sent.</p>
+  <p>See other MApP players who are within <b>200 m</b> of you, walking or on their light bikes, with their names, and they see you.</p>
+  <p class="dim">Who counts as near is decided by your real GPS. While NEARBY is on, MApP sends your name, bike colour, where your avatar is (your GPS spot, or where you walk or teleport to in FREE) and your rough real position to MApP players within reach. In a far-away demo city you show as AWAY. Turn it off any time: then nothing is sent.</p>
   <p class="dim">Tap the radar for the MAP: pick a player or a spot and teleport there, so you can walk around together. GPS brings you back to your real spot.</p>
   <div class="lab" style="color:var(--m);font-size:18px">YOUR NAME</div>
   <input id="nearName" maxlength="12" autocomplete="off" spellcheck="false">
@@ -188,9 +197,11 @@
   <div class="lab">BIKE CAMERA</div><div class="row" data-k="cam"><button class="sm" data-v="chase">CHASE</button><button class="sm" data-v="fpv">COCKPIT</button><button class="sm" data-v="orbit">LOOK AROUND</button><button class="sm" data-v="heli">HELICOPTER</button><button class="sm" data-v="top">TOP DOWN</button></div>
   <div class="lab">BIKE COLOUR</div><div class="row" data-k="color"><button class="sm" data-v="cyan">CYAN</button><button class="sm" data-v="magenta">MAGENTA</button><button class="sm" data-v="amber">AMBER</button><button class="sm" data-v="lime">LIME</button></div>
   <div class="lab">DEMO RUN</div><div class="row" data-k="demo"><button class="sm" data-v="drive">DRIVE</button><button class="sm" data-v="walk">WALK</button></div>
+  <div class="lab">APP</div><div class="row"><button class="sm" id="sFull">FULL SCREEN</button><button class="sm hide" id="sInstall">INSTALL APP</button></div>
+  <p class="dim" id="sAppTip"></p>
   <div class="lab">RAIN · SOUND</div><div class="row"><button class="sm" id="sRain">RAIN</button><button class="sm" id="sSound">SOUND</button><button class="sm" id="sTrim">RESET COMPASS</button></div>
   <p class="dim" id="sInfo"></p>
-  <div class="row" style="justify-content:space-between;margin-top:14px"><a class="sm back" href="/" style="text-decoration:none">&lt; ERROR-DOS</a><button class="sm on" id="sClose">BACK TO ZONE</button></div>
+  <div class="row" style="justify-content:space-between;margin-top:14px"><a class="sm back" href="/" style="text-decoration:none">&lt; ERROR-DOS</a><button class="sm on" id="sClose">BACK TO MApP</button></div>
 </div></div>
 
 <script type="module">
@@ -912,7 +923,7 @@ function mpJoin(code) {
   const e = { ws: null, live: false, retry: 0, dead: false };
   const open = () => {
     if (e.dead) return;
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/room/zone/' + code + '?name=ZONE');
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/room/zone/' + code + '?name=MAPP');
     e.ws = ws;
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch (er) { return; }
@@ -1460,6 +1471,7 @@ function updateButtons() {
 }
 function syncSettings() {
   for (const row of document.querySelectorAll('#settings .row[data-k]')) { const k = row.dataset.k; for (const b of row.children) b.classList.toggle('on', String(S[k]) === b.dataset.v); }
+  if (typeof appUI === 'function') appUI();
   $('sRain').classList.toggle('on', S.rain); $('sSound').classList.toggle('on', S.sound);
   $('sInfo').textContent = `map: ${mapSrc === 'ofm' ? 'OpenFreeMap (OpenStreetMap)' : mapSrc === 'ovp' ? 'Overpass (OpenStreetMap)' : 'simulated sector (offline)'} · compass: ${look.gyro || 'none'}${look.trim ? ' (trimmed)' : ''} · quality ${PR.toFixed(2)}x`;
 }
@@ -1473,6 +1485,27 @@ for (const row of document.querySelectorAll('#settings .row[data-k]')) row.addEv
   if (k === 'look' && v === 'gyro') { const p = startSensors(); if (p && p.then) p.catch(() => {}); }
 });
 $('sRain').onclick = () => { S.rain = !S.rain; saveS(); syncSettings(); };
+/* ---------- full screen web app ---------- */
+const STANDALONE = (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let installEvt = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; appUI(); });
+addEventListener('appinstalled', () => { installEvt = null; appUI(); toast('MApP INSTALLED', 'open it from your home screen: full screen'); });
+const fsOK = () => window.ErrorFS && ErrorFS.supported();
+const fsActive = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function appUI() {
+  const full = $('sFull'), ins = $('sInstall');
+  full.classList.toggle('hide', STANDALONE || !fsOK()); full.classList.toggle('on', fsActive() || (window.ErrorFS && ErrorFS.get()));
+  ins.classList.toggle('hide', STANDALONE || !installEvt);
+  const tip = STANDALONE ? 'Running as an app, full screen.' : IOS ? 'Full screen on iPhone: tap Share, then "Add to Home Screen", and start MApP from there.' : installEvt ? 'INSTALL APP puts MApP on your home screen; it opens full screen.' : fsOK() ? 'FULL SCREEN stays on: MApP goes full screen at your first tap.' : '';
+  $('sAppTip').textContent = tip;
+  $('startTip').textContent = STANDALONE ? '' : IOS ? 'Tip: Share → Add to Home Screen = MApP as a full screen app.' : installEvt ? 'Tip: SET → INSTALL APP = MApP as a full screen app.' : '';
+}
+$('sFull').onclick = () => { if (!window.ErrorFS) return; const on = !fsActive(); ErrorFS.set(on); if (on) ErrorFS.enter(); else ErrorFS.exit(); setTimeout(appUI, 300); };
+$('sInstall').onclick = async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; appUI(); };
+document.addEventListener('fullscreenchange', appUI); document.addEventListener('webkitfullscreenchange', appUI);
+appUI();
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 $('sSound').onclick = () => { S.sound = !S.sound; saveS(); syncSettings(); sfx.mute(!S.sound); };
 $('sTrim').onclick = () => { look.trim = 0; iosOff = null; syncSettings(); toast('COMPASS RESET'); };
 

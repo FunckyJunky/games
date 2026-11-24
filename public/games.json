@@ -41,12 +41,13 @@
   },
   {
     "id": "zone",
-    "title": "ZONE",
-    "dos": "ZONE",
-    "description": "The 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon city. Walk it first-person with your phone as the window; on the road at speed, a light bike drops in and rides the real street. Demo cities and a demo drive too.",
+    "title": "MApP",
+    "dos": "MAPP",
+    "description": "The 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon city. Walk it first person, ride a light bike (AUTO rides on your GPS), film it from a helicopter. Players within 200 m see each other; open the map, pick one and teleport over. Best as a full screen app.",
     "path": "map/",
-    "folder": "games",
-    "added": "2026-11-24T18:30"
+    "folder": "online",
+    "added": "2026-11-24T18:30",
+    "logo": "zone"
   },
   {
     "id": "mistwalkers",

@@ -59,7 +59,8 @@ public/                 the website
                         SPOT: point at a player you can see and the compass fixes their direction (mutual spots averaged,
                         fades after 3 min). Steps + compass move you between GPS fixes (dead reckoning)
   lib/qrcode.js         QR code generator used by radar/ and rifle/ (MIT, Kazuhiko Arase)
-  map/                  ZONE (error.blue/map; error.blue/zone forwards here): the 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon
+  map/                  MApP (was ZONE; error.blue/map, ONLINE tab, logo `zone`; error.blue/zone forwards here). Full screen web app
+                        (manifest.webmanifest, icons, /sw.js; SET → FULL SCREEN / INSTALL APP, iPhone: Add to Home Screen): the 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon
                         city. GPS = where you are, phone sensors = where you look (or drag), FREE = walk with the stick/WASD.
                         On a road at speed (over 18 km/h for 2.5 s, within ~15 m of a street) a light bike drops in and rides
                         that road in your lane (left-hand countries too); it docks after ~6 s slow. BIKE = ride it yourself.
@@ -141,7 +142,7 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 
    `folder` is `games`, `online` or `apps` (the three tabs in the ERROR-DOS menu).
    `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, `tusa`, `vgadai`,
-   `studio`, `mist`, `tolk`, or leave it out for the name over a synthwave sun.
+   `studio`, `mist`, `tolk`, `zone`, or leave it out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 
