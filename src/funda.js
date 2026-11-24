@@ -7,6 +7,7 @@
 //   POST   /api/funda/<id>/notify     {sub, prefs}: turn notifications on / change them for one phone
 //   DELETE /api/funda/<id>/notify     {endpoint}: turn them off
 //   POST   /api/funda/<id>/notify/test {endpoint}: send that phone a test notification
+//   GET    /api/funda/<id>/buren?n=20 the neighbours within 150 m with their WOZ values (src/buren.js)
 //
 // The cron in wrangler.jsonc runs every 30 minutes and calls fundaCron(), which reads a
 // listing when it is due (its "every" setting, once a day if not set) and saves one row in
@@ -18,6 +19,8 @@
 //   2. "web":  the normal www.funda.nl page, read as text
 
 // The houses to watch: Funda's number (the last part of the address) -> its Funda page.
+import { handleBuren } from "./buren.js";
+
 export const FUNDA_WATCH = {
   "44666454": "https://www.funda.nl/detail/koop/lelystad/huis-rozengaard-11-4/44666454/",
 };
@@ -470,7 +473,7 @@ async function view(env, id, extra = {}) {
 }
 
 export async function handleFunda(request, env, url, push) {
-  const m = url.pathname.match(/^\/api\/funda\/(\d{5,10})(?:\/(check|settings|notify)(\/test)?)?$/);
+  const m = url.pathname.match(/^\/api\/funda\/(\d{5,10})(?:\/(check|settings|notify|buren)(\/test)?)?$/);
   if (!m) return json({ watching: Object.keys(FUNDA_WATCH) }, url.pathname === "/api/funda" ? 200 : 404);
   const id = m[1], what = m[2];
   if (!FUNDA_WATCH[id]) return json({ error: "this listing is not on the watch list" }, 404);
@@ -497,5 +500,13 @@ export async function handleFunda(request, env, url, push) {
     return view(env, id, { saved: true });
   }
   if (what === "notify") return handleNotify(request, env, id, push, !!m[3]);
+  if (what === "buren") {
+    if (request.method !== "GET") return json({ error: "use GET" }, 405);
+    await schema(env);
+    const row = await env.DB.prepare(`SELECT info FROM funda_listing WHERE id = ?`).bind(id).first();
+    let info = {};
+    try { info = JSON.parse((row && row.info) || "{}"); } catch {}
+    return handleBuren(request, env, url, id, info);
+  }
   return view(env, id);
 }

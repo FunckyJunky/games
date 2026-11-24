@@ -73,7 +73,10 @@ public/                 the website
                         earlier prices (3D bars), notifications (price, status, saves, every N views) and how often
                         to check (once a day by default), set at the bottom of the page. Installable web app (sw.js,
                         manifest). The server reads Funda from the cron in wrangler.jsonc (src/funda.js); the houses
-                        watched are in FUNDA_WATCH at the top of src/funda.js. Page: ?id=<funda number> for another one
+                        watched are in FUNDA_WATCH at the top of src/funda.js. Page: ?id=<funda number> for another one.
+                        Neighbours (buren.js + src/buren.js): WOZ values of the houses within 150 m (PDOK, BAG,
+                        WOZ-waardeloket; cached, at most 30 lookups per request), 8 charts and a 3D map
+                        (maplibre/ = MapLibre GL JS 4.7.1, BSD-3; PDOK base map / aerial photo)
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:
@@ -91,6 +94,7 @@ esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online 
 esp32/HomeFront/        HOME FRONT firmware for the ESP32-S3 1.47" LCD board (see esp32/HomeFront/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 src/funda.js            FUNDA WATCH: reads funda.nl (app API, website as fallback) and keeps every reading in the database
+src/buren.js            FUNDA WATCH neighbours: houses within 150 m, building outlines, WOZ values
 tools/soundrooms.mjs    makes the radio track lists (runs before every deploy)
 wrangler.jsonc          Cloudflare settings (database, rooms)
 ```

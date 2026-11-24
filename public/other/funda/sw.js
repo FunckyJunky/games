@@ -2,8 +2,8 @@
    - opens without a connection: the page, icons and the last readings are kept
    - always tries the network first, so new readings and page updates show straight away
    - shows the notifications the server sends (price, status, saves, every N views) */
-const CACHE = "funda-v1";
-const SHELL = ["/other/funda/", "/other/funda/manifest.webmanifest", "/other/funda/icon-192.png", "/other/funda/apple-touch-icon.png", "/other/funda/badge-96.png"];
+const CACHE = "funda-v2";
+const SHELL = ["/other/funda/", "/other/funda/buren.js", "/other/funda/manifest.webmanifest", "/other/funda/icon-192.png", "/other/funda/apple-touch-icon.png", "/other/funda/badge-96.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -14,7 +14,7 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET" || u.origin !== location.origin) return;
   const page = u.pathname.startsWith("/other/funda/");
-  const data = /^\/api\/funda\/\d+$/.test(u.pathname); // the readings: kept for offline, never preferred
+  const data = /^\/api\/funda\/\d+(\/buren)?$/.test(u.pathname); // readings + neighbours: kept for offline, never preferred
   if (!page && !data) return;
   const key = e.request.mode === "navigate" ? "/other/funda/" : data ? u.pathname : e.request;
   e.respondWith(

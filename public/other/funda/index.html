@@ -22,6 +22,7 @@
     --grid: #e1e0d9; --axis: #c3c2b7;
     --s1: #2a78d6; --s1-soft: rgba(42,120,214,.12); --s2: #eb6834; --s2-soft: rgba(235,104,52,.12);
     --s3: #1baf7a; --s7: #6250d6;
+    --hi: #e34948; --lo: #1baf7a; --nb: #b8b6ad;
     --good: #006300; --bad: #d03b3b; --warn-bg: #fff4dc; --warn-edge: #f0c766;
     --tip: #0b0b0b; --tip-ink: #f0efec;
     --radius: 14px;
@@ -34,6 +35,7 @@
       --grid: #2c2c2a; --axis: #383835;
       --s1: #3987e5; --s1-soft: rgba(57,135,229,.16); --s2: #d95926; --s2-soft: rgba(217,89,38,.16);
       --s3: #199e70; --s7: #9085e9;
+      --hi: #e66767; --lo: #199e70; --nb: #5d5c57;
       --good: #0ca30c; --bad: #e66767; --warn-bg: #2e2510; --warn-edge: #6b5316;
       --tip: #f0efec; --tip-ink: #0b0b0b;
     }
@@ -145,6 +147,35 @@
   .legend .sq.ghost { opacity: .35; outline: 1.5px dashed var(--ink-2); outline-offset: -1.5px; }
   .info3d { font-size: 14px; min-height: 42px; margin: 6px 0 4px; padding: 9px 12px; border-radius: 10px; background: var(--page); color: var(--ink-2); }
   .info3d b { color: var(--ink); }
+  /* neighbours */
+  .nb-head { display: flex; align-items: flex-end; gap: 10px 16px; flex-wrap: wrap; margin: 8px 0 4px; }
+  .nb-head .grp { display: grid; gap: 6px; }
+  .nb-head .lbl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .seg.small button { padding: 7px 11px; font-size: 13px; }
+  select.yr { font: 600 13.5px/1 inherit; font-family: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--card-edge); border-radius: 999px; padding: 7px 12px; }
+  .nb-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 2px; }
+  @media (max-width: 760px) { .nb-tiles { grid-template-columns: repeat(2, 1fr); } }
+  .nb-tiles .tile { padding: 12px 14px; background: var(--page); border-radius: 12px; }
+  .nb-tiles .v { font-size: 21px; }
+  .prog { font-size: 13px; color: var(--ink-2); min-height: 18px; margin: 6px 0 0; }
+  .map3d { position: relative; height: 420px; border-radius: 12px; overflow: hidden; background: var(--grid); margin-top: 6px; }
+  @media (max-width: 480px) { .map3d { height: 360px; } }
+  .map3d .ctl { position: absolute; left: 8px; top: 8px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 60px); }
+  .map3d .ctl .seg button { background: rgba(252,252,251,.92); color: #0b0b0b; border-color: rgba(0,0,0,.12); padding: 6px 10px; font-size: 12.5px; }
+  .map3d .ctl .seg button[aria-pressed="true"] { background: #0b0b0b; color: #fff; }
+  .map3d .msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--ink-2); font-size: 14px; }
+  .map3d .maplibregl-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0b0b0b; border-radius: 10px; padding: 10px 12px; max-width: 240px; }
+  .map3d .maplibregl-popup-content b { font-weight: 650; }
+  .me-pin { background: var(--s1); color: #fff; font: 700 12px/1 system-ui, sans-serif; padding: 5px 8px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.3); white-space: nowrap; pointer-events: none; }
+  .scale { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; flex-wrap: wrap; }
+  .scale .bar { height: 10px; width: 160px; border-radius: 5px; }
+  .nbc { position: relative; margin-top: 4px; }
+  .nbc svg { display: block; width: 100%; overflow: visible; }
+  .nbc text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .nb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .nb-grid .panel { margin-bottom: 0; }
+  @media (max-width: 760px) { .nb-grid { grid-template-columns: 1fr; } }
+  .muted { color: var(--muted); }
   /* settings */
   .set h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 8px; }
   .set h3:first-of-type { margin-top: 8px; }
@@ -251,6 +282,80 @@
       <summary>All readings <span id="nReadings" style="color:var(--muted);font-weight:500"></span></summary>
       <div class="tbl"><table><thead><tr><th>When</th><th>Price</th><th>Views</th><th>Saves</th><th>Status</th><th>From</th></tr></thead><tbody id="rows"></tbody></table></div>
     </details>
+  </section>
+
+  <section class="card panel" id="nbPanel">
+    <h2>Neighbours: WOZ values compared</h2>
+    <p class="note">The houses within 150 m, nearest first. WOZ values from the WOZ-waardeloket (Kadaster), living areas from the BAG.</p>
+    <div class="nb-head">
+      <div class="grp"><span class="lbl">Compare with</span><div class="seg small" id="nbN"></div></div>
+      <div class="grp"><span class="lbl">WOZ year</span><select class="yr" id="nbYear" aria-label="WOZ year"></select></div>
+    </div>
+    <p class="prog" id="nbProg"></p>
+    <div class="nb-tiles" id="nbTiles"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>3D map · 150 m around the house</h2>
+    <p class="note">Every building within 150 m. Coloured by WOZ value compared with this house; grey = not compared. Drag to move, two fingers to turn and tilt, tap a building for its WOZ.</p>
+    <div class="map3d" id="map3d">
+      <div class="ctl">
+        <div class="seg" id="mapBase"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="photo" aria-pressed="false">Aerial</button></div>
+        <div class="seg" id="mapH"><button type="button" data-v="flat" aria-pressed="true">Houses</button><button type="button" data-v="woz" aria-pressed="false">Height = WOZ</button></div>
+      </div>
+      <div class="msg" id="mapMsg">Loading the map…</div>
+    </div>
+    <div class="scale" id="mapScale"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>Ranking</h2>
+    <p class="note" id="nbRankNote">WOZ value of each house, highest first.</p>
+    <div class="nbc" id="cRank"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>Difference with this house</h2>
+    <p class="note">How much more (red) or less (green) each neighbour's WOZ value is.</p>
+    <div class="nbc" id="cDiff"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>WOZ over the years</h2>
+    <p class="note">This house (blue) against every neighbour (grey) and their median (dashed).</p>
+    <div class="nbc" id="cYears"></div>
+  </section>
+
+  <div class="nb-grid" style="margin-bottom:14px">
+    <section class="card panel">
+      <h2>Growth</h2>
+      <p class="note" id="nbGrowthNote">How much each WOZ value grew.</p>
+      <div class="nbc" id="cGrowth"></div>
+    </section>
+    <section class="card panel">
+      <h2>Yearly change</h2>
+      <p class="note">% change of the WOZ value per year, per house. Darker = more growth, red = went down.</p>
+      <div class="nbc" id="cHeat"></div>
+    </section>
+  </div>
+
+  <div class="nb-grid" style="margin-bottom:14px">
+    <section class="card panel">
+      <h2>WOZ per m²</h2>
+      <p class="note" id="nbM2Note">WOZ value divided by living area.</p>
+      <div class="nbc" id="cM2"></div>
+    </section>
+    <section class="card panel">
+      <h2>Living area vs WOZ</h2>
+      <p class="note" id="nbScatNote">Bigger houses, higher value? The diamond is this house's asking price.</p>
+      <div class="nbc" id="cScatter"></div>
+    </section>
+  </div>
+
+  <section class="card panel">
+    <h2>Distance vs difference</h2>
+    <p class="note">Are the nearest houses more alike? Each dot is a neighbour: how far away, and how much its WOZ differs.</p>
+    <div class="nbc" id="cDist"></div>
   </section>
 
   <section class="card panel set" id="settings">
@@ -1199,5 +1304,6 @@ setInterval(load, 5 * 60 * 1000);
 setInterval(() => DATA && ($("liveTxt").textContent = DATA.lastOk ? "Checked " + ago(DATA.lastOk) : $("liveTxt").textContent), 30000);
 load();
 </script>
+<script src="/other/funda/buren.js"></script>
 </body>
 </html>
