@@ -65,22 +65,39 @@ export function splitAddress(s) {
   return m ? { street: m[1], nr: m[2], letter: (m[3] || "").toUpperCase(), toev: (m[4] || "").toUpperCase() } : null;
 }
 
-// 1. the house itself
-async function findSelf(info) {
+// 1. the house itself: strict first, then broader searches; the best match by street, number, letter, addition
+async function findSelf(info, trace = []) {
   const a = splitAddress(info.address);
   if (!a || !info.postcode) throw new Error("no address for this listing yet");
   const pc = String(info.postcode).replace(/\s+/g, "").toUpperCase();
-  const docs = await pdok("free", [
-    ["q", `${a.street} ${a.nr}${a.letter}${a.toev ? "-" + a.toev : ""} ${pc} ${info.city || ""}`.trim()],
-    ["fq", "type:adres"], ["fq", "postcode:" + pc], ["fq", "huisnummer:" + a.nr], ["rows", "30"], ["fl", "*"],
-  ]);
-  if (!docs.length) throw new Error("PDOK doesn't know " + info.address + " " + pc);
-  const same = (x, y) => String(x || "").toUpperCase() === String(y || "").toUpperCase();
-  const doc = docs.find((d) => same(d.huisletter, a.letter) && same(d.huisnummertoevoeging, a.toev))
-    || docs.find((d) => same((d.huisletter || "") + (d.huisnummertoevoeging || ""), a.letter + a.toev))
-    || docs.find((d) => !a.letter && !a.toev && !d.huisletter && !d.huisnummertoevoeging)
-    || docs[0];
-  return { doc, point: ll(doc.centroide_ll) };
+  const norm = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const score = (d) => {
+    let sc = 0;
+    if (norm(d.postcode) === pc) sc += 4;
+    if (norm(d.straatnaam) === norm(a.street)) sc += 3;
+    if (String(d.huisnummer) === a.nr) sc += 4;
+    if (norm(d.huisletter) === a.letter) sc += 1;
+    if (norm(d.huisnummertoevoeging) === a.toev) sc += 2;
+    if (norm(d.huis_nlt) === norm(a.nr + a.letter + a.toev)) sc += 3;
+    if (!a.toev && !a.letter && norm(d.huis_nlt) === a.nr) sc += 1;
+    return sc;
+  };
+  const tries = [
+    ["postcode + number", [["q", `${a.street} ${a.nr}`], ["fq", "type:adres"], ["fq", "postcode:" + pc], ["fq", "huisnummer:" + a.nr], ["rows", "50"], ["fl", "*"]]],
+    ["address text", [["q", `${info.address} ${pc} ${info.city || ""}`.trim()], ["fq", "type:adres"], ["rows", "20"], ["fl", "*"]]],
+    ["postcode", [["q", pc], ["fq", "type:adres"], ["fq", "postcode:" + pc], ["rows", "100"], ["fl", "*"]]],
+    ["street + city", [["q", `${a.street} ${info.city || ""}`.trim()], ["fq", "type:adres"], ["rows", "100"], ["fl", "*"]]],
+  ];
+  let best = null, bestScore = -1;
+  for (const [name, params] of tries) {
+    let docs = [];
+    try { docs = await pdok("free", params); } catch (e) { trace.push(`search by ${name}: ${e.message || e}`); continue; }
+    for (const d of docs) { const sc = score(d); if (sc > bestScore) { best = d; bestScore = sc; } }
+    trace.push(`search by ${name}: ${docs.length} found` + (docs[0] ? `, e.g. ${docs[0].weergavenaam}` : "") + (best ? ` · best so far ${best.weergavenaam} (${bestScore})` : ""));
+    if (bestScore >= 13) break; // postcode + street + number + the addition all match
+  }
+  if (!best || bestScore < 7) throw new Error(`PDOK doesn't know ${info.address} ${pc}` + (best ? ` (closest: ${best.weergavenaam})` : ""));
+  return { doc: best, point: ll(best.centroide_ll) };
 }
 
 // 2. every address within 150 m (nearest first)
@@ -123,7 +140,7 @@ const centroid = (ring) => { let x = 0, y = 0; for (const p of ring) { x += p[0]
 async function buildArea(info, trace = []) {
   const sample = {};
   trace.push("find the house: " + info.address + " " + info.postcode);
-  const { doc, point } = await findSelf(info);
+  const { doc, point } = await findSelf(info, trace);
   trace.push("found: " + (doc && doc.weergavenaam) + " at " + JSON.stringify(point));
   if (!point) throw new Error("PDOK gave no point for the house");
   sample.self = doc;
