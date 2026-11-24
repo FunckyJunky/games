@@ -40,6 +40,15 @@
     "added": "2026-11-20T23:30"
   },
   {
+    "id": "zone",
+    "title": "ZONE",
+    "dos": "ZONE",
+    "description": "The 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon city. Walk it first-person with your phone as the window; on the road at speed, a light bike drops in and rides the real street. Demo cities and a demo drive too.",
+    "path": "zone/",
+    "folder": "games",
+    "added": "2026-11-24T18:30"
+  },
+  {
     "id": "mistwalkers",
     "title": "Mistwalkers",
     "dos": "MISTWALK",

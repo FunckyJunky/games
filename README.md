@@ -59,6 +59,14 @@ public/                 the website
                         SPOT: point at a player you can see and the compass fixes their direction (mutual spots averaged,
                         fades after 3 min). Steps + compass move you between GPS fixes (dead reckoning)
   lib/qrcode.js         QR code generator used by radar/ and rifle/ (MIT, Kazuhiko Arase)
+  zone/                 ZONE (error.blue/zone): the 150 m around you, rebuilt from OpenStreetMap as a glitchy low-poly neon
+                        city. GPS = where you are, phone sensors = where you look (or drag), FREE = walk with the stick/WASD.
+                        On a road at speed (over 18 km/h for 2.5 s, within ~15 m of a street) a light bike drops in and rides
+                        that road in your lane (left-hand countries too); it docks after ~6 s slow. BIKE = ride it yourself.
+                        DEMO = fake GPS that drives (or walks) the real streets. Map: OpenFreeMap vector tiles (OpenMapTiles,
+                        no key), then Overpass, then a made-up SIMULATED SECTOR when offline. zone-worker.js decodes the tiles
+                        and builds 64 m chunks off the main thread; three.module.min.js = three.js r170 (MIT).
+                        Testing: ?lat=..&lon=..&auto=1 (skip the start screen), ?src=ofm|ovp|synth, ?demo=drive|walk, ?fx=high|low|off
   glasses/mykolai/      Святий Миколайчик: find the gifts left for Yaro (3D radar, close-up finder, pick up at 7 m)
   glasses/room404/      ROOM404.EXE (Room 404): a small 3D room you look round with head motion, like VR. Pinch = walk/stop,
                         hold pinch = walk, pinch twice = take or put down (table, chairs, shelf, sill, floor, on the dice).
