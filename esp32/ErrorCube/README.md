@@ -23,6 +23,16 @@ battery, PCF85063 clock, QMI8658 motion sensor, ES8311 speaker, TF card, buttons
 | ONLINE | WHO (who's online on error.blue), CHAT (ERROR-CHAT, keyboard EN / UA), LINK (code + QR for the phone) |
 | SYSTEM | SETUP, WIFI, UPDATE, INFO (system, power, sensors, network), COMMAND (C:\> prompt) |
 
+**Look (SETUP > LOOK):** MENU 3D (the programs as glass cards on a turning carousel over a synthwave floor, each
+with its own turning wireframe icon; the camera leans with how you hold the cube) or DOS (the list).
+GLASS: CURVED (a CRT tube: the edges bend, the middle stays sharp), FISHEYE or FLAT, with COLOUR FRINGE (red and
+blue drift apart toward the edges). ANIMATION 3D: the cube turns between screens (up = open, down = back, the
+3D menu's folders turn up/down); SIMPLE: a glitch instead. Glitches: tears, roll, jitter, blocks, static, inverse
+bands, garbled letters, colour split, VHS tracking band, interlace, datamosh, smear, signal loss. Also: the list's
+selection bar slides, rows type themselves in, dialogs open like DOS windows, QUICK slides down, a ring where you
+tap, and the 3D INTRO at start (starfield warp, ERROR in solid block letters, lens flare). BATTERY SAVER turns the
+effects off.
+
 Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sound, colour, sleep, power).
 Swipe right: back. Buttons: - / + move, hold + = OK, hold - = BACK, PWR = screen off/on, hold PWR = power menu
 (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
@@ -32,16 +42,19 @@ Swipe right: back. Buttons: - / + move, hold + = OK, hold - = BACK, PWR = screen
 ```
 ErrorCube.ino     start-up and the main loop (interface on core 1, network task on core 0)
 src/core/         config.h (version, pins, address), sys.h (settings + what the board reports), gfx (drawing),
+                  g3d (3D: camera, glowing anti-aliased lines, filled polygons), fx (the lens, glitches, the cube turn),
                   fonts.h (made by tools/mkfont.py: VT323 + GNU Unifont for Cyrillic, with glow)
 src/ui/           screens, touch gestures, buttons, lists, settings rows, keyboard, dialogs, quick panel,
                   screen off / dim / clock when off, glitches, scanlines
-src/apps/         apps_core (menu, ERROR-BIOS, program list), apps_tools, apps_online, apps_setup, apps_media
+src/apps/         apps_core (DOS menu, ERROR-BIOS, program list), menu3d (the 3D menu), icons3d (a wireframe icon
+                  per program), intro (the 3D start), apps_tools, apps_online, apps_setup, apps_media
 src/js/           jsapp.cpp: the web app API on Duktape 2.7 (duktape.c, MIT)
 src/board/        board.cpp (CO5300 screen via Arduino_GFX, CST9220 touch, AXP2101, PCF85063, QMI8658, TF card,
                   flash drive, buttons), sound.cpp (ES8311 + a small synthesizer, streamed sound)
 src/net/          net.cpp (WiFi, phone setup, the cube's web page, internet time), cloud.cpp (error.blue)
 src/lib/          cubeqr (QR codes, Nayuki, MIT)
-sim/              the interface on a PC: sh sim/build.sh, then commands on stdin (see sim.cpp) -> screenshots
+sim/              the interface on a PC: sh sim/build.sh, then commands on stdin (see sim.cpp) -> screenshots,
+                  `rec MS` records frames (25 a second) for a video
 tools/mkfont.py   the letters
 ```
 
@@ -67,6 +80,9 @@ wraps them as `{type:"msg", from, data}`):
 - phone -> cube: `{t:"hello"}`, `{t:"set", k, v}`, `{t:"cmd", c:"wake"|"sleep"|"home"|"beep"|"check"|"update"|"restart"}`,
   `{t:"say", text}`, `{t:"app", id}`, `{t:"appmsg", data}`, `{t:"watch", on}`,
   `{t:"vid", n, i, of, d}` (a JPEG, base64, in parts under 12000 characters), `{t:"aud", d}` (16 kHz mu-law, base64).
+
+Settings (cfg in src/core/sys.h) are saved as one block: add new ones only at the end of the struct, then a newer
+firmware keeps everything an older one saved.
 
 Another kind of device can use the same page: add it to `DRIVERS` in public/cube/index.html and send the same
 schema/state messages.

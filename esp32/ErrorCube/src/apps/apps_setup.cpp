@@ -75,12 +75,18 @@ static Screen* pageDisplay() {
 }
 static Screen* pageLook() {
   return page("LOOK", "C:\\SETUP\\LOOK>", [](std::vector<Row>& r) {
+    r.push_back(choice("MENU", &cfg.view, 2, [](int i) { return i ? "3D" : "DOS"; }));
+    r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
+    r.push_back(toggle("COLOUR FRINGE", &cfg.fringe));
+    r.push_back(choice("ANIMATION", &cfg.anim, 3, [](int i) { static const char* A[3] = {"OFF", "SIMPLE", "3D"}; return A[i]; }));
+    r.push_back(toggle("MOVES WITH YOU", &cfg.parallax));
     r.push_back(choice("COLOUR", &cfg.color, N_SCHEMES, [](int i) { return SCHEMES[i].name; }, [] { garbleUntil = msNow() + 160; }));
     r.push_back(choice("GLOW", &cfg.glow, 3, [](int i) { static const char* G[3] = {"OFF", "LOW", "HIGH"}; return G[i]; }));
     r.push_back(toggle("SCANLINES", &cfg.scan));
     r.push_back(choice("GLITCH", &cfg.glitch, 4, [](int i) { static const char* G[4] = {"OFF", "LOW", "MEDIUM", "HIGH"}; return G[i]; }));
     r.push_back(toggle("CRT ON/OFF", &cfg.crt));
     r.push_back(choice("BOOT", &cfg.boot, 3, [](int i) { static const char* B[3] = {"FULL", "SHORT", "OFF"}; return B[i]; }));
+    r.push_back(toggle("3D INTRO", &cfg.intro));
   });
 }
 static Screen* pageSound() {
@@ -176,7 +182,7 @@ struct Setup : Screen {
     L.setBox(15, 92, 450, 330); L.rowH = 55;
     secs = {
       {"DISPLAY", "light, sleep, turn", pageDisplay},
-      {"LOOK", "colour, glow, glitch", pageLook},
+      {"LOOK", "3D, glass, glitch", pageLook},
       {"SOUND", "volume, clicks", pageSound},
       {"WIFI", "networks", [] { return findProg("WIFI"); }},
       {"TIME", "clock, time zone", pageTime},

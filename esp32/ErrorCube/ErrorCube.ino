@@ -31,7 +31,7 @@ void setup() {
   boardBegin();
   appsRegister();
   uiInit();
-  uiOpen(bootScreen());
+  uiOpen(cfg.boot == 0 && cfg.intro ? introScreen() : bootScreen());
   uiFrame();
   boardShow();
   sysBrightness(uiBrightNow());

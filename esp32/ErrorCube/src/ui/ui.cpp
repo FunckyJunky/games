@@ -1,5 +1,7 @@
 // ui.cpp: see ui.h
 #include "ui.h"
+#include "../core/fx.h"
+#include "../core/g3d.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -15,6 +17,12 @@ static uint32_t focusShowUntil = 0;
 static char toastMsg[64] = "";
 static uint32_t toastUntil = 0;
 static int lastTapX = 0, lastTapY = 0;
+static int ripX = 0, ripY = 0; static uint32_t ripAt = 0;    // the ring where you tapped
+static uint32_t revealAt = 0;
+static int transDir = -1; static uint32_t transAt = 0; static bool transTo = false;
+static const uint16_t* lastPre = nullptr;                    // the last frame, before the lens + scanlines
+void uiReveal() { revealAt = msNow(); }
+uint32_t uiRevealAt() { return revealAt; }
 
 // overlays: drawn over the current screen, they get the input first
 struct Overlay { virtual ~Overlay() {} virtual void draw() = 0; virtual bool ev(const Ev& e) = 0; virtual bool dim() { return true; } virtual int kind() { return 0; } };
@@ -29,8 +37,28 @@ void uiDirty() { dirty = true; }
 void redrawIn(uint32_t ms) { uint32_t t = msNow() + ms; if (!nextDraw || (int32_t)(t - nextDraw) < 0) nextDraw = t; }
 Screen* uiCurrent() { return stack.empty() ? nullptr : stack.back(); }
 
+void uiTransition(int dir) {
+  if (cfg.anim < 2 || cfg.saver || !uiAwake() || !lastPre) { if (cfg.anim) uiGlitch(1, 120); return; }
+  uint16_t* a = fxBuf(0);
+  if (!a || !fxBuf(1)) return;
+  memcpy(a, lastPre, SCR_W * SCR_H * 2);
+  transDir = dir; transAt = msNow(); transTo = false;
+  dirty = true;
+}
+void uiReplaceRoot(Screen* s) {
+  if (!s) return;
+  if (stack.empty()) { uiOpen(s); return; }
+  bool top = stack.size() == 1;
+  if (top) stack[0]->leave();
+  delete stack[0];
+  stack[0] = s;
+  if (top) { s->enter(); uiTransition(2); }
+  dirty = true;
+}
 void uiOpen(Screen* s) {
   if (!s) return;
+  if (!stack.empty()) uiTransition(0);
+  uiReveal();
   if (!stack.empty()) stack.back()->leave();
   stack.push_back(s);
   focusIdx = -1;
@@ -40,6 +68,8 @@ void uiOpen(Screen* s) {
 void uiBack() {
   if (stack.size() <= 1) return;
   Screen* s = stack.back();
+  uiTransition(1);
+  uiReveal();
   s->leave();
   stack.pop_back();
   delete s;
@@ -105,6 +135,7 @@ static bool deliver(const Ev& e) {
 
 void uiTouch(bool down, int x, int y) {
   uint32_t now = msNow();
+  if (down) fxLensTouch(x, y);            // the picture is curved: where the finger really is
   if (down && !tDown) {
     tDown = true; tDrag = false; tLongDone = false;
     tx0 = tx = x; ty0 = ty = y; tAt = now;
@@ -135,6 +166,7 @@ void uiTouch(bool down, int x, int y) {
   if (!tDrag) {
     if (tLongDone) { deliver(up); return; }
     lastTapX = tx0; lastTapY = ty0;
+    if (cfg.anim) { ripX = tx0; ripY = ty0; ripAt = now; }
     int h = hitAt(tx0, ty0);
     Ev e; e.t = EV_TAP; e.x = tx0; e.y = ty0; e.x0 = tx0; e.y0 = ty0;
     bool done = false;
@@ -349,12 +381,39 @@ void ListView::tick() {
 void ListView::draw(std::function<void(int, int, int, int, int, bool)> row, std::function<void(int)> pick,
                     std::function<void(int, int)>) {
   clampScroll();
+  uint32_t now = msNow();
+  bool anim = cfg.anim && !cfg.saver;
+  // the selection bar slides from row to row
+  float target = sel * rowH;
+  if (barY < 0 || !anim) barY = target;
+  barY += (target - barY) * 0.38f;
+  if (fabsf(target - barY) < 1.5f) barY = target;
+  bool moving = barY != target;
   clipSet(x, y, w, h);
+  if (moving) {
+    int by = y + (int)(barY - scroll);
+    glowRect(x + 2, by + 3, w - 4, rowH - 6, C_FG, 4);
+    blendRect(x + 2, by + 3, w - 4, rowH - 6, C_FG, 20);
+    redrawIn(16);
+  }
   int first = (int)(scroll / rowH);
   for (int i = first; i < n; i++) {
     int ry = y + i * rowH - (int)scroll;
     if (ry >= y + h) break;
-    row(i, x, ry, w, rowH, i == sel);
+    // rows type themselves in, one after the other, when the list opens
+    float p = anim ? ((int32_t)(now - revealAt) - (i - first) * 32) / 120.0f : 1;
+    if (p <= 0) { redrawIn(16); continue; }
+    if (p < 1) {
+      int cw = (int)(w * p);
+      int top = ry > y ? ry : y, bot = ry + rowH < y + h ? ry + rowH : y + h;
+      clipSet(x, top, cw, bot - top);
+      row(i, x, ry, w, rowH, i == sel && !moving);
+      clipSet(x, y, w, h);
+      fillRect(x + cw, ry + (rowH - LH) / 2 + 4, CW, LH - 8, C_FG);
+      redrawIn(16);
+      continue;
+    }
+    row(i, x, ry, w, rowH, i == sel && !moving);
   }
   clipReset();
   // scroll marks, like ^ and v on error.blue
@@ -624,6 +683,7 @@ struct Dialog : Overlay {
   std::vector<std::string> btn;
   std::function<void(int)> cb;
   int sel = 0;
+  uint32_t born = msNow();
   Dialog(const char* t, const char* x, std::vector<const char*> b, std::function<void(int)> c) : cb(c) {
     snprintf(title, sizeof(title), "%s", t); snprintf(text, sizeof(text), "%s", x ? x : "");
     for (auto s : b) btn.push_back(s);
@@ -641,6 +701,18 @@ struct Dialog : Overlay {
     int h = 72 + nl * LH + (vert ? (int)btn.size() * (bh + 8) : bh + 8) + 10;
     int w = 420, x = (SCR_W - w) / 2, y = (SCR_H - h) / 2;
     if (y < 56) y = 56;
+    // a DOS window opening: the box grows out of the middle, with a little static
+    float p = cfg.anim ? (msNow() - born) / 170.0f : 1;
+    if (p < 1) {
+      float e = 1 - (1 - p) * (1 - p);
+      int ww = 24 + (int)((w - 24) * e), hh = 12 + (int)((h - 12) * e);
+      int xx = SCR_W / 2 - ww / 2, yy = y + h / 2 - hh / 2;
+      fillRect(xx, yy, ww, hh, C_BG);
+      dosBox(xx, yy, ww, hh, C_FG);
+      for (int i = 0; i < 6; i++) blendRect(xx, yy + rnd() % hh, ww, 1, C_FG, 4 + rnd() % 10);
+      redrawIn(16);
+      return;
+    }
     fillRect(x, y, w, h, C_BG);
     fillRect(x + 12, y + h, w, 10, C_BLACK);          // the DOS shadow
     fillRect(x + w, y + 12, 12, h, C_BLACK);
@@ -690,6 +762,7 @@ void powerMenu() {
 // ------------------------------------------------------------------ quick panel (swipe down from the top)
 struct Quick : Overlay {
   int drag = -1;
+  uint32_t born = msNow();
   int kind() override { return 2; }
   void setFrom(int which, int x) {
     int p = (x - 150) * 100 / 290; if (p < 0) p = 0; if (p > 100) p = 100;
@@ -698,6 +771,16 @@ struct Quick : Overlay {
   }
   void draw() override {
     int x = 15, y = 52, w = 450, h = 372;
+    // slides down from the status bar
+    float p = cfg.anim ? (msNow() - born) / 200.0f : 1;
+    if (p < 1) {
+      float e = 1 - (1 - p) * (1 - p) * (1 - p);
+      int hh = (int)(h * e);
+      fillRect(x, y, w, hh, C_BG);
+      dosBox(x, y, w, hh < 20 ? 20 : hh, C_FG);
+      redrawIn(16);
+      return;
+    }
     fillRect(x, y, w, h, C_BG);
     fillRect(x + 10, y + h, w, 8, C_BLACK);
     dosBox(x, y, w, h, C_FG);
@@ -800,6 +883,21 @@ static void scheduleGlitch(uint32_t now) {
   glitchNext = MEAN[g & 3] ? now + MEAN[g & 3] * (40 + rnd() % 120) / 100 : 0;
 }
 
+void uiGlitch(int kind, uint32_t ms) {
+  if (!awake || cfg.saver) return;
+  uint32_t now = msNow();
+  if (kind < 0) {
+    // which one: tears and colour splits most, the full signal loss now and then
+    static const uint8_t K[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 10, 11, 11, 12, 1, 8, 13};
+    kind = K[rnd() % sizeof(K)];
+  }
+  fxKind = kind; fxSeed = rnd();
+  fxUntil = now + (ms ? ms : kind == 0 ? 160 : kind == 9 ? 400 : kind == 13 ? 140 : 120 + rnd() % 260);
+  if (kind == 7) garbleUntil = now + 160;
+  if (cfg.sounds && kind != 7 && rnd() % 10 < 8) snd(SND_CRACKLE);
+  dirty = true;
+}
+
 void uiInit() {
   gfxInit();
   gfxTheme(cfg.color, cfg.saver ? 0 : cfg.glow);
@@ -807,6 +905,7 @@ void uiInit() {
   scheduleGlitch(msNow());
 }
 void uiStart() {
+  uiTransition(0);
   while (!stack.empty()) { delete stack.back(); stack.pop_back(); }
   uiOpen(homeScreen());
 }
@@ -835,12 +934,7 @@ void uiLoop() {
     scheduleGlitch(now);
     Screen* c = uiCurrent();
     bool calm = (c && (c->fullScreen() || c->noSwipeBack())) || kbIsOpen() || dimmed;
-    if (!calm) {
-      fxKind = rnd() % 8; fxSeed = rnd(); fxUntil = now + (fxKind == 0 ? 160 : 120 + rnd() % 260);
-      if (fxKind == 7) garbleUntil = now + 160;
-      if (cfg.sounds && fxKind != 7 && rnd() % 10 < 8) snd(SND_CRACKLE);
-      dirty = true;
-    }
+    if (!calm) uiGlitch(-1, 0);
   }
   if (!glitchNext && cfg.glitch && !cfg.saver) scheduleGlitch(now);
   // a message from the control page
@@ -859,7 +953,8 @@ bool uiFrame() {
   if (!fx && fxKind >= 0) { fxKind = -1; dirty = true; }
   if (nextDraw && (int32_t)(now - nextDraw) >= 0) { nextDraw = 0; dirty = true; }
   if (toastUntil && (int32_t)(now - toastUntil) >= 0) { toastUntil = 0; dirty = true; }
-  if (!dirty && !fx) return false;
+  bool inTrans = transDir >= 0;
+  if (!dirty && !fx && !inTrans) return false;
   dirty = false;
   if (!awake) {
     if (!aodOn) return false;
@@ -869,43 +964,69 @@ bool uiFrame() {
     delete a;
     return true;
   }
-  gfxTheme(cfg.color, cfg.saver ? 0 : cfg.glow);
-  hits.clear();
-  gfxClear();
-  Screen* s = uiCurrent();
-  Keyboard* k = kb();
-  if (k) { k->draw(); }
-  else {
-    if (s) {
-      if (!s->fullScreen()) statusBar(s->name());
-      s->draw();
-    }
-    for (Overlay* o : ovl) {
-      if (o->dim()) {
-        // shade what's under the dialog, so it stands out (like the dark layer on error.blue)
-        for (int i = 0; i < SCR_W * SCR_H; i++) { uint16_t v = fb[i]; fb[i] = ((v & 0xE79C) >> 2); }
-        hits.clear();
+  bool calm = cfg.saver;
+  gfxTheme(cfg.color, calm ? 0 : cfg.glow);
+  fxLensSetup(calm ? 0 : cfg.lens);
+  // a transition: the cube turns from the last picture to the new one
+  float tt = inTrans ? (now - transAt) / 440.0f : 0;
+  if (inTrans && tt >= 1) { transDir = -1; inTrans = false; }
+  if (!inTrans || !transTo) {
+    hits.clear();
+    gfxClear();
+    Screen* s = uiCurrent();
+    Keyboard* k = kb();
+    if (k) { k->draw(); }
+    else {
+      if (s) {
+        if (!s->fullScreen()) statusBar(s->name());
+        s->draw();
       }
-      o->draw();
+      for (Overlay* o : ovl) {
+        if (o->dim()) {
+          // shade what's under the dialog, so it stands out (like the dark layer on error.blue)
+          for (int i = 0; i < SCR_W * SCR_H; i++) { uint16_t v = fb[i]; fb[i] = ((v & 0xE79C) >> 2); }
+          hits.clear();
+        }
+        o->draw();
+      }
     }
+    // the focused button (when the hardware buttons are used to move around)
+    if (focusIdx >= 0 && focusIdx < (int)hits.size() && (int32_t)(focusShowUntil - now) > 0) {
+      const Hit& h = hits[focusIdx];
+      if ((now / 300) % 3) { rect(h.x - 4, h.y - 4, h.w + 8, h.h + 8, C_FG); rect(h.x - 3, h.y - 3, h.w + 6, h.h + 6, C_FG); }
+      redrawIn(300);
+    }
+    if (pressHit >= 0 && pressHit < (int)hits.size() && tDown) {
+      const Hit& h = hits[pressHit];
+      blendRect(h.x, h.y, h.w, h.h, C_FG, 8);
+    }
+    if (toastUntil) {
+      // slides up from the bottom
+      uint32_t age = 2600 - ((int32_t)(toastUntil - now) > 2600 ? 2600 : toastUntil - now);
+      int w = textW(FT, toastMsg) + 30, x = (SCR_W - w) / 2, y = 382 + (age < 160 && cfg.anim ? (160 - age) / 3 : 0);
+      fillRect(x + 6, y + 6, w, 40, C_BLACK);
+      invBar(x, y, w, 40);
+      drawTextC(FT, SCR_W / 2, y + 4, toastMsg, C_BG, TX_FLAT);
+      if (age < 160) redrawIn(16);
+    }
+    // a ring where you tapped
+    if (ripAt && now - ripAt < 340) {
+      float p = (now - ripAt) / 340.0f, r = 10 + 70 * p;
+      int a = (int)(26 * (1 - p)), n = 40;
+      for (int i = 0; i < n; i++) {
+        float a0 = i * 6.2832f / n, a1 = (i + 1) * 6.2832f / n;
+        glowLine(ripX + cosf(a0) * r, ripY + sinf(a0) * r, ripX + cosf(a1) * r, ripY + sinf(a1) * r, C_FG, a);
+      }
+      redrawIn(16);
+    }
+    if (inTrans) { memcpy(fxBuf(1), fb, SCR_W * SCR_H * 2); transTo = true; }
   }
-  // the focused button (when the hardware buttons are used to move around)
-  if (focusIdx >= 0 && focusIdx < (int)hits.size() && (int32_t)(focusShowUntil - now) > 0) {
-    const Hit& h = hits[focusIdx];
-    if ((now / 300) % 3) { rect(h.x - 4, h.y - 4, h.w + 8, h.h + 8, C_FG); rect(h.x - 3, h.y - 3, h.w + 6, h.h + 6, C_FG); }
-    redrawIn(300);
-  }
-  if (pressHit >= 0 && pressHit < (int)hits.size() && tDown) {
-    const Hit& h = hits[pressHit];
-    blendRect(h.x, h.y, h.w, h.h, C_FG, 8);
-  }
-  if (toastUntil) {
-    int w = textW(FT, toastMsg) + 30, x = (SCR_W - w) / 2, y = 382;
-    fillRect(x + 6, y + 6, w, 40, C_BLACK);
-    invBar(x, y, w, 40);
-    drawTextC(FT, SCR_W / 2, y + 4, toastMsg, C_BG, TX_FLAT);
-  }
-  if (fx) {
+  if (inTrans) {
+    float e = tt < 0.5f ? 4 * tt * tt * tt : 1 - powf(-2 * tt + 2, 3) / 2;    // ease in and out
+    fxCube(fxBuf(0), fxBuf(1), e, transDir, fb);
+    redrawIn(1);
+  } else if (fx) {
+    uint32_t t = now - (fxUntil - 400);
     switch (fxKind) {
       case 0: fxShift(0, (int)((now - (fxUntil - 160)) * 3) % 200 - 100); break;   // roll
       case 1: case 2: fxTear(1 + fxSeed % 3, fxSeed + (now / 60)); break;
@@ -913,10 +1034,17 @@ bool uiFrame() {
       case 4: fxBlock(fxSeed); break;
       case 5: fxStatic(26, fxSeed + now / 50); break;
       case 6: fxInvertBand(fxSeed); break;
+      case 8: fxRgbSplit(3 + (int)(fxSeed % 5)); fxTear(1, fxSeed + now / 50); break;   // colour split
+      case 9: fxVhs(fxSeed, (t % 400) / 400.0f); break;                                // VHS tracking band
+      case 10: fxInterlace((now / 40) % 2 ? 4 : -4); break;
+      case 11: fxDatamosh(fxSeed + now / 70); break;
+      case 12: fxStretch(fxSeed + (now / 90) * 7919); break;
+      case 13: fxSignalLoss(fxSeed + now); break;
     }
     redrawIn(40);
     wasFx = true;
   }
-  if (cfg.scan) fxScanlines();
+  fxPost(cfg.fringe && !calm, cfg.scan);
+  lastPre = fxSpare();
   return true;
 }

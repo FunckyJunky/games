@@ -44,10 +44,12 @@ static Preferences prefs;
 static uint32_t cfgDirtyAt = 0;
 static void cfgLoad() {
   prefs.begin("cube", false);
-  Cfg c;
-  if (prefs.getBytesLength("cfg") == sizeof(Cfg)) {
-    prefs.getBytes("cfg", &c, sizeof(c));
-    if (c.magic == Cfg().magic) cfg = c;
+  // settings from this or an older firmware: what was saved keeps its value, newer settings start at their default
+  size_t n = prefs.getBytesLength("cfg");
+  if (n >= 8 && n <= sizeof(Cfg)) {
+    Cfg c;
+    prefs.getBytes("cfg", &c, n);
+    if ((c.magic & 0xFFFF0000u) == 0xC0BE0000u) { cfg = c; cfg.magic = Cfg().magic; }
   }
 }
 void cfgSave() { cfgDirtyAt = millis() | 1; }

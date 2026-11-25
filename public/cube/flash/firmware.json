@@ -1,8 +1,8 @@
 {
-  "ver": "1.0",
+  "ver": "1.1",
   "path": "/cube/flash/cube.bin",
-  "size": 2505264,
-  "md5": "9d6cb62298625be9774b76fc9f2dce63",
-  "notes": "First version: ERROR-DOS, WHO, CHAT, web apps, live video + sound, updates over WiFi",
-  "date": "2026-11-25T18:33Z"
+  "size": 2536800,
+  "md5": "9ce59c1319423f4541dd205d233d21d3",
+  "notes": "3D menu, 3D intro, cube turns between screens, curved CRT glass with colour fringe, more glitches and animations",
+  "date": "2026-11-25T19:22Z"
 }

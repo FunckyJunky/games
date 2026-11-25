@@ -11,8 +11,28 @@
 extern uint32_t simNow;
 extern std::string root, appsDir;
 static std::string outDir = "/tmp/shots";
+extern float simTilt[3];
+static int recN = 0;
+static void dump(const std::string& p) {
+  FILE* f = fopen(p.c_str(), "wb");
+  fprintf(f, "P6 480 480 255\n");
+  for (int i = 0; i < 480 * 480; i++) {
+    uint16_t c = fb[i]; uint8_t rgb[3] = {(uint8_t)((c >> 11) * 255 / 31), (uint8_t)(((c >> 5) & 63) * 255 / 63), (uint8_t)((c & 31) * 255 / 31)};
+    fwrite(rgb, 1, 3, f);
+  }
+  fclose(f);
+}
+static void rec(int ms) {
+  // frames every 40 ms (25 a second) into outDir/rec/NNNN.ppm
+  system(("mkdir -p " + outDir + "/rec").c_str());
+  for (int t = 0; t < ms; t += 40) {
+    extern void step(uint32_t); step(40);
+    char p[32]; snprintf(p, sizeof(p), "/rec/%04d.ppm", recN++);
+    dump(outDir + p);
+  }
+}
 
-static void step(uint32_t ms) {
+void step(uint32_t ms) {
   uint32_t end = simNow + ms;
   while (simNow < end) { simNow += 16; uiLoop(); uiFrame(); }
 }
@@ -43,7 +63,7 @@ int main(int argc, char** argv) {
   strcpy(cfg.code, "QX7K2M"); strcpy(cfg.name, "ALEX");
   appsRegister();
   uiInit();
-  uiOpen(bootScreen());
+  uiOpen(cfg.boot == 0 && cfg.intro ? introScreen() : bootScreen());
   char line[256];
   while (fgets(line, sizeof(line), stdin)) {
     char cmd[32] = ""; int a = 0, b = 0, c = 0, d = 0; char s[64] = "";
@@ -65,6 +85,16 @@ int main(int argc, char** argv) {
       uiKey(k); step(150);
     }
     else if (!strcmp(cmd, "shot")) { sscanf(line, "%*s %63s", s); shot(s); }
+    else if (!strcmp(cmd, "rec")) { sscanf(line, "%*s %d", &a); rec(a); }
+    else if (!strcmp(cmd, "tilt")) { float x, z; sscanf(line, "%*s %f %f", &x, &z); simTilt[0] = x; simTilt[2] = z; }
+    else if (!strcmp(cmd, "glitch")) { sscanf(line, "%*s %d %d", &a, &b); uiGlitch(a, b); }
+    else if (!strcmp(cmd, "dragrec")) {   // a slow drag, recorded
+      sscanf(line, "%*s %d %d %d %d", &a, &b, &c, &d);
+      system(("mkdir -p " + outDir + "/rec").c_str());
+      uiTouch(true, a, b);
+      for (int i = 1; i <= 20; i++) { step(40); uiTouch(true, a + (c - a) * i / 20, b + (d - b) * i / 20); char p[32]; snprintf(p, sizeof(p), "/rec/%04d.ppm", recN++); dump(outDir + p); }
+      uiTouch(false, c, d);
+    }
     else if (!strcmp(cmd, "open")) { sscanf(line, "%*s %63s", s); openProg(s); step(200); }
     else if (!strcmp(cmd, "app")) { sscanf(line, "%*s %63s", s); strcpy(S.wantApp, s); S.wantAppAt = simNow + 1; step(300); }
     else if (!strcmp(cmd, "vid")) {
@@ -76,6 +106,7 @@ int main(int argc, char** argv) {
       sscanf(line, "%*s %31s %d", s, &a);
       if (!strcmp(s, "color")) cfg.color = a; else if (!strcmp(s, "glow")) cfg.glow = a; else if (!strcmp(s, "scan")) cfg.scan = a;
       else if (!strcmp(s, "glitch")) cfg.glitch = a; else if (!strcmp(s, "boot")) cfg.boot = a; else if (!strcmp(s, "h24")) cfg.h24 = a;
+      else if (!strcmp(s, "lens")) cfg.lens = a; else if (!strcmp(s, "view")) cfg.view = a;
       else if (!strcmp(s, "upd")) { S.upd = a; strcpy(S.updVer, "1.1"); S.updPct = 42; strcpy(S.updNotes, "Faster chat, new LEVEL look"); }
       cfgChanged();
     }

@@ -459,6 +459,9 @@ static const char* lChg(int i) { static char b[7][10]; snprintf(b[i], 10, "%d MA
 static const char* lAuto(int i) { static char b[5][10]; int m = AUTO_OFF_MIN[i]; if (!m) return "NEVER"; if (m < 60) snprintf(b[i], 10, "%d MIN", m); else snprintf(b[i], 10, "%d H", m / 60); return b[i]; }
 static const char* lUpd(int i) { static char b[3][10]; snprintf(b[i], 10, "%d H", UPD_HOURS[i]); return b[i]; }
 static const char* lKbd(int i) { return i ? "UKRAINIAN" : "ENGLISH"; }
+static const char* lView(int i) { return i ? "3D" : "DOS"; }
+static const char* lLens(int i) { static const char* L[] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }
+static const char* lAnim(int i) { static const char* A[] = {"OFF", "SIMPLE", "3D"}; return A[i]; }
 static Set SETS[] = {
   {"DISPLAY", "bright", "BRIGHTNESS", T_SLIDER, &cfg.bright, 5, 100, nullptr},
   {"DISPLAY", "offIdx", "SCREEN OFF AFTER", T_CHOICE, &cfg.offIdx, 0, 7, lOff},
@@ -467,12 +470,18 @@ static Set SETS[] = {
   {"DISPLAY", "tapWake", "TAP TO WAKE", T_TOGGLE, &cfg.tapWake, 0, 1, nullptr},
   {"DISPLAY", "moveWake", "LIFT TO WAKE", T_TOGGLE, &cfg.moveWake, 0, 1, nullptr},
   {"DISPLAY", "rot", "ROTATION", T_CHOICE, &cfg.rot, 0, 4, lRot},
+  {"LOOK", "view", "MENU", T_CHOICE, &cfg.view, 0, 1, lView},
+  {"LOOK", "lens", "GLASS", T_CHOICE, &cfg.lens, 0, 2, lLens},
+  {"LOOK", "fringe", "COLOUR FRINGE", T_TOGGLE, &cfg.fringe, 0, 1, nullptr},
+  {"LOOK", "anim", "ANIMATION", T_CHOICE, &cfg.anim, 0, 2, lAnim},
+  {"LOOK", "parallax", "MOVES WITH YOU", T_TOGGLE, &cfg.parallax, 0, 1, nullptr},
   {"LOOK", "color", "COLOUR", T_CHOICE, &cfg.color, 0, N_SCHEMES - 1, lScheme},
   {"LOOK", "glow", "GLOW", T_CHOICE, &cfg.glow, 0, 2, lGlow},
   {"LOOK", "scan", "SCANLINES", T_TOGGLE, &cfg.scan, 0, 1, nullptr},
   {"LOOK", "glitch", "GLITCH", T_CHOICE, &cfg.glitch, 0, 3, lGlitch},
   {"LOOK", "crt", "CRT ON/OFF", T_TOGGLE, &cfg.crt, 0, 1, nullptr},
   {"LOOK", "boot", "BOOT", T_CHOICE, &cfg.boot, 0, 2, lBoot},
+  {"LOOK", "intro", "3D INTRO", T_TOGGLE, &cfg.intro, 0, 1, nullptr},
   {"SOUND", "vol", "VOLUME", T_SLIDER, &cfg.vol, 0, 100, nullptr},
   {"SOUND", "clicks", "KEY CLICKS", T_TOGGLE, &cfg.clicks, 0, 1, nullptr},
   {"SOUND", "sounds", "SOUNDS", T_TOGGLE, &cfg.sounds, 0, 1, nullptr},

@@ -27,7 +27,8 @@ bool sysLocalTime(struct tm& t) {
   setenv("TZ", TIMEZONES[cfg.tzIdx % N_TZ].posix, 1); tzset();
   time_t now = base + simNow / 1000 + setOff; localtime_r(&now, &t); return true;
 }
-bool imuRead(float a[3], float g[3]) { a[0] = 0.6f; a[1] = 9.7f; a[2] = 1.2f; g[0] = 0.4f; g[1] = -0.2f; g[2] = 0.1f; return true; }
+float simTilt[3] = {0.3f, 9.7f, 0.4f};
+bool imuRead(float a[3], float g[3]) { a[0] = simTilt[0]; a[1] = simTilt[1]; a[2] = simTilt[2]; g[0] = 0.4f; g[1] = -0.2f; g[2] = 0.1f; return true; }
 uint32_t freeHeap() { return 214 * 1024; }
 uint32_t freePsram() { return 6120 * 1024; }
 uint32_t uptimeSecs() { return 3725 + simNow / 1000; }

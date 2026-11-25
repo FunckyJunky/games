@@ -10,6 +10,8 @@ uint32_t msNow();
 
 // ------------------------------------------------------------------ settings (saved in flash)
 struct Cfg {
+  // first, never moved: a newer firmware keeps the settings an older one saved (new fields only go at the end)
+  uint32_t magic = 0xC0BE0002;
   // look
   uint8_t color = 0;        // SCHEMES[]
   uint8_t glow = 1;         // 0 off, 1 low, 2 high
@@ -54,7 +56,14 @@ struct Cfg {
   uint8_t alarmOn = 0, alarmH = 7, alarmM = 30, alarmDays = 0x7F;   // bit 0 = Monday
   uint8_t wifiOn = 1;
   int8_t axes[3] = {1, 2, 3};   // motion sensor -> screen: which sensor axis (1..3, minus = turned round) is x, y, z
-  uint32_t magic = 0xC0BE0001;  // changes when this struct changes
+  // 3D and effects
+  uint8_t view = 1;         // the menu: 0 DOS list, 1 3D carousel
+  uint8_t lens = 1;         // 0 flat glass, 1 curved CRT, 2 fisheye
+  uint8_t fringe = 1;       // colour fringe toward the edges
+  uint8_t anim = 2;         // 0 off, 1 simple, 2 full (the cube turns between screens)
+  uint8_t parallax = 1;     // the 3D menu moves with how you hold the cube
+  uint8_t intro = 1;        // the 3D ERROR intro at start (BOOT FULL)
+  // new settings go here, at the end
 };
 extern Cfg cfg;
 void cfgSave();             // write to flash (the board waits a moment, so many quick changes are one write)

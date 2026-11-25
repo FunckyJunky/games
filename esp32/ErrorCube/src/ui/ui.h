@@ -48,6 +48,11 @@ struct Screen {
 
 void uiInit();
 void uiStart();                          // after the boot screen
+void uiTransition(int dir);              // the cube turns to the next picture: 0 up, 1 down, 2 left, 3 right
+void uiReveal();                         // list rows type themselves in again
+uint32_t uiRevealAt();
+void uiReplaceRoot(Screen* s);           // a new menu at the bottom of the stack (the menu view changed)
+void uiGlitch(int kind, uint32_t ms);    // a glitch now (-1 = any)
 void uiOpen(Screen* s);
 void uiBack();
 void uiHome();
@@ -89,6 +94,7 @@ void sndKey();
 // Rows of 56 px; drag to scroll, tap to pick, - / + buttons move, hold + = OK.
 struct ListView {
   int sel = 0, n = 0;
+  float barY = -1;                       // the selection bar slides to the selected row
   float scroll = 0, vel = 0;
   int x = 15, y = 96, w = 450, h = 330, rowH = 56;
   bool dragging = false; int dragY0 = 0; float scroll0 = 0; uint32_t lastMove = 0; int lastY = 0;
@@ -131,6 +137,8 @@ void appsLoop();                         // the control page asked to open a web
 Screen* makeWebApp(const char* id, const char* name);
 Screen* makeLive();
 Screen* bootScreen();
+Screen* introScreen();
+Screen* makeHome3D();
 Screen* homeScreen();
 Screen* aodScreen();
 Screen* findProg(const char* dos);
