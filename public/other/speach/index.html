@@ -55,7 +55,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tmr small{font-size:13px;color:var(--muted)}
 .hint{font-size:13px;color:var(--muted);margin:6px 0 0}
 .meter{padding:8px 0 0}
-.lvl{position:relative;height:46px;border-radius:23px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.lvl{cursor:pointer;position:relative;height:46px;border-radius:23px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
 .z{position:absolute;top:0;bottom:0;width:calc(12.5% + 15px);background:var(--or);opacity:.12;transition:opacity .15s}
 .zl{left:0}.zr{right:0}
 .lvl.fl .zl,.lvl.fr .zr{opacity:.55}
@@ -179,9 +179,10 @@ input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
     <h1>Opening speech trainer</h1>
     <p class="ukt" lang="uk">Відкриття поглибленої вогневої та тактичної підготовки</p>
     <ul class="how">
-      <li><b>Tilt right</b><span>next sentence</span></li>
-      <li><b>Tilt left</b><span>one back</span></li>
+      <li><b>Next</b><span>tilt right, or tip the top away</span></li>
+      <li><b>Back</b><span>tilt left, or tip it toward you</span></li>
       <li><b>Swipe or tap</b><span>works too, always</span></li>
+      <li><b>Voice</b><span>reads each sentence aloud</span></li>
     </ul>
     <button class="btn pri big" id="go">Start</button>
     <button class="btn big" id="go1" hidden>Start from sentence 1</button>
@@ -202,8 +203,9 @@ input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
     <form id="setForm">
       <div class="row"><span class="t">Gesture</span>
         <div class="seg g4">
-          <label><input type="radio" name="mode" value="tilt"><span>Tilt sideways</span></label>
-          <label><input type="radio" name="mode" value="nod"><span>Tip forward</span></label>
+          <label><input type="radio" name="mode" value="both"><span>Any tilt</span></label>
+          <label><input type="radio" name="mode" value="tilt"><span>Sideways only</span></label>
+          <label><input type="radio" name="mode" value="nod"><span>Forward only</span></label>
           <label><input type="radio" name="mode" value="flick"><span>Flick</span></label>
           <label><input type="radio" name="mode" value="off"><span>Off</span></label>
         </div>
@@ -319,10 +321,10 @@ const D=[
 ];
 
 const $=id=>document.getElementById(id);
-const S={mode:'tilt',sens:3,flip:false,ph:'en',en:true,pr:'off',auto:false,rate:0.85,k:1};
+const S={mode:'both',sens:3,flip:false,ph:'en',en:true,pr:'off',auto:true,rate:0.85,k:1,v:3};
 const KEY='orangecoy-speech-v1';
 let idx=0,rev=false,started=false,running=false,gotData=false,noSensor=false,denied=false;
-try{const o=JSON.parse(localStorage.getItem(KEY)||'null');if(o){Object.assign(S,o.S||{});idx=Math.min(Math.max(0,o.i|0),D.length-1)}}catch(e){}
+try{const o=JSON.parse(localStorage.getItem(KEY)||'null');if(o){const ov=(o.S&&o.S.v)|0;Object.assign(S,o.S||{});if(ov<3){S.auto=true;S.mode='both';S.v=3}idx=Math.min(Math.max(0,o.i|0),D.length-1)}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify({S,i:idx}))}catch(e){}}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -368,7 +370,7 @@ function render(dir){
  $('rev').hidden=!prac;$('rev').setAttribute('aria-pressed',rev);$('rev').classList.toggle('on',rev);
  card.scrollTop=0;
  save();
- if(S.auto&&started&&dir)speak();
+ if(S.auto&&started&&dir&&t!=='c')speak();
 }
 function go(dir,byMotion){
  const n=idx+dir;
@@ -380,30 +382,43 @@ function buzz(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
 
 /* ---------- motion ---------- */
-const TH=[34,27,21,16,12],FL=[24,19,15,11.5,8.5];
-let base=null,armed=true,mv=0,mf=false,mq=false,lp=null,lastF=0;
+const TH=[30,24,18,14,10],FL=[24,19,15,11.5,8.5];
+let base=null,armed=true,settle=null,settleT=0,ghost=null,ghostT=0,mv=0,mf=false,mq=false,lp=null,lastF=0;
 const lvl=$('lvl'),dot=$('dot');
 function meter(r,fl){mv=r;mf=fl;if(mq)return;mq=true;requestAnimationFrame(()=>{mq=false;const half=lvl.clientWidth/2-20;const c=mf?Math.min(Math.max(mv,0),1.3):Math.max(-1.3,Math.min(1.3,mv));dot.style.transform='translateX('+(c*half*.75).toFixed(1)+'px)'})}
 function flash(dir){lvl.classList.add(dir>0?'fr':'fl');setTimeout(()=>lvl.classList.remove('fr','fl'),380)}
 function sheetOpen(){return !!document.querySelector('.sheet.on')}
 function seen(){if(!gotData){gotData=true;if(noSensor){noSensor=false;modeText()}}}
+/* lean of the screen against gravity: [sideways, forward], no jumps when the phone is held upright */
+const R=Math.PI/180,asd=x=>Math.asin(Math.max(-1,Math.min(1,x)))/R;
 function axes(e){
+ const b=e.beta*R,g=e.gamma*R,ux=-Math.sin(g)*Math.cos(b),uy=Math.sin(b);
  const a=(screen.orientation&&screen.orientation.angle)??window.orientation??0;
- switch((a+360)%360){case 90:return[e.beta,-e.gamma];case 270:return[-e.beta,e.gamma];case 180:return[-e.gamma,-e.beta];default:return[e.gamma,e.beta]}
+ switch((a+360)%360){case 90:return[asd(uy),asd(ux)];case 270:return[-asd(uy),-asd(ux)];case 180:return[asd(ux),-asd(uy)];default:return[-asd(ux),asd(uy)]}
 }
 addEventListener('deviceorientation',e=>{
  if(e.gamma==null||e.beta==null)return;
  seen();
- if(!running||(S.mode!=='tilt'&&S.mode!=='nod')||sheetOpen())return;
- const [side,fwd]=axes(e),v=S.mode==='tilt'?side:-fwd;
- if(base==null){base=v;armed=true}
- const d=(v-base)*(S.flip?-1:1),th=TH[S.sens-1];
+ if(!running||!['both','tilt','nod'].includes(S.mode)||sheetOpen())return;
+ const [side,fwd]=axes(e);
+ if(base==null){base=[side,fwd];armed=true}
+ const k=S.flip?-1:1,ds=(side-base[0])*k,df=(base[1]-fwd)*k,th=TH[S.sens-1];
+ const d=S.mode==='tilt'?ds:S.mode==='nod'?df:(Math.abs(ds)>=Math.abs(df)?ds:df);
+ const calm=S.mode==='both'?Math.max(Math.abs(ds),Math.abs(df)):Math.abs(d);
  meter(d/th,false);
+ const now=performance.now(),p=[side,fwd];
+ const dist=(a,c)=>S.mode==='tilt'?Math.abs(a[0]-c[0]):S.mode==='nod'?Math.abs(a[1]-c[1]):Math.hypot(a[0]-c[0],a[1]-c[1]);
  if(armed){
-  if(d>th){armed=false;go(1,true)}
-  else if(d<-th){armed=false;go(-1,true)}
-  else if(Math.abs(d)<th*.3)base+=(v-base)*.005;
- }else if(Math.abs(d)<th*.45)armed=true;
+  if(Math.abs(d)>th){
+   armed=false;settle=null;
+   /* coming back to where the phone was before a re-centre is not a new tilt */
+   if(ghost&&now-ghostT<15000&&dist(p,ghost)<dist(p,base)){base=ghost;ghost=null;return}
+   ghost=null;go(d>0?1:-1,true);
+  }else if(calm<th*.3){base[0]+=(side-base[0])*.005;base[1]+=(fwd-base[1])*.005}
+ }else if(calm<th*.45){armed=true;settle=null}
+ /* held still away from the centre for 2 s: this is the new way of holding it */
+ else if(!settle||Math.abs(side-settle[0])>4||Math.abs(fwd-settle[1])>4){settle=p;settleT=now}
+ else if(now-settleT>2000){ghost=base;ghostT=now;base=p;armed=true;settle=null;meter(0,false)}
 });
 addEventListener('devicemotion',e=>{
  let m=null;const a=e.acceleration;
@@ -420,13 +435,14 @@ addEventListener('devicemotion',e=>{
  meter(m/th,true);
  if(m>th&&t-lastF>900){lastF=t;go(1,true)}
 });
-const reori=()=>{base=null};
+const reori=()=>{base=null;ghost=null};
 addEventListener('orientationchange',reori);
 try{screen.orientation&&screen.orientation.addEventListener('change',reori)}catch(e){}
 
 function modeText(){
  const L=S.flip?['left','right']:['right','left'];
- let t={tilt:'Tilt '+L[0]+' for next, '+L[1]+' for back.',
+ let t={both:S.flip?'Tilt left or tip the top toward you for next. Tilt right or tip away for back.':'Tilt right or tip the top away for next. Tilt left or tip it toward you for back.',
+  tilt:'Tilt '+L[0]+' for next, '+L[1]+' for back.',
   nod:S.flip?'Tip the top toward you for next, away for back.':'Tip the top away for next, toward you for back.',
   flick:'Flick the phone for next. Use the back button to go back.',
   off:'Motion is off. Swipe the card or use the buttons.'}[S.mode];
@@ -435,6 +451,7 @@ function modeText(){
   else if(denied)t='Motion access was refused. Reload and allow it, or swipe the card.';
   else if(noSensor)t='No motion data here. Swipe or use the buttons. For tilt, open this page from an https site in Safari or Chrome.';
  }
+ if(['both','tilt','nod'].includes(S.mode)&&running&&!noSensor&&!denied)t+=' Tap the level bar to re-centre.';
  $('mstat').textContent=t;
  lvl.classList.toggle('flick',S.mode==='flick');
  lvl.classList.toggle('dead',S.mode==='off'||denied||noSensor||!running);
@@ -476,7 +493,8 @@ function begin(){
   if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function')ps.push(DeviceOrientationEvent.requestPermission());
   if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function')ps.push(DeviceMotionEvent.requestPermission());
  }catch(e){}
- try{if('speechSynthesis' in window)speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}
+ if(S.auto&&D[idx][2]!=='c')speak();
+ else try{if('speechSynthesis' in window)speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}
  started=true;$('start').hidden=true;wake();
  Promise.allSettled(ps).then(r=>{
   denied=r.some(x=>x.status==='rejected'||x.value==='denied');
@@ -540,7 +558,9 @@ F.addEventListener('input',()=>{
  S.auto=F.elements.auto.checked;S.rate=+F.elements.rate.value;S.k=+F.elements.k.value;
  base=null;armed=true;rev=false;fill();render(0);modeText();
 });
-$('recal').addEventListener('click',()=>{base=null;armed=true;toast('Centred. Hold the phone the way you read it.')});
+const recentre=()=>{base=null;ghost=null;armed=true;settle=null;meter(0,false)};
+lvl.addEventListener('click',()=>{recentre();toast('Centred')});
+$('recal').addEventListener('click',()=>{recentre();toast('Centred. Hold the phone the way you read it.')});
 $('restart').addEventListener('click',()=>{idx=0;rev=false;stopTimer();closeSheets();render(-1)});
 
 /* ---------- init ---------- */

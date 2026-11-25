@@ -107,8 +107,9 @@ public/                 the website
                         (maplibre/ = MapLibre GL JS 4.7.1, BSD-3; PDOK base map / aerial photo). Cyberpunk view:
                         cyber.js (three/ = three.js r170, MIT): neon city of the same buildings, fly over or walk
   other/speach/         Speech trainer (error.blue/other/speach): the ORANGE COY opening speech in Ukrainian, one sentence
-                        at a time. Tilt the phone right/left (or tip forward, or flick) for next/back; swipe and buttons too.
-                        Pronunciation line (English- or Dutch-style), English meaning, practice mode, read-aloud, 60 s
+                        at a time. Tilt right or tip the top away for next, left or toward you for back (or flick); swipe and
+                        buttons too. Holding still 2 s or tapping the level bar re-centres. Reads each sentence aloud
+                        (on by default). Pronunciation line (English- or Dutch-style), English meaning, practice mode, 60 s
                         silence timer. One self-contained index.html; the sentences are in the D array at the top of the script
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
