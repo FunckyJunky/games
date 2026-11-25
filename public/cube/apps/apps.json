@@ -1,0 +1,38 @@
+{
+  "name": "ERROR-CUBE web apps",
+  "about": "Small JavaScript programs for the ERROR-CUBE (480x480 touch screen). The cube lists them in its WEB folder, downloads one when you open it and runs it itself. Try them in a browser at /cube/apps/run.html?app=ID. API: README.md. Bump v to make cubes download a file again.",
+  "apps": [
+    {
+      "id": "hello",
+      "name": "HELLO",
+      "file": "hello.js",
+      "v": "1",
+      "color": "#39ff7a",
+      "info": "start here"
+    },
+    {
+      "id": "cube3d",
+      "name": "CUBE3D",
+      "file": "cube3d.js",
+      "v": "1",
+      "color": "#45f0ff",
+      "info": "tilt 3D cube"
+    },
+    {
+      "id": "matrix",
+      "name": "MATRIX",
+      "file": "matrix.js",
+      "v": "1",
+      "color": "#39ff7a",
+      "info": "digital rain"
+    },
+    {
+      "id": "pad",
+      "name": "PHONEPAD",
+      "file": "pad.js",
+      "v": "1",
+      "color": "#ffb43a",
+      "info": "talk to phone"
+    }
+  ]
+}

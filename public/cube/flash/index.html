@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ERROR-CUBE · install with USB</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  body { margin: 0; min-height: 100vh; background: #031208; color: #39ff7a; font: 24px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.5); }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+  h1 { background: #39ff7a; color: #031208; text-shadow: none; font-weight: normal; font-size: 28px; margin: 0 -16px 16px; padding: 6px 16px; }
+  h2 { font-weight: normal; font-size: 24px; margin: 26px 0 6px; border-bottom: 3px double #1b7a3c; }
+  a { color: #b8ffd0; }
+  .dim { color: #1b7a3c; text-shadow: none; }
+  ol li { margin: 6px 0; }
+  .btn { font: inherit; font-size: 28px; background: #031208; color: #39ff7a; border: 2px solid #39ff7a; padding: 8px 22px; cursor: pointer;
+    box-shadow: 0 0 8px rgba(57,255,122,.5), inset 0 0 8px rgba(57,255,122,.4); }
+  .btn.small { font-size: 22px; padding: 6px 14px; }
+  esp-web-install-button { --esp-tools-button-color: #39ff7a; --esp-tools-button-text-color: #031208; --esp-tools-button-border-radius: 0; }
+  .box { border: 3px double #1b7a3c; padding: 10px 14px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ERROR-CUBE · INSTALL WITH USB</h1>
+  <p>For the Waveshare <b>ESP32-S3-Touch-AMOLED-2.16</b> (the white cube). Use Chrome or Edge on a computer. You only need this
+  once: after that the cube gets new firmware from error.blue by itself, over WiFi.</p>
+  <ol>
+    <li>Plug the cube into this computer with a USB-C cable (a cable that carries data, not only power).</li>
+    <li>Press INSTALL and pick the cube's port (<i>USB JTAG/serial debug unit</i>, or COMx).</li>
+    <li>When asked, choose to erase the cube (the first time). The cube restarts with ERROR-DOS.</li>
+    <li>No WiFi yet: on the cube open SYSTEM &gt; WIFI, or join the WiFi <b>ERROR-CUBE-XXXX</b> with your phone and pick your WiFi there.</li>
+    <li>Then open <a href="/cube/">error.blue/cube</a> on your phone and add the cube with its link code (ONLINE &gt; LINK on the cube).</li>
+  </ol>
+  <p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" class="btn" id="inst">INSTALL ERROR-CUBE</button>
+      <span slot="unsupported">This browser can't talk to USB boards. Use Chrome or Edge on a computer.</span>
+      <span slot="not-allowed">Open this page over https.</span>
+    </esp-web-install-button>
+  </p>
+  <div class="box dim">
+    It doesn't connect? Hold BOOT (the right button, "BOOT/-"), press and let go of PWR, let go of BOOT, then try again.
+    Or unplug, hold BOOT, plug in, let go.
+  </div>
+
+  <h2>BACK TO THE ORIGINAL</h2>
+  <p class="dim">Waveshare's own firmware (the app screen it came with), straight from Waveshare's GitHub. 16 MB, takes a few minutes.</p>
+  <esp-web-install-button manifest="factory.json">
+    <button slot="activate" class="btn small">INSTALL WAVESHARE FACTORY FIRMWARE</button>
+  </esp-web-install-button>
+
+  <h2>FOR DEVELOPERS</h2>
+  <p class="dim">Firmware <span id="ver">?</span> · <a href="firmware.json">firmware.json</a> · <a href="cube.bin">cube.bin</a> (app at 0x10000).
+  Source: esp32/ErrorCube in the games repo. New version: tools/cube-fwpub.sh, then push.</p>
+  <p><a href="/cube/">&lt; ERROR-CUBE</a></p>
+</main>
+<script>
+fetch('firmware.json', { cache: 'no-store' }).then(r => r.json()).then(j => {
+  document.getElementById('ver').textContent = j.ver + ' (' + (j.date || '') + ')';
+  document.getElementById('inst').textContent = 'INSTALL ERROR-CUBE ' + j.ver;
+}).catch(() => {});
+</script>
+</body>
+</html>

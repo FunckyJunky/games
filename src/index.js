@@ -838,6 +838,7 @@ const ONLINE_MAX = 2000;
 // pages that aren't in games.json
 const ONLINE_EXTRA = [
   { prefix: "/oled", id: "error-oled", title: "ERROR-OLED", dos: "OLED", folder: "apps" },
+  { prefix: "/cube", id: "error-cube", title: "ERROR-CUBE", dos: "CUBE", folder: "apps" },
   { prefix: "/rifle/", id: "space-rifle", title: "Space Rifle", dos: "RIFLE", folder: "online" },
   { prefix: "/radar/", id: "friend-radar", title: "Friend Radar", dos: "RADAR", folder: "apps" },
   { prefix: "/glasses/", id: "glasses", title: "Glasses", dos: "GLASSES", folder: "apps" },

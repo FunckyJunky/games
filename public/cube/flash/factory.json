@@ -1,0 +1,13 @@
+{
+  "name": "Waveshare factory firmware (ESP32-S3-Touch-AMOLED-2.16)",
+  "version": "20261030",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "https://raw.githubusercontent.com/waveshareteam/ESP32-S3-Touch-AMOLED-2.16/main/firmware/ESP32-S3-Touch-AMOLED-2.16_FactoryOnly_20261030.bin", "offset": 0 }
+      ]
+    }
+  ]
+}

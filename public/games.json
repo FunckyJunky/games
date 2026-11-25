@@ -124,5 +124,15 @@
     "folder": "apps",
     "logo": "home",
     "added": "2026-11-23T14:30"
+  },
+  {
+    "id": "error-cube",
+    "title": "ERROR-CUBE",
+    "dos": "CUBE",
+    "description": "The ERROR-DOS cube (Waveshare ESP32-S3 2.16in AMOLED): your cubes, their settings, live video and sound from your phone, web apps to open on them, and new firmware.",
+    "path": "cube/",
+    "folder": "apps",
+    "logo": "pocket",
+    "added": "2026-11-25T19:30"
   }
 ]

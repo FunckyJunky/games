@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ERROR-CUBE · error.blue</title>
+<meta name="theme-color" content="#031208">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Crect x=%273.5%27 y=%273.5%27 width=%279%27 height=%279%27 fill=%27none%27 stroke=%27%2339ff7a%27 stroke-width=%271.5%27/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+:root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --hi: #b8ffd0; --red: #ff5a6a; --amber: #ffb43a; --glow: rgba(57,255,122,.5); --panel: #04180b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 22px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px var(--glow); min-height: 100vh; -webkit-tap-highlight-color: transparent; }
+body:after { content: ''; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); z-index: 50; }
+main { max-width: 760px; margin: 0 auto; padding: 0 12px 60px; }
+a { color: var(--hi); }
+button, input, select { font: inherit; color: inherit; }
+.bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--fg); color: var(--bg); text-shadow: none; padding: 4px 12px; margin: 0 -12px 12px; }
+.bar h1 { margin: 0; font-size: 26px; font-weight: normal; letter-spacing: 1px; }
+.bar a { color: var(--bg); text-decoration: none; font-size: 20px; }
+h2 { font-size: 22px; font-weight: normal; margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; color: var(--fg); }
+h2:after { content: ''; flex: 1; border-top: 3px double var(--dim); }
+.box { border: 3px double var(--fg); box-shadow: 0 0 8px var(--glow), inset 0 0 8px rgba(57,255,122,.25); background: var(--panel); padding: 10px 12px; margin: 10px 0; }
+.dim { color: var(--dim); text-shadow: none; }
+.red { color: var(--red); text-shadow: 0 0 5px rgba(255,90,106,.5); }
+.amber { color: var(--amber); }
+.btn { background: none; border: 2px solid var(--fg); padding: 6px 14px; cursor: pointer; box-shadow: inset 0 0 6px rgba(57,255,122,.3); text-shadow: inherit; min-height: 44px; }
+.btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+.btn.big { width: 100%; font-size: 26px; padding: 10px; }
+.btn:disabled { opacity: .35; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row > .btn { flex: 1 1 auto; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* devices */
+.dev { display: flex; align-items: center; gap: 12px; border: 2px solid var(--dim); padding: 8px 10px; margin: 6px 0; cursor: pointer; }
+.dev.sel { border-color: var(--fg); box-shadow: 0 0 8px var(--glow); }
+.dev .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--dim); box-shadow: none; flex: none; }
+.dev .dot.on { background: var(--fg); box-shadow: 0 0 8px var(--fg); }
+.dev .nm { flex: 1; min-width: 0; }
+.dev .nm b { font-weight: normal; font-size: 24px; }
+.dev .nm div { color: var(--dim); text-shadow: none; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev .x { border: 0; background: none; color: var(--dim); font-size: 24px; cursor: pointer; padding: 0 6px; }
+/* tabs */
+.tabs { display: flex; gap: 4px; margin: 12px 0 0; overflow-x: auto; }
+.tabs button { flex: 1; background: none; border: 2px solid var(--dim); border-bottom: 0; color: var(--dim); text-shadow: none; padding: 6px 4px; cursor: pointer; min-width: 84px; }
+.tabs button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.tabpane { border: 3px double var(--fg); border-top-width: 3px; padding: 12px; background: var(--panel); box-shadow: 0 0 8px var(--glow); }
+/* key/value */
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; }
+.kv span:nth-child(odd) { color: var(--dim); text-shadow: none; }
+.kv span:nth-child(even) { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* settings */
+.set { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid #0d3a1c; }
+.set label { flex: 1; }
+.set select, .set input[type=text] { background: #000; border: 2px solid var(--fg); padding: 4px 8px; min-width: 140px; max-width: 55%; }
+.set input[type=range] { width: 46%; accent-color: var(--fg); }
+.set .val { min-width: 48px; text-align: right; }
+.tog { width: 74px; height: 36px; border: 2px solid var(--fg); background: none; cursor: pointer; position: relative; }
+.tog:after { content: 'OFF'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); text-shadow: none; }
+.tog.on { background: var(--fg); }
+.tog.on:after { content: 'ON'; color: var(--bg); }
+.group { margin: 14px 0 4px; color: var(--bg); background: var(--dim); text-shadow: none; display: inline-block; padding: 0 10px; }
+/* screen preview */
+.screen { display: grid; place-items: center; }
+.screen canvas { width: min(100%, 300px); aspect-ratio: 1; image-rendering: pixelated; border-radius: 22px; background: #000; border: 3px solid #1a1a1a; box-shadow: 0 0 0 6px #e8e8e0, 0 0 24px rgba(57,255,122,.2); }
+.vid { width: 100%; max-width: 320px; aspect-ratio: 1; object-fit: cover; background: #000; border: 2px solid var(--dim); display: block; margin: 8px auto; }
+textarea { width: 100%; background: #000; border: 2px solid var(--fg); color: var(--fg); font: inherit; padding: 8px; min-height: 70px; }
+input[type=text].wide { width: 100%; background: #000; border: 2px solid var(--fg); padding: 8px; }
+.meter { height: 16px; border: 2px solid var(--dim); position: relative; }
+.meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg); width: 0; }
+.app { display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #0d3a1c; padding: 8px 0; }
+.app .sw { width: 14px; height: 40px; flex: none; }
+.app .nm { flex: 1; } .app .nm div { color: var(--dim); text-shadow: none; font-size: 18px; }
+.log { max-height: 160px; overflow: auto; font-size: 18px; color: var(--hi); border: 1px solid var(--dim); padding: 6px; margin-top: 8px; }
+.msg { min-height: 1.3em; margin: 6px 0; }
+.hide { display: none !important; }
+.empty { text-align: center; padding: 18px 8px; color: var(--dim); text-shadow: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar"><h1>C:\&gt;ERROR-CUBE</h1><a href="/">&lt; ERROR-DOS</a></div>
+
+  <!-- ============ devices ============ -->
+  <h2>DEVICES</h2>
+  <div id="devs"></div>
+  <div class="box" id="addBox">
+    <div class="row">
+      <input type="text" id="addCode" class="wide" style="flex:1;width:auto" maxlength="6" placeholder="LINK CODE (LINK.EXE on the cube)" autocapitalize="characters" autocomplete="off">
+      <button class="btn" id="addBtn">+ ADD</button>
+    </div>
+    <div class="dim" style="font-size:18px;margin-top:6px">On the cube: ONLINE &gt; LINK. Scan its QR code with your phone, or type the 6-letter code here.</div>
+  </div>
+
+  <!-- ============ one device ============ -->
+  <section id="devPane" class="hide">
+    <div class="tabs" id="tabs"></div>
+    <div class="tabpane">
+      <div class="msg" id="linkMsg"></div>
+
+      <!-- STATUS -->
+      <div data-tab="status">
+        <div class="screen"><canvas id="shot" width="96" height="96"></canvas></div>
+        <div class="row" style="justify-content:center;margin:8px 0"><button class="btn" id="watchBtn">LIVE SCREEN: OFF</button></div>
+        <div class="kv" id="kv"></div>
+        <h2>QUICK</h2>
+        <div class="grid2">
+          <button class="btn" data-cmd="wake">WAKE UP</button>
+          <button class="btn" data-cmd="sleep">SCREEN OFF</button>
+          <button class="btn" data-cmd="home">TO THE MENU</button>
+          <button class="btn" data-cmd="beep">BEEP</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div data-tab="settings"><div id="sets"><div class="empty">WAITING FOR THE CUBE...</div></div></div>
+
+      <!-- SEND -->
+      <div data-tab="send">
+        <h2>MESSAGE</h2>
+        <textarea id="sayText" maxlength="110" placeholder="Shows up on the cube with a beep"></textarea>
+        <button class="btn big" id="sayBtn">SEND MESSAGE</button>
+        <h2>LIVE VIDEO</h2>
+        <video id="camView" class="vid" playsinline muted></video>
+        <div class="row">
+          <select id="camSel" class="btn" style="flex:1"><option value="environment">BACK CAMERA</option><option value="user">FRONT CAMERA</option><option value="screen">SHARE SCREEN</option></select>
+          <select id="qSel" class="btn" style="flex:1"><option value="160,0.55,8">LOW · FAST</option><option value="240,0.6,6" selected>MEDIUM</option><option value="320,0.7,4">SHARP</option></select>
+        </div>
+        <button class="btn big" id="vidBtn" style="margin-top:8px">START VIDEO</button>
+        <div class="dim" id="vidInfo" style="font-size:18px"></div>
+        <h2>SOUND</h2>
+        <div class="meter"><i id="micLvl"></i></div>
+        <div class="grid2" style="margin-top:8px">
+          <button class="btn" id="micBtn">MIC: OFF</button>
+          <button class="btn" id="pttBtn">HOLD TO TALK</button>
+        </div>
+        <h2>PICTURE</h2>
+        <input type="file" id="picFile" accept="image/*" class="hide">
+        <button class="btn big" id="picBtn">SEND A PHOTO</button>
+      </div>
+
+      <!-- APPS -->
+      <div data-tab="apps">
+        <div id="appList"><div class="empty">LOADING...</div></div>
+        <h2>TALK TO THE RUNNING APP</h2>
+        <div class="row"><input type="text" id="appMsg" class="wide" style="flex:1;width:auto" placeholder="text for the app (onmsg)"><button class="btn" id="appMsgBtn">SEND</button></div>
+        <div class="log" id="appLog"></div>
+        <div class="dim" style="font-size:18px;margin-top:8px">Make your own: a JavaScript file in <b>public/cube/apps/</b> and a line in apps.json. <a href="/cube/apps/README.md">The app API</a>.</div>
+      </div>
+
+      <!-- SYSTEM -->
+      <div data-tab="system">
+        <div class="kv" id="fwKv"></div>
+        <div class="grid2" style="margin-top:10px">
+          <button class="btn" data-cmd="check">CHECK FOR UPDATE</button>
+          <button class="btn" data-cmd="update" id="installBtn">INSTALL UPDATE</button>
+          <button class="btn" data-cmd="restart">RESTART</button>
+          <a class="btn" id="localLink" style="text-align:center;text-decoration:none;display:grid;place-items:center" target="_blank">CUBE WEB PAGE</a>
+        </div>
+        <div class="meter hide" id="updBar" style="margin-top:10px"><i></i></div>
+        <h2>INSTALL WITH USB</h2>
+        <div class="dim" style="font-size:19px">The first time, or to repair it: <a href="/cube/flash/">error.blue/cube/flash</a> (Chrome or Edge on a computer). After that the cube updates itself over WiFi.</div>
+        <h2>FORGET</h2>
+        <button class="btn big" id="forgetBtn">REMOVE THIS CUBE FROM THIS PHONE</button>
+      </div>
+    </div>
+  </section>
+  <p class="dim" style="font-size:18px;margin-top:24px">ERROR-CUBE runs on a Waveshare ESP32-S3 Touch AMOLED 2.16". This page talks to it through error.blue (room <i>error-cube/CODE</i>).
+  Firmware and code: <i>esp32/ErrorCube</i> in the games repo.</p>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ===================================================================== device types
+// Each kind of device: which room it lives in. New kinds can be added here; the page builds its settings
+// from what the device sends ({t:"schema"}), and shows SEND / APPS only when the device says it can ({caps}).
+const DRIVERS = {
+  'error-cube': { label: 'ERROR-CUBE', room: 'error-cube' },
+};
+
+// ===================================================================== saved devices (this phone)
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+let devices = store.get('cube.devices', []);          // [{code, type, name}]
+let selCode = store.get('cube.sel', null);
+const online = {};                                    // code -> {on, name}
+function saveDevices() { store.set('cube.devices', devices); store.set('cube.sel', selCode); }
+function addDevice(code) {
+  code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 6) { flash('A LINK CODE HAS 6 LETTERS/DIGITS', true); return; }
+  if (!devices.find(d => d.code === code)) devices.push({ code, type: 'error-cube', name: 'CUBE ' + code });
+  selCode = code; saveDevices(); renderDevices(); checkOnline(); openDevice(code);
+}
+function removeDevice(code) {
+  devices = devices.filter(d => d.code !== code);
+  if (selCode === code) { selCode = devices[0] ? devices[0].code : null; }
+  saveDevices(); renderDevices(); openDevice(selCode);
+}
+function renderDevices() {
+  const el = $('devs');
+  if (!devices.length) { el.innerHTML = '<div class="empty">NO CUBES YET. ADD ONE BELOW.</div>'; return; }
+  el.innerHTML = devices.map(d => {
+    const o = online[d.code] || {}, st = d.code === selCode && state ? state : null;
+    const info = st ? [st.prog, st.bat >= 0 ? st.bat + '%' + (st.chg ? '+' : '') : 'USB', 'v' + st.v].join(' · ') : (o.on ? 'ONLINE' : 'OFFLINE');
+    return '<div class="dev' + (d.code === selCode ? ' sel' : '') + '" data-code="' + d.code + '"><span class="dot' + (o.on ? ' on' : '') + '"></span>' +
+      '<div class="nm"><b>' + esc(d.name) + '</b><div>' + esc(DRIVERS[d.type]?.label || d.type) + ' · ' + d.code + ' · ' + esc(info) + '</div></div>' +
+      '<button class="x" data-del="' + d.code + '" title="remove">&times;</button></div>';
+  }).join('');
+}
+$('devs').addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if (del) { if (confirm('Remove ' + del.dataset.del + ' from this phone?')) removeDevice(del.dataset.del); return; }
+  const d = e.target.closest('.dev'); if (d) { selCode = d.dataset.code; saveDevices(); renderDevices(); openDevice(selCode); }
+});
+$('addBtn').onclick = () => { addDevice($('addCode').value); $('addCode').value = ''; };
+$('addCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('addBtn').click(); });
+// who's in each device's room: is it online?
+async function checkOnline() {
+  await Promise.all(devices.map(async d => {
+    try {
+      const j = await fetch('/api/room/' + DRIVERS[d.type].room + '/' + d.code + '/who', { cache: 'no-store' }).then(r => r.json());
+      const dev = (j.players || []).find(p => p.name && p.name !== 'PANEL');
+      online[d.code] = { on: !!dev, name: dev && dev.name };
+    } catch (e) {}
+  }));
+  renderDevices();
+}
+setInterval(checkOnline, 15000);
+
+// ===================================================================== the link to one device
+let ws = null, wsCode = null, schema = null, state = null, retry = null, lastRx = 0;
+function openDevice(code) {
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  clearTimeout(retry);
+  stopVideo(); stopMic();
+  schema = null; state = null; wsCode = code;
+  $('devPane').classList.toggle('hide', !code);
+  if (!code) return;
+  renderTabs(); renderAll();
+  connect();
+}
+function connect() {
+  const d = devices.find(x => x.code === wsCode); if (!d) return;
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/room/' + DRIVERS[d.type].room + '/' + d.code + '?name=PANEL';
+  linkMsg('CONNECTING...');
+  const s = new WebSocket(url); ws = s;
+  s.onopen = () => { send({ t: 'hello' }); linkMsg('WAITING FOR THE CUBE...'); if (watching) send({ t: 'watch', on: 1 }); };
+  s.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'join') { send({ t: 'hello' }); return; }
+    if (m.type === 'welcome') { return; }
+    if (m.type !== 'msg' || !m.data) return;
+    const x = m.data; lastRx = Date.now();
+    if (x.t === 'schema') { schema = x; renderTabs(); renderSettings(); }
+    else if (x.t === 'state') { state = x; online[wsCode] = { on: true }; if (d.name !== x.name && x.name) { d.name = x.name; saveDevices(); } renderAll(); }
+    else if (x.t === 'shot') drawShot(x);
+    else if (x.t === 'app') appLog('APP ' + x.id + ': ' + JSON.stringify(x.data));
+  };
+  s.onclose = () => { if (ws !== s) return; ws = null; linkMsg('CONNECTION LOST. TRYING AGAIN...', true); retry = setTimeout(connect, 3000); };
+}
+function send(o) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); return true; } return false; }
+function linkMsg(t, bad) { $('linkMsg').innerHTML = t ? '<span class="' + (bad ? 'red' : 'dim') + '">' + esc(t) + '</span>' : ''; }
+setInterval(() => {
+  if (!ws || ws.readyState !== 1) return;
+  if (state && Date.now() - lastRx > 15000) { linkMsg('THE CUBE IS NOT ANSWERING (ASLEEP OR OFFLINE?)', true); online[wsCode] = { on: false }; renderDevices(); }
+  else if (state) linkMsg('');
+}, 3000);
+let flashT = 0;
+function flash(t, bad) { linkMsg(t, bad); clearTimeout(flashT); flashT = setTimeout(() => linkMsg(''), 3500); }
+
+// ===================================================================== tabs
+const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
+let tab = store.get('cube.tab', 'status');
+function renderTabs() {
+  const caps = schema ? schema.caps || [] : ['video', 'apps'];
+  const list = TABS.filter(t => !t[2] || caps.includes(t[2]));
+  if (!list.find(t => t[0] === tab)) tab = 'status';
+  $('tabs').innerHTML = list.map(t => '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>').join('');
+  document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('hide', el.dataset.tab !== tab));
+  if (tab === 'apps') loadApps();
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; store.set('cube.tab', tab); renderTabs(); });
+document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
+  const c = b.dataset.cmd;
+  if (c === 'restart' && !confirm('Restart the cube?')) return;
+  if (send({ t: 'cmd', c })) flash(c === 'update' ? 'INSTALLING... THE CUBE RESTARTS WHEN DONE' : 'SENT: ' + c.toUpperCase());
+  else flash('NOT CONNECTED', true);
+}));
+
+// ===================================================================== status
+function fmtUp(s) { const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60; return (d ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2, '0') + 'm'; }
+function renderAll() {
+  renderDevices();
+  const s = state;
+  if (!s) { $('kv').innerHTML = '<span>STATUS</span><span>WAITING...</span>'; $('fwKv').innerHTML = ''; return; }
+  const rows = [
+    ['NAME', s.name + ' (' + s.id + ')'], ['PROGRAM', s.prog + (s.awake ? '' : ' · ASLEEP')],
+    ['BATTERY', s.bat < 0 ? 'NONE (USB)' : s.bat + '%' + (s.chg ? ' · CHARGING' : '') + ' · ' + (s.mv / 1000).toFixed(2) + 'V'],
+    ['WIFI', (s.ssid || '-') + ' · ' + s.rssi + ' dBm'], ['ADDRESS', s.ip || '-'],
+    ['UP', fmtUp(s.up)], ['MEMORY', s.heap + 'K + ' + s.psram + 'K PSRAM'], ['CHIP', s.temp + ' C'],
+    ['TF CARD', s.sd || 'NONE'], ['FIRMWARE', s.v],
+  ];
+  $('kv').innerHTML = rows.map(r => '<span>' + r[0] + '</span><span>' + esc(r[1]) + '</span>').join('');
+  const u = s.upd || {};
+  const st = { idle: 'NOT CHECKED', checking: 'CHECKING...', new: 'NEW: ' + u.ver, loading: 'INSTALLING ' + u.pct + '%', done: 'DONE, RESTARTING', failed: 'FAILED: ' + u.msg, latest: 'UP TO DATE' }[u.st] || u.st;
+  $('fwKv').innerHTML = [['ON THE CUBE', s.v], ['ON ERROR.BLUE', u.ver || latest || '?'], ['STATE', st], ['NOTES', u.notes || '-']]
+    .map(r => '<span>' + r[0] + '</span><span class="' + (u.st === 'new' && r[0] === 'STATE' ? 'amber' : '') + '">' + esc(r[1]) + '</span>').join('');
+  $('installBtn').disabled = u.st !== 'new';
+  $('updBar').classList.toggle('hide', u.st !== 'loading');
+  $('updBar').firstElementChild.style.width = (u.pct || 0) + '%';
+  $('localLink').href = s.ip ? 'http://' + s.ip + '/' : '#';
+  if (schema) syncSettings();
+}
+let latest = '';
+fetch('/cube/flash/firmware.json', { cache: 'no-store' }).then(r => r.json()).then(j => { latest = j.ver; }).catch(() => {});
+
+// the cube's screen, small (RGB332)
+let watching = false;
+$('watchBtn').onclick = () => { watching = !watching; $('watchBtn').textContent = 'LIVE SCREEN: ' + (watching ? 'ON' : 'OFF'); $('watchBtn').classList.toggle('on', watching); send({ t: 'watch', on: watching ? 1 : 0 }); };
+function drawShot(x) {
+  const cv = $('shot'), c = cv.getContext('2d'), im = c.createImageData(x.w, x.h), b = atob(x.d);
+  for (let i = 0; i < b.length; i++) {
+    const v = b.charCodeAt(i);
+    im.data[i * 4] = (v >> 5) * 255 / 7; im.data[i * 4 + 1] = ((v >> 2) & 7) * 255 / 7; im.data[i * 4 + 2] = (v & 3) * 255 / 3; im.data[i * 4 + 3] = 255;
+  }
+  c.putImageData(im, 0, 0);
+}
+
+// ===================================================================== settings (from the schema)
+function renderSettings() {
+  const el = $('sets');
+  if (!schema) { el.innerHTML = '<div class="empty">WAITING FOR THE CUBE...</div>'; return; }
+  let html = '', g = '';
+  for (const s of schema.sets) {
+    if (s.g !== g) { g = s.g; html += '<div class="group">' + esc(g) + '</div>'; }
+    let ctl = '';
+    if (s.t === 'toggle') ctl = '<button class="tog" data-k="' + s.k + '"></button>';
+    else if (s.t === 'choice') ctl = '<select data-k="' + s.k + '">' + s.o.map((o, i) => '<option value="' + i + '">' + esc(o) + '</option>').join('') + '</select>';
+    else if (s.t === 'slider') ctl = '<input type="range" data-k="' + s.k + '" min="' + s.lo + '" max="' + s.hi + '"><span class="val" data-v="' + s.k + '"></span>';
+    else if (s.t === 'text') ctl = '<input type="text" data-k="' + s.k + '" maxlength="' + s.hi + '">';
+    html += '<div class="set"><label>' + esc(s.n) + '</label>' + ctl + '</div>';
+  }
+  el.innerHTML = html;
+  syncSettings();
+}
+let editing = null, editUntil = 0;
+function syncSettings() {
+  if (!state || !state.cfg) return;
+  for (const s of schema.sets) {
+    if (s.k === editing && Date.now() < editUntil) continue;
+    const v = state.cfg[s.k], el = document.querySelector('#sets [data-k="' + s.k + '"]'); if (!el) continue;
+    if (s.t === 'toggle') el.classList.toggle('on', !!v);
+    else if (s.t === 'choice') el.value = v - (s.lo || 0);
+    else if (s.t === 'slider') { el.value = v; const o = document.querySelector('[data-v="' + s.k + '"]'); if (o) o.textContent = v; }
+    else if (s.t === 'text' && document.activeElement !== el) el.value = v;
+  }
+}
+function setKey(k, v) { editing = k; editUntil = Date.now() + 1500; if (state && state.cfg) state.cfg[k] = v; if (!send({ t: 'set', k, v })) flash('NOT CONNECTED', true); }
+$('sets').addEventListener('click', e => { const t = e.target.closest('.tog'); if (!t) return; const on = !t.classList.contains('on'); t.classList.toggle('on', on); setKey(t.dataset.k, on ? 1 : 0); });
+$('sets').addEventListener('change', e => {
+  const el = e.target, k = el.dataset.k; if (!k) return;
+  const s = schema.sets.find(x => x.k === k);
+  if (el.tagName === 'SELECT') setKey(k, +el.value + (s.lo || 0));
+  else if (el.type === 'text') setKey(k, el.value);
+});
+let slideT = 0;
+$('sets').addEventListener('input', e => {
+  const el = e.target; if (el.type !== 'range') return;
+  const o = document.querySelector('[data-v="' + el.dataset.k + '"]'); if (o) o.textContent = el.value;
+  clearTimeout(slideT); slideT = setTimeout(() => setKey(el.dataset.k, +el.value), 120);
+});
+
+// ===================================================================== send: message
+$('sayBtn').onclick = () => {
+  const t = $('sayText').value.trim(); if (!t) return;
+  if (send({ t: 'say', text: t })) { flash('ON THE CUBE'); $('sayText').value = ''; } else flash('NOT CONNECTED', true);
+};
+
+// ===================================================================== send: video (JPEG frames through the room)
+let camStream = null, vidTimer = 0, vidSeq = 0, sentFrames = 0, sentAt = 0;
+const vcv = document.createElement('canvas'), vctx = vcv.getContext('2d');
+async function startVideo() {
+  try {
+    const mode = $('camSel').value;
+    camStream = mode === 'screen' ? await navigator.mediaDevices.getDisplayMedia({ video: true })
+      : await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode, width: { ideal: 640 }, height: { ideal: 640 } }, audio: false });
+    $('camView').srcObject = camStream; await $('camView').play();
+    $('vidBtn').textContent = 'STOP VIDEO'; $('vidBtn').classList.add('on');
+    sentFrames = 0; sentAt = Date.now();
+    pump();
+  } catch (e) { flash('NO CAMERA: ' + e.message, true); stopVideo(); }
+}
+function pump() {
+  if (!camStream) return;
+  const [size, q, fps] = $('qSel').value.split(',').map(Number);
+  const v = $('camView');
+  if (ws && ws.readyState === 1 && ws.bufferedAmount < 48000 && v.videoWidth) {
+    vcv.width = vcv.height = size;
+    const s = Math.min(v.videoWidth, v.videoHeight);                // the middle square
+    vctx.drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, size, size);
+    sendJpeg(vcv.toDataURL('image/jpeg', q).split(',')[1]);
+    sentFrames++;
+    const secs = (Date.now() - sentAt) / 1000;
+    if (secs > 2) $('vidInfo').textContent = (sentFrames / secs).toFixed(1) + ' FRAMES/S · ' + size + 'x' + size;
+  }
+  vidTimer = setTimeout(pump, 1000 / fps);
+}
+function sendJpeg(b64) {
+  const PART = 12000, of = Math.ceil(b64.length / PART), n = ++vidSeq;
+  for (let i = 0; i < of; i++) send({ t: 'vid', n, i, of, d: b64.slice(i * PART, (i + 1) * PART) });
+}
+function stopVideo() {
+  clearTimeout(vidTimer);
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+  $('vidBtn').textContent = 'START VIDEO'; $('vidBtn').classList.remove('on'); $('vidInfo').textContent = '';
+}
+$('vidBtn').onclick = () => camStream ? stopVideo() : startVideo();
+$('picBtn').onclick = () => $('picFile').click();
+$('picFile').onchange = () => {
+  const f = $('picFile').files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    vcv.width = vcv.height = 320; const s = Math.min(img.width, img.height);
+    vctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 320, 320);
+    sendJpeg(vcv.toDataURL('image/jpeg', 0.75).split(',')[1]); flash('PHOTO SENT');
+  };
+  img.src = URL.createObjectURL(f);
+};
+
+// ===================================================================== send: sound (16 kHz mu-law, 100 ms slices)
+let ac = null, micStream = null, micNode = null, micOn = false, ptt = false, acc = [], ratePos = 0;
+function ulaw(x) {
+  const BIAS = 0x84, CLIP = 32635; let s = x < 0 ? 0x80 : 0; let v = Math.min(CLIP, Math.abs(Math.round(x * 32767))) + BIAS;
+  let e = 7; for (let m = 0x4000; (v & m) === 0 && e > 0; e--, m >>= 1);
+  return ~(s | (e << 4) | ((v >> (e + 3)) & 0x0F)) & 0xFF;
+}
+async function startMic() {
+  if (micStream) return true;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ac.createMediaStreamSource(micStream);
+    micNode = ac.createScriptProcessor(2048, 1, 1);
+    const step = ac.sampleRate / 16000;
+    micNode.onaudioprocess = e => {
+      const d = e.inputBuffer.getChannelData(0);
+      let peak = 0; for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+      $('micLvl').style.width = Math.min(100, peak * 140) + '%';
+      if (!micOn && !ptt) { acc = []; return; }
+      for (; ratePos < d.length; ratePos += step) acc.push(ulaw(d[Math.floor(ratePos)]));
+      ratePos -= d.length;
+      while (acc.length >= 1600) {
+        const part = acc.splice(0, 1600);
+        let bin = ''; for (const b of part) bin += String.fromCharCode(b);
+        send({ t: 'aud', d: btoa(bin) });
+      }
+    };
+    src.connect(micNode); micNode.connect(ac.destination);
+    return true;
+  } catch (e) { flash('NO MICROPHONE: ' + e.message, true); return false; }
+}
+function stopMic() {
+  micOn = false; ptt = false;
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (micNode) micNode.disconnect();
+  if (ac) ac.close();
+  micStream = micNode = ac = null;
+  $('micBtn').textContent = 'MIC: OFF'; $('micBtn').classList.remove('on'); $('micLvl').style.width = '0';
+}
+$('micBtn').onclick = async () => {
+  if (micOn) { stopMic(); return; }
+  if (await startMic()) { micOn = true; $('micBtn').textContent = 'MIC: ON'; $('micBtn').classList.add('on'); }
+};
+const pttDown = async e => { e.preventDefault(); if (await startMic()) { ptt = true; $('pttBtn').classList.add('on'); } };
+const pttUp = e => { e.preventDefault(); ptt = false; $('pttBtn').classList.remove('on'); if (!micOn) stopMic(); };
+$('pttBtn').addEventListener('pointerdown', pttDown);
+$('pttBtn').addEventListener('pointerup', pttUp);
+$('pttBtn').addEventListener('pointerleave', e => { if (ptt) pttUp(e); });
+
+// ===================================================================== apps
+let apps = null;
+async function loadApps() {
+  if (!apps) { try { apps = (await fetch('/cube/apps/apps.json', { cache: 'no-store' }).then(r => r.json())).apps; } catch (e) { apps = []; } }
+  $('appList').innerHTML = apps.length ? apps.map(a =>
+    '<div class="app"><div class="sw" style="background:' + esc(a.color || '#39ff7a') + '"></div><div class="nm">' + esc(a.name) + '<div>' + esc(a.info || '') + '</div></div>' +
+    '<a class="btn" href="/cube/apps/run.html?app=' + encodeURIComponent(a.id) + '" target="_blank" style="text-decoration:none;display:grid;place-items:center">TRY</a>' +
+    '<button class="btn" data-open="' + esc(a.id) + '">OPEN ON CUBE</button></div>').join('') : '<div class="empty">NO APPS YET</div>';
+}
+$('appList').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (!b) return; if (send({ t: 'app', id: b.dataset.open })) flash('OPENING ' + b.dataset.open.toUpperCase() + ' ON THE CUBE'); else flash('NOT CONNECTED', true); });
+$('appMsgBtn').onclick = () => { const t = $('appMsg').value; if (!t) return; send({ t: 'appmsg', data: { text: t } }); appLog('YOU: ' + t); $('appMsg').value = ''; };
+function appLog(t) { const el = $('appLog'); el.innerHTML += esc(t) + '<br>'; el.scrollTop = 1e9; }
+
+// ===================================================================== system
+$('forgetBtn').onclick = () => { if (selCode && confirm('Remove ' + selCode + ' from this phone?')) removeDevice(selCode); };
+
+// ===================================================================== start
+const q = new URLSearchParams(location.search).get('code');
+if (q) { addDevice(q); history.replaceState(null, '', '/cube/'); }
+else { renderDevices(); if (selCode && devices.find(d => d.code === selCode)) openDevice(selCode); else if (devices[0]) { selCode = devices[0].code; openDevice(selCode); } }
+checkOnline();
+})();
+</script>
+<script src="/lib/online.js" defer></script>
+</body>
+</html>

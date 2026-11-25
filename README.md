@@ -118,6 +118,10 @@ public/                 the website
                         draw at 3 px per dot, then black lines over the gaps). Raycaster with walls of different heights,
                         tilt to walk/turn (calibration like NEON FLIGHT), TAP = map, find 8 places (saved on the board).
                         Lowers its own detail when the board can't keep up
+  cube/                 ERROR-CUBE (error.blue/cube): the phone control page for the cubes (devices, settings from the cube's
+                        schema, live screen, message / camera video / microphone / photo, web apps, firmware). flash/ = USB
+                        installer + firmware.json (the cubes update themselves from it), apps/ = the web apps (apps.json,
+                        README.md = the API, run.html = try one in the browser)
   thuisfront/           HOME FRONT (error.blue/thuisfront): screens at home, controlled from a phone (see "Home Front" below).
                         index.html = the phone side (3D carousel of screens, then the COMM web app), text.js = text to
                         picture, dev/ = the screen itself (dev/index.html runs in any browser, dev/render.js draws for
@@ -127,6 +131,7 @@ lib/online.js         "I'm in this game" beacon for the who's-online list (GET /
 esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online in which game and does ERROR-CHAT
                         (see esp32/README.md)
 esp32/HomeFront/        HOME FRONT firmware for the ESP32-S3 1.47" LCD board (see esp32/HomeFront/README.md)
+esp32/ErrorCube/        ERROR-CUBE firmware for the Waveshare ESP32-S3-Touch-AMOLED-2.16 (see esp32/ErrorCube/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 src/funda.js            FUNDA WATCH: reads funda.nl (app API, website as fallback) and keeps every reading in the database
 src/buren.js            FUNDA WATCH neighbours: houses within 150 m, building outlines, WOZ values
@@ -833,3 +838,15 @@ Screens at home that show one web app, controlled from a phone. In ERROR-DOS und
   Also an UPDATE FIRMWARE button in the screen's panel. A failed version is not tried again for an hour.
   New firmware: build, then tools: fwpub.sh copies the bins to public/thuisfront/flash and writes src/hf_firmware.js.
 - Changing the drawing: change dev/render.js AND esp32/HomeFront/screen.cpp the same way.
+
+## ERROR-CUBE (error.blue/cube)
+
+ERROR-DOS on the Waveshare ESP32-S3-Touch-AMOLED-2.16, the white cube. Everything about the firmware, its
+programs and the link protocol: esp32/ErrorCube/README.md.
+
+- **error.blue/cube**: your cubes (saved on the phone in `cube.devices`), add one with its 6-letter link code (or scan
+  the QR code in LINK.EXE: it opens /cube/?code=...). Each cube talks to the page through the room `error-cube/<CODE>`.
+- **Web apps**: public/cube/apps (one .js file + a line in apps.json; API in public/cube/apps/README.md).
+- **New firmware**: bump CUBE_VERSION in esp32/ErrorCube/src/core/config.h, run `tools/cube-fwpub.sh "notes"`, push.
+  The cubes find public/cube/flash/firmware.json and install it themselves (when the screen is asleep, or at once with
+  INSTALL on the phone). First install: error.blue/cube/flash with USB.
