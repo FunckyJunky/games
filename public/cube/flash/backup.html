@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ERROR-CUBE · backup &amp; restore</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; min-height: 100vh; background: #031208; color: #39ff7a; font: 24px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.5); }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+  h1 { background: #39ff7a; color: #031208; text-shadow: none; font-weight: normal; font-size: 28px; margin: 0 -16px 16px; padding: 6px 16px; }
+  h2 { font-weight: normal; font-size: 24px; margin: 26px 0 6px; border-bottom: 3px double #1b7a3c; }
+  a { color: #b8ffd0; }
+  .dim { color: #1b7a3c; text-shadow: none; }
+  .btn { font: inherit; font-size: 28px; background: #031208; color: #39ff7a; border: 2px solid #39ff7a; padding: 8px 22px; cursor: pointer;
+    box-shadow: 0 0 8px rgba(57,255,122,.5), inset 0 0 8px rgba(57,255,122,.4); }
+  .btn.small { font-size: 22px; padding: 6px 14px; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .btn.red { color: #ff5a4a; border-color: #ff5a4a; box-shadow: 0 0 8px rgba(255,90,74,.5), inset 0 0 8px rgba(255,90,74,.4); text-shadow: 0 0 5px rgba(255,90,74,.5); }
+  .box { border: 3px double #1b7a3c; padding: 10px 14px; margin: 16px 0; }
+  #bar { height: 22px; border: 2px solid #1b7a3c; margin: 10px 0 4px; position: relative; }
+  #fill { position: absolute; inset: 0 auto 0 0; width: 0; background: repeating-linear-gradient(90deg, #39ff7a 0 10px, #1b7a3c 10px 12px); }
+  #state { min-height: 30px; }
+  #state.ok { color: #031208; background: #39ff7a; text-shadow: none; padding: 2px 8px; }
+  #state.err { color: #031208; background: #ff5a4a; text-shadow: none; padding: 2px 8px; }
+  #log { font-size: 18px; line-height: 1.15; color: #1b7a3c; text-shadow: none; max-height: 220px; overflow: auto; white-space: pre-wrap; margin: 8px 0; }
+  label { cursor: pointer; }
+  input[type=file] { font: inherit; font-size: 20px; color: #39ff7a; max-width: 100%; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ERROR-CUBE · BACKUP &amp; RESTORE</h1>
+  <p>Saves <b>everything</b> on the cube's 16 MB flash to one file on this computer (firmware, settings, files), so you can always
+  put it back exactly as it was. Use Chrome or Edge on a computer, with the cube plugged in by USB.</p>
+  <div class="box dim">
+    Close the Arduino IDE's Serial Monitor first (it keeps the port busy). The cube restarts when it's done.
+    Takes about 2–5 minutes: don't unplug.
+  </div>
+
+  <h2>BACKUP</h2>
+  <p><button class="btn" id="bk">BACK UP THE CUBE</button></p>
+  <p id="again" hidden><button class="btn small" id="save">SAVE THE FILE AGAIN</button></p>
+
+  <h2>RESTORE</h2>
+  <p class="dim">Writes a backup file back onto the cube, over everything that's on it now.</p>
+  <p><input type="file" id="file" accept=".bin,application/octet-stream"></p>
+  <p><button class="btn small red" id="rs" disabled>RESTORE THIS BACKUP</button></p>
+
+  <div id="bar"><div id="fill"></div></div>
+  <div id="state"></div>
+  <div id="log"></div>
+
+  <p><label class="dim"><input type="checkbox" id="all"> show every USB port (not only Espressif chips)</label></p>
+  <p><a href="./">&lt; INSTALL ERROR-CUBE</a> · <a href="/cube/">ERROR-CUBE</a></p>
+  <p class="dim" style="font-size:18px">Uses <a href="https://github.com/espressif/esptool-js">esptool-js</a> 0.7.1 by Espressif (<a href="esptool-LICENSE.txt">Apache-2.0</a>).</p>
+</main>
+<script type="module">
+import { ESPLoader, Transport } from './esptool.js';
+import { md5 } from './md5.js';
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const hex = a => Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+let busy = false, lastFile = null, lastName = '';
+
+function log(s) { const l = $('log'); l.textContent += s + '\n'; l.scrollTop = l.scrollHeight; }
+function state(s, cls = '') { $('state').textContent = s; $('state').className = cls; }
+function bar(f) { $('fill').style.width = (Math.max(0, Math.min(1, f)) * 100).toFixed(1) + '%'; }
+const terminal = { clean() {}, writeLine(s) { log(s); }, write(s) { log(s); } };
+
+if (!('serial' in navigator)) {
+  state("This browser can't talk to USB boards. Use Chrome or Edge on a computer.", 'err');
+  $('bk').disabled = true;
+}
+
+function lock(on) { busy = on; $('bk').disabled = on; $('rs').disabled = on || !$('file').files.length; $('file').disabled = on; }
+
+async function connect() {
+  const filters = $('all').checked ? [] : [{ usbVendorId: 0x303a }];
+  const port = await navigator.serial.requestPort({ filters });
+  const transport = new Transport(port, false);
+  const loader = new ESPLoader({ transport, baudrate: 921600, romBaudrate: 115200, terminal });
+  state('Connecting…');
+  try { await loader.main(); }
+  catch (e) {
+    try { await transport.disconnect(); } catch (_) {}
+    throw new Error(/open|busy|access/i.test(String(e))
+      ? 'The port is busy. Close the Arduino Serial Monitor (or anything else using the cube) and try again.'
+      : "Can't reach the cube: " + (e.message || e) + '. Hold BOOT, press PWR, let go of BOOT, then try again.');
+  }
+  return { transport, loader };
+}
+
+async function finish(c) {
+  if (!c) return;
+  try { await c.loader.after('hard_reset'); } catch (_) {}
+  try { await c.transport.disconnect(); } catch (_) {}
+}
+
+function save() {
+  if (!lastFile) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lastFile], { type: 'application/octet-stream' }));
+  a.download = lastName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+$('bk').onclick = async () => {
+  if (busy) return;
+  lock(true); $('log').textContent = ''; bar(0);
+  let c = null;
+  try {
+    c = await connect();
+    const { loader, transport } = c;
+    const fs = await loader.detectFlashSize().catch(() => undefined);
+    const size = fs ? loader.flashSizeBytes(fs) : 16 * 1024 * 1024;
+    let mac = '';
+    try { mac = (await loader.chip.readMac(loader)).replace(/:/g, ''); } catch (_) {}
+    log('Flash ' + (fs || '16MB?') + ' · reading ' + (size >> 20) + ' MB');
+    const out = new Uint8Array(size);
+    const CH = 0x40000, t0 = Date.now();
+    for (let a = 0; a < size; a += CH) {
+      for (let tries = 1; ; tries++) {
+        try {
+          const d = await loader.readFlash(a, CH, (p, got) => {
+            const done = a + got, s = (Date.now() - t0) / 1000;
+            bar(done / size);
+            state('Reading ' + (done >> 10) + ' / ' + (size >> 10) + ' KB · ' + Math.round(done / 1024 / Math.max(s, .1)) + ' KB/s');
+          });
+          let dig = null;
+          try { dig = await transport.read(1500); } catch (_) {}
+          if (dig && dig.length === 16 && hex(dig) !== md5(d.subarray(0, CH))) throw new Error('checksum mismatch');
+          out.set(d.subarray(0, CH), a);
+          break;
+        } catch (e) {
+          if (tries >= 3) throw new Error('Reading at 0x' + a.toString(16) + ' failed: ' + (e.message || e));
+          log('retry 0x' + a.toString(16) + ' (' + (e.message || e) + ')');
+          await sleep(400); transport.flushInput();
+        }
+      }
+    }
+    state('Checking the copy…');
+    const mine = md5(out);
+    const theirs = await loader.flashMd5sum(0, size);
+    log('MD5 file ' + mine + ' · cube ' + theirs);
+    if (mine !== theirs) throw new Error('The copy does not match the cube (MD5). Try again.');
+    const d = new Date(), p2 = n => String(n).padStart(2, '0');
+    lastFile = out;
+    lastName = 'errorcube-backup-' + (mac || 'cube') + '-' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + '.bin';
+    save();
+    bar(1);
+    state('BACKUP OK · ' + lastName + ' (' + (size >> 20) + ' MB, checked) → your Downloads folder', 'ok');
+    log('Saved ' + lastName + ' · MD5 ' + mine + ' · ' + Math.round((Date.now() - t0) / 1000) + ' s');
+    $('again').hidden = false;
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') state('No port picked. Press the button again and pick the cube (COMx).', 'err');
+    else state(String(e.message || e), 'err');
+  } finally {
+    await finish(c);
+    lock(false);
+  }
+};
+
+$('save').onclick = save;
+$('file').onchange = () => { $('rs').disabled = busy || !$('file').files.length; };
+
+$('rs').onclick = async () => {
+  if (busy || !$('file').files.length) return;
+  const f = $('file').files[0];
+  if (f.size < 0x10000 || f.size % 0x1000) { state('That file does not look like a full backup (' + f.size + ' bytes).', 'err'); return; }
+  if (!confirm('Write ' + f.name + ' (' + (f.size >> 10) + ' KB) onto the cube? Everything on it now is replaced.')) return;
+  lock(true); $('log').textContent = ''; bar(0);
+  let c = null;
+  try {
+    const data = new Uint8Array(await f.arrayBuffer());
+    c = await connect();
+    const t0 = Date.now();
+    await c.loader.writeFlash({
+      fileArray: [{ data, address: 0 }],
+      flashMode: 'keep', flashFreq: 'keep', flashSize: 'keep',
+      eraseAll: false, compress: true,
+      reportProgress: (i, w, t) => { bar(w / t); state('Writing ' + (w >> 10) + ' / ' + (t >> 10) + ' KB'); },
+      calculateMD5Hash: md5,
+    });
+    bar(1);
+    state('RESTORE OK · ' + f.name + ' written and checked. The cube restarts now.', 'ok');
+    log('Done in ' + Math.round((Date.now() - t0) / 1000) + ' s');
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') state('No port picked. Press the button again and pick the cube (COMx).', 'err');
+    else state(String(e.message || e), 'err');
+  } finally {
+    await finish(c);
+    lock(false);
+  }
+};
+</script>
+</body>
+</html>

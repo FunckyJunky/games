@@ -26,6 +26,10 @@
   <h1>ERROR-CUBE · INSTALL WITH USB</h1>
   <p>For the Waveshare <b>ESP32-S3-Touch-AMOLED-2.16</b> (the white cube). Use Chrome or Edge on a computer. You only need this
   once: after that the cube gets new firmware from error.blue by itself, over WiFi.</p>
+  <div class="box">
+    <b>Before the first install:</b> <a href="backup.html">BACK UP what's on the cube now</a> (one file with the whole 16 MB flash),
+    so you can always put it back exactly as it was.
+  </div>
   <ol>
     <li>Plug the cube into this computer with a USB-C cable (a cable that carries data, not only power).</li>
     <li>Press INSTALL and pick the cube's port (<i>USB JTAG/serial debug unit</i>, or COMx).</li>
@@ -50,6 +54,8 @@
   <esp-web-install-button manifest="factory.json">
     <button slot="activate" class="btn small">INSTALL WAVESHARE FACTORY FIRMWARE</button>
   </esp-web-install-button>
+
+  <p class="dim">Or put back your own backup: <a href="backup.html">BACKUP &amp; RESTORE</a>.</p>
 
   <h2>FOR DEVELOPERS</h2>
   <p class="dim">Firmware <span id="ver">?</span> · <a href="firmware.json">firmware.json</a> · <a href="cube.bin">cube.bin</a> (app at 0x10000).
