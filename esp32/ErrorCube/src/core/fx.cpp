@@ -12,11 +12,18 @@ static void* bigAlloc(size_t n) { return malloc(n); }
 #endif
 
 static const int NPX = SCR_W * SCR_H;
-static uint32_t* lut = nullptr;           // per screen pixel: where it comes from (bits 0-17) + how dark (bits 18-22)
+// the lens as a table of shifts around its centre, bigger than the screen so the centre can move (HOLO)
+static const int LM = 64, TW = SCR_W + 2 * LM;
+static uint32_t* disp = nullptr;          // per table pixel: (dy << 16) | (dx & 0xFFFF), both int16
 static int8_t fcol[SCR_W], frow[SCR_H];   // colour fringe: how far red / blue sit apart, by column / row
 static uint16_t* spare = nullptr;
 static uint16_t* bufs[2] = {nullptr, nullptr};
 static int lensMode = 0;
+// HOLO glass for the next frame
+static int hLX = 0, hLY = 0, hRBX = 0, hRBY = 0, hGX = 0, hGY = 0, hGA = 0;
+static float hAX = 0, hAY = 0;
+static int32_t kx[SCR_W], ky[SCR_H];      // perspective, 16.16
+static uint8_t gxv[SCR_W], gyv[SCR_H];    // the reflection: a soft round light (a gaussian is row x column)
 
 uint16_t* fxBuf(int i) { if (!bufs[i & 1]) bufs[i & 1] = (uint16_t*)bigAlloc(NPX * 2); return bufs[i & 1]; }
 uint16_t* fxSpare() { return spare; }
@@ -29,30 +36,29 @@ static void lensSrc(int mode, float ox, float oy, float& sx, float& sy) {
   sx = 240 + nx * f * 240; sy = 240 + ny * f * 240;
 }
 void fxLensSetup(int mode) {
-  if (mode == lensMode && (lut || !mode)) return;
-  lensMode = mode;
-  if (!mode) return;
-  if (!lut) lut = (uint32_t*)bigAlloc(NPX * 4);
   if (!spare) spare = (uint16_t*)bigAlloc(NPX * 2);
-  if (!lut || !spare) { lensMode = 0; return; }
-  for (int y = 0; y < SCR_H; y++)
-    for (int x = 0; x < SCR_W; x++) {
-      float sx, sy;
-      lensSrc(mode, x, y, sx, sy);
-      // past the glass: black; the last few pixels fade out (a soft tube edge)
-      float edge = fminf(fminf(sx, 479.5f - sx), fminf(sy, 479.5f - sy));
-      uint32_t v;
-      if (edge < 0) v = 0xFFFFFFFFu;
-      else {
-        int dark = edge < 4 ? (int)((4 - edge) * 7.5f) : 0; if (dark > 31) dark = 31;
-        int ix = (int)sx, iy = (int)sy; if (ix > 479) ix = 479; if (iy > 479) iy = 479;
-        v = (uint32_t)(iy * SCR_W + ix) | ((uint32_t)dark << 18);
-      }
-      lut[y * SCR_W + x] = v;
+  if (mode == lensMode && (disp || !mode)) return;
+  lensMode = mode;
+  if (!mode) { memset(fcol, 0, sizeof(fcol)); memset(frow, 0, sizeof(frow)); return; }
+  if (!disp) disp = (uint32_t*)bigAlloc((size_t)TW * TW * 4);
+  if (!disp || !spare) { lensMode = 0; return; }
+  for (int v = 0; v < TW; v++)
+    for (int u = 0; u < TW; u++) {
+      float ox = u - LM, oy = v - LM, sx, sy;
+      lensSrc(mode, ox, oy, sx, sy);
+      int dx = (int)floorf(sx - ox), dy = (int)floorf(sy - oy);
+      if (dx < -32000) dx = -32000; if (dx > 32000) dx = 32000; if (dy < -32000) dy = -32000; if (dy > 32000) dy = 32000;
+      disp[v * TW + u] = ((uint32_t)(uint16_t)(int16_t)dy << 16) | (uint16_t)(int16_t)dx;
     }
   // the fringe grows toward the edges, up to 3 px
   for (int i = 0; i < SCR_W; i++) { float n = (i - 240) / 240.0f; fcol[i] = (int8_t)roundf(n * n * n * (mode == 2 ? 3.4f : 2.4f)); }
   for (int i = 0; i < SCR_H; i++) { float n = (i - 240) / 240.0f; frow[i] = (int8_t)roundf(n * n * n * (mode == 2 ? 3.0f : 2.0f)); }
+}
+
+void fxHolo(int lx, int ly, float ax, float ay, int rbx, int rby, int gx, int gy, int ga) {
+  hLX = lx < -LM ? -LM : lx > LM ? LM : lx;
+  hLY = ly < -LM ? -LM : ly > LM ? LM : ly;
+  hAX = ax; hAY = ay; hRBX = rbx; hRBY = rby; hGX = gx; hGY = gy; hGA = ga;
 }
 
 void fxPost(bool fringe, bool scan) {
@@ -60,30 +66,56 @@ void fxPost(bool fringe, bool scan) {
   if (!spare) { if (scan) fxScanlines(); return; }
   const uint16_t* src = fb;
   uint16_t* out = spare;
-  if (!lensMode || !lut) {
+  bool persp = hAX != 0 || hAY != 0;
+  bool warp = (lensMode && disp) || hLX || hLY || persp || hRBX || hRBY || hGA;
+  if (!warp) {
     memcpy(out, src, NPX * 2);
     uint16_t* t = fb; fb = spare; spare = t;
     if (scan) fxScanlines();
     return;
   }
-  const uint32_t* L = lut;
+  if (persp) {
+    for (int x = 0; x < SCR_W; x++) kx[x] = (int32_t)(hAX * (x - 240) / 240.0f * 65536);
+    for (int y = 0; y < SCR_H; y++) ky[y] = (int32_t)(hAY * (y - 240) / 240.0f * 65536);
+  }
+  if (hGA) {
+    const float s2 = 1.0f / (2 * 118.0f * 118.0f);
+    for (int x = 0; x < SCR_W; x++) { float d = (float)(x - hGX); gxv[x] = (uint8_t)(255 * expf(-d * d * s2)); }
+    for (int y = 0; y < SCR_H; y++) { float d = (float)(y - hGY); gyv[y] = (uint8_t)(255 * expf(-d * d * s2 * 1.6f)); }
+  }
+  bool fr = fringe && (lensMode || hRBX || hRBY);
+  int rbo = hRBX + hRBY * SCR_W;
+  const bool lens = lensMode && disp;
   for (int y = 0; y < SCR_H; y++) {
-    int fy = fringe ? frow[y] * SCR_W : 0;
+    int fy = fr ? frow[y] * SCR_W + rbo : 0;
     bool sl = scan && y % 3 == 0;
+    const uint32_t* D = lens ? &disp[(y - hLY + LM) * TW + (LM - hLX)] : nullptr;
+    int32_t kyy = persp ? ky[y] : 0;
+    int gyr = hGA ? gyv[y] : 0;
     for (int x = 0; x < SCR_W; x++) {
-      uint32_t v = *L++;
-      if (v == 0xFFFFFFFFu) { *out++ = 0; continue; }
-      int idx = v & 0x3FFFF;
+      int sx = x, sy = y;
+      if (lens) { uint32_t d = D[x]; sx += (int16_t)(d & 0xFFFF); sy += (int16_t)(d >> 16); }
+      if (persp) { int32_t k = kx[x] + kyy; sx += (int)(((int64_t)(x - 240) * k) >> 16); sy += (int)(((int64_t)(y - 240) * k) >> 16); }
+      if ((unsigned)sx >= SCR_W || (unsigned)sy >= SCR_H) { *out++ = 0; continue; }
+      int idx = sy * SCR_W + sx;
       uint16_t c = src[idx];
-      if (fringe) {
+      if (fr) {
         int off = fcol[x] + fy;
         if (off) {
           int a = idx + off, b = idx - off;
           if (a >= 0 && a < NPX && b >= 0 && b < NPX) c = (src[a] & 0xF800) | (c & 0x07E0) | (src[b] & 0x001F);
         }
       }
-      int dark = v >> 18;
-      if (dark) c = blend(c, 0, dark);
+      // past the glass: black; the last few pixels fade out (a soft tube edge)
+      int e = sx < SCR_W - 1 - sx ? sx : SCR_W - 1 - sx;
+      int ey = sy < SCR_H - 1 - sy ? sy : SCR_H - 1 - sy;
+      if (ey < e) e = ey;
+      if (e < 4 && (lens || persp)) c = blend(c, 0, (4 - e) * 8);
+      if (gyr) {
+        // dithered, so the soft light has no rings
+        int a = (gxv[x] * gyr * hGA + (((x * 7 + y * 13) & 15) << 12)) >> 16;
+        if (a) c = blend(c, 0xFFFF, a);
+      }
       *out++ = sl ? ((c & 0xF7DE) >> 1) + ((c & 0xE79C) >> 2) : c;
     }
   }
@@ -92,9 +124,15 @@ void fxPost(bool fringe, bool scan) {
 }
 
 void fxLensTouch(int& x, int& y) {
-  if (!lensMode) return;
-  float sx, sy;
-  lensSrc(lensMode, x, y, sx, sy);
+  float sx = x, sy = y;
+  if (lensMode) {
+    lensSrc(lensMode, x - hLX, y - hLY, sx, sy);
+    sx += hLX; sy += hLY;
+  }
+  if (hAX != 0 || hAY != 0) {
+    float k = hAX * (x - 240) / 240.0f + hAY * (y - 240) / 240.0f;
+    sx += (x - 240) * k; sy += (y - 240) * k;
+  }
   x = sx < 0 ? 0 : sx > 479 ? 479 : (int)sx;
   y = sy < 0 ? 0 : sy > 479 ? 479 : (int)sy;
 }

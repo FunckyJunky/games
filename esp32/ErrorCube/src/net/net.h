@@ -7,6 +7,7 @@
 void netBegin();
 void netStep();                 // WiFi state, web page, phone setup (net task)
 bool netUp();
+void netSleepMode(int m);      // the screen is off: 0 WiFi as normal, 1 power saving, 2 off (cfg.aodWifi)
 
 // cloud.cpp
 void cloudBegin();

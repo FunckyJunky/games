@@ -2,6 +2,7 @@
 // synthwave floor under the stars, each with its own wireframe icon. The camera follows how you hold the cube.
 // Swipe sideways (or - / +) to turn, tap the front card (or hold +) to run it, swipe up / down for the next folder.
 #include "../ui/ui.h"
+#include "../core/holo.h"
 #include "../core/g3d.h"
 #include <string.h>
 #include <stdio.h>
@@ -84,7 +85,11 @@ struct Home3D : Screen {
       }
     }
     // how you hold the cube: the camera leans a little (smoothed, so it doesn't shake)
-    if (cfg.parallax && S.imu && !cfg.saver) {
+    if (holoActive()) {
+      // HOLO 3D on: the camera follows the same tilt as the rest of the interface (range, centre, invert...)
+      float k = cfg.holoDepth / 9.0f;
+      tx = -holoTX() * 0.55f * k; ty = -holoTY() * 0.55f * k;
+    } else if (cfg.parallax && S.imu && !cfg.saver) {
       float a[3], g[3];
       if (imuRead(a, g)) { tx += (a[0] / 9.81f - tx) * 0.12f; ty += (a[2] / 9.81f - ty) * 0.12f; }
     } else { tx *= 0.9f; ty *= 0.9f; }

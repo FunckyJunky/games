@@ -149,6 +149,20 @@ input[type=text].wide { width: 100%; background: #000; border: 2px solid var(--f
         <div class="dim" style="font-size:18px;margin-top:8px">Make your own: a JavaScript file in <b>public/cube/apps/</b> and a line in apps.json. <a href="/cube/apps/README.md">The app API</a>.</div>
       </div>
 
+      <!-- FILES -->
+      <div data-tab="files">
+        <div class="grid2"><button class="btn" id="fSd">SD CARD</button><button class="btn" id="fC">CUBE FLASH</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn" id="fUpDir" style="flex:0 0 auto">&lt; UP</button><span id="fPath" style="flex:1;word-break:break-all"></span><button class="btn" id="fRef" style="flex:0 0 auto">REFRESH</button></div>
+        <div class="dim" id="fInfo" style="font-size:18px;margin:4px 0"></div>
+        <input type="file" id="fFile" multiple class="hide">
+        <button class="btn big" id="fSend">UPLOAD FILES HERE</button>
+        <div class="meter hide" id="fBar" style="margin-top:8px"><i></i></div>
+        <div class="dim" id="fStat" style="font-size:18px;min-height:22px"></div>
+        <div id="fList"></div>
+        <div class="grid2" style="margin-top:8px"><button class="btn" id="fMk">NEW FOLDER</button><a class="btn" id="fLocal" target="_blank" style="text-align:center;text-decoration:none;display:grid;place-items:center">FAST (SAME WIFI)</a></div>
+        <div class="dim" style="font-size:18px;margin-top:8px">Uploads here go through error.blue, so they work from anywhere (about 50 KB/s). On the same WiFi as the cube, FAST opens the cube's own page: much quicker for music and video.</div>
+      </div>
+
       <!-- SYSTEM -->
       <div data-tab="system">
         <div class="kv" id="fwKv"></div>
@@ -260,6 +274,9 @@ function connect() {
     else if (x.t === 'state') { state = x; online[wsCode] = { on: true }; if (d.name !== x.name && x.name) { d.name = x.name; saveDevices(); } renderAll(); }
     else if (x.t === 'shot') drawShot(x);
     else if (x.t === 'app') appLog('APP ' + x.id + ': ' + JSON.stringify(x.data));
+    else if (x.t === 'fls') fRender(x);
+    else if (x.t === 'fack') fAck(x);
+    else if (x.t === 'fdone') { if (!x.ok) flash(x.c === 'frm' ? 'COULD NOT DELETE (FOLDERS MUST BE EMPTY)' : 'DID NOT WORK', true); fls(); }
   };
   s.onclose = () => { if (ws !== s) return; ws = null; linkMsg('CONNECTION LOST. TRYING AGAIN...', true); retry = setTimeout(connect, 3000); };
 }
@@ -274,7 +291,7 @@ let flashT = 0;
 function flash(t, bad) { linkMsg(t, bad); clearTimeout(flashT); flashT = setTimeout(() => linkMsg(''), 3500); }
 
 // ===================================================================== tabs
-const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
+const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['files', 'FILES', 'files'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
 let tab = store.get('cube.tab', 'status');
 function renderTabs() {
   const caps = schema ? schema.caps || [] : ['video', 'apps'];
@@ -283,6 +300,7 @@ function renderTabs() {
   $('tabs').innerHTML = list.map(t => '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>').join('');
   document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('hide', el.dataset.tab !== tab));
   if (tab === 'apps') loadApps();
+  if (tab === 'files') fls();
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; store.set('cube.tab', tab); renderTabs(); });
 document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
@@ -314,6 +332,7 @@ function renderAll() {
   $('updBar').classList.toggle('hide', u.st !== 'loading');
   $('updBar').firstElementChild.style.width = (u.pct || 0) + '%';
   $('localLink').href = s.ip ? 'http://' + s.ip + '/' : '#';
+  $('fLocal').href = s.ip ? 'http://' + s.ip + '/files' : '#';
   if (schema) syncSettings();
 }
 let latest = '';
@@ -504,6 +523,70 @@ const q = new URLSearchParams(location.search).get('code');
 if (q) { addDevice(q); history.replaceState(null, '', '/cube/'); }
 else { renderDevices(); if (selCode && devices.find(d => d.code === selCode)) openDevice(selCode); else if (devices[0]) { selCode = devices[0].code; openDevice(selCode); } }
 checkOnline();
+
+// ===================================================================== files: the SD card / the cube's flash
+let fDir = '/sd', fBusy = false, fWait = null;
+const fsz = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
+function fls() { if (!send({ t: 'fls', d: fDir })) $('fList').innerHTML = '<div class="empty">NOT CONNECTED</div>'; }
+function fRender(x) {
+  if (x.d !== fDir) return;
+  $('fSd').classList.toggle('on', fDir.startsWith('/sd')); $('fC').classList.toggle('on', fDir.startsWith('/c'));
+  $('fPath').textContent = (fDir.startsWith('/sd') ? 'A:' : 'C:') + (fDir.replace(/^\/(sd|c)/, '') || '\\').replace(/\//g, '\\');
+  $('fInfo').textContent = fDir.startsWith('/sd') ? (x.sd ? x.sdInfo + ' · ' + (x.free ?? '?') + ' MB free' : 'NO SD CARD IN THE CUBE') : (x.free ?? '?') + ' MB free';
+  const e = (x.e || []).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  $('fList').innerHTML = !x.ok ? '<div class="empty">' + (fDir.startsWith('/sd') ? 'PUT AN SD CARD IN THE CUBE' : 'CAN\'T READ THIS FOLDER') + '</div>' :
+    !e.length ? '<div class="empty">EMPTY</div>' :
+    e.map(f => '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all;cursor:pointer" data-open="' + (f[1] ? esc(f[0]) : '') + '">' +
+      (f[1] ? '&#9618; ' : '') + esc(f[0]) + '</span><span class="dim">' + (f[1] ? '&lt;DIR&gt;' : fsz(f[2])) + '</span>' +
+      '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-ren="' + esc(f[0]) + '">REN</button>' +
+      '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-del="' + esc(f[0]) + '">DEL</button></div>').join('') + (x.more ? '<div class="dim">(more files: use the FAST page to see all)</div>' : '');
+}
+$('fList').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.open) { fDir += '/' + t.dataset.open; fls(); }
+  else if (t.dataset.del) { if (confirm('Delete ' + t.dataset.del + '?')) send({ t: 'frm', p: fDir + '/' + t.dataset.del }); }
+  else if (t.dataset.ren) { const n = prompt('New name', t.dataset.ren); if (n && !n.includes('/')) send({ t: 'fmv', p: fDir + '/' + t.dataset.ren, b: fDir + '/' + n }); }
+});
+$('fSd').onclick = () => { fDir = '/sd'; fls(); };
+$('fC').onclick = () => { fDir = '/c'; fls(); };
+$('fUpDir').onclick = () => { if (fDir === '/sd' || fDir === '/c') return; fDir = fDir.slice(0, fDir.lastIndexOf('/')); fls(); };
+$('fRef').onclick = fls;
+$('fMk').onclick = () => { const n = prompt('Folder name'); if (n && !n.includes('/')) send({ t: 'fmk', p: fDir + '/' + n }); };
+$('fSend').onclick = () => { if (!fBusy) $('fFile').click(); };
+function fAck(x) { if (fWait && x.p === fWait.p) { const w = fWait; fWait = null; w.res(x); } }
+function waitAck(p, ms) { return new Promise(res => { fWait = { p, res }; setTimeout(() => { if (fWait && fWait.p === p) { fWait = null; res(null); } }, ms); }); }
+function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096)); return btoa(s); }
+$('fFile').onchange = async () => {
+  const files = [...$('fFile').files]; $('fFile').value = '';
+  if (!files.length) return;
+  fBusy = true; $('fSend').disabled = true; $('fBar').classList.remove('hide');
+  let ok = 0;
+  for (let k = 0; k < files.length; k++) {
+    const f = files[k], p = fDir + '/' + f.name, buf = new Uint8Array(await f.arrayBuffer()), CH = 9000, t0 = Date.now();
+    let o = 0, fail = '';
+    while (o < buf.length || (o === 0 && buf.length === 0)) {
+      const part = buf.subarray(o, o + CH);
+      let a = null;
+      for (let tries = 0; tries < 3 && !a; tries++) {
+        if (!send({ t: 'fput', p, o, z: buf.length, d: b64(part) })) { fail = 'NOT CONNECTED'; break; }
+        a = await waitAck(p, 15000);
+      }
+      if (fail) break;
+      if (!a) { fail = 'NO ANSWER FROM THE CUBE'; break; }
+      if (!a.ok) { fail = a.err || 'COULD NOT WRITE'; break; }
+      o = a.o;
+      const kb = o / 1024 / Math.max(0.1, (Date.now() - t0) / 1000);
+      $('fBar').firstElementChild.style.width = (buf.length ? o / buf.length * 100 : 100) + '%';
+      $('fStat').textContent = 'SENDING ' + f.name + ' (' + (k + 1) + '/' + files.length + ') ' + fsz(o) + ' / ' + fsz(buf.length) + ' · ' + Math.round(kb) + ' KB/s';
+      if (!buf.length) break;
+    }
+    if (fail) { flash(f.name + ': ' + fail, true); break; }
+    ok++;
+  }
+  $('fStat').textContent = ok + ' of ' + files.length + ' file(s) sent';
+  fBusy = false; $('fSend').disabled = false; $('fBar').classList.add('hide');
+  fls();
+};
 })();
 </script>
 <script src="/lib/online.js" defer></script>

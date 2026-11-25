@@ -2,6 +2,7 @@
 #include "ui.h"
 #include "../core/fx.h"
 #include "../core/g3d.h"
+#include "../core/holo.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -18,6 +19,7 @@ static char toastMsg[64] = "";
 static uint32_t toastUntil = 0;
 static int lastTapX = 0, lastTapY = 0;
 static int ripX = 0, ripY = 0; static uint32_t ripAt = 0;    // the ring where you tapped
+extern float holoBarUp;
 static uint32_t revealAt = 0;
 static int transDir = -1; static uint32_t transAt = 0; static bool transTo = false;
 static const uint16_t* lastPre = nullptr;                    // the last frame, before the lens + scanlines
@@ -107,7 +109,7 @@ void uiSleep() {
   dirty = true;
 }
 int uiBrightNow() {
-  if (!awake) return aodOn ? 6 : 0;
+  if (!awake) return aodOn ? (cfg.aodLight < 1 ? 1 : cfg.aodLight > 30 ? 30 : cfg.aodLight) : 0;
   int b = cfg.bright;
   if (cfg.saver && b > 50) b = 50;
   if (dimmed) b = b / 4 < 5 ? 5 : b / 4;
@@ -135,7 +137,7 @@ static bool deliver(const Ev& e) {
 
 void uiTouch(bool down, int x, int y) {
   uint32_t now = msNow();
-  if (down) fxLensTouch(x, y);            // the picture is curved: where the finger really is
+  if (down) { fxLensTouch(x, y); holoUnmap(x, y); }   // the picture is curved (and HOLO moves it): where the finger really is
   if (down && !tDown) {
     tDown = true; tDrag = false; tLongDone = false;
     tx0 = tx = x; ty0 = ty = y; tAt = now;
@@ -227,12 +229,22 @@ void uiKey(int key) {
   dirty = true;
 }
 
-void hit(int x, int y, int w, int h, Act a, Act longAct, bool focusable) { hits.push_back({x, y, w, h, a, longAct, focusable}); }
+void hit(int x, int y, int w, int h, Act a, Act longAct, bool focusable) {
+  // HOLO: the button may sit on another depth layer than the text; touches are on the text plane
+  int tx, ty; holoShift(H_TEXT, tx, ty);
+  hits.push_back({x + gOX - tx, y + gOY - ty, w, h, a, longAct, focusable});
+}
 
 // ------------------------------------------------------------------ drawing pieces
 void putText(int r, int c, const char* s, uint16_t col, int mode) { drawText(FT, colX(c), rowY(r), s, col ? col : C_FG, mode); }
 
+float holoBarUp = 0;
 void invBar(int x, int y, int w, int h, bool glow) {
+  if (holoBarUp > 0) {                     // HOLO: a raised selection bar: its shadow and sides first
+    holoShadow(x, y, w, h, holoBarUp);
+    holoWalls(x, y, w, h, C_FG, holoBarUp, true);
+    holoBarUp = 0;
+  }
   if (glow && cfg.glow) glowRect(x, y, w, h, C_FG, 4);
   fillRect(x, y, w, h, C_FG);
 }
@@ -260,6 +272,38 @@ void battIcon(int x, int y, int pct, bool chg) {
   }
 }
 
+void icon(int id, int x, int y, uint16_t c) {
+  // drawn in a 26 x 26 box, thin lines, ERROR-DOS style
+  int cx = x + 13, cy = y + 13;
+  switch (id) {
+    case IC_SCREEN: rect(x + 1, y + 3, 24, 16, c); rect(x + 2, y + 4, 22, 14, c); fillRect(x + 10, y + 20, 6, 3, c); fillRect(x + 6, y + 23, 14, 2, c); break;
+    case IC_LOOK: for (int i = -10; i <= 10; i++) { int h = (int)(6 * sqrtf(1 - i * i / 110.0f)); pset(cx + i, cy - h, c); pset(cx + i, cy + h, c); } fillCircle(cx, cy, 4, c); break;
+    case IC_HOLO: rect(x + 2, y + 8, 15, 15, c); rect(x + 9, y + 2, 15, 15, c); line(x + 2, y + 8, x + 9, y + 2, c); line(x + 16, y + 8, x + 23, y + 2, c);
+                  line(x + 2, y + 22, x + 9, y + 16, c); line(x + 16, y + 22, x + 23, y + 16, c); break;
+    case IC_SOUND: fillRect(x + 2, y + 9, 6, 8, c); for (int i = 0; i < 7; i++) vline(x + 8 + i, y + 9 - i, 8 + 2 * i, c);
+                   for (int r = 0; r < 2; r++) for (int a = -40; a <= 40; a += 8) { float t = a * 0.01745f; pset(x + 17 + r * 5 + (int)(cosf(t) * (3 + r * 3)), cy + (int)(sinf(t) * (5 + r * 4)), c); } break;
+    case IC_KEY: rect(x + 1, y + 6, 11, 14, c); rect(x + 14, y + 6, 11, 14, c); fillRect(x + 4, y + 12, 5, 2, c); fillRect(x + 17, y + 12, 5, 2, c); vline(x + 19, y + 10, 6, c); break;
+    case IC_WIFI: for (int r = 0; r < 3; r++) for (int a = -50; a <= 50; a += 6) { float t = a * 0.01745f; pset(cx + (int)(sinf(t) * (5 + r * 5)), y + 22 - (int)(cosf(t) * (5 + r * 5)), c); } fillCircle(cx, y + 21, 2, c); break;
+    case IC_CLOUD: ring(cx, cy, 10, 1, c); vline(cx, y + 3, 21, c); hline(x + 3, cy, 21, c); for (int i = -9; i <= 9; i++) { int w = (int)(5 * sqrtf(1 - i * i / 100.0f)); pset(cx - w, cy + i, c); pset(cx + w, cy + i, c); } break;
+    case IC_OFFLINE: fillRect(x + 2, cy - 1, 22, 3, c); for (int i = 0; i < 8; i++) { fillRect(x + 9 + i, cy - 2 - i, 3, 1, c); fillRect(x + 9 + i, cy + 2 + i, 3, 1, c); } fillRect(x + 2, cy - 5, 2, 11, c); break;
+    case IC_TIME: ring(cx, cy, 10, 1, c); vline(cx, y + 6, 8, c); hline(cx, cy, 6, c); break;
+    case IC_POWER: rect(x + 1, y + 7, 21, 12, c); fillRect(x + 22, y + 10, 3, 6, c); fillRect(x + 3, y + 9, 12, 8, c); break;
+    case IC_UPDATE: vline(cx, y + 3, 16, c); vline(cx + 1, y + 3, 16, c); for (int i = 0; i < 7; i++) hline(cx - i, y + 4 + i, 2 + 2 * i, c); hline(x + 3, y + 23, 21, c); break;
+    case IC_SYSTEM: rect(x + 5, y + 5, 16, 16, c); rect(x + 9, y + 9, 8, 8, c);
+                    for (int i = 0; i < 4; i++) { vline(x + 7 + i * 4, y + 1, 3, c); vline(x + 7 + i * 4, y + 22, 3, c); hline(x + 1, y + 7 + i * 4, 3, c); hline(x + 22, y + 7 + i * 4, 3, c); } break;
+    case IC_WALL: rect(x + 1, y + 3, 24, 20, c); line(x + 3, y + 20, x + 10, y + 11, c); line(x + 10, y + 11, x + 15, y + 17, c); line(x + 15, y + 17, x + 18, y + 14, c); line(x + 18, y + 14, x + 23, y + 20, c); fillCircle(x + 19, y + 8, 2, c); break;
+    case IC_MOON: for (int i = -10; i <= 10; i++) { int w = (int)sqrtf(100.0f - i * i), w2 = (int)sqrtf(fmaxf(0, 64.0f - (i + 2) * (i + 2))); hline(cx - w, cy + i, w - w2 + (w2 ? 0 : w), c); } break;
+    case IC_HAND: for (int i = 0; i < 4; i++) rect(x + 5 + i * 4, y + 3 + (i == 0 || i == 3 ? 4 : 0), 4, 12, c); rect(x + 5, y + 14, 16, 10, c); line(x + 5, y + 15, x + 1, y + 11, c); break;
+    case IC_MOTION: rect(x + 7, y + 3, 12, 20, c); for (int a = 200; a <= 340; a += 10) { float t = a * 0.01745f; pset(cx + (int)(cosf(t) * 12), y + 26 + (int)(sinf(t) * 6), c); } break;
+    case IC_GLASS: ring(cx, cy, 10, 1, c); line(cx - 5, cy - 5, cx - 1, cy - 8, c); break;
+    case IC_LIGHT: fillCircle(cx, cy, 5, c); for (int i = 0; i < 8; i++) { float t = i * 0.785f; line(cx + (int)(cosf(t) * 8), cy + (int)(sinf(t) * 8), cx + (int)(cosf(t) * 11), cy + (int)(sinf(t) * 11), c); } break;
+    case IC_DEPTH: for (int i = 0; i < 3; i++) rect(x + 1 + i * 4, y + 1 + i * 4, 24 - i * 8, 24 - i * 8, mix(C_BG, c, 100 - i * 25)); break;
+    case IC_FILES: rect(x + 1, y + 6, 24, 17, c); fillRect(x + 1, y + 3, 10, 4, c); hline(x + 1, y + 10, 24, c); break;
+    case IC_INFO: ring(cx, cy, 10, 1, c); fillRect(cx - 1, cy - 1, 3, 8, c); fillRect(cx - 1, cy - 6, 3, 3, c); break;
+    case IC_TURN: for (int a = 30; a <= 330; a += 6) { float t = a * 0.01745f; pset(cx + (int)(cosf(t) * 10), cy + (int)(sinf(t) * 10), c); } fillRect(cx + 7, cy - 9, 5, 5, c); break;
+  }
+}
+
 void fmtTime(char* out, int h, int m, int s, bool secs) {
   int hh = h;
   if (!cfg.h24) { hh = h % 12; if (!hh) hh = 12; }
@@ -268,6 +312,9 @@ void fmtTime(char* out, int h, int m, int s, bool secs) {
 
 void statusBar(const char* title) {
   int y = 16, h = 32;
+  HoloZ z(H_CHROME);
+  holoShadow(15, y, 450, h, H_CHROME - H_TEXT);
+  holoWalls(15, y, 450, h, C_FG, H_CHROME - H_TEXT, true);
   invBar(15, y, 450, h);
   char t[32];
   snprintf(t, sizeof(t), "%s", title ? title : "ERROR-DOS");
@@ -288,7 +335,13 @@ void statusBar(const char* title) {
     x -= 30; battIcon(x, y + 6, S.battery ? S.batPct : 100, S.charging || (!S.battery && S.usb));
     x -= 10;
   }
-  if (cfg.wifiOn) { x -= 24; wifiIcon(x, y + 7, S.rssi, S.net == NET_UP); x -= 8; }
+  if (cfg.offline) {                       // OFFLINE: a little plane
+    x -= 24; int px = x, py = y + 16;
+    fillRect(px, py - 1, 22, 3, C_BG);                        // body
+    for (int i = 0; i < 7; i++) { fillRect(px + 8 + i, py - 2 - i, 3, 1, C_BG); fillRect(px + 8 + i, py + 2 + i, 3, 1, C_BG); }   // wings
+    fillRect(px, py - 5, 2, 11, C_BG);                       // tail
+    x -= 8;
+  } else if (cfg.wifiOn) { x -= 24; wifiIcon(x, y + 7, S.rssi, S.net == NET_UP); x -= 8; }
   if (S.link) { x -= 12; fillCircle(x + 5, y + 16, 5, C_BG); x -= 6; }
   if (S.chatUnread) { x -= 22; rect(x, y + 9, 20, 14, C_BG); line(x, y + 9, x + 10, y + 17, C_BG); line(x + 19, y + 9, x + 10, y + 17, C_BG); x -= 6; }
   if (S.upd == UPD_NEW || S.upd == UPD_LOADING) { x -= 15; drawText(FT, x, y, "\xE2\x86\x91", C_BG, TX_FLAT); }
@@ -303,9 +356,12 @@ void pathLine(const char* path) {
 
 void fkeys(std::initializer_list<FKey> keys) {
   int x = colX(0), y = rowY(13);
+  HoloZ z(H_CHROME);
   for (const FKey& k : keys) {
     int x0 = x;
     int kw = textW(FT, k.k);
+    holoShadow(x, y + 2, kw, LH - 4, H_CHROME - H_TEXT);
+    holoWalls(x, y + 2, kw, LH - 4, C_FG, H_CHROME - H_TEXT, true);
     fillRect(x, y + 2, kw, LH - 4, C_FG);
     drawText(FT, x, y, k.k, C_BG, TX_FLAT);
     x += kw;
@@ -351,6 +407,11 @@ int wrapText(const char* s, int width, char lines[][64], int maxLines) {
 }
 
 void dosButton(int x, int y, int w, int h, const char* label, Act a, bool on, int f) {
+  // HOLO: a button stands up from its panel; the chosen one stands higher
+  float up = on ? H_RAISE * 1.4f : H_RAISE;
+  HoloZ z(holoAt() + up);
+  holoShadow(x, y, w, h, up);
+  holoWalls(x, y, w, h, C_FG, up, on);
   if (on) { invBar(x, y, w, h); drawTextC(f, x + w / 2, y + (h - fontH(f)) / 2, label, C_BG, TX_FLAT); }
   else {
     rect(x, y, w, h, C_FG); rect(x + 1, y + 1, w - 2, h - 2, C_FG);
@@ -413,6 +474,14 @@ void ListView::draw(std::function<void(int, int, int, int, int, bool)> row, std:
       redrawIn(16);
       continue;
     }
+    if (i == sel && !moving && holoLayersOn()) {
+      // HOLO: the chosen row floats above the list
+      HoloZ z(holoAt() + H_RAISE);
+      holoBarUp = H_RAISE;                 // the row's bar (if it draws one) gets a shadow and sides
+      row(i, x, ry, w, rowH, true);
+      holoBarUp = 0;
+      continue;
+    }
     row(i, x, ry, w, rowH, i == sel && !moving);
   }
   clipReset();
@@ -465,18 +534,28 @@ void drawRows(ListView& L, std::vector<Row>& rows) {
   L.draw([&](int i, int x, int y, int w, int h, bool sel) {
     Row& r = rows[i];
     int ty = y + (h - LH) / 2;
-    if (r.kind == 4) {   // heading
-      drawText(FT, x + 6, ty, r.name, C_DIM, TX_FLAT);
-      hline(x + 6 + textW(FT, r.name) + 8, y + h / 2, w - textW(FT, r.name) - 26, C_DIM);
+    if (r.kind == 4) {   // heading (with its icon)
+      int hx = x + 6;
+      if (r.icon) { icon(r.icon, hx, y + (h - 26) / 2 + 2, C_DIM); hx += 34; }
+      drawText(FT, hx, ty, r.name, C_DIM, TX_FLAT);
+      int lx = hx + textW(FT, r.name) + 8;
+      hline(lx, y + h / 2, x + w - 12 - lx, C_DIM);
       return;
     }
     bool inv = sel && r.kind != 3;
     if (inv) invBar(x + 2, y + 3, w - 4, h - 6);
     uint16_t c = inv ? C_BG : C_FG;
     int mode = inv ? TX_FLAT : TX_GLOW;
-    drawText(FT, x + 12, ty, r.name, r.kind == 3 && !inv ? C_DIM : c, r.kind == 3 ? TX_FLAT : mode);
+    int nx = x + 12;
+    if (r.icon) { icon(r.icon, nx, y + (h - 26) / 2, inv ? C_BG : C_FG); nx += 36; }
+    drawText(FT, nx, ty, r.name, r.kind == 3 && !inv ? C_DIM : c, r.kind == 3 ? TX_FLAT : mode);
     char v[64] = "";
     if (r.val) r.val(v);
+    {   // the value never runs into the name: cut it to the room that's left
+      int room = (x + w - 12 - (nx + textW(FT, r.name) + 14)) / CW - (r.kind == 1 ? 4 : 0);
+      if (room < 3) room = 3;
+      if (r.kind != 2 && utf8Len(v) > room) { utf8Cut(v, room - 1); strcat(v, "\xE2\x80\xA6"); }
+    }
     if (r.kind == 2) {
       int p = r.pct ? r.pct() : 0;
       int bx = x + SL_X, by = y + 14;
@@ -488,7 +567,8 @@ void drawRows(ListView& L, std::vector<Row>& rows) {
       char t[72]; snprintf(t, sizeof(t), "< %s >", v);
       drawTextR(FT, x + w - 12, ty, t, c, mode);
     } else if (v[0]) {
-      drawTextR(FT, x + w - 12, ty, v, r.kind == 3 ? c : (inv ? C_BG : C_FG), mode);
+      bool desc = r.icon && r.kind == 0;          // a section's short description: dim
+      drawTextR(FT, x + w - 12, ty, v, r.kind == 3 ? c : (inv ? C_BG : desc ? C_DIM : C_FG), desc && !inv ? TX_FLAT : mode);
     }
     if (r.kind == 0 && !v[0]) drawTextR(FT, x + w - 12, ty, "\xE2\x96\xBA", c, mode);
   }, nullptr);
@@ -518,6 +598,10 @@ bool rowsEv(ListView& L, std::vector<Row>& rows, const Ev& e) {
       if (rows[i].kind != 4 && rows[i].kind != 3) { L.sel = i; L.showSel(); sndKey(); return true; }
     }
     return true;
+  }
+  if (e.t == EV_TAP && e.x0 >= L.x && e.x0 < L.x + L.w && e.y0 >= L.y && e.y0 < L.y + L.h) {
+    int i = (int)((e.y - L.y + L.scroll) / L.rowH);    // a heading or an info line: nothing to pick
+    if (i >= 0 && i < (int)rows.size() && (rows[i].kind == 3 || rows[i].kind == 4)) return true;
   }
   return L.ev(e, [&](int i) {
     Row& r = rows[i];
@@ -609,6 +693,7 @@ struct Keyboard : Overlay {
   void draw() override {
     // the whole screen: title, the text, the keys
     gfxClear();
+    holoBackdrop();
     statusBar("KEYBOARD");
     char path[48]; snprintf(path, sizeof(path), "%s", title);
     drawText(FT, colX(0), TOP_Y, path, C_FG);
@@ -646,6 +731,8 @@ struct Keyboard : Overlay {
             const char* p = K.lab; uint32_t c = upperCp(utf8Next(p)); int q = putUtf8(lab, c); lab[q] = 0;
           } else snprintf(lab, sizeof(lab), "%s", K.out[0] == ' ' ? (cfg.kbd && mode == 0 ? "ПРОБІЛ" : "SPACE") : K.lab);
           if (!strcmp(K.out, K_LANG)) snprintf(lab, sizeof(lab), "%s", cfg.kbd ? "EN" : "UA");
+          HoloZ kz(hot ? H_TEXT : H_RAISE);   // HOLO: keys stand up, the pressed one goes down
+          if (!hot) { holoShadow((int)x, y, w, kh, H_RAISE); holoWalls((int)x, y, w, kh, C_DIM, H_RAISE, false); }
           if (hot) invBar((int)x, y, w, kh, false);
           else { rect((int)x, y, w, kh, C_DIM); rect((int)x + 1, y + 1, w - 2, kh - 2, mix(C_DIM, C_BG, 40)); }
           bool special = K.out[0] <= 7 && K.out[0] != ' ';
@@ -713,9 +800,12 @@ struct Dialog : Overlay {
       redrawIn(16);
       return;
     }
+    if (holoLayersOn()) { holoShadow(x, y, w, h, holoAt() - H_TEXT); holoWalls(x, y, w, h, C_FG, 0.6f, true); }
+    else {
+      fillRect(x + 12, y + h, w, 10, C_BLACK);          // the DOS shadow
+      fillRect(x + w, y + 12, 12, h, C_BLACK);
+    }
     fillRect(x, y, w, h, C_BG);
-    fillRect(x + 12, y + h, w, 10, C_BLACK);          // the DOS shadow
-    fillRect(x + w, y + 12, 12, h, C_BLACK);
     dosBox(x, y, w, h, C_FG);
     char t[40]; snprintf(t, sizeof(t), " %s ", title);
     int tw = textW(FT, t);
@@ -781,8 +871,9 @@ struct Quick : Overlay {
       redrawIn(16);
       return;
     }
+    if (holoLayersOn()) { holoShadow(x, y, w, h, holoAt() - H_TEXT); holoWalls(x, y, w, h, C_FG, 0.6f, true); }
+    else fillRect(x + 10, y + h, w, 8, C_BLACK);
     fillRect(x, y, w, h, C_BG);
-    fillRect(x + 10, y + h, w, 8, C_BLACK);
     dosBox(x, y, w, h, C_FG);
     fillRect(x + 160, y, 130, 10, C_BG);
     drawTextC(FT, 240, y - 10, " QUICK ", C_FG);
@@ -800,19 +891,20 @@ struct Quick : Overlay {
     char b1[20], b2[20], b3[20];
     snprintf(b1, sizeof(b1), "WIFI %s", cfg.wifiOn ? "ON" : "OFF");
     snprintf(b2, sizeof(b2), "SOUND %s", cfg.sounds || cfg.clicks ? "ON" : "OFF");
-    snprintf(b3, sizeof(b3), "%s", SCHEMES[cfg.color].name);
+    snprintf(b3, sizeof(b3), "OFFLINE");
     int by = y + 160, bw = 132, bh = 50;
     dosButton(x + 18, by, bw, bh, b1, [] { cfg.wifiOn = !cfg.wifiOn; netWifi(cfg.wifiOn); cfgChanged(); }, cfg.wifiOn);
     dosButton(x + 18 + bw + 9, by, bw, bh, b2, [] { bool on = cfg.sounds || cfg.clicks; cfg.sounds = cfg.clicks = !on; cfgChanged(); }, cfg.sounds || cfg.clicks);
-    dosButton(x + 18 + 2 * (bw + 9), by, bw, bh, b3, [] { cfg.color = (cfg.color + 1) % N_SCHEMES; cfgChanged(); garbleUntil = msNow() + 160; });
+    dosButton(x + 18 + 2 * (bw + 9), by, bw, bh, b3, [] { cfg.offline = !cfg.offline; netOffline(cfg.offline); toast(cfg.offline ? "OFFLINE" : "ONLINE", 1200); cfgChanged(); }, cfg.offline);
     by += bh + 12;
     dosButton(x + 18, by, bw, bh, "SLEEP", [this] { ovlClose(this); uiSleep(); });
     dosButton(x + 18 + bw + 9, by, bw, bh, "SETUP", [this] { ovlClose(this); openProg("SETUP"); });
     dosButton(x + 18 + 2 * (bw + 9), by, bw, bh, "POWER", [this] { ovlClose(this); powerMenu(); });
     // state line
     char st[64];
-    if (S.battery) snprintf(st, sizeof(st), "%d%%%s  %s", S.batPct, S.charging ? "+" : "", S.net == NET_UP ? S.ip : "NO WIFI");
-    else snprintf(st, sizeof(st), "USB  %s", S.net == NET_UP ? S.ip : "NO WIFI");
+    const char* nw = cfg.offline ? "OFFLINE" : S.net == NET_UP ? S.ip : "NO WIFI";
+    if (S.battery) snprintf(st, sizeof(st), "%d%%%s  %s", S.batPct, S.charging ? "+" : "", nw);
+    else snprintf(st, sizeof(st), "USB  %s", nw);
     drawTextC(FT, 240, y + h - 50, st, C_DIM, TX_FLAT);
     hit(0, y + h, SCR_W, SCR_H - y - h, [this] { ovlClose(this); }, nullptr, false);
   }
@@ -842,6 +934,8 @@ struct Ring : Overlay {
   Ring(const char* w) { snprintf(what, sizeof(what), "%s", w); at = msNow(); }
   int kind() override { return 3; }
   void draw() override {
+    holoShadow(15, 90, 450, 300, holoAt() - H_TEXT);
+    holoWalls(15, 90, 450, 300, C_FG, 0.6f, true);
     fillRect(15, 90, 450, 300, C_BG);
     dosBox(15, 90, 450, 300, C_FG);
     bool blink = (msNow() / 400) % 2;
@@ -912,6 +1006,7 @@ void uiStart() {
 
 void uiLoop() {
   uint32_t now = msNow();
+  if (holoTick()) dirty = true;               // HOLO: the cube moved, the picture moves with it
   if (Screen* s0 = uiCurrent()) s0->tick();
   if (Ring* r = ringing()) r->tick();
   clockTick();
@@ -967,6 +1062,7 @@ bool uiFrame() {
   bool calm = cfg.saver;
   gfxTheme(cfg.color, calm ? 0 : cfg.glow);
   fxLensSetup(calm ? 0 : cfg.lens);
+  { Screen* s0 = uiCurrent(); holoFrameStart(s0 && s0->fullScreen()); }
   // a transition: the cube turns from the last picture to the new one
   float tt = inTrans ? (now - transAt) / 440.0f : 0;
   if (inTrans && tt >= 1) { transDir = -1; inTrans = false; }
@@ -975,10 +1071,12 @@ bool uiFrame() {
     gfxClear();
     Screen* s = uiCurrent();
     Keyboard* k = kb();
-    if (k) { k->draw(); }
+    if (k) { holoSet(H_TEXT); k->draw(); }
     else {
+      holoBackdrop();                                  // HOLO: the far wall
       if (s) {
         if (!s->fullScreen()) statusBar(s->name());
+        holoSet(H_TEXT);
         s->draw();
       }
       for (Overlay* o : ovl) {
@@ -987,9 +1085,11 @@ bool uiFrame() {
           for (int i = 0; i < SCR_W * SCR_H; i++) { uint16_t v = fb[i]; fb[i] = ((v & 0xE79C) >> 2); }
           hits.clear();
         }
+        holoSet(holoOverH());                          // HOLO: dialogs float in front
         o->draw();
       }
     }
+    holoSet(H_TEXT);
     // the focused button (when the hardware buttons are used to move around)
     if (focusIdx >= 0 && focusIdx < (int)hits.size() && (int32_t)(focusShowUntil - now) > 0) {
       const Hit& h = hits[focusIdx];
@@ -1004,7 +1104,9 @@ bool uiFrame() {
       // slides up from the bottom
       uint32_t age = 2600 - ((int32_t)(toastUntil - now) > 2600 ? 2600 : toastUntil - now);
       int w = textW(FT, toastMsg) + 30, x = (SCR_W - w) / 2, y = 382 + (age < 160 && cfg.anim ? (160 - age) / 3 : 0);
-      fillRect(x + 6, y + 6, w, 40, C_BLACK);
+      HoloZ tz(holoOverH());
+      if (holoLayersOn()) { holoShadow(x, y, w, 40, holoAt() - H_TEXT); holoWalls(x, y, w, 40, C_FG, 0.5f, true); }
+      else fillRect(x + 6, y + 6, w, 40, C_BLACK);
       invBar(x, y, w, 40);
       drawTextC(FT, SCR_W / 2, y + 4, toastMsg, C_BG, TX_FLAT);
       if (age < 160) redrawIn(16);
@@ -1021,6 +1123,7 @@ bool uiFrame() {
     }
     if (inTrans) { memcpy(fxBuf(1), fb, SCR_W * SCR_H * 2); transTo = true; }
   }
+  gfxOffset(0, 0);
   if (inTrans) {
     float e = tt < 0.5f ? 4 * tt * tt * tt : 1 - powf(-2 * tt + 2, 3) / 2;    // ease in and out
     fxCube(fxBuf(0), fxBuf(1), e, transDir, fb);
@@ -1044,6 +1147,7 @@ bool uiFrame() {
     redrawIn(40);
     wasFx = true;
   }
+  holoGlass();                                         // HOLO: the glass moves the other way
   fxPost(cfg.fringe && !calm, cfg.scan);
   lastPre = fxSpare();
   return true;

@@ -9,6 +9,9 @@ void fxPost(bool fringe, bool scan);       // the last pass: fb -> fb through th
                                            // afterwards fxSpare() holds the frame before it (for transitions)
 void fxLensTouch(int& x, int& y);          // where a touch on the curved picture really is
 int fxLensMode();
+// HOLO glass, for the next fxPost: the lens centre moves by (lx, ly) px, the picture leans (ax, ay: perspective,
+// about -0.16..0.16), the colour fringe moves by (rbx, rby) px, a soft light reflection at (gx, gy) with strength ga (0..32)
+void fxHolo(int lx, int ly, float ax, float ay, int rbx, int rby, int gx, int gy, int ga);
 
 // glitches (on fb)
 void fxRgbSplit(int dx);

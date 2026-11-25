@@ -43,6 +43,19 @@ Screen* findProg(const char* dos) {
   return nullptr;
 }
 void openProg(const char* dos) {
+  // OFFLINE: programs that need the internet ask first
+  for (auto& p : PROGS) {
+    if (strcmp(p.dos, dos) || !cfg.offline) continue;
+    if (p.folder == F_ONLINE || !strcmp(dos, "UPDATE")) {
+      std::string d = dos;
+      ask("OFFLINE", "This needs the internet. Go online?", {"GO ONLINE", "CANCEL"}, [d](int i) {
+        if (i) return;
+        cfg.offline = 0; netOffline(false); cfgChanged();
+        Screen* s = findProg(d.c_str()); if (s) { snd(SND_FLOPPY); uiOpen(s); }
+      });
+      return;
+    }
+  }
   Screen* s = findProg(dos);
   if (s) { snd(SND_FLOPPY); uiOpen(s); }
 }
@@ -54,6 +67,7 @@ void cfgChanged() {
   gfxTheme(cfg.color, cfg.saver ? 0 : cfg.glow);
   sysBrightness(uiBrightNow());
   sysApplyRotation();
+  sysApplyButtons();
   cfgSave();
   uiDirty();
 }
@@ -249,24 +263,50 @@ Screen* homeScreen() { return cfg.view ? makeHome3D() : (Screen*)new Home(); }
 
 // ------------------------------------------------------------------ always-on clock (screen "off")
 struct Aod : Screen {
+  // the low power clock (screen "off"): black, dim, moves a little every minute so the AMOLED doesn't burn in
   const char* name() override { return "AOD"; }
   bool fullScreen() override { return true; }
   void draw() override {
     struct tm t;
+    bool ok = sysLocalTime(t);
     char c[12] = "--:--", d[32] = "";
-    if (sysLocalTime(t)) {
+    if (ok) {
       fmtTime(c, t.tm_hour, t.tm_min, 0, false);
       static const char* DAYS[7] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
       snprintf(d, sizeof(d), "%s %02d-%02d", DAYS[t.tm_wday], t.tm_mday, t.tm_mon + 1);
     }
-    // move a little every minute, so the AMOLED doesn't burn in
     uint32_t m = msNow() / 60000;
     int ox = (int)(m * 37 % 61) - 30, oy = (int)(m * 53 % 81) - 40;
-    uint16_t dim = mix(C_BLACK, C_FG, 55);
-    drawTextC(FH, 240 + ox, 160 + oy, c, dim, TX_FLAT);
-    drawTextC(FT, 240 + ox, 270 + oy, d, mix(C_BLACK, C_FG, 40), TX_FLAT);
-    if (S.battery) { char b[16]; snprintf(b, sizeof(b), "%d%%%s", S.batPct, S.charging ? "+" : ""); drawTextC(FT, 240 + ox, 306 + oy, b, mix(C_BLACK, C_FG, 30), TX_FLAT); }
-    if (S.chatUnread) drawTextC(FT, 240 + ox, 342 + oy, "NEW MESSAGE", mix(C_BLACK, C_FG, 40), TX_FLAT);
+    uint16_t dim = mix(C_BLACK, C_FG, 55), dim2 = mix(C_BLACK, C_FG, 38);
+    int y = 160;
+    switch (cfg.aodStyle) {
+      case 1:   // SMALL
+        drawTextC(FB, 240 + ox, 200 + oy, c, dim, TX_FLAT); y = 252; break;
+      case 2: { // ANALOG: a ring, two hands, twelve dots
+        int cx = 240 + ox, cy = 190 + oy, R = 96;
+        ring(cx, cy, R, 2, dim2);
+        for (int i = 0; i < 12; i++) { float a = i * 0.5236f; fillCircle(cx + (int)(sinf(a) * (R - 12)), cy - (int)(cosf(a) * (R - 12)), i % 3 ? 1 : 3, dim2); }
+        if (ok) {
+          float ha = ((t.tm_hour % 12) + t.tm_min / 60.0f) * 0.5236f, ma = t.tm_min * 0.10472f;
+          thickLine(cx, cy, cx + (int)(sinf(ha) * 52), cy - (int)(cosf(ha) * 52), 6, dim);
+          thickLine(cx, cy, cx + (int)(sinf(ma) * 80), cy - (int)(cosf(ma) * 80), 3, dim);
+        }
+        fillCircle(cx, cy, 5, dim);
+        y = 304; break;
+      }
+      case 3: { // DOS: a prompt with the time
+        char l[40]; snprintf(l, sizeof(l), "C:\\>TIME %s", c);
+        drawText(FT, 60 + ox, 200 + oy, l, dim, TX_FLAT);
+        if (((msNow() / 60000) & 1) == 0) fillRect(60 + ox + textW(FT, l), 204 + oy, CW, LH - 8, dim2);
+        y = 250; break;
+      }
+      default:  // BIG
+        drawTextC(FH, 240 + ox, 160 + oy, c, dim, TX_FLAT); y = 270; break;
+    }
+    if (cfg.aodDate && d[0]) { drawTextC(FT, 240 + ox, y + oy, d, dim2, TX_FLAT); y += 36; }
+    if (cfg.aodBatt && S.battery) { char b[16]; snprintf(b, sizeof(b), "%d%%%s", S.batPct, S.charging ? "+" : ""); drawTextC(FT, 240 + ox, y + oy, b, mix(C_BLACK, C_FG, 30), TX_FLAT); y += 36; }
+    if (cfg.aodNote && S.chatUnread) drawTextC(FT, 240 + ox, y + oy, "NEW MESSAGE", dim2, TX_FLAT);
+    if (cfg.offline) drawTextC(FT, 240 + ox, 420, "OFFLINE", mix(C_BLACK, C_FG, 22), TX_FLAT);
   }
 };
 Screen* aodScreen() { return new Aod(); }

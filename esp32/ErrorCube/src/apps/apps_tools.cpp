@@ -1,5 +1,8 @@
 // apps_tools.cpp: CLOCK, CALC, PAINT, LEVEL, SNAKE, SOUND, FILES
 #include "../ui/ui.h"
+#include "../core/img.h"
+#include <strings.h>
+#include <string>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -504,49 +507,70 @@ struct TextView : Screen {
   }
 };
 
+// SHOW: pictures (JPEG / BMP), swipe or - / + for the next one in the folder
 struct ImageView : Screen {
-  uint16_t* img = nullptr; int w = 0, h = 0; char err[48] = "";
+  std::vector<std::string> pics; int idx = 0;
+  uint16_t* img = nullptr; char err[48] = ""; int iw = 0, ih = 0; bool info = true; uint32_t infoAt = 0;
   const char* name() override { return "SHOW"; }
   bool fullScreen() override { return true; }
-  ImageView(const uint8_t* d, size_t n) {
-    if (n < 54 || d[0] != 'B' || d[1] != 'M') { strcpy(err, "NOT A BMP"); return; }
-    uint32_t off = *(uint32_t*)(d + 10); int32_t W = *(int32_t*)(d + 18), H = *(int32_t*)(d + 22);
-    uint16_t bpp = *(uint16_t*)(d + 28); uint32_t comp = *(uint32_t*)(d + 30);
-    if ((bpp != 24 && bpp != 32) || comp != 0 || W <= 0 || W > 4096) { strcpy(err, "ONLY 24-BIT BMP"); return; }
-    bool flip = H > 0; if (H < 0) H = -H;
-    int row = ((W * bpp / 8) + 3) & ~3;
-    if (off + (size_t)row * H > n) { strcpy(err, "FILE IS CUT SHORT"); return; }
-    float sc = fminf(480.0f / W, 480.0f / H); if (sc > 1) sc = floorf(sc);
-    w = (int)(W * sc); h = (int)(H * sc);
-    img = (uint16_t*)bigAlloc(w * h * 2);
+  bool noSwipeBack() override { return true; }
+  ImageView(std::vector<std::string> p, int i) : pics(p), idx(i) { load(); }
+  ~ImageView() { free(img); }
+  void load() {
+    if (!img) img = (uint16_t*)bigAlloc(SCR_W * SCR_H * 2);
+    err[0] = 0;
     if (!img) { strcpy(err, "NO MEMORY"); return; }
-    for (int y = 0; y < h; y++) {
-      int sy = (int)(y / sc); const uint8_t* src = d + off + (size_t)(flip ? H - 1 - sy : sy) * row;
-      for (int x = 0; x < w; x++) { int sx = (int)(x / sc); const uint8_t* p = src + sx * (bpp / 8); img[y * w + x] = rgb3(p[2], p[1], p[0]); }
+    if (!imgLoad(pics[idx].c_str(), img, SCR_W, SCR_H, IMG_FIT, err, &iw, &ih)) { if (!err[0]) strcpy(err, "CAN'T SHOW IT"); }
+    info = true; infoAt = msNow(); uiDirty(); redrawIn(2600);
+  }
+  void go(int d) { if (pics.size() < 2) return; idx = (idx + d + pics.size()) % pics.size(); snd(SND_MOVE); load(); }
+  void draw() override {
+    if (img && !err[0]) memcpy(fb, img, SCR_W * SCR_H * 2); else gfxClearTo(0);
+    if (err[0]) drawTextC(FT, 240, 220, err, C_RED);
+    if (info && msNow() - infoAt < 2500) {
+      const char* nm = strrchr(pics[idx].c_str(), '/'); nm = nm ? nm + 1 : pics[idx].c_str();
+      char t[64]; snprintf(t, sizeof(t), "%s", nm); utf8Cut(t, 26);
+      blendRect(0, 430, 480, 50, 0, 22);
+      drawText(FT, 14, 440, t, C_FG, TX_FLAT);
+      char k[32]; snprintf(k, sizeof(k), "%d/%d", idx + 1, (int)pics.size());
+      drawTextR(FT, 466, 440, k, C_DIM, TX_FLAT);
+      if (iw) { char r[24]; snprintf(r, sizeof(r), "%dx%d", iw, ih); blendRect(0, 0, 480, 44, 0, 22); drawTextR(FT, 466, 6, r, C_DIM, TX_FLAT); }
     }
   }
-  ~ImageView() { free(img); }
-  void draw() override {
-    gfxClearTo(0);
-    if (img) for (int y = 0; y < h; y++) memcpy(&fb[(y + (480 - h) / 2) * SCR_W + (480 - w) / 2], &img[y * w], w * 2);
-    else drawTextC(FT, 240, 220, err, C_RED);
+  bool ev(const Ev& e) override {
+    if (e.t == EV_SWIPE && e.dir == SW_LEFT) { go(1); return true; }
+    if (e.t == EV_SWIPE && e.dir == SW_RIGHT) { go(-1); return true; }
+    if (e.t == EV_SWIPE && (e.dir == SW_DOWN || e.dir == SW_UP)) { uiBack(); return true; }
+    if (e.t == EV_TAP) { if (info && msNow() - infoAt < 2500) uiBack(); else { info = true; infoAt = msNow(); uiDirty(); redrawIn(2600); } return true; }
+    if (e.t == EV_KEY) {
+      if (e.key == K_NEXT) go(1); else if (e.key == K_PREV) go(-1); else uiBack();
+      return true;
+    }
+    return false;
   }
-  bool ev(const Ev& e) override { if (e.t == EV_TAP || e.t == EV_KEY) { uiBack(); return true; } return false; }
 };
+
+static const char* extOf(const char* n) { const char* e = strrchr(n, '.'); return e ? e : ""; }
+static bool isText(const char* n) {
+  static const char* T[] = {".txt", ".md", ".json", ".js", ".csv", ".log", ".ini", ".cfg", ".p8", ".html", ".htm", ".css", ".xml", ".lua", ".py"};
+  for (const char* t : T) if (!strcasecmp(extOf(n), t)) return true;
+  return false;
+}
 
 struct Files : Screen {
   char dir[96] = "";                 // "" = the drives
-  FileEnt ents[96]; int n = 0;
+  FileEnt ents[160]; int n = 0;
   ListView L;
-  const char* name() override { return "FILES.EXE"; }
+  bool pickWall = false;             // choosing a wallpaper picture (SETUP > DISPLAY)
+  const char* name() override { return pickWall ? "PICK PICTURE" : "FILES.EXE"; }
   void load() {
     n = 0;
     if (!dir[0]) {
-      if (S.sd) { strcpy(ents[n].name, "A:  TF CARD"); ents[n].dir = true; ents[n].size = 0; n++; }
-      strcpy(ents[n].name, "C:  FLASH"); ents[n].dir = true; ents[n].size = 0; n++;
+      strcpy(ents[n].name, "A:  SD CARD"); ents[n].dir = true; ents[n].size = 0; n++;
+      strcpy(ents[n].name, "C:  CUBE FLASH"); ents[n].dir = true; ents[n].size = 0; n++;
     } else {
       strcpy(ents[0].name, ".."); ents[0].dir = true; ents[0].size = 0;
-      int k = fsList(dir, ents + 1, 95);
+      int k = fsList(dir, ents + 1, 159);
       n = k < 0 ? 1 : k + 1;
       // folders first, then by name
       for (int a = 1; a < n; a++) for (int b = a + 1; b < n; b++) {
@@ -554,41 +578,106 @@ struct Files : Screen {
         if (sw) { FileEnt t = ents[a]; ents[a] = ents[b]; ents[b] = t; }
       }
     }
-    L.n = n; L.sel = 0; L.scroll = 0;
+    L.n = n; if (L.sel >= n) L.sel = n - 1; if (L.sel < 0) L.sel = 0; L.clampScroll();
+    uiReveal();
   }
   void enter() override { L.setBox(15, 92, 450, 312); L.rowH = 52; if (!n) load(); }
-  void up() { char* s = strrchr(dir, '/'); if (s && s != dir && strchr(dir + 1, '/')) *s = 0; else dir[0] = 0; load(); uiDirty(); }
+  void openDrive(bool sd) {
+    if (sd) {
+      if (!sdMount()) {
+        ask("NO SD CARD", "Put a card in (FAT32 or exFAT) and try again.", {"TRY AGAIN", "OK"}, [this](int i) { if (i == 0) openDrive(true); });
+        return;
+      }
+      toast(S.sdInfo, 1400);
+    }
+    strcpy(dir, sd ? "/sd" : "/c"); L.sel = 0; L.scroll = 0; load();
+  }
+  void up() {
+    char* s = strrchr(dir, '/');
+    if (s && s != dir && strchr(dir + 1, '/')) *s = 0; else dir[0] = 0;
+    L.sel = 0; L.scroll = 0; load(); uiDirty();
+  }
+  std::string pathOf(int i) { char p[200]; snprintf(p, sizeof(p), "%s/%s", dir, ents[i].name); return p; }
+  void showPics(const std::string& p) {
+    std::vector<std::string> pics; int at = 0;
+    for (int i = 1; i < n; i++) if (!ents[i].dir && imgIsPicture(ents[i].name)) { if (pathOf(i) == p) at = pics.size(); pics.push_back(pathOf(i)); }
+    if (pics.empty()) pics.push_back(p);
+    uiOpen(new ImageView(pics, at));
+  }
+  void setWall(const std::string& p) {
+    snprintf(cfg.wallPic, sizeof(cfg.wallPic), "%s", p.c_str());
+    cfg.holoBack = 5;
+    cfgChanged();
+    toast("WALLPAPER SET");
+  }
+  void more(int i) {
+    // options for a file or folder: copy to the other drive, rename, delete
+    FileEnt f = ents[i];
+    std::string p = pathOf(i);
+    bool onSd = !strncmp(dir, "/sd", 3);
+    std::vector<const char*> b;
+    if (!f.dir) b.push_back(onSd ? "COPY TO FLASH" : "COPY TO SD");
+    b.push_back("RENAME"); b.push_back("DELETE"); b.push_back("CANCEL");
+    char info[96]; snprintf(info, sizeof(info), "%s", f.name);
+    ask(f.dir ? "FOLDER" : "FILE", info, b, [this, f, p, onSd](int k) {
+      if (!f.dir) k--;                          // the first button was COPY
+      if (k == -1) {
+        char to[200]; snprintf(to, sizeof(to), "%s/%s", onSd ? "/c" : "/sd", f.name);
+        if (!onSd && !sdMount()) { toast("NO SD CARD"); return; }
+        toast("COPYING...", 600); uiFrame();
+        bool ok = fsCopy(p.c_str(), to);
+        toast(ok ? "COPIED" : "COULD NOT COPY (FULL?)");
+      } else if (k == 0) {
+        std::string pp = p;
+        kbOpen("NEW NAME", f.name, 60, [this, pp](const char* nm) {
+          if (!nm[0] || strchr(nm, '/')) return;
+          std::string to = pp.substr(0, pp.rfind('/') + 1) + nm;
+          toast(fsRename(pp.c_str(), to.c_str()) ? "RENAMED" : "COULD NOT RENAME"); load();
+        });
+      } else if (k == 1) {
+        std::string pp = p; bool d = f.dir;
+        ask("DELETE", d ? "Delete this folder? (it has to be empty)" : "Delete this file?", {"DELETE", "KEEP"}, [this, pp, d](int j) {
+          if (j) return;
+          bool ok = d ? fsRmdir(pp.c_str()) : fsRemove(pp.c_str());
+          toast(ok ? "DELETED" : d ? "THE FOLDER ISN'T EMPTY" : "COULD NOT DELETE"); load();
+        });
+      }
+    });
+  }
   void open(int i) {
     FileEnt& f = ents[i];
-    if (!dir[0]) { strcpy(dir, f.name[0] == 'A' ? "/sd" : "/c"); load(); return; }
+    if (!dir[0]) { openDrive(f.name[0] == 'A'); return; }
     if (!strcmp(f.name, "..")) { up(); return; }
-    char path[192]; snprintf(path, sizeof(path), "%s/%s", dir, f.name);
-    if (f.dir) { snprintf(dir, sizeof(dir), "%s", path); load(); return; }
-    const char* ext = strrchr(f.name, '.');
-    bool bin = ext && !strcasecmp(ext, ".bin"), bmp = ext && !strcasecmp(ext, ".bmp");
-    std::string p = path;
+    std::string p = pathOf(i);
+    if (f.dir) { snprintf(dir, sizeof(dir), "%s", p.c_str()); L.sel = 0; L.scroll = 0; load(); return; }
+    bool bin = !strcasecmp(extOf(f.name), ".bin"), pic = imgIsPicture(f.name), txt = isText(f.name);
+    if (pickWall) { if (pic) { setWall(p); uiBack(); } else toast("PICK A JPEG OR BMP"); return; }
     std::vector<const char*> b;
-    if (bin) b = {"INSTALL FIRMWARE", "DELETE", "CANCEL"};
-    else b = {bmp ? "SHOW" : "VIEW", "DELETE", "CANCEL"};
-    char info[96]; snprintf(info, sizeof(info), "%s\n%u bytes", f.name, (unsigned)f.size);
-    ask("FILE", info, b, [this, p, bin, bmp](int k) {
+    if (bin) b = {"INSTALL FIRMWARE", "MORE...", "CANCEL"};
+    else if (pic) b = {"SHOW", "SET AS WALLPAPER", "MORE...", "CANCEL"};
+    else if (txt) b = {"VIEW", "MORE...", "CANCEL"};
+    else b = {"MORE...", "CANCEL"};
+    char info[120], sz[16];
+    if (f.size >= 1048576) snprintf(sz, sizeof(sz), "%.1f MB", f.size / 1048576.0); else snprintf(sz, sizeof(sz), "%u bytes", (unsigned)f.size);
+    snprintf(info, sizeof(info), "%s\n%s", f.name, sz);
+    int ix = i;
+    ask("FILE", info, b, [this, p, bin, pic, txt, ix](int k) {
+      if (!bin && !pic && !txt) k += 1;        // only MORE / CANCEL
       if (k == 0 && bin) {
         ask("INSTALL", "Put this firmware on the cube and restart?", {"INSTALL", "CANCEL"}, [p](int j) {
           if (j == 0 && !netInstallFile(p.c_str())) toast("NOT A GOOD FIRMWARE FILE");
         });
-      } else if (k == 0) {
-        size_t max = bmp ? 2000000 : 96000, got = 0;
+      } else if (k == 0 && pic) showPics(p);
+      else if (k == 0 && txt) {
+        size_t max = 96000, got = 0;
         uint8_t* buf = (uint8_t*)bigAlloc(max + 1);
         if (!buf || !fsRead(p.c_str(), buf, max, got)) { free(buf); toast("CAN'T READ IT"); return; }
         buf[got] = 0;
         const char* nm = strrchr(p.c_str(), '/');
-        if (bmp) uiOpen(new ImageView(buf, got)); else uiOpen(new TextView(nm ? nm + 1 : "", (const char*)buf));
+        uiOpen(new TextView(nm ? nm + 1 : "", (const char*)buf));
         free(buf);
-      } else if (k == 1) {
-        ask("DELETE", "Delete this file?", {"DELETE", "KEEP"}, [this, p](int j) {
-          if (j == 0) { toast(fsRemove(p.c_str()) ? "DELETED" : "COULD NOT DELETE"); load(); }
-        });
-      }
+      } else if (k == 1 && pic) setWall(p);
+      else if ((k == 1 && !pic) || (k == 2 && pic)) more(ix);
     });
   }
   void draw() override {
@@ -603,10 +692,15 @@ struct Files : Screen {
       int ty = y + (h - LH) / 2;
       if (sel) invBar(x + 2, y + 3, w - 4, h - 6);
       uint16_t c = sel ? C_BG : C_FG; int m = sel ? TX_FLAT : TX_GLOW;
-      char nm[64]; snprintf(nm, sizeof(nm), "%s", f.name); utf8Cut(nm, 19);
+      char nm[64]; snprintf(nm, sizeof(nm), "%s", f.name); utf8Cut(nm, dir[0] ? 19 : 16);
       drawText(FT, x + 10, ty, nm, c, m);
-      char sz[16];
-      if (f.dir) strcpy(sz, dir[0] ? "<DIR>" : "");
+      char sz[24];
+      if (!dir[0]) {                            // the drives: what's in them
+        uint64_t t, u;
+        if (i == 0) snprintf(sz, sizeof(sz), "%s", S.sd ? S.sdInfo : "PUT A CARD IN");
+        else if (fsInfo("/c", t, u)) snprintf(sz, sizeof(sz), "%u MB FREE", (unsigned)((t - u) >> 20)); else sz[0] = 0;
+      }
+      else if (f.dir) strcpy(sz, "<DIR>");
       else if (f.size >= 1048576) snprintf(sz, sizeof(sz), "%uM", (unsigned)(f.size >> 20));
       else if (f.size >= 10240) snprintf(sz, sizeof(sz), "%uK", (unsigned)(f.size >> 10));
       else snprintf(sz, sizeof(sz), "%u", (unsigned)f.size);
@@ -614,16 +708,31 @@ struct Files : Screen {
     }, nullptr);
     if (dir[0]) {
       uint64_t tot, used; char b[48] = "";
-      if (fsInfo(dir, tot, used)) snprintf(b, sizeof(b), "%d file(s)  %u MB free", n - 1, (unsigned)((tot - used) >> 20));
+      if (fsInfo(dir, tot, used)) snprintf(b, sizeof(b), "%d item(s)  %u MB free", n - 1, (unsigned)((tot - used) >> 20));
       drawText(FT, colX(0), rowY(12) + 6, b, C_DIM, TX_FLAT);
-    }
-    fkeys({{"ESC", "Back", [this] { if (dir[0]) up(); else uiBack(); }}, {"\xE2\x86\xB5", "Open", [this] { if (L.sel >= 0 && L.sel < n) open(L.sel); }}});
+      bool sdRoot = !strcmp(dir, "/sd");
+      if (sdRoot) fkeys({{"ESC", "Up", [this] { up(); }}, {"N", "New", [this] { newFolder(); }}, {"O", "Opt", [this] { if (L.sel > 0) more(L.sel); }},
+                         {"E", "Eject", [this] { sdEject(); dir[0] = 0; load(); toast("SAFE TO TAKE OUT"); }}});
+      else fkeys({{"ESC", "Up", [this] { up(); }}, {"N", "New", [this] { newFolder(); }}, {"O", "Opt", [this] { if (L.sel > 0) more(L.sel); }}, {"R", "Ref", [this] { load(); }}});
+    } else fkeys({{"ESC", "Back", [] { uiBack(); }}, {"R", "Refresh", [this] { sdMount(); load(); }}});
   }
-  void tick() override { L.tick(); }
+  void newFolder() {
+    kbOpen("NEW FOLDER", "", 40, [this](const char* nm) {
+      if (!nm[0] || strchr(nm, '/')) return;
+      char p[200]; snprintf(p, sizeof(p), "%s/%s", dir, nm);
+      toast(fsMkdir(p) ? "FOLDER MADE" : "COULD NOT MAKE IT"); load();
+    });
+  }
+  void tick() override {
+    L.tick();
+    static uint32_t seen = 0;
+    if (S.fileAt != seen) { seen = S.fileAt; if (dir[0]) load(); }      // a file came in from the phone
+  }
   bool ev(const Ev& e) override {
     if (e.t == EV_KEY && e.key == K_BACK) { if (dir[0]) up(); else uiBack(); return true; }
     if (e.t == EV_SWIPE && e.dir == SW_RIGHT && dir[0]) { up(); return true; }
     return L.ev(e, [this](int i) { open(i); uiDirty(); });
   }
 };
+Screen* makeFilePicker() { Files* f = new Files(); f->pickWall = true; return f; }
 Screen* makeFiles() { return new Files(); }

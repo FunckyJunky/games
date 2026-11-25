@@ -34,7 +34,7 @@ static void rec(int ms) {
 
 void step(uint32_t ms) {
   uint32_t end = simNow + ms;
-  while (simNow < end) { simNow += 16; uiLoop(); uiFrame(); }
+  while (simNow < end) { simNow += 16; btnPoll(); uiLoop(); uiFrame(); }
 }
 static void shot(const char* name) {
   uiDirty(); uiFrame();
@@ -86,7 +86,11 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(cmd, "shot")) { sscanf(line, "%*s %63s", s); shot(s); }
     else if (!strcmp(cmd, "rec")) { sscanf(line, "%*s %d", &a); rec(a); }
+    else if (!strcmp(cmd, "btn")) { sscanf(line, "%*s %d %d", &a, &b); btnRaw(a, b); step(20); }      // btn 0|1 (- / +) 1|0 (down / up)
+    else if (!strcmp(cmd, "pwr")) { sscanf(line, "%*s %d", &a); btnPwr(a); step(20); }                 // pwr 0 press, 1 hold
     else if (!strcmp(cmd, "tilt")) { float x, z; sscanf(line, "%*s %f %f", &x, &z); simTilt[0] = x; simTilt[2] = z; }
+    else if (!strcmp(cmd, "accel")) { float x, y, z; sscanf(line, "%*s %f %f %f", &x, &y, &z); simTilt[0] = x; simTilt[1] = y; simTilt[2] = z; }
+    else if (!strcmp(cmd, "gyro")) { extern float simGyro[3]; sscanf(line, "%*s %f %f %f", &simGyro[0], &simGyro[1], &simGyro[2]); }
     else if (!strcmp(cmd, "glitch")) { sscanf(line, "%*s %d %d", &a, &b); uiGlitch(a, b); }
     else if (!strcmp(cmd, "dragrec")) {   // a slow drag, recorded
       sscanf(line, "%*s %d %d %d %d", &a, &b, &c, &d);
@@ -107,6 +111,11 @@ int main(int argc, char** argv) {
       if (!strcmp(s, "color")) cfg.color = a; else if (!strcmp(s, "glow")) cfg.glow = a; else if (!strcmp(s, "scan")) cfg.scan = a;
       else if (!strcmp(s, "glitch")) cfg.glitch = a; else if (!strcmp(s, "boot")) cfg.boot = a; else if (!strcmp(s, "h24")) cfg.h24 = a;
       else if (!strcmp(s, "lens")) cfg.lens = a; else if (!strcmp(s, "view")) cfg.view = a;
+      else if (!strcmp(s, "holo")) cfg.holo = a; else if (!strcmp(s, "holoSensor")) cfg.holoSensor = a;
+      else if (!strcmp(s, "aod")) cfg.aod = a; else if (!strcmp(s, "aodStyle")) cfg.aodStyle = a; else if (!strcmp(s, "offline")) cfg.offline = a;
+      else if (!strcmp(s, "btnDouble")) cfg.btnDouble = a; else if (!strcmp(s, "btnRepeat")) cfg.btnRepeat = a;
+      else if (!strcmp(s, "holoCentre")) cfg.holoCentre = a; else if (!strcmp(s, "holoBack")) cfg.holoBack = a;
+      else if (!strcmp(s, "holoDepth")) cfg.holoDepth = a; else if (!strcmp(s, "holoSmooth")) cfg.holoSmooth = a;
       else if (!strcmp(s, "upd")) { S.upd = a; strcpy(S.updVer, "1.1"); S.updPct = 42; strcpy(S.updNotes, "Faster chat, new LEVEL look"); }
       cfgChanged();
     }

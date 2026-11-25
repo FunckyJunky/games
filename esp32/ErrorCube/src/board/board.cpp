@@ -22,6 +22,8 @@
 #include "../ui/ui.h"
 #include "board.h"
 #include "sound.h"
+#include "esp32s3/rom/tjpgd.h"
+#include "../net/net.h"
 
 Cfg cfg;
 SysState S;
@@ -135,6 +137,17 @@ void sysPowerOff() {
   esp_deep_sleep_start();                     // no power chip: sleep for ever (the reset button wakes it)
 }
 void boardSlow(bool slow) { setCpuFrequencyMhz(slow ? 80 : 240); }
+void sysLowPower(bool on) {
+  // the screen is off (or the low power clock shows): a slower CPU; WiFi as set (cfg.aodWifi)
+  boardSlow(on || cfg.saver);
+  netSleepMode(on ? cfg.aodWifi : 0);
+}
+void sysApplyButtons() {
+  if (!S.pmu) return;
+  static const xpowers_irq_time_t HT[4] = {XPOWERS_AXP2101_IRQ_TIME_1S, XPOWERS_AXP2101_IRQ_TIME_1S5, XPOWERS_AXP2101_IRQ_TIME_2S, (xpowers_irq_time_t)3};
+  pmu.setIrqLevelTime(HT[cfg.pwrHold & 3]);
+  pmu.setPowerKeyPressOffTime(cfg.pwrOff & 3);      // 4, 6, 8, 10 s
+}
 
 // ------------------------------------------------------------------ the panel
 static int lastBright = -1;
@@ -266,6 +279,115 @@ bool fsWrite(const char* path, const uint8_t* buf, size_t n) {
   size_t w = fwrite(buf, 1, n, f); fclose(f); return w == n;
 }
 bool fsRemove(const char* path) { return remove(path) == 0; }
+bool fsAppend(const char* path, const uint8_t* buf, size_t n, size_t at) {
+  if (!at) mkdirs(path);
+  FILE* f = fopen(path, at ? "r+b" : "wb");
+  if (!f) return false;
+  if (at && fseek(f, at, SEEK_SET) != 0) { fclose(f); return false; }
+  size_t w = fwrite(buf, 1, n, f); fclose(f); return w == n;
+}
+bool fsMkdir(const char* path) { char p[200]; snprintf(p, sizeof(p), "%s/x", path); mkdirs(p); struct stat st; return stat(path, &st) == 0; }
+bool fsRename(const char* a, const char* b) { return rename(a, b) == 0; }
+bool fsRmdir(const char* path) { return rmdir(path) == 0; }
+long fsSize(const char* path) { struct stat st; if (stat(path, &st) != 0) return -1; return S_ISDIR(st.st_mode) ? 0 : (long)st.st_size; }
+bool fsCopy(const char* from, const char* to, int* pct) {
+  FILE* a = fopen(from, "rb"); if (!a) return false;
+  mkdirs(to);
+  FILE* b = fopen(to, "wb"); if (!b) { fclose(a); return false; }
+  fseek(a, 0, SEEK_END); long total = ftell(a); fseek(a, 0, SEEK_SET);
+  uint8_t* buf = (uint8_t*)heap_caps_malloc(16384, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  bool ok = buf != nullptr; long done = 0;
+  while (ok) {
+    size_t n = fread(buf, 1, 16384, a);
+    if (!n) break;
+    if (fwrite(buf, 1, n, b) != n) ok = false;
+    done += n; if (pct && total) *pct = (int)(done * 100 / total);
+  }
+  free(buf); fclose(a); fclose(b);
+  if (!ok) remove(to);
+  return ok;
+}
+
+// ------------------------------------------------------------------ the SD card: in at the start, or put in later
+bool sdMount() {
+  if (S.sd) {                                         // still there?
+    DIR* d = opendir("/sd");
+    if (d) { closedir(d); return true; }
+    sdEject();
+  }
+  pinMode(PIN_SD_CS, OUTPUT); digitalWrite(PIN_SD_CS, HIGH);       // D3 high = SD mode
+  SD_MMC.setPins(PIN_SD_SCK, PIN_SD_MOSI, PIN_SD_MISO);
+  S.sd = SD_MMC.begin("/sd", true, false, 20000);
+  sdSpi = false;
+  if (!S.sd) {
+    SD_MMC.end();
+    static SPIClass spi(HSPI);
+    static bool spiOn = false;
+    if (!spiOn) { spi.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, PIN_SD_CS); spiOn = true; }
+    S.sd = SD.begin(PIN_SD_CS, spi, 20000000, "/sd");
+    sdSpi = S.sd;
+  }
+  S.sdInfo[0] = 0;
+  if (S.sd) {
+    uint64_t t = sdSpi ? SD.cardSize() : SD_MMC.cardSize();
+    uint8_t ty = sdSpi ? SD.cardType() : SD_MMC.cardType();
+    snprintf(S.sdInfo, sizeof(S.sdInfo), "%.1f GB %s", t / 1073741824.0, ty == CARD_SDHC ? "SDHC" : ty == CARD_SD ? "SD" : ty == CARD_MMC ? "MMC" : "");
+  }
+  return S.sd;
+}
+void sdEject() {
+  if (sdSpi) SD.end(); else SD_MMC.end();
+  S.sd = false; sdSpi = false; S.sdInfo[0] = 0;
+}
+
+// ------------------------------------------------------------------ JPEG (the ROM's TJpgDec)
+struct JpgOut { const uint8_t* d; size_t n, pos; uint16_t* out; int ow, oh, ox, oy, dw, dh, sw, sh; };
+static UINT jRead(JDEC* jd, BYTE* buf, UINT len) {
+  JpgOut* j = (JpgOut*)jd->device;
+  if (j->pos + len > j->n) len = j->n - j->pos;
+  if (buf) memcpy(buf, j->d + j->pos, len);
+  j->pos += len;
+  return len;
+}
+static UINT jWrite(JDEC* jd, void* bitmap, JRECT* r) {
+  JpgOut* j = (JpgOut*)jd->device;
+  const uint8_t* px = (const uint8_t*)bitmap;
+  for (int y = r->top; y <= r->bottom; y++) {
+    int y0 = j->oy + y * j->dh / j->sh, y1 = j->oy + (y + 1) * j->dh / j->sh;
+    for (int x = r->left; x <= r->right; x++, px += 3) {
+      uint16_t c = rgb3(px[0], px[1], px[2]);
+      int x0 = j->ox + x * j->dw / j->sw, x1 = j->ox + (x + 1) * j->dw / j->sw;
+      for (int yy = y0; yy < y1; yy++) {
+        if ((unsigned)yy >= (unsigned)j->oh) continue;
+        uint16_t* row = j->out + yy * j->ow;
+        for (int xx = x0; xx < x1; xx++) if ((unsigned)xx < (unsigned)j->ow) row[xx] = c;
+      }
+    }
+  }
+  return 1;
+}
+bool jpegDecode(const uint8_t* d, size_t n, uint16_t* out, int ow, int oh, int mode, int* iw, int* ih) {
+  static uint8_t* work = nullptr;
+  if (!work) work = (uint8_t*)heap_caps_malloc(4096, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (!work || !d || n < 4) return false;
+  JpgOut j = {d, n, 0, out, ow, oh, 0, 0, ow, oh, 0, 0};
+  JDEC jd;
+  if (jd_prepare(&jd, jRead, work, 4096, &j) != JDR_OK) return false;
+  if (iw) *iw = jd.width;
+  if (ih) *ih = jd.height;
+  int sc = 0;                                          // big photos: decode at 1/2, 1/4, 1/8 (much faster)
+  if (mode == IMG_FIT) while (sc < 3 && (jd.width >> (sc + 1)) >= ow && (jd.height >> (sc + 1)) >= oh) sc++;
+  else while (sc < 3 && ((jd.width >> (sc + 1)) >= ow || (jd.height >> (sc + 1)) >= oh) && (jd.width >> (sc + 1)) >= ow / 2 && (jd.height >> (sc + 1)) >= oh / 2) sc++;
+  j.sw = jd.width >> sc; j.sh = jd.height >> sc;
+  if (!j.sw || !j.sh) return false;
+  if (mode != IMG_STRETCH) {
+    float k = mode == IMG_FIT ? fminf((float)ow / j.sw, (float)oh / j.sh) : fmaxf((float)ow / j.sw, (float)oh / j.sh);
+    j.dw = (int)(j.sw * k); j.dh = (int)(j.sh * k);
+    if (j.dw < 1) j.dw = 1; if (j.dh < 1) j.dh = 1;
+    j.ox = (ow - j.dw) / 2; j.oy = (oh - j.dh) / 2;
+  }
+  return jd_decomp(&jd, jWrite, sc) == JDR_OK;
+}
 bool fsInfo(const char* drive, uint64_t& total, uint64_t& used) {
   if (!strncmp(drive, "/sd", 3)) {
     if (!S.sd) return false;
@@ -319,8 +441,7 @@ void boardBegin() {
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
     pmu.clearIrqStatus();
     pmu.enableIRQ(XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ);
-    pmu.setIrqLevelTime(XPOWERS_AXP2101_IRQ_TIME_1S5);
-    pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_6S);
+    sysApplyButtons();
     pmu.enableTemperatureMeasure(); pmu.enableBattDetection(); pmu.enableVbusVoltageMeasure();
     pmu.enableBattVoltageMeasure(); pmu.enableSystemVoltageMeasure();
     sysChargeCurrent(CHARGE_MA[cfg.chgIdx % N_CHARGE]);
@@ -361,19 +482,7 @@ void boardDrives() {
   // drives: the cube's own flash (C:), the TF card (A:)
   if (!FFat.begin(true, "/c", 10, "ffat")) Serial.println("C: drive failed");
   mkdir("/c/apps", 0777); mkdir("/c/appdata", 0777);
-  pinMode(PIN_SD_CS, OUTPUT); digitalWrite(PIN_SD_CS, HIGH);       // D3 high = SD mode
-  SD_MMC.setPins(PIN_SD_SCK, PIN_SD_MOSI, PIN_SD_MISO);
-  S.sd = SD_MMC.begin("/sd", true, false, 20000);
-  if (!S.sd) {
-    static SPIClass spi(HSPI);
-    spi.begin(PIN_SD_SCK, PIN_SD_MISO, PIN_SD_MOSI, PIN_SD_CS);
-    S.sd = SD.begin(PIN_SD_CS, spi, 20000000, "/sd");
-    sdSpi = S.sd;
-  }
-  if (S.sd) {
-    uint64_t t = sdSpi ? SD.cardSize() : SD_MMC.cardSize();
-    snprintf(S.sdInfo, sizeof(S.sdInfo), "%.1f GB", t / 1073741824.0);
-  }
+  sdMount();
   // sound
   S.codec = sndBegin();
 }
@@ -412,19 +521,23 @@ static void touchPoll() {
 void boardPoll() {
   uint32_t now = millis();
   touchPoll();
-  for (Btn& b : btns) {
+  // - and +: debounced, then the gesture engine (buttons.cpp): press, double, hold, repeat, together
+  for (int i = 0; i < 2; i++) {
+    Btn& b = btns[i];
     bool d = digitalRead(b.pin) == LOW;
-    if (d && !b.down) { b.down = true; b.at = now; b.longDone = false; }
-    else if (d && b.down && !b.longDone && now - b.at > 600) { b.longDone = true; uiKey(b.longKey); }
-    else if (!d && b.down) { b.down = false; if (!b.longDone && now - b.at > 25) uiKey(b.shortKey); }
+    if (d != b.down) {
+      if (!b.at) b.at = now;
+      if (now - b.at >= 20) { b.down = d; b.at = 0; btnRaw(i == 0 ? 1 : 0, d); }   // btns[0] is +, btns[1] is -
+    } else b.at = 0;
   }
-  if (S.pmu && now - pmuAt > 80) {
+  if (S.pmu && now - pmuAt > 40) {
     pmuAt = now;
     pmu.getIrqStatus();
-    if (pmu.isPekeyShortPressIrq()) uiKey(K_PWR);
-    if (pmu.isPekeyLongPressIrq()) uiKey(K_PWR_LONG);
+    if (pmu.isPekeyShortPressIrq()) btnPwr(false);
+    if (pmu.isPekeyLongPressIrq()) btnPwr(true);
     pmu.clearIrqStatus();
   }
+  btnPoll();
   if (now - battAt > 2000) {
     battAt = now;
     if (S.pmu) {

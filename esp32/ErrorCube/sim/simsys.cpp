@@ -6,6 +6,8 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <math.h>
 #include <string>
 
 uint32_t simNow = 0;
@@ -28,7 +30,8 @@ bool sysLocalTime(struct tm& t) {
   time_t now = base + simNow / 1000 + setOff; localtime_r(&now, &t); return true;
 }
 float simTilt[3] = {0.3f, 9.7f, 0.4f};
-bool imuRead(float a[3], float g[3]) { a[0] = simTilt[0]; a[1] = simTilt[1]; a[2] = simTilt[2]; g[0] = 0.4f; g[1] = -0.2f; g[2] = 0.1f; return true; }
+float simGyro[3] = {0.4f, -0.2f, 0.1f};
+bool imuRead(float a[3], float g[3]) { a[0] = simTilt[0]; a[1] = simTilt[1]; a[2] = simTilt[2]; g[0] = simGyro[0]; g[1] = simGyro[1]; g[2] = simGyro[2]; return true; }
 uint32_t freeHeap() { return 214 * 1024; }
 uint32_t freePsram() { return 6120 * 1024; }
 uint32_t uptimeSecs() { return 3725 + simNow / 1000; }
@@ -63,6 +66,45 @@ bool fsWrite(const char* path, const uint8_t* buf, size_t n) {
   FILE* f = fopen(r.c_str(), "wb"); if (!f) return false; fwrite(buf, 1, n, f); fclose(f); return true;
 }
 bool fsRemove(const char* path) { return remove(real(path).c_str()) == 0; }
+bool fsAppend(const char* path, const uint8_t* buf, size_t n, size_t at) {
+  std::string r = real(path); if (!at) { std::string d = r.substr(0, r.rfind('/')); system(("mkdir -p '" + d + "'").c_str()); }
+  FILE* f = fopen(r.c_str(), at ? "r+b" : "wb"); if (!f) return false; if (at) fseek(f, at, SEEK_SET);
+  size_t w = fwrite(buf, 1, n, f); fclose(f); return w == n;
+}
+bool fsMkdir(const char* path) { return system(("mkdir -p '" + real(path) + "'").c_str()) == 0; }
+bool fsRename(const char* a, const char* b) { return rename(real(a).c_str(), real(b).c_str()) == 0; }
+bool fsRmdir(const char* path) { return rmdir(real(path).c_str()) == 0; }
+long fsSize(const char* path) { struct stat st; if (stat(real(path).c_str(), &st) != 0) return -1; return S_ISDIR(st.st_mode) ? 0 : (long)st.st_size; }
+bool fsCopy(const char* a, const char* b, int* pct) {
+  FILE* x = fopen(real(a).c_str(), "rb"); if (!x) return false;
+  std::string r = real(b); system(("mkdir -p '" + r.substr(0, r.rfind('/')) + "'").c_str());
+  FILE* y = fopen(r.c_str(), "wb"); if (!y) { fclose(x); return false; }
+  char buf[16384]; size_t n; while ((n = fread(buf, 1, sizeof(buf), x)) > 0) fwrite(buf, 1, n, y);
+  fclose(x); fclose(y); if (pct) *pct = 100; return true;
+}
+bool simSdIn = true;
+bool sdMount() { S.sd = simSdIn; if (S.sd) strcpy(S.sdInfo, "29.7 GB SDHC"); else S.sdInfo[0] = 0; return S.sd; }
+void sdEject() { S.sd = false; S.sdInfo[0] = 0; }
+void sysApplyButtons() {}
+void sysLowPower(bool) {}
+void netOffline(bool on) { S.net = on ? NET_OFF : NET_UP; S.link = !on; }
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_JPEG
+#define STBI_NO_STDIO
+#include "stb_image.h"
+bool jpegDecode(const uint8_t* d, size_t n, uint16_t* out, int ow, int oh, int mode, int* iw, int* ih) {
+  int w, h, c; uint8_t* p = stbi_load_from_memory(d, (int)n, &w, &h, &c, 3);
+  if (!p) return false;
+  if (iw) *iw = w; if (ih) *ih = h;
+  int dw = ow, dh = oh, ox = 0, oy = 0;
+  if (mode != IMG_STRETCH) { float k = mode == IMG_FIT ? fminf((float)ow / w, (float)oh / h) : fmaxf((float)ow / w, (float)oh / h); dw = (int)(w * k); dh = (int)(h * k); ox = (ow - dw) / 2; oy = (oh - dh) / 2; }
+  for (int y = 0; y < dh; y++) for (int x = 0; x < dw; x++) {
+    int X = x + ox, Y = y + oy; if (X < 0 || Y < 0 || X >= ow || Y >= oh) continue;
+    const uint8_t* q = p + ((y * h / dh) * w + (x * w / dw)) * 3;
+    out[Y * ow + X] = rgb3(q[0], q[1], q[2]);
+  }
+  free(p); return true;
+}
 bool fsInfo(const char* drive, uint64_t& total, uint64_t& used) { total = drive[1] == 's' ? 31914983424ULL : 10354688; used = drive[1] == 's' ? 2147483648ULL : 98304; return true; }
 
 void netWifi(bool on) { S.net = on ? NET_UP : NET_OFF; }

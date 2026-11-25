@@ -135,7 +135,23 @@ Screen* makeLive() { return new Live(); }
 
 // ================================================================== what the control page asks for
 void appsLoop() {
-  static uint32_t seenApp = 0, seenVid = 0, seenAud = 0, seenHome = 0;
+  static uint32_t seenApp = 0, seenVid = 0, seenAud = 0, seenHome = 0, seenFile = 0;
+  // a new firmware is ready: say so (once per version), UPDATE NOW or LATER
+  static char askedVer[16] = "";
+  if (S.upd == UPD_NEW && cfg.updAsk && S.updVer[0] && strcmp(askedVer, S.updVer) && uiAwake() && !kbIsOpen()) {
+    snprintf(askedVer, sizeof(askedVer), "%s", S.updVer);
+    char t[200];
+    snprintf(t, sizeof(t), "ERROR-CUBE %s is ready.\n%s%s", S.updVer, S.updNotes[0] ? S.updNotes : "",
+             cfg.autoUpd ? "\n(or it installs when the screen is off)" : "");
+    ask("NEW FIRMWARE", t, {"UPDATE NOW", "LATER"}, [](int i) { if (i == 0) { netUpdateInstall(); openProg("UPDATE"); } });
+    snd(SND_MSG);
+  }
+  if (S.fileAt && S.fileAt != seenFile) {             // a file arrived from the phone
+    seenFile = S.fileAt;
+    char t[64]; snprintf(t, sizeof(t), "RECEIVED %s", S.fileName); utf8Cut(t, 28);
+    if (uiAwake()) toast(t, 2200);
+    snd(SND_FLOPPY);
+  }
   if (S.wantAppAt && S.wantAppAt != seenApp) {
     seenApp = S.wantAppAt;
     uiWake();

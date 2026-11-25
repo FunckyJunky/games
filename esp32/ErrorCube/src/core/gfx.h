@@ -36,6 +36,10 @@ extern int clipX0, clipY0, clipX1, clipY1;     // drawing stays inside (x1/y1 ex
 void clipSet(int x, int y, int w, int h);
 void clipReset();
 
+// HOLO depth: what's drawn next is moved by this much on the screen (set by holo.cpp per layer)
+extern int gOX, gOY;
+void gfxOffset(int dx, int dy);
+
 void pset(int x, int y, uint16_t c);
 void pblend(int x, int y, uint16_t c, int a32);
 void fillRect(int x, int y, int w, int h, uint16_t c);

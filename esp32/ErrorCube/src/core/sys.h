@@ -8,6 +8,11 @@
 
 uint32_t msNow();
 
+// what a button (or two together) can do: SETUP > BUTTONS. New ones only at the end (saved settings keep their number)
+enum { BA_NONE, BA_PREV, BA_NEXT, BA_OK, BA_BACK, BA_HOME, BA_QUICK, BA_SCREEN, BA_POWER, BA_VOLUP, BA_VOLDN,
+       BA_LIGHTUP, BA_LIGHTDN, BA_HOLO, BA_HCENTRE, BA_OFFLINE, BA_SHOT, BA_TORCH, BA_GLITCH, BA_CLOCK, BA_FILES,
+       BA_SETUP, BA_COUNT };
+
 // ------------------------------------------------------------------ settings (saved in flash)
 struct Cfg {
   // first, never moved: a newer firmware keeps the settings an older one saved (new fields only go at the end)
@@ -63,6 +68,47 @@ struct Cfg {
   uint8_t anim = 2;         // 0 off, 1 simple, 2 full (the cube turns between screens)
   uint8_t parallax = 1;     // the 3D menu moves with how you hold the cube
   uint8_t intro = 1;        // the 3D ERROR intro at start (BOOT FULL)
+  // HOLO 3D (1.2): the tilt makes the interface deep, like a hologram (holo.cpp)
+  uint8_t holo = 1;         // on / off
+  uint8_t holoLayers = 1;   // depth layers: parts of the interface move by their depth
+  uint8_t holoDepth = 7;    // px a layer moves at full tilt (0..20)
+  uint8_t holoFocus = 2;    // which layer stays still: 0 BACK, 1 PANELS, 2 TEXT, 3 BARS, 4 FRONT
+  uint8_t holoPop = 50;     // how far dialogs and messages float in front (0..100)
+  uint8_t holoShadow = 1;   // 0 off, 1 soft, 2 hard
+  uint8_t holoWalls = 3;    // the sides of raised parts: 0 off .. 5 thick
+  uint8_t holoBack = 4;     // the far wall: 0 off, 1 dots, 2 grid, 3 stars, 4 room
+  uint8_t holoLens = 26;    // px the glass's centre moves at full tilt (0..60)
+  uint8_t holoPersp = 35;   // the picture leans with the tilt (0..100)
+  uint8_t holoGlare = 1;    // light reflection on the glass: 0 off, 1 soft, 2 bright
+  uint8_t holoRainbow = 2;  // the colour fringe moves with the tilt: px (0..4)
+  uint8_t holoRange = 25;   // degrees of tilt for the full effect (10..60)
+  uint8_t holoDead = 1;     // degrees that do nothing (0..10)
+  uint8_t holoSmooth = 45;  // smoothing (0..100)
+  uint8_t holoCentre = 1;   // the "straight" way to hold it follows you: 0 off, 1 slow, 2 medium, 3 fast
+  uint8_t holoInvX = 0, holoInvY = 0;
+  uint8_t holoSensor = 0;   // 0 gyro + gravity (sees every turn), 1 gravity only (no turning left/right when upright)
+  // BUTTONS (1.2): [-, +, PWR] x [press, double press, hold]
+  uint8_t btnAct[3][3] = {{BA_PREV, BA_NONE, BA_BACK}, {BA_NEXT, BA_NONE, BA_OK}, {BA_SCREEN, BA_NONE, BA_POWER}};
+  uint8_t btnCombo[4] = {BA_QUICK, BA_HCENTRE, BA_NONE, BA_SHOT};   // - & + press, - & + hold, hold - + PWR, hold + + PWR
+  uint8_t btnHold = 12;     // x50 ms: when - / + count as held (300..2000 ms)
+  uint8_t btnDouble = 0;    // x10 ms: the gap for a double press (0 = no double press: a press acts at once)
+  uint8_t btnRepeat = 0;    // x10 ms: a held - / + repeats its press (when its hold does nothing); 0 = off
+  uint8_t pwrHold = 0;      // PWR counts as held after 0 1 s, 1 1.5 s, 2 2 s, 3 2.5 s
+  uint8_t pwrOff = 1;       // PWR held this long switches the cube off by force: 0 4 s, 1 6 s, 2 8 s, 3 10 s
+  uint8_t btnSwap = 0;      // - and + swapped
+  uint8_t btnWake = 0;      // 0 any button wakes the screen, 1 only PWR
+  // OFFLINE (1.2): like airplane mode: WiFi off, no internet, programs that work without it
+  uint8_t offline = 0;
+  // the clock when the screen is off (1.2): low power
+  uint8_t aodStyle = 0;     // 0 BIG, 1 SMALL, 2 ANALOG, 3 DOS
+  uint8_t aodLight = 6;     // % (1..30)
+  uint8_t aodDate = 1, aodBatt = 1, aodNote = 1;
+  uint8_t aodWifi = 1;      // while the screen is off: 0 WiFi as normal, 1 save power, 2 WiFi off
+  // WALLPAPER (1.2): holoBack is the style (0 glass .. 4 room, 5 a picture)
+  char wallPic[72] = "";    // the picture (JPEG / BMP on the SD card or the cube's drive)
+  uint8_t wallLight = 40;   // how bright the picture is behind the text, %
+  // UPDATES (1.2): a message when a new firmware is ready (UPDATE NOW / LATER)
+  uint8_t updAsk = 1;
   // new settings go here, at the end
 };
 extern Cfg cfg;
@@ -115,6 +161,7 @@ struct SysState {
   uint32_t wantHomeAt = 0;
   uint32_t cfgAt = 0;                          // settings changed from the control page: apply them
   uint32_t wakeAt = 0, sleepAt = 0;            // the control page wants the screen on / off
+  uint32_t fileAt = 0; char fileName[48] = "";  // a file came in from the control page
 };
 extern SysState S;
 
@@ -131,6 +178,18 @@ uint32_t uptimeSecs();
 const char* resetReason();
 void sysChargeCurrent(int ma);
 void sysApplyRotation();
+void sysApplyButtons();                // PWR hold / force-off times to the power chip
+void sysLowPower(bool on);             // the screen is off: slower CPU, WiFi saving power (cfg.aodWifi)
+enum { IMG_STRETCH, IMG_FIT, IMG_COVER };   // fill the box / the whole picture with bars / fill it, cut the sides
+bool jpegDecode(const uint8_t* d, size_t n, uint16_t* out, int ow, int oh, int mode, int* iw = nullptr, int* ih = nullptr);
+
+// buttons (buttons.cpp): the board reports - / + up and down, and the power chip's PWR presses
+void btnRaw(int id, bool down);        // id 0 = -, 1 = +
+void btnPwr(bool held);
+void btnPoll();                        // every loop: double press and hold timers
+void btnDo(int action);
+const char* btnName(int action);
+extern char btnLast[48];               // what the buttons did last (BUTTONS > TEST)
 
 // sound (all made up on the spot, like on error.blue)
 enum { SND_KEY, SND_MOVE, SND_BEEP, SND_THUD, SND_CRACKLE, SND_FLOPPY, SND_OK, SND_ERR, SND_MSG, SND_ALARM, SND_ON, SND_OFF };
@@ -145,6 +204,14 @@ bool fsRead(const char* path, uint8_t* buf, size_t max, size_t& n);
 bool fsWrite(const char* path, const uint8_t* buf, size_t n);
 bool fsRemove(const char* path);
 bool fsInfo(const char* drive, uint64_t& total, uint64_t& used);
+bool fsAppend(const char* path, const uint8_t* buf, size_t n, size_t at);   // at = 0: a new file; else must be its length
+bool fsMkdir(const char* path);
+bool fsRename(const char* from, const char* to);
+bool fsRmdir(const char* path);                               // empty folders only
+bool fsCopy(const char* from, const char* to, int* pct = nullptr);
+long fsSize(const char* path);                                // -1 = none
+bool sdMount();                       // the SD card in now (a card put in after the start); updates S.sd, S.sdInfo
+void sdEject();                       // safe to take out
 
 // ------------------------------------------------------------------ network
 struct WifiNet { char ssid[33]; int rssi; bool open; bool saved; };
@@ -161,6 +228,7 @@ void netUpdateCheck();
 void netUpdateInstall();
 bool netInstallFile(const char* path);        // firmware from a file (TF card)
 void netSetFocus(int what);                   // what's on screen: polls that more often
+void netOffline(bool on);                     // OFFLINE: WiFi off and no internet jobs (cfg.offline)
 enum { FOCUS_NONE, FOCUS_WHO, FOCUS_CHAT };
 
 struct WhoGame { char title[28]; char dos[9]; int n; char players[200]; };

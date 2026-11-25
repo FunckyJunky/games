@@ -1,12 +1,14 @@
 // apps_setup.cpp: SETUP (every setting), WIFI, UPDATE, INFO, COMMAND
 #include "../ui/ui.h"
+#include "../core/holo.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 
 // ------------------------------------------------------------------ building blocks for settings pages
-static Row heading(const char* n) { Row r; r.name = n; r.kind = 4; return r; }
+static Row heading(const char* n, uint8_t ic = 0) { Row r; r.name = n; r.kind = 4; r.icon = ic; return r; }
 static Row info(const char* n, std::function<void(char*)> v) { Row r; r.name = n; r.val = v; r.kind = 3; return r; }
 static Row action(const char* n, std::function<void()> f, std::function<void(char*)> v = nullptr) {
   Row r; r.name = n; r.val = v; r.kind = 0; r.act = [f](int) { f(); }; return r;
@@ -28,6 +30,18 @@ static Row slider(const char* n, uint8_t* v, int lo, std::function<void()> live 
   r.pct = [v]() { return (int)*v; };
   r.setPct = [v, lo, live](int p) { *v = p < lo ? lo : p; if (live) live(); };
   r.act = [v, lo, live](int) { *v = *v >= 100 ? lo : (*v + 10 > 100 ? 100 : *v + 10); if (live) live(); cfgChanged(); };
+  return r;
+}
+
+// a number with < >: lo..hi in steps, shown with a unit ("PX", "°"); 0 can read as OFF
+static Row number(const char* n, uint8_t* v, int lo, int hi, int step, const char* unit, const char* zero = nullptr) {
+  Row r; r.name = n; r.kind = 1;
+  r.val = [v, unit, zero](char* o) { if (!*v && zero) strcpy(o, zero); else snprintf(o, 40, "%d%s", *v, unit); };
+  r.act = [v, lo, hi, step](int d) {
+    int x = *v + (d < 0 ? -step : step);
+    if (x > hi) x = lo; if (x < lo) x = hi;           // wraps round, like the choices
+    *v = x; cfgChanged();
+  };
   return r;
 }
 
@@ -61,21 +75,51 @@ static const char* offLabel(int i) {
 static void fmtUptime(char* o) { uint32_t s = uptimeSecs(); sprintf(o, "%ud %02u:%02u", (unsigned)(s / 86400), (unsigned)(s / 3600 % 24), (unsigned)(s / 60 % 60)); }
 
 // ------------------------------------------------------------------ the pages
+static void idleText(char* o) {
+  // what happens when you stop using it, in one line
+  int sec = OFF_SECS[cfg.offIdx % N_OFF];
+  char off[12];
+  if (!sec) { strcpy(o, "STAYS ON"); return; }
+  if (sec < 60) snprintf(off, sizeof(off), "%dS", sec); else snprintf(off, sizeof(off), "%dMIN", sec / 60);
+  if (cfg.dim && sec > 15) snprintf(o, 40, "DIM, OFF AT %s", off); else snprintf(o, 40, "OFF AT %s", off);
+}
+Screen* makeFilePicker();
 static Screen* pageDisplay() {
-  return page("DISPLAY", "C:\\SETUP\\DISPLAY>", [](std::vector<Row>& r) {
+  return page("SCREEN", "C:\\SETUP\\SCREEN>", [](std::vector<Row>& r) {
+    r.push_back(heading("LIGHT", IC_LIGHT));
     r.push_back(slider("BRIGHTNESS", &cfg.bright, 5, [] { sysBrightness(uiBrightNow()); }));
-    r.push_back(choice("SCREEN OFF", &cfg.offIdx, N_OFF, [](int i) { return offLabel(i); }));
-    r.push_back(toggle("DIM FIRST", &cfg.dim));
-    r.push_back(toggle("CLOCK WHEN OFF", &cfg.aod));
+    r.push_back(choice("ROTATION", &cfg.rot, 5, [](int i) { static const char* R[5] = {"0", "90", "180", "270", "AUTO"}; return R[i]; }));
+    r.push_back(heading("WALLPAPER", IC_WALL));
+    r.push_back(choice("WALLPAPER", &cfg.holoBack, 6, [](int i) { static const char* B[6] = {"GLASS", "DOTS", "GRID", "STARS", "ROOM", "PICTURE"}; return B[i]; }));
+    r.push_back(action("PICTURE", [] { uiOpen(makeFilePicker()); }, [](char* o) {
+      const char* n = strrchr(cfg.wallPic, '/');
+      if (!cfg.wallPic[0]) strcpy(o, "CHOOSE...");
+      else { snprintf(o, 40, "%s", n ? n + 1 : cfg.wallPic); utf8Cut(o, 14); }
+    }));
+    r.push_back(slider("PICTURE LIGHT", &cfg.wallLight, 5));
+    r.push_back(heading("WHEN YOU STOP USING IT", IC_MOON));
+    r.push_back(info("IDLE", [](char* o) { idleText(o); }));
+    r.push_back(info("THEN", [](char* o) { strcpy(o, !OFF_SECS[cfg.offIdx % N_OFF] ? "-" : cfg.aod ? "LOW POWER CLOCK" : "NOTHING (BLACK)"); }));
+    r.push_back(choice("TURN OFF AFTER", &cfg.offIdx, N_OFF, [](int i) { return offLabel(i); }));
+    r.push_back(toggle("DIM 10 S BEFORE", &cfg.dim));
+    r.push_back(choice("WHEN OFF SHOW", &cfg.aod, 2, [](int i) { return i ? "LOW POWER CLOCK" : "BLACK"; }));
+    r.push_back(choice("CLOCK STYLE", &cfg.aodStyle, 4, [](int i) { static const char* A[4] = {"BIG", "SMALL", "ANALOG", "DOS"}; return A[i]; }));
+    r.push_back(number("CLOCK LIGHT", &cfg.aodLight, 1, 30, 1, "%"));
+    r.push_back(toggle("CLOCK: DATE", &cfg.aodDate));
+    r.push_back(toggle("CLOCK: BATTERY", &cfg.aodBatt));
+    r.push_back(toggle("CLOCK: MESSAGES", &cfg.aodNote));
+    r.push_back(choice("WIFI WHEN OFF", &cfg.aodWifi, 3, [](int i) { static const char* W[3] = {"AS NORMAL", "SAVE POWER", "OFF"}; return W[i]; }));
+    r.push_back(action("TURN OFF NOW", [] { uiSleep(); }));
+    r.push_back(heading("WAKE UP", IC_HAND));
     r.push_back(toggle("TAP TO WAKE", &cfg.tapWake));
     r.push_back(toggle("LIFT TO WAKE", &cfg.moveWake));
-    r.push_back(choice("ROTATION", &cfg.rot, 5, [](int i) { static const char* R[5] = {"0", "90", "180", "270", "AUTO"}; return R[i]; }));
-    r.push_back(action("SCREEN OFF NOW", [] { uiSleep(); }));
+    r.push_back(choice("BUTTONS WAKE", &cfg.btnWake, 2, [](int i) { return i ? "PWR ONLY" : "ANY BUTTON"; }));
   });
 }
 static Screen* pageLook() {
   return page("LOOK", "C:\\SETUP\\LOOK>", [](std::vector<Row>& r) {
     r.push_back(choice("MENU", &cfg.view, 2, [](int i) { return i ? "3D" : "DOS"; }));
+    r.push_back(toggle("HOLO 3D", &cfg.holo, [] { holoRecenter(); }));
     r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
     r.push_back(toggle("COLOUR FRINGE", &cfg.fringe));
     r.push_back(choice("ANIMATION", &cfg.anim, 3, [](int i) { static const char* A[3] = {"OFF", "SIMPLE", "3D"}; return A[i]; }));
@@ -163,6 +207,7 @@ static Screen* pageSystem() {
     r.push_back(info("NAME", [](char* o) { strcpy(o, S.host); }));
     r.push_back(info("UP", [](char* o) { fmtUptime(o); }));
     r.push_back(choice("KEYBOARD", &cfg.kbd, 2, [](int i) { return i ? "UKRAINIAN" : "ENGLISH"; }));
+    r.push_back(toggle("OFFLINE (AIRPLANE)", &cfg.offline, [] { netOffline(cfg.offline); }));
     r.push_back(action("ALL INFO", [] { openProg("INFO"); }));
     r.push_back(action("FACTORY RESET", [] {
       ask("FACTORY RESET", "Every setting back to the start, WiFi forgotten. Sure?", {"RESET", "CANCEL"}, [](int i) {
@@ -172,42 +217,214 @@ static Screen* pageSystem() {
   });
 }
 
-// ------------------------------------------------------------------ SETUP.EXE: the sections
-struct Setup : Screen {
-  ListView L;
-  struct Sec { const char* name; const char* desc; Screen* (*open)(); };
-  std::vector<Sec> secs;
-  const char* name() override { return "SETUP.EXE"; }
-  void enter() override {
-    L.setBox(15, 92, 450, 330); L.rowH = 55;
-    secs = {
-      {"DISPLAY", "light, sleep, turn", pageDisplay},
-      {"LOOK", "3D, glass, glitch", pageLook},
-      {"SOUND", "volume, clicks", pageSound},
-      {"WIFI", "networks", [] { return findProg("WIFI"); }},
-      {"TIME", "clock, time zone", pageTime},
-      {"POWER", "battery, off", pagePower},
-      {"ERROR.BLUE", "name, chat, link", pageCloud},
-      {"UPDATES", "firmware", [] { return findProg("UPDATE"); }},
-      {"SYSTEM", "info, reset", pageSystem},
-    };
-    L.n = secs.size();
-  }
+// ------------------------------------------------------------------ HOLO 3D: the tilt effect
+// HOLO TEST: a tunnel of frames from far behind to in front of the glass, a level bubble and the numbers
+struct HoloTest : Screen {
+  const char* name() override { return "HOLO TEST"; }
   void draw() override {
-    pathLine("C:\\SETUP>");
-    L.n = secs.size();
-    L.draw([&](int i, int x, int y, int w, int h, bool sel) {
-      int ty = y + (h - LH) / 2;
-      if (sel) invBar(x + 2, y + 3, w - 4, h - 6);
-      drawText(FT, x + 12, ty, secs[i].name, sel ? C_BG : C_FG, sel ? TX_FLAT : TX_GLOW);
-      drawTextR(FT, x + w - 12, ty, secs[i].desc, sel ? C_BG : C_DIM, TX_FLAT);
-    }, nullptr);
+    pathLine("C:\\SETUP\\HOLO\\TEST>");
+    // the tunnel: frames on every depth, far ones dim
+    static const float HS[] = {-3.0f, -2.2f, -1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.6f};
+    for (int i = 0; i < 9; i++) {
+      HoloZ z(HS[i]);
+      int m = 40 + i * 12;
+      uint16_t c = mix(C_BG, C_FG, 20 + i * 10);
+      rect(m - 25, 96 + m / 3 - 10, 480 - 2 * (m - 25), 300 - 2 * (m / 3) + 20, c);
+    }
+    {
+      HoloZ z(1.2f);
+      dosButton(150, 190, 180, 60, "HOLO", [] { holoRecenter(); toast("CENTRED"); });
+    }
+    // the bubble: where the tilt is
+    {
+      HoloZ z(H_TEXT);
+      int bx = 240 + (int)(holoTX() * 120), by = 330 + (int)(holoTY() * 40);
+      hline(120, 330, 240, C_DIM); vline(240, 290, 80, C_DIM);
+      fillCircle(bx, by, 9, C_FG);
+      char t[64];
+      snprintf(t, sizeof(t), "X %+4d  Y %+4d  %d FPS", (int)lroundf(holoTX() * 100), (int)lroundf(holoTY() * 100), holoFps());
+      drawTextC(FT, 240, 376, t, C_FG);
+      if (!S.imu) drawTextC(FT, 240, 260, "NO MOTION SENSOR", C_RED);
+      if (!cfg.holo) drawTextC(FT, 240, 260, "HOLO 3D IS OFF", C_WARN);
+    }
+    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"C", "Centre", [] { holoRecenter(); toast("CENTRED"); }}});
+    redrawIn(33);
+  }
+  bool ev(const Ev& e) override {
+    if (e.t == EV_KEY && e.key == K_OK) { holoRecenter(); toast("CENTRED"); return true; }
+    return false;
+  }
+};
+
+static void holoPreset(int p) {
+  // SUBTLE, NORMAL, DEEP, EXTREME
+  static const uint8_t D[4] = {4, 7, 11, 16}, POP[4] = {30, 50, 70, 100}, L[4] = {12, 26, 40, 60}, PE[4] = {15, 35, 55, 85};
+  static const uint8_t W[4] = {1, 3, 4, 5}, R[4] = {35, 25, 20, 15}, RB[4] = {1, 2, 3, 4};
+  cfg.holoDepth = D[p]; cfg.holoPop = POP[p]; cfg.holoLens = L[p]; cfg.holoPersp = PE[p];
+  cfg.holoWalls = W[p]; cfg.holoRange = R[p]; cfg.holoRainbow = RB[p];
+  cfg.holoShadow = p >= 2 ? 2 : 1; cfg.holoGlare = p >= 2 ? 2 : 1;
+  cfg.holo = 1; cfg.holoLayers = 1;
+}
+static void holoDefaults() {
+  Cfg d;
+  cfg.holoLayers = d.holoLayers; cfg.holoDepth = d.holoDepth; cfg.holoFocus = d.holoFocus; cfg.holoPop = d.holoPop;
+  cfg.holoShadow = d.holoShadow; cfg.holoWalls = d.holoWalls; cfg.holoBack = d.holoBack; cfg.holoLens = d.holoLens;
+  cfg.holoPersp = d.holoPersp; cfg.holoGlare = d.holoGlare; cfg.holoRainbow = d.holoRainbow; cfg.holoRange = d.holoRange;
+  cfg.holoDead = d.holoDead; cfg.holoSmooth = d.holoSmooth; cfg.holoCentre = d.holoCentre;
+  cfg.holoInvX = d.holoInvX; cfg.holoInvY = d.holoInvY; cfg.holoSensor = d.holoSensor;
+}
+static uint8_t presetIdx = 1;
+static Screen* pageHolo() {
+  return page("HOLO 3D", "C:\\SETUP\\HOLO>", [](std::vector<Row>& r) {
+    r.push_back(toggle("HOLO 3D", &cfg.holo, [] { holoRecenter(); }));
+    { Row p; p.name = "PRESET"; p.kind = 1;
+      p.val = [](char* o) { static const char* N[4] = {"SUBTLE", "NORMAL", "DEEP", "EXTREME"}; strcpy(o, N[presetIdx & 3]); };
+      p.act = [](int d) { presetIdx = (presetIdx + (d < 0 ? 3 : 1)) & 3; holoPreset(presetIdx); cfgChanged(); };
+      r.push_back(p); }
+    r.push_back(action("CENTRE NOW", [] { holoRecenter(); toast("CENTRED"); }));
+    r.push_back(action("TEST", [] { uiOpen(new HoloTest()); }));
+    r.push_back(heading("DEPTH", IC_DEPTH));
+    r.push_back(toggle("LAYERS", &cfg.holoLayers));
+    r.push_back(number("DEPTH", &cfg.holoDepth, 0, 20, 1, " PX", "OFF"));
+    r.push_back(choice("STAYS STILL", &cfg.holoFocus, 5, [](int i) { static const char* F[5] = {"BACK", "PANELS", "TEXT", "BARS", "FRONT"}; return F[i]; }));
+    r.push_back(slider("POP-OUT", &cfg.holoPop, 0));
+    r.push_back(choice("SHADOWS", &cfg.holoShadow, 3, [](int i) { static const char* S3[3] = {"OFF", "SOFT", "HARD"}; return S3[i]; }));
+    r.push_back(number("SIDES", &cfg.holoWalls, 0, 5, 1, "", "OFF"));
+    r.push_back(choice("WALLPAPER", &cfg.holoBack, 6, [](int i) { static const char* B[6] = {"GLASS", "DOTS", "GRID", "STARS", "ROOM", "PICTURE"}; return B[i]; }));
+    r.push_back(heading("GLASS", IC_GLASS));
+    r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
+    r.push_back(number("GLASS MOVES", &cfg.holoLens, 0, 60, 4, " PX", "OFF"));
+    r.push_back(slider("PERSPECTIVE", &cfg.holoPersp, 0));
+    r.push_back(choice("REFLECTION", &cfg.holoGlare, 3, [](int i) { static const char* G[3] = {"OFF", "SOFT", "BRIGHT"}; return G[i]; }));
+    r.push_back(number("RAINBOW", &cfg.holoRainbow, 0, 4, 1, " PX", "OFF"));
+    r.push_back(heading("MOTION", IC_MOTION));
+    r.push_back(number("FULL TILT AT", &cfg.holoRange, 10, 60, 5, "\xC2\xB0"));
+    r.push_back(number("DEAD ZONE", &cfg.holoDead, 0, 10, 1, "\xC2\xB0", "OFF"));
+    r.push_back(slider("SMOOTHING", &cfg.holoSmooth, 0));
+    r.push_back(choice("AUTO CENTRE", &cfg.holoCentre, 4, [](int i) { static const char* C4[4] = {"OFF", "SLOW", "MEDIUM", "FAST"}; return C4[i]; }));
+    r.push_back(choice("SENSOR", &cfg.holoSensor, 2, [](int i) { return i ? "GRAVITY" : "GYRO+GRAVITY"; }));
+    r.push_back(toggle("INVERT LEFT/RIGHT", &cfg.holoInvX));
+    r.push_back(toggle("INVERT UP/DOWN", &cfg.holoInvY));
+    r.push_back(action("RESET HOLO", [] {
+      ask("RESET HOLO", "All HOLO 3D settings back to normal?", {"RESET", "CANCEL"}, [](int i) { if (i == 0) { holoDefaults(); presetIdx = 1; cfgChanged(); toast("HOLO RESET"); } });
+    }));
+  });
+}
+
+// ------------------------------------------------------------------ BUTTONS: what - + PWR do
+struct BtnTest : Screen {
+  const char* name() override { return "BUTTON TEST"; }
+  void draw() override {
+    pathLine("C:\\SETUP\\BUTTONS\\TEST>");
+    drawTextC(FT, 240, 110, "Press, double press, hold", C_DIM, TX_FLAT);
+    drawTextC(FT, 240, 142, "or press two together.", C_DIM, TX_FLAT);
+    dosBox(30, 190, 420, 110, C_FG);
+    char a[48]; snprintf(a, sizeof(a), "%s", btnLast[0] ? btnLast : "...");
+    char* c = strchr(a, ':');
+    if (c) { *c = 0; drawTextC(FB, 240, 206, a, C_FG); drawTextC(FT, 240, 252, c + 2, C_WARN); }
+    else drawTextC(FB, 240, 222, a, C_FG);
+    drawTextC(FT, 240, 330, "(the actions still happen)", C_DIM, TX_FLAT);
     fkeysBack();
   }
-  void tick() override { L.tick(); }
-  bool ev(const Ev& e) override { return L.ev(e, [this](int i) { uiOpen(secs[i].open()); }); }
 };
-Screen* makeSetup() { return new Setup(); }
+static const char* actLabel(int i) { return btnName(i); }
+static Row actRow(const char* n, uint8_t* v) { return choice(n, v, BA_COUNT, [](int i) { return actLabel(i); }); }
+static Screen* pageButtons() {
+  return page("BUTTONS", "C:\\SETUP\\BUTTONS>", [](std::vector<Row>& r) {
+    r.push_back(action("TEST", [] { btnLast[0] = 0; uiOpen(new BtnTest()); }));
+    static const char* BN[3] = {"- BUTTON (LEFT)", "+ BUTTON (RIGHT)", "PWR BUTTON"};
+    for (int b = 0; b < 3; b++) {
+      r.push_back(heading(BN[b], IC_KEY));
+      r.push_back(actRow("PRESS", &cfg.btnAct[b][0]));
+      r.push_back(actRow("DOUBLE PRESS", &cfg.btnAct[b][1]));
+      r.push_back(actRow("HOLD", &cfg.btnAct[b][2]));
+    }
+    r.push_back(heading("TOGETHER", IC_HAND));
+    r.push_back(actRow("- AND +", &cfg.btnCombo[0]));
+    r.push_back(actRow("HOLD - AND +", &cfg.btnCombo[1]));
+    r.push_back(actRow("HOLD -, PWR", &cfg.btnCombo[2]));
+    r.push_back(actRow("HOLD +, PWR", &cfg.btnCombo[3]));
+    r.push_back(heading("TIMING", IC_TIME));
+    { Row t; t.name = "HOLD AFTER"; t.kind = 1;
+      t.val = [](char* o) { sprintf(o, "%d MS", cfg.btnHold * 50); };
+      t.act = [](int d) { int v = cfg.btnHold + (d < 0 ? -2 : 2); if (v > 40) v = 6; if (v < 6) v = 40; cfg.btnHold = v; cfgChanged(); };
+      r.push_back(t); }
+    { Row t; t.name = "DOUBLE PRESS GAP"; t.kind = 1;
+      t.val = [](char* o) { if (!cfg.btnDouble) strcpy(o, "OFF"); else sprintf(o, "%d MS", cfg.btnDouble * 10); };
+      t.act = [](int d) { static const uint8_t G[7] = {0, 15, 20, 25, 30, 40, 50}; int k = 0; for (int i = 0; i < 7; i++) if (G[i] == cfg.btnDouble) k = i;
+                          k = (k + (d < 0 ? 6 : 1)) % 7; cfg.btnDouble = G[k]; cfgChanged(); };
+      r.push_back(t); }
+    { Row t; t.name = "REPEAT WHEN HELD"; t.kind = 1;
+      t.val = [](char* o) { if (!cfg.btnRepeat) strcpy(o, "OFF"); else sprintf(o, "%d MS", cfg.btnRepeat * 10); };
+      t.act = [](int d) { static const uint8_t G[6] = {0, 8, 12, 18, 25, 40}; int k = 0; for (int i = 0; i < 6; i++) if (G[i] == cfg.btnRepeat) k = i;
+                          k = (k + (d < 0 ? 5 : 1)) % 6; cfg.btnRepeat = G[k]; cfgChanged(); };
+      r.push_back(t); }
+    r.push_back(choice("PWR HOLD AFTER", &cfg.pwrHold, 4, [](int i) { static const char* H[4] = {"1 S", "1.5 S", "2 S", "2.5 S"}; return H[i]; }));
+    r.push_back(choice("PWR FORCE OFF", &cfg.pwrOff, 4, [](int i) { static const char* H[4] = {"4 S", "6 S", "8 S", "10 S"}; return H[i]; }));
+    r.push_back(heading("OTHER", IC_INFO));
+    r.push_back(toggle("SWAP - AND +", &cfg.btnSwap));
+    r.push_back(choice("WAKE WITH", &cfg.btnWake, 2, [](int i) { return i ? "PWR ONLY" : "ANY BUTTON"; }));
+    r.push_back(action("RESET BUTTONS", [] {
+      ask("RESET BUTTONS", "Buttons back to how they were?", {"RESET", "CANCEL"}, [](int i) {
+        if (i) return;
+        Cfg d;
+        memcpy(cfg.btnAct, d.btnAct, sizeof(cfg.btnAct)); memcpy(cfg.btnCombo, d.btnCombo, sizeof(cfg.btnCombo));
+        cfg.btnHold = d.btnHold; cfg.btnDouble = d.btnDouble; cfg.btnRepeat = d.btnRepeat; cfg.pwrHold = d.pwrHold;
+        cfg.pwrOff = d.pwrOff; cfg.btnSwap = d.btnSwap; cfg.btnWake = d.btnWake;
+        cfgChanged(); toast("BUTTONS RESET");
+      });
+    }));
+  });
+}
+
+// ------------------------------------------------------------------ SETUP.EXE: the sections
+static Screen* pageUpdates() {
+  return page("UPDATES", "C:\\SETUP\\UPDATES>", [](std::vector<Row>& r) {
+    r.push_back(heading("FIRMWARE", IC_UPDATE));
+    r.push_back(info("THIS CUBE", [](char* o) { strcpy(o, CUBE_VERSION); }));
+    r.push_back(info("ON ERROR.BLUE", [](char* o) { strcpy(o, S.updVer[0] ? S.updVer : "?"); }));
+    r.push_back(info("STATUS", [](char* o) {
+      static const char* W[] = {"NOT CHECKED", "CHECKING...", "NEW ONE READY", "INSTALLING...", "DONE", "FAILED", "UP TO DATE"};
+      strcpy(o, cfg.offline ? "OFFLINE" : W[S.upd % 7]);
+    }));
+    if (S.upd == UPD_NEW) r.push_back(action("INSTALL NOW", [] { netUpdateInstall(); openProg("UPDATE"); }));
+    r.push_back(action("CHECK NOW", [] { if (cfg.offline) toast("OFFLINE"); else { netUpdateCheck(); toast("CHECKING...", 1200); } }));
+    r.push_back(heading("WHEN THERE'S A NEW ONE", IC_INFO));
+    r.push_back(choice("INSTALL", &cfg.autoUpd, 2, [](int i) { return i ? "BY ITSELF" : "ASK ME"; }));
+    r.push_back(toggle("MESSAGE WHEN NEW", &cfg.updAsk));
+    r.push_back(choice("CHECK EVERY", &cfg.updIdx, N_UPD, [](int i) { static char b[8]; snprintf(b, sizeof(b), "%d H", UPD_HOURS[i]); return (const char*)b; }));
+    r.push_back(info("BY ITSELF =", [](char* o) { strcpy(o, "WHEN THE SCREEN IS OFF"); }));
+    r.push_back(action("OPEN UPDATE.EXE", [] { openProg("UPDATE"); }));
+  });
+}
+static Row section(const char* n, const char* desc, uint8_t ic, Screen* (*open)()) {
+  Row r; r.name = n; r.kind = 0; r.icon = ic;
+  r.val = [desc](char* o) { strcpy(o, desc); };
+  r.act = [open](int) { Screen* s = open(); if (s) uiOpen(s); };
+  return r;
+}
+Screen* makeSetup() {
+  Page* p = (Page*)page("SETUP.EXE", "C:\\SETUP>", [](std::vector<Row>& r) {
+    r.push_back(heading("SCREEN", IC_SCREEN));
+    r.push_back(section("SCREEN", "light, wallpaper", IC_LIGHT, pageDisplay));
+    r.push_back(section("LOOK", "colour, glitch", IC_LOOK, pageLook));
+    r.push_back(section("HOLO 3D", "tilt, depth", IC_HOLO, pageHolo));
+    r.push_back(heading("CONTROLS", IC_KEY));
+    r.push_back(section("SOUND", "volume, clicks", IC_SOUND, pageSound));
+    r.push_back(section("BUTTONS", "hold, combos", IC_KEY, pageButtons));
+    r.push_back(heading("CONNECT", IC_WIFI));
+    r.push_back(section("WIFI", "networks", IC_WIFI, [] { return findProg("WIFI"); }));
+    { Row o = toggle("OFFLINE", &cfg.offline, [] { netOffline(cfg.offline); }); o.icon = IC_OFFLINE; r.push_back(o); }
+    r.push_back(section("ERROR.BLUE", "name, link", IC_CLOUD, pageCloud));
+    r.push_back(heading("DEVICE", IC_SYSTEM));
+    r.push_back(section("TIME", "zone, alarm", IC_TIME, pageTime));
+    r.push_back(section("POWER", "battery, saver", IC_POWER, pagePower));
+    r.push_back(section("UPDATES", "firmware", IC_UPDATE, pageUpdates));
+    r.push_back(section("SYSTEM", "info, reset", IC_SYSTEM, pageSystem));
+  });
+  return p;
+}
+
 
 // ------------------------------------------------------------------ WIFI.EXE
 struct Wifi : Screen {
@@ -301,7 +518,10 @@ struct Update : Screen {
     else if (S.updNotes[0]) { char l[2][64]; int n = wrapText(S.updNotes, 26, l, 2); for (int i = 0; i < n; i++) drawTextC(FT, 240, 228 + i * 28, l[i], C_DIM, TX_FLAT); }
     if (S.upd == UPD_NEW) dosButton(30, 304, 205, 56, "INSTALL", [] { netUpdateInstall(); }, true);
     else dosButton(30, 304, 205, 56, "CHECK", [] { netUpdateCheck(); });
-    dosButton(245, 304, 205, 56, cfg.autoUpd ? "AUTO: ON" : "AUTO: OFF", [] { cfg.autoUpd = !cfg.autoUpd; cfgSave(); }, cfg.autoUpd);
+    dosButton(245, 304, 205, 56, cfg.autoUpd ? "BY ITSELF" : "ASK ME", [] {
+      cfg.autoUpd = !cfg.autoUpd; cfgSave();
+      toast(cfg.autoUpd ? "INSTALLS BY ITSELF (SCREEN OFF)" : "ASKS YOU FIRST", 2200);
+    }, cfg.autoUpd);
     char up[48];
     if (S.net == NET_UP) snprintf(up, sizeof(up), "WEB PAGE: %s", S.ip); else strcpy(up, "OR A .BIN ON THE TF CARD");
     drawTextC(FT, 240, 372, up, C_DIM, TX_FLAT);

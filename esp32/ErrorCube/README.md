@@ -33,9 +33,40 @@ selection bar slides, rows type themselves in, dialogs open like DOS windows, QU
 tap, and the 3D INTRO at start (starfield warp, ERROR in solid block letters, lens flare). BATTERY SAVER turns the
 effects off.
 
-Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sound, colour, sleep, power).
-Swipe right: back. Buttons: - / + move, hold + = OK, hold - = BACK, PWR = screen off/on, hold PWR = power menu
-(6 s = hard off). LIVE opens by itself when the phone sends video or sound.
+Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sound, offline, sleep, setup, power).
+Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
+- and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
+
+## New in 1.2
+
+- **HOLO 3D** (SETUP > HOLO 3D): tilt the cube and the interface looks deep, like a hologram. Every part sits on a
+  depth layer (wallpaper far behind, box frames behind the text, the selection bar and buttons raised, the bars in
+  front, dialogs floating) and moves by its own amount; raised parts cast shadows and show their sides; the curved
+  glass, its colour fringe, a light reflection and the perspective move the other way. Motion: gyro + gravity fused
+  (sees every turn) or gravity only; the "straight" position follows you slowly (AUTO CENTRE) or press CENTRE NOW.
+  Presets SUBTLE / NORMAL / DEEP / EXTREME and ~20 settings (depth, which layer stays still, pop-out, shadows, sides,
+  wallpaper, glass shift, perspective, reflection, rainbow, full tilt angle, dead zone, smoothing, invert). TEST
+  shows a tunnel of frames and the tilt. Code: src/core/holo.cpp (+ the draw offset in gfx.cpp, the lens table in fx.cpp).
+- **SETUP in groups with icons:** SCREEN (screen, look, HOLO 3D), CONTROLS (sound, buttons), CONNECT (WiFi,
+  OFFLINE, error.blue), DEVICE (time, power, updates, system).
+- **SCREEN page:** light, WALLPAPER (glass, dots, grid, stars, room, or your own picture: FILES > SET AS WALLPAPER),
+  and "when you stop using it" spelled out: IDLE (dim, off after...), THEN (black or the LOW POWER CLOCK: big,
+  small, analog or DOS; its light, date, battery, messages; WiFi as normal / saving power / off while it shows).
+  The CPU slows down 3 s after the screen goes off.
+- **BUTTONS:** each of -, +, PWR: press, double press and hold, each set to any action (prev, next, OK, back, home,
+  quick panel, screen, power menu, volume, light, HOLO on/off, HOLO centre, offline, screenshot, torch, glitch,
+  clock, files, setup); together: - and +, hold - and +, hold - then PWR, hold + then PWR; timing (hold after,
+  double press gap, repeat while held, PWR hold time, PWR force-off time), swap - and +, which buttons wake. TEST
+  shows what was detected. Code: src/ui/buttons.cpp.
+- **OFFLINE** (airplane mode): quick panel, SETUP or a button. WiFi off, a plane in the status bar, programs that
+  need the internet ask first.
+- **SD card in FILES:** put a card in any time (it's mounted when you open A:), EJECT, new folder, copy between
+  the card and the flash, rename, delete (empty folders too), pictures (JPEG / BMP, swipe through a folder),
+  text files, firmware. Screenshots (a button action) go to A:\SHOTS.
+- **Files from the phone:** error.blue/cube > FILES (from anywhere, through the link, about 50 KB/s), or the cube's
+  own page http://IP/files on the same WiFi (fast, drag and drop, download).
+- **Updates:** a message when a new firmware is ready (UPDATE NOW / LATER), or INSTALL BY ITSELF while the screen is
+  off (SETUP > UPDATES).
 
 ## How it's built
 

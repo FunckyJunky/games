@@ -89,6 +89,10 @@ int wrapText(const char* s, int width, char lines[][64], int maxLines);
 void fmtTime(char* out, int h, int m, int s, bool secs);
 void dosButton(int x, int y, int w, int h, const char* label, Act a, bool on = false, int f = FT);
 void sndKey();
+// little drawn icons (26 x 26) for settings and menus
+enum { IC_NONE, IC_SCREEN, IC_LOOK, IC_HOLO, IC_SOUND, IC_KEY, IC_WIFI, IC_CLOUD, IC_OFFLINE, IC_TIME, IC_POWER,
+       IC_UPDATE, IC_SYSTEM, IC_WALL, IC_MOON, IC_HAND, IC_MOTION, IC_GLASS, IC_LIGHT, IC_DEPTH, IC_FILES, IC_INFO, IC_TURN };
+void icon(int id, int x, int y, uint16_t c);
 
 // ------------------------------------------------------------------ list (menus, settings, files...)
 // Rows of 56 px; drag to scroll, tap to pick, - / + buttons move, hold + = OK.
@@ -116,6 +120,7 @@ struct Row {
   uint8_t kind = 0;                      // 0 action, 1 choice < >, 2 slider 0..100, 3 info only, 4 heading
   std::function<int()> pct = nullptr;    // slider value
   std::function<void(int)> setPct = nullptr;
+  uint8_t icon = 0;                      // IC_* in front of the name (headings and section rows)
 };
 void drawRows(ListView& L, std::vector<Row>& rows);
 bool rowsEv(ListView& L, std::vector<Row>& rows, const Ev& e);

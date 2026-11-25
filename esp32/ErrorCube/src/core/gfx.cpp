@@ -1,5 +1,6 @@
 // gfx.cpp: see gfx.h
 #include "gfx.h"
+#include "holo.h"
 #include "fonts.h"
 #include <string.h>
 #include <stdlib.h>
@@ -90,25 +91,41 @@ void gfxTheme(int scheme, int glow) {
 void gfxClear() { if (bgImg) memcpy(fb, bgImg, SCR_W * SCR_H * 2); }
 void gfxClearTo(uint16_t c) { for (int i = 0; i < SCR_W * SCR_H; i++) fb[i] = c; }
 
+// HOLO: everything is drawn moved by (gOX, gOY), the depth layer's shift. Clipping is in layout
+// coordinates (before the shift), so a clipped list moves together with its rows.
+int gOX = 0, gOY = 0;
+void gfxOffset(int dx, int dy) { gOX = dx; gOY = dy; }
+// a rectangle: clip in layout coordinates, then shift onto the screen. false = nothing to draw
+static inline bool clipShift(int x, int y, int w, int h, int& x0, int& y0, int& x1, int& y1) {
+  x0 = x < clipX0 ? clipX0 : x; y0 = y < clipY0 ? clipY0 : y;
+  x1 = x + w > clipX1 ? clipX1 : x + w; y1 = y + h > clipY1 ? clipY1 : y + h;
+  x0 += gOX; x1 += gOX; y0 += gOY; y1 += gOY;
+  if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0; if (x1 > SCR_W) x1 = SCR_W; if (y1 > SCR_H) y1 = SCR_H;
+  return x0 < x1 && y0 < y1;
+}
 void pset(int x, int y, uint16_t c) {
   if (x < clipX0 || y < clipY0 || x >= clipX1 || y >= clipY1) return;
+  x += gOX; y += gOY;
+  if ((unsigned)x >= SCR_W || (unsigned)y >= SCR_H) return;
   fb[y * SCR_W + x] = c;
 }
 void pblend(int x, int y, uint16_t c, int a) {
   if (x < clipX0 || y < clipY0 || x >= clipX1 || y >= clipY1 || a <= 0) return;
+  x += gOX; y += gOY;
+  if ((unsigned)x >= SCR_W || (unsigned)y >= SCR_H) return;
   uint16_t* p = &fb[y * SCR_W + x];
   *p = a >= 32 ? c : blend(*p, c, a);
 }
 void fillRect(int x, int y, int w, int h, uint16_t c) {
-  int x0 = x < clipX0 ? clipX0 : x, y0 = y < clipY0 ? clipY0 : y;
-  int x1 = x + w > clipX1 ? clipX1 : x + w, y1 = y + h > clipY1 ? clipY1 : y + h;
+  int x0, y0, x1, y1;
+  if (!clipShift(x, y, w, h, x0, y0, x1, y1)) return;
   for (int yy = y0; yy < y1; yy++) { uint16_t* p = &fb[yy * SCR_W + x0]; for (int xx = x0; xx < x1; xx++) *p++ = c; }
 }
 void blendRect(int x, int y, int w, int h, uint16_t c, int a) {
   if (a >= 32) { fillRect(x, y, w, h, c); return; }
   if (a <= 0) return;
-  int x0 = x < clipX0 ? clipX0 : x, y0 = y < clipY0 ? clipY0 : y;
-  int x1 = x + w > clipX1 ? clipX1 : x + w, y1 = y + h > clipY1 ? clipY1 : y + h;
+  int x0, y0, x1, y1;
+  if (!clipShift(x, y, w, h, x0, y0, x1, y1)) return;
   for (int yy = y0; yy < y1; yy++) { uint16_t* p = &fb[yy * SCR_W + x0]; for (int xx = x0; xx < x1; xx++, p++) *p = blend(*p, c, a); }
 }
 void hline(int x, int y, int w, uint16_t c) { fillRect(x, y, w, 1, c); }
@@ -156,6 +173,11 @@ void glowRect(int x, int y, int w, int h, uint16_t c, int spread) {
   }
 }
 void dosBox(int x, int y, int w, int h, uint16_t c) {
+  // HOLO: on the text plane a box frame sits one layer back, behind its text, with walls going further back
+  float cur = holoAt();
+  bool base = fabsf(cur - H_TEXT) < 0.3f;
+  HoloZ z(base ? H_PANEL : cur);
+  holoWalls(x, y, w, h, c, base ? 0.9f : 0.5f, false);
   // like "border: 3px double" + box-shadow glow (outside and inside)
   glowRect(x, y, w, h, c, 5);
   for (int i = 1; i <= 4; i++) {
@@ -174,8 +196,8 @@ void dosBox(int x, int y, int w, int h, uint16_t c) {
   }
 }
 void invertRect(int x, int y, int w, int h) {
-  int x0 = x < clipX0 ? clipX0 : x, y0 = y < clipY0 ? clipY0 : y;
-  int x1 = x + w > clipX1 ? clipX1 : x + w, y1 = y + h > clipY1 ? clipY1 : y + h;
+  int x0, y0, x1, y1;
+  if (!clipShift(x, y, w, h, x0, y0, x1, y1)) return;
   for (int yy = y0; yy < y1; yy++) for (int xx = x0; xx < x1; xx++) fb[yy * SCR_W + xx] ^= 0xFFFF;
 }
 
@@ -232,14 +254,14 @@ int drawChar(int f, int x, int y, uint32_t cp, uint16_t c, int mode) {
   const uint8_t* d = F.data + g->off;
   int gx = x + g->x, gy = y + g->y;
   for (int j = 0; j < g->h; j++) {
-    int yy = gy + j;
-    if (yy < clipY0 || yy >= clipY1) { d += g->w; continue; }
-    uint16_t* row = &fb[yy * SCR_W];
+    int yy = gy + j, sy = yy + gOY;
+    if (yy < clipY0 || yy >= clipY1 || (unsigned)sy >= SCR_H) { d += g->w; continue; }
+    uint16_t* row = &fb[sy * SCR_W + gOX];
     for (int i = 0; i < g->w; i++) {
       uint8_t v = *d++;
       if (!v) continue;
       int xx = gx + i;
-      if (xx < clipX0 || xx >= clipX1) continue;
+      if (xx < clipX0 || xx >= clipX1 || (unsigned)(xx + gOX) >= SCR_W) continue;
       int a = lut[v];
       if (a) row[xx] = a >= 32 ? c : blend(row[xx], c, a);
     }

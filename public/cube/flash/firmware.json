@@ -1,8 +1,8 @@
 {
-  "ver": "1.1",
+  "ver": "1.2",
   "path": "/cube/flash/cube.bin",
-  "size": 2536800,
-  "md5": "9ce59c1319423f4541dd205d233d21d3",
-  "notes": "3D menu, 3D intro, cube turns between screens, curved CRT glass with colour fringe, more glitches and animations",
-  "date": "2026-11-25T19:22Z"
+  "size": 2596976,
+  "md5": "cbb1a74620f7237a4dceec2929f4d846",
+  "notes": "HOLO 3D tilt, SD card + phone uploads, button setup, offline mode, low power clock, wallpaper, grouped SETUP",
+  "date": "2026-11-25T22:15Z"
 }

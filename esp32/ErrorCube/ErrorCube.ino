@@ -57,9 +57,10 @@ void loop() {
   }
   // the new firmware ran for 30 s: keep it
   if (!good && millis() > 30000) { good = true; cloudMarkGood(); }
-  // asleep for a while: a slower CPU (WiFi still works)
-  bool want = !uiAwake() && !uiAod() ? millis() - asleepAt > 10000 : cfg.saver;
+  // screen off (black or the low power clock) for a few seconds: low power (slower CPU, WiFi as set: cfg.aodWifi)
+  bool low = !uiAwake() && millis() - asleepAt > 3000;
   if (uiAwake()) asleepAt = millis();
-  if (want != slow) { slow = want; boardSlow(slow); }
-  delay(uiAwake() ? 2 : 20);
+  static int lastSaver = -1;
+  if (low != slow || (!low && lastSaver != cfg.saver)) { slow = low; lastSaver = cfg.saver; sysLowPower(low); }
+  delay(uiAwake() ? 2 : 30);
 }

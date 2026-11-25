@@ -462,11 +462,28 @@ static const char* lKbd(int i) { return i ? "UKRAINIAN" : "ENGLISH"; }
 static const char* lView(int i) { return i ? "3D" : "DOS"; }
 static const char* lLens(int i) { static const char* L[] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }
 static const char* lAnim(int i) { static const char* A[] = {"OFF", "SIMPLE", "3D"}; return A[i]; }
+static const char* lFocus(int i) { static const char* F[] = {"BACK", "PANELS", "TEXT", "BARS", "FRONT"}; return F[i]; }
+static const char* lOffSoftHard(int i) { static const char* S3[] = {"OFF", "SOFT", "HARD"}; return S3[i]; }
+static const char* lBack(int i) { static const char* B[] = {"OFF", "DOTS", "GRID", "STARS", "ROOM"}; return B[i]; }
+static const char* lGlare(int i) { static const char* G[] = {"OFF", "SOFT", "BRIGHT"}; return G[i]; }
+static const char* lCentre(int i) { static const char* C4[] = {"OFF", "SLOW", "MEDIUM", "FAST"}; return C4[i]; }
+static const char* lSensor(int i) { return i ? "GRAVITY" : "GYRO+GRAVITY"; }
+static const char* lAct(int i) { return btnName(i); }
+static const char* lAodStyle(int i) { static const char* A[] = {"BIG", "SMALL", "ANALOG", "DOS"}; return A[i]; }
+static const char* lAodWifi(int i) { static const char* W[] = {"AS NORMAL", "SAVE POWER", "OFF"}; return W[i]; }
+static const char* lPwrHold(int i) { static const char* H[] = {"1 S", "1.5 S", "2 S", "2.5 S"}; return H[i]; }
+static const char* lPwrOff(int i) { static const char* H[] = {"4 S", "6 S", "8 S", "10 S"}; return H[i]; }
+static const char* lWake(int i) { return i ? "PWR ONLY" : "ANY BUTTON"; }
 static Set SETS[] = {
   {"DISPLAY", "bright", "BRIGHTNESS", T_SLIDER, &cfg.bright, 5, 100, nullptr},
   {"DISPLAY", "offIdx", "SCREEN OFF AFTER", T_CHOICE, &cfg.offIdx, 0, 7, lOff},
   {"DISPLAY", "dim", "DIM FIRST", T_TOGGLE, &cfg.dim, 0, 1, nullptr},
-  {"DISPLAY", "aod", "CLOCK WHEN OFF", T_TOGGLE, &cfg.aod, 0, 1, nullptr},
+  {"DISPLAY", "aod", "LOW POWER CLOCK WHEN OFF", T_TOGGLE, &cfg.aod, 0, 1, nullptr},
+  {"DISPLAY", "aodStyle", "CLOCK STYLE", T_CHOICE, &cfg.aodStyle, 0, 3, lAodStyle},
+  {"DISPLAY", "aodLight", "CLOCK LIGHT %", T_SLIDER, &cfg.aodLight, 1, 30, nullptr},
+  {"DISPLAY", "aodDate", "CLOCK: DATE", T_TOGGLE, &cfg.aodDate, 0, 1, nullptr},
+  {"DISPLAY", "aodBatt", "CLOCK: BATTERY", T_TOGGLE, &cfg.aodBatt, 0, 1, nullptr},
+  {"DISPLAY", "aodWifi", "WIFI WHEN OFF", T_CHOICE, &cfg.aodWifi, 0, 2, lAodWifi},
   {"DISPLAY", "tapWake", "TAP TO WAKE", T_TOGGLE, &cfg.tapWake, 0, 1, nullptr},
   {"DISPLAY", "moveWake", "LIFT TO WAKE", T_TOGGLE, &cfg.moveWake, 0, 1, nullptr},
   {"DISPLAY", "rot", "ROTATION", T_CHOICE, &cfg.rot, 0, 4, lRot},
@@ -482,6 +499,25 @@ static Set SETS[] = {
   {"LOOK", "crt", "CRT ON/OFF", T_TOGGLE, &cfg.crt, 0, 1, nullptr},
   {"LOOK", "boot", "BOOT", T_CHOICE, &cfg.boot, 0, 2, lBoot},
   {"LOOK", "intro", "3D INTRO", T_TOGGLE, &cfg.intro, 0, 1, nullptr},
+  {"HOLO 3D", "holo", "HOLO 3D", T_TOGGLE, &cfg.holo, 0, 1, nullptr},
+  {"HOLO 3D", "holoLayers", "LAYERS", T_TOGGLE, &cfg.holoLayers, 0, 1, nullptr},
+  {"HOLO 3D", "holoDepth", "DEPTH (PX)", T_SLIDER, &cfg.holoDepth, 0, 20, nullptr},
+  {"HOLO 3D", "holoFocus", "STAYS STILL", T_CHOICE, &cfg.holoFocus, 0, 4, lFocus},
+  {"HOLO 3D", "holoPop", "POP-OUT", T_SLIDER, &cfg.holoPop, 0, 100, nullptr},
+  {"HOLO 3D", "holoShadow", "SHADOWS", T_CHOICE, &cfg.holoShadow, 0, 2, lOffSoftHard},
+  {"HOLO 3D", "holoWalls", "SIDES", T_SLIDER, &cfg.holoWalls, 0, 5, nullptr},
+  {"HOLO 3D", "holoBack", "BACKDROP", T_CHOICE, &cfg.holoBack, 0, 4, lBack},
+  {"HOLO 3D", "holoLens", "GLASS MOVES (PX)", T_SLIDER, &cfg.holoLens, 0, 60, nullptr},
+  {"HOLO 3D", "holoPersp", "PERSPECTIVE", T_SLIDER, &cfg.holoPersp, 0, 100, nullptr},
+  {"HOLO 3D", "holoGlare", "REFLECTION", T_CHOICE, &cfg.holoGlare, 0, 2, lGlare},
+  {"HOLO 3D", "holoRainbow", "RAINBOW (PX)", T_SLIDER, &cfg.holoRainbow, 0, 4, nullptr},
+  {"HOLO 3D", "holoRange", "FULL TILT AT (DEG)", T_SLIDER, &cfg.holoRange, 10, 60, nullptr},
+  {"HOLO 3D", "holoDead", "DEAD ZONE (DEG)", T_SLIDER, &cfg.holoDead, 0, 10, nullptr},
+  {"HOLO 3D", "holoSmooth", "SMOOTHING", T_SLIDER, &cfg.holoSmooth, 0, 100, nullptr},
+  {"HOLO 3D", "holoCentre", "AUTO CENTRE", T_CHOICE, &cfg.holoCentre, 0, 3, lCentre},
+  {"HOLO 3D", "holoSensor", "SENSOR", T_CHOICE, &cfg.holoSensor, 0, 1, lSensor},
+  {"HOLO 3D", "holoInvX", "INVERT LEFT/RIGHT", T_TOGGLE, &cfg.holoInvX, 0, 1, nullptr},
+  {"HOLO 3D", "holoInvY", "INVERT UP/DOWN", T_TOGGLE, &cfg.holoInvY, 0, 1, nullptr},
   {"SOUND", "vol", "VOLUME", T_SLIDER, &cfg.vol, 0, 100, nullptr},
   {"SOUND", "clicks", "KEY CLICKS", T_TOGGLE, &cfg.clicks, 0, 1, nullptr},
   {"SOUND", "sounds", "SOUNDS", T_TOGGLE, &cfg.sounds, 0, 1, nullptr},
@@ -499,9 +535,30 @@ static Set SETS[] = {
   {"ERROR.BLUE", "name", "NAME", T_TEXT, nullptr, 0, 16, nullptr, cfg.name, sizeof(cfg.name)},
   {"ERROR.BLUE", "chan", "CHAT CHANNEL", T_TEXT, nullptr, 3, 8, nullptr, cfg.chan, sizeof(cfg.chan)},
   {"ERROR.BLUE", "online", "SHOW ME ONLINE", T_TOGGLE, &cfg.online, 0, 1, nullptr},
-  {"UPDATES", "autoUpd", "AUTO UPDATE", T_TOGGLE, &cfg.autoUpd, 0, 1, nullptr},
+  {"UPDATES", "autoUpd", "INSTALL BY ITSELF (SCREEN OFF)", T_TOGGLE, &cfg.autoUpd, 0, 1, nullptr},
+  {"UPDATES", "updAsk", "MESSAGE WHEN NEW", T_TOGGLE, &cfg.updAsk, 0, 1, nullptr},
   {"UPDATES", "updIdx", "CHECK EVERY", T_CHOICE, &cfg.updIdx, 0, N_UPD - 1, lUpd},
   {"SYSTEM", "kbd", "KEYBOARD", T_CHOICE, &cfg.kbd, 0, 1, lKbd},
+  {"BUTTONS", "b00", "- PRESS", T_CHOICE, &cfg.btnAct[0][0], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b01", "- DOUBLE PRESS", T_CHOICE, &cfg.btnAct[0][1], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b02", "- HOLD", T_CHOICE, &cfg.btnAct[0][2], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b10", "+ PRESS", T_CHOICE, &cfg.btnAct[1][0], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b11", "+ DOUBLE PRESS", T_CHOICE, &cfg.btnAct[1][1], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b12", "+ HOLD", T_CHOICE, &cfg.btnAct[1][2], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b20", "PWR PRESS", T_CHOICE, &cfg.btnAct[2][0], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b21", "PWR DOUBLE PRESS", T_CHOICE, &cfg.btnAct[2][1], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "b22", "PWR HOLD", T_CHOICE, &cfg.btnAct[2][2], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "c0", "- AND +", T_CHOICE, &cfg.btnCombo[0], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "c1", "HOLD - AND +", T_CHOICE, &cfg.btnCombo[1], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "c2", "HOLD -, PWR", T_CHOICE, &cfg.btnCombo[2], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "c3", "HOLD +, PWR", T_CHOICE, &cfg.btnCombo[3], 0, BA_COUNT - 1, lAct},
+  {"BUTTONS", "btnHold", "HOLD AFTER (x50 MS)", T_SLIDER, &cfg.btnHold, 6, 40, nullptr},
+  {"BUTTONS", "btnDouble", "DOUBLE GAP (x10 MS, 0 OFF)", T_SLIDER, &cfg.btnDouble, 0, 50, nullptr},
+  {"BUTTONS", "btnRepeat", "REPEAT (x10 MS, 0 OFF)", T_SLIDER, &cfg.btnRepeat, 0, 40, nullptr},
+  {"BUTTONS", "pwrHold", "PWR HOLD AFTER", T_CHOICE, &cfg.pwrHold, 0, 3, lPwrHold},
+  {"BUTTONS", "pwrOff", "PWR FORCE OFF", T_CHOICE, &cfg.pwrOff, 0, 3, lPwrOff},
+  {"BUTTONS", "btnSwap", "SWAP - AND +", T_TOGGLE, &cfg.btnSwap, 0, 1, nullptr},
+  {"BUTTONS", "btnWake", "WAKE WITH", T_CHOICE, &cfg.btnWake, 0, 1, lWake},
 };
 static const int N_SETS = sizeof(SETS) / sizeof(SETS[0]);
 
@@ -509,7 +566,7 @@ static void sendSchema() {
   JsonDocument d;
   d["t"] = "schema"; d["dev"] = "error-cube"; d["v"] = CUBE_VERSION;
   JsonArray caps = d["caps"].to<JsonArray>();
-  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power"}) caps.add(c);
+  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power", "files"}) caps.add(c);
   JsonArray g = d["sets"].to<JsonArray>();
   static const char* TY[] = {"toggle", "choice", "slider", "text"};
   for (int i = 0; i < N_SETS; i++) {
@@ -662,6 +719,64 @@ void netAppSend(const char* id, const char* json) {
   if (s.length() < 15000) wsText(s);
 }
 
+// ---------------- files from the control page (error.blue/cube > FILES): list, upload in pieces, delete, folders
+static bool okPath(const char* p) {
+  bool root = !strcmp(p, "/sd") || !strcmp(p, "/c") || !strncmp(p, "/sd/", 4) || !strncmp(p, "/c/", 3);
+  return root && !strstr(p, "..") && strlen(p) < 180;
+}
+static void onFls(JsonObject m) {
+  const char* d = m["d"] | "/sd";
+  JsonDocument r;
+  r["t"] = "fls"; r["d"] = d;
+  if (!strncmp(d, "/sd", 3)) sdMount();
+  r["sd"] = S.sd; r["sdInfo"] = S.sdInfo;
+  static FileEnt* ents = nullptr;
+  if (!ents) ents = (FileEnt*)psram(sizeof(FileEnt) * 150);
+  int n = ents && okPath(d) ? fsList(d, ents, 150) : -1;
+  r["ok"] = n >= 0;
+  JsonArray e = r["e"].to<JsonArray>();
+  size_t room = 13000;
+  for (int i = 0; i < n; i++) {
+    size_t l = strlen(ents[i].name) + 20;
+    if (l > room) { r["more"] = true; break; }
+    room -= l;
+    JsonArray a = e.add<JsonArray>(); a.add(ents[i].name); a.add(ents[i].dir ? 1 : 0); a.add(ents[i].size);
+  }
+  uint64_t t, u; if (n >= 0 && fsInfo(d, t, u)) { r["free"] = (uint32_t)((t - u) >> 20); r["total"] = (uint32_t)(t >> 20); }
+  String out; serializeJson(r, out); wsText(out);
+}
+static void onFput(JsonObject m) {
+  const char* p = m["p"] | "";
+  uint32_t o = m["o"] | 0, z = m["z"] | 0;
+  const char* d = m["d"] | "";
+  JsonDocument r; r["t"] = "fack"; r["p"] = p;
+  bool ok = okPath(p) && strchr(p + 1, '/');
+  size_t n = 0;
+  if (ok) {
+    if (!o && !strncmp(p, "/sd", 3)) ok = sdMount();
+    uint8_t* b = ok ? b64dec(d, n) : nullptr;
+    ok = b && fsAppend(p, b, n, o);
+    free(b);
+  }
+  r["ok"] = ok; r["o"] = o + (ok ? n : 0);
+  if (!ok) r["err"] = !strncmp(p, "/sd", 3) && !S.sd ? "NO SD CARD" : "COULD NOT WRITE";
+  if (ok && z && o + n >= z) {                   // the whole file is there: tell the screen
+    const char* nm = strrchr(p, '/');
+    snprintf(S.fileName, sizeof(S.fileName), "%s", nm ? nm + 1 : p); S.fileAt = millis() | 1;
+  }
+  String out; serializeJson(r, out); wsText(out);
+}
+static void onFop(const char* t, JsonObject m) {
+  const char* p = m["p"] | "";
+  bool ok = false;
+  if (!strcmp(t, "frm")) ok = okPath(p) && strchr(p + 1, '/') && (fsRemove(p) || fsRmdir(p));
+  else if (!strcmp(t, "fmk")) ok = okPath(p) && fsMkdir(p);
+  else if (!strcmp(t, "fmv")) { const char* b = m["b"] | ""; ok = okPath(p) && okPath(b) && fsRename(p, b); }
+  JsonDocument r; r["t"] = "fdone"; r["c"] = t; r["p"] = p; r["ok"] = ok;
+  String out; serializeJson(r, out); wsText(out);
+  uiDirty();
+}
+
 static void onMessage(char* txt, size_t n) {
   JsonDocument d;
   if (deserializeJson(d, txt, n)) return;
@@ -684,6 +799,9 @@ static void onMessage(char* txt, size_t n) {
   else if (!strcmp(t, "app")) { snprintf(S.wantApp, sizeof(S.wantApp), "%s", m["id"] | ""); S.wantAppAt = millis() | 1; }
   else if (!strcmp(t, "appmsg")) { String s; serializeJson(m["data"], s); char* c = strdup(s.c_str()); if (xQueueSend(appMsgs, &c, 0) != pdTRUE) free(c); }
   else if (!strcmp(t, "watch")) { watching = m["on"] | 0; if (watching) shotAt = 0; }
+  else if (!strcmp(t, "fls")) onFls(m);
+  else if (!strcmp(t, "fput")) onFput(m);
+  else if (!strcmp(t, "frm") || !strcmp(t, "fmk") || !strcmp(t, "fmv")) onFop(t, m);
   else if (!strcmp(t, "cmd")) {
     const char* c = m["c"] | "";
     if (!strcmp(c, "wake")) S.wakeAt = millis() | 1;

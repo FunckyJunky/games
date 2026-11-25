@@ -8,9 +8,13 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <esp_sntp.h>
+#include <esp_wifi.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include "../ui/ui.h"
 #include "../board/board.h"
 #include "net.h"
+#include "files_page.h"
 
 // ------------------------------------------------------------------ saved networks (up to 6, newest first)
 struct Saved { char ssid[33]; char pass[65]; };
@@ -68,6 +72,8 @@ static volatile int scanN = -1;
 static bool scanning = false;
 
 bool netUp() { return S.net == NET_UP; }
+static bool paused = false;              // WiFi off while the screen is off (cfg.aodWifi = 2)
+static bool radioWanted() { return cfg.wifiOn && !cfg.offline && !paused; }
 
 static void beginJoin(const char* ssid, const char* pass) {
   WiFi.disconnect(false, false);
@@ -91,7 +97,7 @@ void netJoin(const char* ssid, const char* pass) {
   beginJoin(joinSsid, joinPass);
 }
 void netWifi(bool on) {
-  if (!on) { WiFi.disconnect(true, false); S.net = NET_OFF; S.link = false; return; }
+  if (!on || cfg.offline) { WiFi.disconnect(true, false); S.net = NET_OFF; S.link = false; return; }
   WiFi.mode(S.portal ? WIFI_AP_STA : WIFI_STA);
   tryIdx = -1; tryNext();
 }
@@ -173,8 +179,78 @@ static const char* stateWord() {
 }
 static void sendJson(JsonDocument& d) { String o; serializeJson(d, o); web->sendHeader("Cache-Control", "no-store"); web->send(200, "application/json", o); }
 static bool otaUpOk = false;
+// ---------------- FILES on the cube's own page: list, upload (fast, same WiFi), download, delete, new folder
+static bool okPath(const String& p) {
+  return (p == "/sd" || p == "/c" || p.startsWith("/sd/") || p.startsWith("/c/")) && p.indexOf("..") < 0 && p.length() < 180;
+}
+static FILE* upF = nullptr; static bool upOk = false; static size_t upN = 0;
+static void filesApi() {
+  web->on("/files", [] { web->send_P(200, "text/html", FILES_PAGE); });
+  web->on("/api/ls", [] {
+    String d = web->arg("d"); if (!d.length()) d = "/sd";
+    JsonDocument j;
+    if (d.startsWith("/sd")) sdMount();
+    j["d"] = d; j["sd"] = S.sd; j["sdInfo"] = S.sdInfo;
+    if (!okPath(d)) { j["ok"] = false; sendJson(j); return; }
+    static FileEnt* ents = nullptr;
+    if (!ents) ents = (FileEnt*)malloc(sizeof(FileEnt) * 200);
+    int n = ents ? fsList(d.c_str(), ents, 200) : -1;
+    j["ok"] = n >= 0;
+    JsonArray e = j["e"].to<JsonArray>();
+    for (int i = 0; i < n; i++) { JsonArray a = e.add<JsonArray>(); a.add(ents[i].name); a.add(ents[i].dir ? 1 : 0); a.add(ents[i].size); }
+    uint64_t t, u; if (fsInfo(d.c_str(), t, u)) { j["free"] = (uint32_t)((t - u) >> 20); j["total"] = (uint32_t)(t >> 20); }
+    sendJson(j);
+  });
+  web->on("/api/up", HTTP_POST, [] {
+    JsonDocument j; j["ok"] = upOk; j["n"] = (uint32_t)upN; sendJson(j); uiDirty();
+  }, [] {
+    HTTPUpload& u = web->upload();
+    if (u.status == UPLOAD_FILE_START) {
+      String dir = web->arg("d"), p = dir + "/" + u.filename;
+      upOk = false; upN = 0;
+      if (upF) { fclose(upF); upF = nullptr; }
+      if (!okPath(dir) || u.filename.indexOf('/') >= 0) return;
+      if (dir.startsWith("/sd")) sdMount();
+      fsMkdir(dir.c_str());
+      upF = fopen(p.c_str(), "wb");
+      upOk = upF != nullptr;
+    } else if (u.status == UPLOAD_FILE_WRITE) {
+      if (upF && fwrite(u.buf, 1, u.currentSize, upF) != u.currentSize) upOk = false;
+      upN += u.currentSize;
+    } else if (u.status == UPLOAD_FILE_END || u.status == UPLOAD_FILE_ABORTED) {
+      if (upF) { fclose(upF); upF = nullptr; }
+      if (u.status == UPLOAD_FILE_ABORTED) upOk = false;
+    }
+  });
+  web->on("/api/rm", HTTP_POST, [] {
+    String p = web->arg("p"); JsonDocument j;
+    j["ok"] = okPath(p) && p != "/sd" && p != "/c" && (fsRemove(p.c_str()) || fsRmdir(p.c_str()));
+    sendJson(j); uiDirty();
+  });
+  web->on("/api/mk", HTTP_POST, [] { String p = web->arg("p"); JsonDocument j; j["ok"] = okPath(p) && fsMkdir(p.c_str()); sendJson(j); uiDirty(); });
+  web->on("/api/mv", HTTP_POST, [] {
+    String a = web->arg("a"), b = web->arg("b"); JsonDocument j;
+    j["ok"] = okPath(a) && okPath(b) && fsRename(a.c_str(), b.c_str()); sendJson(j); uiDirty();
+  });
+  web->on("/dl", [] {
+    String p = web->arg("p");
+    FILE* f = okPath(p) ? fopen(p.c_str(), "rb") : nullptr;
+    if (!f) { web->send(404, "text/plain", "Not found"); return; }
+    fseek(f, 0, SEEK_END); size_t n = ftell(f); fseek(f, 0, SEEK_SET);
+    String name = p.substring(p.lastIndexOf('/') + 1);
+    web->sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
+    web->setContentLength(n);
+    web->send(200, "application/octet-stream", "");
+    static uint8_t* b = nullptr; if (!b) b = (uint8_t*)malloc(8192);
+    size_t k;
+    while (b && (k = fread(b, 1, 8192, f)) > 0) web->sendContent((const char*)b, k);
+    fclose(f);
+  });
+}
+
 static void webSetup() {
   web = new WebServer(80);
+  filesApi();
   web->on("/", [] { web->send_P(200, "text/html", PAGE); });
   web->on("/info.json", [] {
     JsonDocument d;
@@ -233,6 +309,30 @@ void netPortal(bool on) {
   }
 }
 
+// OFFLINE (airplane mode): the radio off, nothing goes to the internet; back on: join again
+void netOffline(bool on) {
+  if (on) {
+    if (S.portal) netPortal(false);
+    WiFi.disconnect(true, false); WiFi.mode(WIFI_OFF);
+    S.net = NET_OFF; S.link = false;
+  } else if (cfg.wifiOn) {
+    WiFi.mode(WIFI_STA); tryIdx = -1; tryNext();
+  }
+  uiDirty();
+}
+// the screen is off: 0 as normal, 1 the radio sleeps between beacons (saves power, a bit slower), 2 the radio off
+void netSleepMode(int m) {
+  static int now = 0;
+  if (m == now) return;
+  if (now == 2 && paused) {                       // back from off
+    paused = false;
+    if (radioWanted()) { WiFi.mode(WIFI_STA); tryIdx = -1; tryNext(); }
+  }
+  now = m;
+  if (m == 2 && radioWanted()) { paused = true; WiFi.disconnect(true, false); WiFi.mode(WIFI_OFF); S.net = NET_OFF; S.link = false; return; }
+  if (S.net != NET_OFF) esp_wifi_set_ps(m == 1 ? WIFI_PS_MAX_MODEM : WIFI_PS_MIN_MODEM);
+}
+
 void netBegin() {
   savedLoad();
   WiFi.persistent(false);
@@ -242,7 +342,7 @@ void netBegin() {
   WiFi.setHostname(host);
   WiFi.setAutoReconnect(true);
   webSetup();
-  if (!cfg.wifiOn) S.net = NET_OFF;
+  if (!cfg.wifiOn || cfg.offline) { S.net = NET_OFF; if (cfg.offline) WiFi.mode(WIFI_OFF); }
   else if (!nSaved) { S.net = NET_NOSAVED; netPortal(true); }     // nothing saved: phone setup straight away
   else tryNext();
 }
@@ -252,7 +352,7 @@ void netStep() {
   scanCheck();
   if (web) web->handleClient();
   if (dns) dns->processNextRequest();
-  if (!cfg.wifiOn) return;
+  if (!radioWanted()) return;
   wl_status_t st = WiFi.status();
   if (st == WL_CONNECTED) {
     if (S.net != NET_UP) {
