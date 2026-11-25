@@ -801,6 +801,7 @@ static void onMessage(char* txt, size_t n) {
   else if (!strcmp(t, "watch")) { watching = m["on"] | 0; if (watching) shotAt = 0; }
   else if (!strcmp(t, "fls")) onFls(m);
   else if (!strcmp(t, "fput")) onFput(m);
+  else if (!strcmp(t, "fopen")) { const char* p = m["p"] | ""; if (okPath(p)) { snprintf(S.openPath, sizeof(S.openPath), "%s", p); S.openAt = millis() | 1; } }
   else if (!strcmp(t, "frm") || !strcmp(t, "fmk") || !strcmp(t, "fmv")) onFop(t, m);
   else if (!strcmp(t, "cmd")) {
     const char* c = m["c"] | "";

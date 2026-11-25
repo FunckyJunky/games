@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
   appsRegister();
   uiInit();
   uiOpen(cfg.boot == 0 && cfg.intro ? introScreen() : bootScreen());
-  char line[256];
+  char line[256]; static char reqp[200];
   while (fgets(line, sizeof(line), stdin)) {
     char cmd[32] = ""; int a = 0, b = 0, c = 0, d = 0; char s[64] = "";
     sscanf(line, "%31s", cmd);
@@ -87,6 +87,7 @@ int main(int argc, char** argv) {
     }
     else if (!strcmp(cmd, "shot")) { sscanf(line, "%*s %63s", s); shot(s); }
     else if (!strcmp(cmd, "rec")) { sscanf(line, "%*s %d", &a); rec(a); }
+    else if (!strcmp(cmd, "fopen")) { sscanf(line, "%*s %190s", reqp); snprintf(S.openPath, sizeof(S.openPath), "%s", reqp); S.openAt = simNow | 1; step(300); }
     else if (!strcmp(cmd, "btn")) { sscanf(line, "%*s %d %d", &a, &b); btnRaw(a, b); step(20); }      // btn 0|1 (- / +) 1|0 (down / up)
     else if (!strcmp(cmd, "pwr")) { sscanf(line, "%*s %d", &a); btnPwr(a); step(20); }                 // pwr 0 press, 1 hold
     else if (!strcmp(cmd, "tilt")) { float x, z; sscanf(line, "%*s %f %f", &x, &z); simTilt[0] = x; simTilt[2] = z; }

@@ -147,6 +147,13 @@ void appsLoop() {
     ask("NEW FIRMWARE", t, {"UPDATE NOW", "LATER"}, [](int i) { if (i == 0) { netUpdateInstall(); openProg("UPDATE"); } });
     snd(SND_MSG);
   }
+  static uint32_t seenOpen = 0;
+  if (S.openAt && S.openAt != seenOpen) {             // the phone: "open this on the cube"
+    seenOpen = S.openAt;
+    uiWake();
+    char p[200]; snprintf(p, sizeof(p), "%s", S.openPath);
+    if (!openFile(p)) toast("NOTHING ON THE CUBE OPENS THAT", 2200);
+  }
   if (S.fileAt && S.fileAt != seenFile) {             // a file arrived from the phone
     seenFile = S.fileAt;
     char t[64]; snprintf(t, sizeof(t), "RECEIVED %s", S.fileName); utf8Cut(t, 28);

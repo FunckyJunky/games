@@ -542,12 +542,14 @@ function fRender(x) {
     !e.length ? '<div class="empty">EMPTY</div>' :
     e.map(f => '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all;cursor:pointer" data-open="' + (f[1] ? esc(f[0]) : '') + '">' +
       (f[1] ? '&#9618; ' : '') + esc(f[0]) + '</span><span class="dim">' + (f[1] ? '&lt;DIR&gt;' : fsz(f[2])) + '</span>' +
+      (!f[1] && /\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-ren="' + esc(f[0]) + '">REN</button>' +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-del="' + esc(f[0]) + '">DEL</button></div>').join('') + (x.more ? '<div class="dim">(more files: use the FAST page to see all)</div>' : '');
 }
 $('fList').addEventListener('click', e => {
   const t = e.target;
   if (t.dataset.open) { fDir += '/' + t.dataset.open; fls(); }
+  else if (t.dataset.play) { if (send({ t: 'fopen', p: fDir + '/' + t.dataset.play })) flash('OPENING ON THE CUBE: ' + t.dataset.play); }
   else if (t.dataset.del) { if (confirm('Delete ' + t.dataset.del + '?')) send({ t: 'frm', p: fDir + '/' + t.dataset.del }); }
   else if (t.dataset.ren) { const n = prompt('New name', t.dataset.ren); if (n && !n.includes('/')) send({ t: 'fmv', p: fDir + '/' + t.dataset.ren, b: fDir + '/' + n }); }
 });

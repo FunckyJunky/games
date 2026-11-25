@@ -227,6 +227,11 @@ static void filesApi() {
     j["ok"] = okPath(p) && p != "/sd" && p != "/c" && (fsRemove(p.c_str()) || fsRmdir(p.c_str()));
     sendJson(j); uiDirty();
   });
+  web->on("/api/open", HTTP_POST, [] {
+    String p = web->arg("p"); JsonDocument j; j["ok"] = okPath(p);
+    if (okPath(p)) { snprintf(S.openPath, sizeof(S.openPath), "%s", p.c_str()); S.openAt = millis() | 1; }
+    sendJson(j);
+  });
   web->on("/api/mk", HTTP_POST, [] { String p = web->arg("p"); JsonDocument j; j["ok"] = okPath(p) && fsMkdir(p.c_str()); sendJson(j); uiDirty(); });
   web->on("/api/mv", HTTP_POST, [] {
     String a = web->arg("a"), b = web->arg("b"); JsonDocument j;

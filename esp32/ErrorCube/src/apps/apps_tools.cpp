@@ -3,6 +3,7 @@
 #include "../core/img.h"
 #include <strings.h>
 #include <string>
+#include <algorithm>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -541,6 +542,14 @@ struct ImageView : Screen {
     if (e.t == EV_SWIPE && e.dir == SW_LEFT) { go(1); return true; }
     if (e.t == EV_SWIPE && e.dir == SW_RIGHT) { go(-1); return true; }
     if (e.t == EV_SWIPE && (e.dir == SW_DOWN || e.dir == SW_UP)) { uiBack(); return true; }
+    if (e.t == EV_LONG) {
+      std::string p = pics[idx];
+      ask("PICTURE", "Use it as the wallpaper?", {"SET AS WALLPAPER", "CANCEL"}, [p](int k) {
+        if (k) return;
+        snprintf(cfg.wallPic, sizeof(cfg.wallPic), "%s", p.c_str()); cfg.holoBack = 5; cfgChanged(); toast("WALLPAPER SET");
+      });
+      return true;
+    }
     if (e.t == EV_TAP) { if (info && msNow() - infoAt < 2500) uiBack(); else { info = true; infoAt = msNow(); uiDirty(); redrawIn(2600); } return true; }
     if (e.t == EV_KEY) {
       if (e.key == K_NEXT) go(1); else if (e.key == K_PREV) go(-1); else uiBack();
@@ -554,6 +563,48 @@ static const char* extOf(const char* n) { const char* e = strrchr(n, '.'); retur
 static bool isText(const char* n) {
   static const char* T[] = {".txt", ".md", ".json", ".js", ".csv", ".log", ".ini", ".cfg", ".p8", ".html", ".htm", ".css", ".xml", ".lua", ".py"};
   for (const char* t : T) if (!strcasecmp(extOf(n), t)) return true;
+  return false;
+}
+
+// ------------------------------------------------------------------ a file -> the program made for it
+static void listPics(const char* path, std::vector<std::string>& pics, int& at) {
+  std::string p = path, dir = p.substr(0, p.rfind('/'));
+  static FileEnt* e = nullptr;
+  if (!e) e = (FileEnt*)bigAlloc(sizeof(FileEnt) * 200);
+  int n = e ? fsList(dir.c_str(), e, 200) : 0;
+  std::vector<std::string> v;
+  for (int i = 0; i < n; i++) if (!e[i].dir && imgIsPicture(e[i].name)) v.push_back(dir + "/" + e[i].name);
+  std::sort(v.begin(), v.end(), [](const std::string& a, const std::string& b) { return strcasecmp(a.c_str(), b.c_str()) < 0; });
+  at = 0; for (int i = 0; i < (int)v.size(); i++) if (v[i] == p) at = i;
+  if (v.empty()) v.push_back(p);
+  pics = v;
+}
+bool openFile(const char* path) {
+  const char* nm = strrchr(path, '/'); nm = nm ? nm + 1 : path;
+  const char* ex = extOf(nm);
+  std::string p = path, dir = p.substr(0, p.rfind('/'));
+  if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { musicPlayFolder(dir.c_str(), nm); uiOpen(makeNowPlaying()); return true; }
+  if (!strcasecmp(ex, ".avi")) { videoOpen(path); return true; }
+  if (!strcasecmp(ex, ".mp4") || !strcasecmp(ex, ".mov") || !strcasecmp(ex, ".mkv") || !strcasecmp(ex, ".webm")) {
+    ask("VIDEO", "The cube plays AVI videos. Convert this one at error.blue/cube/video (it can send it straight to the cube).", {"OK"}, nullptr);
+    return true;
+  }
+  if (imgIsPicture(nm)) { std::vector<std::string> pics; int at; listPics(path, pics, at); uiOpen(new ImageView(pics, at)); return true; }
+  if (isText(nm)) {
+    size_t max = 96000, got = 0;
+    uint8_t* buf = (uint8_t*)bigAlloc(max + 1);
+    if (!buf || !fsRead(path, buf, max, got)) { free(buf); toast("CAN'T READ IT"); return true; }
+    buf[got] = 0;
+    uiOpen(new TextView(nm, (const char*)buf));
+    free(buf);
+    return true;
+  }
+  if (!strcasecmp(ex, ".bin")) {
+    ask("INSTALL", "Put this firmware on the cube and restart?", {"INSTALL", "CANCEL"}, [p](int j) {
+      if (j == 0 && !netInstallFile(p.c_str())) toast("NOT A GOOD FIRMWARE FILE");
+    });
+    return true;
+  }
   return false;
 }
 
@@ -616,10 +667,15 @@ struct Files : Screen {
     std::string p = pathOf(i);
     bool onSd = !strncmp(dir, "/sd", 3);
     std::vector<const char*> b;
+    bool pic = !f.dir && imgIsPicture(f.name);
+    if (pic) b.push_back("SET AS WALLPAPER");
     if (!f.dir) b.push_back(onSd ? "COPY TO FLASH" : "COPY TO SD");
     b.push_back("RENAME"); b.push_back("DELETE"); b.push_back("CANCEL");
-    char info[96]; snprintf(info, sizeof(info), "%s", f.name);
-    ask(f.dir ? "FOLDER" : "FILE", info, b, [this, f, p, onSd](int k) {
+    char info[120], sz[16];
+    if (f.size >= 1048576) snprintf(sz, sizeof(sz), "%.1f MB", f.size / 1048576.0); else snprintf(sz, sizeof(sz), "%u bytes", (unsigned)f.size);
+    if (f.dir) snprintf(info, sizeof(info), "%s", f.name); else snprintf(info, sizeof(info), "%s\n%s", f.name, sz);
+    ask(f.dir ? "FOLDER" : "FILE", info, b, [this, f, p, onSd, pic](int k) {
+      if (pic) { if (k == 0) { setWall(p); return; } k--; }
       if (!f.dir) k--;                          // the first button was COPY
       if (k == -1) {
         char to[200]; snprintf(to, sizeof(to), "%s/%s", onSd ? "/c" : "/sd", f.name);
@@ -650,42 +706,9 @@ struct Files : Screen {
     if (!strcmp(f.name, "..")) { up(); return; }
     std::string p = pathOf(i);
     if (f.dir) { snprintf(dir, sizeof(dir), "%s", p.c_str()); L.sel = 0; L.scroll = 0; load(); return; }
-    bool bin = !strcasecmp(extOf(f.name), ".bin"), pic = imgIsPicture(f.name), txt = isText(f.name);
-    if (pickWall) { if (pic) { setWall(p); uiBack(); } else toast("PICK A JPEG OR BMP"); return; }
-    const char* ex = extOf(f.name);
-    if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { std::string d = dir; musicPlayFolder(d.c_str(), f.name); uiOpen(makeNowPlaying()); return; }
-    if (!strcasecmp(ex, ".avi")) { videoOpen(p.c_str()); return; }
-    if (!strcasecmp(ex, ".mp4") || !strcasecmp(ex, ".mov")) {
-      ask("MP4", "The cube plays MJPEG AVI. Convert it at error.blue/cube/video (it can send it straight to the cube).", {"OK"}, nullptr);
-      return;
-    }
-    std::vector<const char*> b;
-    if (bin) b = {"INSTALL FIRMWARE", "MORE...", "CANCEL"};
-    else if (pic) b = {"SHOW", "SET AS WALLPAPER", "MORE...", "CANCEL"};
-    else if (txt) b = {"VIEW", "MORE...", "CANCEL"};
-    else b = {"MORE...", "CANCEL"};
-    char info[120], sz[16];
-    if (f.size >= 1048576) snprintf(sz, sizeof(sz), "%.1f MB", f.size / 1048576.0); else snprintf(sz, sizeof(sz), "%u bytes", (unsigned)f.size);
-    snprintf(info, sizeof(info), "%s\n%s", f.name, sz);
-    int ix = i;
-    ask("FILE", info, b, [this, p, bin, pic, txt, ix](int k) {
-      if (!bin && !pic && !txt) k += 1;        // only MORE / CANCEL
-      if (k == 0 && bin) {
-        ask("INSTALL", "Put this firmware on the cube and restart?", {"INSTALL", "CANCEL"}, [p](int j) {
-          if (j == 0 && !netInstallFile(p.c_str())) toast("NOT A GOOD FIRMWARE FILE");
-        });
-      } else if (k == 0 && pic) showPics(p);
-      else if (k == 0 && txt) {
-        size_t max = 96000, got = 0;
-        uint8_t* buf = (uint8_t*)bigAlloc(max + 1);
-        if (!buf || !fsRead(p.c_str(), buf, max, got)) { free(buf); toast("CAN'T READ IT"); return; }
-        buf[got] = 0;
-        const char* nm = strrchr(p.c_str(), '/');
-        uiOpen(new TextView(nm ? nm + 1 : "", (const char*)buf));
-        free(buf);
-      } else if (k == 1 && pic) setWall(p);
-      else if ((k == 1 && !pic) || (k == 2 && pic)) more(ix);
-    });
+    if (pickWall) { if (imgIsPicture(f.name)) { setWall(p); uiBack(); } else toast("PICK A JPEG OR BMP"); return; }
+    if (openFile(p.c_str())) return;              // music, video, pictures, text, firmware: straight into its program
+    more(i);                                       // nothing plays it: what to do with it
   }
   void draw() override {
     char path[110];
@@ -738,6 +761,11 @@ struct Files : Screen {
   bool ev(const Ev& e) override {
     if (e.t == EV_KEY && e.key == K_BACK) { if (dir[0]) up(); else uiBack(); return true; }
     if (e.t == EV_SWIPE && e.dir == SW_RIGHT && dir[0]) { up(); return true; }
+    if (e.t == EV_LONG && dir[0] && e.x0 >= L.x && e.x0 < L.x + L.w && e.y0 >= L.y && e.y0 < L.y + L.h) {
+      int i = (int)((e.y0 - L.y + L.scroll) / L.rowH);           // hold a row: what to do with it
+      if (i > 0 && i < n) { L.sel = i; more(i); }
+      return true;
+    }
     return L.ev(e, [this](int i) { open(i); uiDirty(); });
   }
 };

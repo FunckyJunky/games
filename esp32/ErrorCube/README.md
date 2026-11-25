@@ -37,6 +37,15 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.3.1
+
+- **Tap a file, it opens in its program:** MP3 / WAV in MUSIC (the folder becomes the playlist), AVI in VIDEO,
+  pictures in SHOW (swipe through the folder), text in the reader, a .bin asks to install. MP4 says where to convert
+  it. Hold a file (or O) for its options: SET AS WALLPAPER, COPY, RENAME, DELETE. Holding a picture in SHOW sets it as
+  the wallpaper. Long presses work everywhere now (EV_LONG, and a button's long action).
+- **Open on the cube from the phone:** a play button next to music, videos, pictures and text in error.blue/cube >
+  FILES and on the cube's own page http://IP/files (message "fopen" / POST /api/open).
+
 ## New in 1.3
 
 - **MUSIC.EXE:** MP3 (minimp3, public domain) and WAV from the SD card (A:\MUSIC first) or the flash. Library by

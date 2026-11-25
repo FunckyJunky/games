@@ -154,6 +154,7 @@ void musicPlayFolder(const char* dir, const char* file);
 void musicTick();
 void videoOpen(const char* path);
 Screen* makeNowPlaying();
+bool openFile(const char* path);         // a file in the program made for it (music, video, picture, text...); false = none
 void openProg(const char* dos);
 void clockTick();                        // alarm / timer, also while another program is open
 extern uint32_t tmrEnd, tmrLeft;     // CLOCK's timer

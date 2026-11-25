@@ -162,6 +162,7 @@ struct SysState {
   uint32_t cfgAt = 0;                          // settings changed from the control page: apply them
   uint32_t wakeAt = 0, sleepAt = 0;            // the control page wants the screen on / off
   uint32_t fileAt = 0; char fileName[48] = "";  // a file came in from the control page
+  uint32_t openAt = 0; char openPath[200] = "";  // the control page asks to open a file (in its player)
 };
 extern SysState S;
 

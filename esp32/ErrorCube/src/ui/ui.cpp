@@ -1010,6 +1010,14 @@ void uiStart() {
 void uiLoop() {
   uint32_t now = msNow();
   if (holoTick()) dirty = true;               // HOLO: the cube moved, the picture moves with it
+  // a finger held still: a long press (the button's long action, or EV_LONG for the screen)
+  if (tDown && !tDrag && !tLongDone && !tSwallow && now - tAt > 550) {
+    tLongDone = true;
+    if (pressHit >= 0 && pressHit < (int)hits.size() && hits[pressHit].l) { Act l = hits[pressHit].l; sndKey(); l(); }
+    else { Ev e; e.t = EV_LONG; e.x = tx0; e.y = ty0; e.x0 = tx0; e.y0 = ty0; e.ms = now - tAt; if (deliver(e)) sndKey(); }
+    pressHit = -1;
+    dirty = true;
+  }
   if (Screen* s0 = uiCurrent()) s0->tick();
   if (Ring* r = ringing()) r->tick();
   clockTick();

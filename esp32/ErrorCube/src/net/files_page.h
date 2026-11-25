@@ -33,11 +33,13 @@ async function ls(){
   const e=(j.e||[]).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
   $('list').innerHTML=e.length?e.map(f=>{const p=cur+'/'+f[0];
     return '<div><span class=n data-d="'+(f[1]?esc(p):'')+'">'+(f[1]?'&#9618; ':'')+esc(f[0])+'</span><span class=s>'+(f[1]?'&lt;DIR&gt;':sz(f[2]))+'</span>'+
+    (f[1]||!/\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8|bin)$/i.test(f[0])?'':'<span class=x data-o="'+esc(p)+'">&#9654;</span>')+
     (f[1]?'':'<a href="/dl?p='+encodeURIComponent(p)+'">&#8595;</a>')+'<span class=x data-r="'+esc(p)+'">REN</span><span class=x data-x="'+esc(p)+'">DEL</span></div>'}).join(''):
     '<div class=dim>'+(j.ok?'Empty':(cur.startsWith('/sd')?'No SD card in the cube':'Can\'t read this folder'))+'</div>';
 }
 $('list').onclick=async e=>{const t=e.target;
   if(t.dataset.d){cur=t.dataset.d;ls()}
+  else if(t.dataset.o){await post('/api/open?p='+encodeURIComponent(t.dataset.o));$('st').textContent='OPENED ON THE CUBE: '+t.dataset.o.split('/').pop()}
   else if(t.dataset.x){if(confirm('Delete '+t.dataset.x.split('/').pop()+'?')){const j=await post('/api/rm?p='+encodeURIComponent(t.dataset.x));if(!j.ok)alert('Could not delete (folders must be empty)');ls()}}
   else if(t.dataset.r){const o=t.dataset.r,n=prompt('New name',o.split('/').pop());if(n&&n.indexOf('/')<0){await post('/api/mv?a='+encodeURIComponent(o)+'&b='+encodeURIComponent(o.slice(0,o.lastIndexOf('/')+1)+n));ls()}}};
 async function mk(){const n=prompt('Folder name');if(n&&n.indexOf('/')<0){await post('/api/mk?p='+encodeURIComponent(cur+'/'+n));ls()}}
