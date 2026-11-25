@@ -110,7 +110,8 @@ public/                 the website
                         at a time. Tilt right or tip the top away for next, left or toward you for back (or flick); swipe and
                         buttons too. Holding still 2 s or tapping the level bar re-centres. Reads each sentence aloud
                         (on by default). Pronunciation line (English- or Dutch-style), English meaning, practice mode, 60 s
-                        silence timer. One self-contained index.html; the sentences are in the D array at the top of the script
+                        silence timer. The sentences are in the D array at the top of the script in index.html.
+                        Installable web app (manifest.webmanifest, sw.js, icons): opens offline, portrait, full screen
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:

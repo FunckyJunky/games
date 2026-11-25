@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#12150e">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Speech">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/other/speach/manifest.webmanifest">
+<link rel="icon" href="/other/speach/icon-192.png">
+<link rel="apple-touch-icon" href="/other/speach/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Speech trainer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -109,6 +114,8 @@ input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
 .ends{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
 .acts{display:flex;gap:8px;flex-wrap:wrap;border:0}
 .acts .btn{flex:1 1 160px}
+.steps{margin:6px 0 0;padding-left:1.4em;display:grid;gap:12px;font-size:17px}
+.steps b{color:var(--or2)}
 #toast{position:fixed;left:50%;bottom:calc(168px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;background:#000d;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;width:max-content;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s}
 #toast.on{opacity:1}
 @media (max-height:600px){.uk{font-size:calc(var(--k)*24px)}.uk.s0{font-size:calc(var(--k)*30px)}.uk.s2,.uk.s3{font-size:calc(var(--k)*20px)}.btn{height:46px}.lvl{height:38px}#part{margin-top:6px}}
@@ -186,6 +193,7 @@ input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
     </ul>
     <button class="btn pri big" id="go">Start</button>
     <button class="btn big" id="go1" hidden>Start from sentence 1</button>
+    <button class="btn big" id="inst" hidden>Install as app</button>
     <p class="hint">Tilt needs this page opened directly in Safari or Chrome over https. Your phone may ask to allow motion access. The screen stays on while you practise.</p>
   </div>
 </div>
@@ -243,8 +251,21 @@ input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
       <div class="row acts">
         <button type="button" class="btn" id="recal">Re-centre tilt</button>
         <button type="button" class="btn" id="restart">Back to sentence 1</button>
+        <button type="button" class="btn" id="inst2" hidden>Install as app</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="sheet" id="sInst" role="dialog" aria-modal="true" aria-labelledby="hInst">
+  <div class="pan">
+    <h2 id="hInst">Install as app <button class="ib x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></h2>
+    <ol class="steps">
+      <li>Open this page in <b>Safari</b>.</li>
+      <li>Tap <b>Share</b>. On newer iPhones it sits in the <b>···</b> menu.</li>
+      <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+    </ol>
+    <p class="hint">The app opens full screen from your home screen, stays upright while you tilt, and works without a connection.</p>
   </div>
 </div>
 
@@ -562,6 +583,23 @@ const recentre=()=>{base=null;ghost=null;armed=true;settle=null;meter(0,false)};
 lvl.addEventListener('click',()=>{recentre();toast('Centred')});
 $('recal').addEventListener('click',()=>{recentre();toast('Centred. Hold the phone the way you read it.')});
 $('restart').addEventListener('click',()=>{idx=0;rev=false;stopTimer();closeSheets();render(-1)});
+
+/* ---------- installable app ---------- */
+const onSite=location.pathname.startsWith('/other/speach');
+const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+let installEvt=null;
+if(onSite&&'serviceWorker' in navigator)navigator.serviceWorker.register('/other/speach/sw.js',{scope:'/other/speach/'}).catch(()=>{});
+function showInst(){const can=onSite&&!standalone&&!!(installEvt||isIOS);$('inst').hidden=!can;$('inst2').hidden=!can}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;showInst()});
+addEventListener('appinstalled',()=>{installEvt=null;showInst();toast('Installed. Open Speech from your home screen.')});
+async function install(){
+ if(installEvt){const ev=installEvt;installEvt=null;try{ev.prompt();await ev.userChoice}catch(e){}showInst();return}
+ closeSheets();$('sInst').classList.add('on');
+}
+$('inst').addEventListener('click',install);
+$('inst2').addEventListener('click',install);
+showInst();
 
 /* ---------- init ---------- */
 $('kick').textContent='ORANGE COY · '+D.length+' sentences';
