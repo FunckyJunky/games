@@ -33,6 +33,20 @@ void icon3d(const char* id, float t, uint16_t col, int a32) {
     L(0, 0, -0.2f, sinf(mn) * 0.8f, -cosf(mn) * 0.8f, -0.2f);
     float sc = t * 1.0472f;
     L(0, 0, -0.22f, sinf(sc) * 0.88f, -cosf(sc) * 0.88f, -0.22f);
+  } else if (!strcmp(id, "MUSIC")) {
+    // two notes on a beam, bouncing
+    float b = sinf(t * 3) * 0.08f;
+    R(-0.55f, 0.55f + b, 0, 0.26f, 2, 14); R(0.45f, 0.4f - b, 0, 0.26f, 2, 14);
+    L(-0.3f, 0.55f + b, 0, -0.3f, -0.75f, 0); L(0.7f, 0.4f - b, 0, 0.7f, -0.9f, 0);
+    L(-0.3f, -0.75f, 0, 0.7f, -0.9f, 0); L(-0.3f, -0.55f, 0, 0.7f, -0.7f, 0);
+    L(-0.3f, -0.75f, -0.1f, 0.7f, -0.9f, -0.1f);
+  } else if (!strcmp(id, "VIDEO")) {
+    // a film frame with a play triangle that turns
+    B(0, 0, 0, 1, 0.7f, 0.12f);
+    for (int i = 0; i < 5; i++) { B(-0.8f + i * 0.4f, -0.6f, -0.12f, 0.06f, 0.04f, 0.02f); B(-0.8f + i * 0.4f, 0.6f, -0.12f, 0.06f, 0.04f, 0.02f); }
+    float c = cosf(t), s = sinf(t);
+    float P[3][2] = {{-0.25f, -0.35f}, {-0.25f, 0.35f}, {0.38f, 0}};
+    for (int i = 0; i < 3; i++) { int j = (i + 1) % 3; L(P[i][0] * c, P[i][1], P[i][0] * s - 0.2f, P[j][0] * c, P[j][1], P[j][0] * s - 0.2f); }
   } else if (!strcmp(id, "CALC")) {
     B(0, 0, 0, 0.72f, 1, 0.18f);
     B(0, -0.62f, -0.18f, 0.55f, 0.22f, 0.02f);

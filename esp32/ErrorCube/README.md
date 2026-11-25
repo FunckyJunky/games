@@ -18,7 +18,7 @@ battery, PCF85063 clock, QMI8658 motion sensor, ES8311 speaker, TF card, buttons
 
 | folder | programs |
 |---|---|
-| APPS | CLOCK (time, alarm, timer, stopwatch), CALC, PAINT (saves BMP), LEVEL, SNAKE, SOUND, FILES (A: TF card, C: flash) |
+| APPS | CLOCK (time, alarm, timer, stopwatch), MUSIC, VIDEO, CALC, PAINT (saves BMP), LEVEL, SNAKE, SOUND, FILES (A: SD card, C: flash) |
 | WEB | the web apps from error.blue/cube/apps |
 | ONLINE | WHO (who's online on error.blue), CHAT (ERROR-CHAT, keyboard EN / UA), LINK (code + QR for the phone) |
 | SYSTEM | SETUP, WIFI, UPDATE, INFO (system, power, sensors, network), COMMAND (C:\> prompt) |
@@ -36,6 +36,20 @@ effects off.
 Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sound, offline, sleep, setup, power).
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
+
+## New in 1.3
+
+- **MUSIC.EXE:** MP3 (minimp3, public domain) and WAV from the SD card (A:\MUSIC first) or the flash. Library by
+  folder, NOW PLAYING with title / artist from ID3 tags, a picture of the sound (bars that move with HOLO, a wave),
+  a seek bar (drag), previous / play-pause / next, repeat (off / all / one), shuffle. It keeps playing when you
+  leave (a note in the status bar); buttons can do PLAY / PAUSE, NEXT SONG, PREVIOUS SONG, MUSIC (SETUP > BUTTONS).
+- **VIDEO.EXE:** MJPEG AVI with PCM sound, in sync with the sound (frames are skipped when it's behind), full
+  screen; tap for the bar, tap again to pause, tap the bar to jump, - / + = 10 s back / on.
+- **error.blue/cube/video.html:** converts any video the browser can open (MP4, MOV, WebM) into that AVI, in the
+  browser: size, shape (whole / fill the square), frames a second, quality, sound, from / length. SAVE it, or SEND
+  it to the cube's A:\VIDEO through error.blue.
+- Sound: the mixer runs at 44.1 kHz stereo now (music, video, the phone's stream and the beeps together).
+  Code: src/core/media.cpp (decoding, its own task on core 0), src/board/sound.cpp, src/apps/apps_music.cpp.
 
 ## New in 1.2
 

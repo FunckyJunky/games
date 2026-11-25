@@ -10,7 +10,7 @@ char btnLast[48] = "";
 static const char* NAMES[BA_COUNT] = {
   "NOTHING", "PREV / UP", "NEXT / DOWN", "OK", "BACK", "HOME", "QUICK PANEL", "SCREEN ON/OFF", "POWER MENU",
   "VOLUME +", "VOLUME -", "LIGHT +", "LIGHT -", "HOLO ON/OFF", "HOLO CENTRE", "OFFLINE ON/OFF", "SCREENSHOT",
-  "TORCH", "GLITCH", "CLOCK", "FILES", "SETUP"};
+  "TORCH", "GLITCH", "CLOCK", "FILES", "SETUP", "PLAY / PAUSE", "NEXT SONG", "PREVIOUS SONG", "MUSIC"};
 const char* btnName(int a) { return a >= 0 && a < BA_COUNT ? NAMES[a] : "?"; }
 static const char* BN[3] = {"-", "+", "PWR"};
 
@@ -79,6 +79,10 @@ void btnDo(int a) {
     case BA_CLOCK: uiWake(); openProg("CLOCK"); break;
     case BA_FILES: uiWake(); openProg("FILES"); break;
     case BA_SETUP: uiWake(); openProg("SETUP"); break;
+    case BA_PLAY: musicToggle(); break;
+    case BA_NEXTTRK: musicNext(1); break;
+    case BA_PREVTRK: musicNext(-1); break;
+    case BA_MUSIC: uiWake(); uiOpen(makeNowPlaying()); break;
     default: break;
   }
 }
@@ -93,7 +97,7 @@ static void fire(int a, const char* what) {
   uiDirty();
   if (a == BA_NONE) return;
   // the screen is off: a button only wakes it (PWR's own actions still work)
-  if (!uiAwake() && a != BA_SCREEN && a != BA_POWER && a != BA_TORCH) {
+  if (!uiAwake() && a != BA_SCREEN && a != BA_POWER && a != BA_TORCH && a != BA_PLAY && a != BA_NEXTTRK && a != BA_PREVTRK) {
     if (cfg.btnWake == 0 || strstr(what, "PWR")) uiWake();
     return;
   }

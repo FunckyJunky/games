@@ -11,7 +11,7 @@ uint32_t msNow();
 // what a button (or two together) can do: SETUP > BUTTONS. New ones only at the end (saved settings keep their number)
 enum { BA_NONE, BA_PREV, BA_NEXT, BA_OK, BA_BACK, BA_HOME, BA_QUICK, BA_SCREEN, BA_POWER, BA_VOLUP, BA_VOLDN,
        BA_LIGHTUP, BA_LIGHTDN, BA_HOLO, BA_HCENTRE, BA_OFFLINE, BA_SHOT, BA_TORCH, BA_GLITCH, BA_CLOCK, BA_FILES,
-       BA_SETUP, BA_COUNT };
+       BA_SETUP, BA_PLAY, BA_NEXTTRK, BA_PREVTRK, BA_MUSIC, BA_COUNT };
 
 // ------------------------------------------------------------------ settings (saved in flash)
 struct Cfg {
@@ -196,6 +196,40 @@ enum { SND_KEY, SND_MOVE, SND_BEEP, SND_THUD, SND_CRACKLE, SND_FLOPPY, SND_OK, S
 void snd(int kind);
 void tone(int hz, int ms, int vol = 100);
 void sndStop();
+// media sound (music, video): stereo 16-bit at any rate, mixed with the beeps at 44.1 kHz
+int sndMediaRoom();                                   // frames (44.1 kHz) that still fit
+void sndMediaPut(const int16_t* lr, int frames, int rate);
+void sndMediaClear();
+uint32_t sndMediaPlayed();                            // frames played since the last clear (44.1 kHz): the video's clock
+int sndMediaQueued();
+void sndMediaPause(bool p);
+void sndMediaWave(int16_t* out, int n);               // the last n samples played (mono), to draw the sound
+
+// music and video (media.cpp): MP3 / WAV, MJPEG AVI with sound; they play in the background
+enum { MED_STOP, MED_PLAY, MED_PAUSE, MED_END, MED_ERR };
+bool musPlay(const char* path);
+void musPause(bool p);
+void musStop();
+void musSeek(uint32_t ms);
+int musState();
+uint32_t musPosMs();
+uint32_t musLenMs();
+const char* musFile();
+const char* musTitle();
+const char* musArtist();
+int musKbps();
+bool vidPlay(const char* path, char* err);           // err: why not
+void vidPause(bool p);
+void vidStop();
+void vidSeek(uint32_t ms);
+int vidState();
+uint32_t vidPosMs();
+uint32_t vidLenMs();
+int vidInfo(int* w, int* h, int* fps);               // the frames' size, frames a second; returns the audio rate (0 = silent)
+extern uint16_t* vidFrame;                            // the newest picture (480 x 480), vidFrameSeq counts them
+extern volatile uint32_t vidFrameSeq;
+void mediaPump();                                     // the media task: read, decode (board: its own task; sim: the loop)
+bool mediaPumpWork();                                 // same, true = it did something (call again soon)
 
 // files: "/sd/..." = the TF card, "/c/..." = the cube's own flash drive
 struct FileEnt { char name[64]; bool dir; uint32_t size; };
@@ -210,6 +244,11 @@ bool fsRename(const char* from, const char* to);
 bool fsRmdir(const char* path);                               // empty folders only
 bool fsCopy(const char* from, const char* to, int* pct = nullptr);
 long fsSize(const char* path);                                // -1 = none
+void* fsOpen(const char* path, const char* mode);     // streaming (FILE* on the board)
+size_t fsReadF(void* f, void* buf, size_t n);
+bool fsSeekF(void* f, long pos);                      // -1 = the end
+long fsTellF(void* f);
+void fsClose(void* f);
 bool sdMount();                       // the SD card in now (a card put in after the start); updates S.sd, S.sdInfo
 void sdEject();                       // safe to take out
 

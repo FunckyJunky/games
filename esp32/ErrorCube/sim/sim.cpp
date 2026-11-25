@@ -34,7 +34,8 @@ static void rec(int ms) {
 
 void step(uint32_t ms) {
   uint32_t end = simNow + ms;
-  while (simNow < end) { simNow += 16; btnPoll(); uiLoop(); uiFrame(); }
+  extern void simAudioTick(int);
+  while (simNow < end) { simNow += 16; simAudioTick(16); for (int k = 0; k < 12; k++) if (!mediaPumpWork()) break; btnPoll(); uiLoop(); uiFrame(); }
 }
 static void shot(const char* name) {
   uiDirty(); uiFrame();

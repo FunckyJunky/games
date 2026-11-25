@@ -1,4 +1,5 @@
-// sound.cpp: see sound.h. 16 kHz, 16 bit, a small mixer task feeding I2S.
+// sound.cpp: see sound.h. 44.1 kHz stereo, 16 bit, a small mixer task feeding I2S: the made-up sounds,
+// the phone's stream (16 kHz, upsampled) and media (music, video: any rate, resampled).
 #include <Arduino.h>
 #include <ESP_I2S.h>
 #include <esp_heap_caps.h>
@@ -9,7 +10,8 @@ extern "C" {
 #include "es8311.h"
 }
 
-#define RATE 16000
+#define RATE 44100
+#define PHONE_RATE 16000
 static I2SClass i2s;
 static es8311_handle_t codec = nullptr;
 static bool ok = false;
@@ -21,7 +23,15 @@ struct Voice { uint8_t w; float f0, f1, vol; uint32_t len, pos, delay; float ph;
 static Voice vs[16];
 static volatile bool stopAll = false;
 static int16_t* ring = nullptr;                 // streamed sound
-static const int RING = RATE * 2;
+static const int RING = PHONE_RATE * 2;
+static uint32_t phPhase = 0;                    // 16.16: where we are between two phone samples
+// media: stereo ring at 44.1 kHz (about 0.75 s)
+static const int MRING = 32768;
+static int16_t* mring = nullptr;                // L, R pairs
+static volatile uint32_t mw = 0, mr = 0, mplayed = 0;
+static volatile bool mpause = false;
+static uint32_t mPhase = 0; static int16_t mLastL = 0, mLastR = 0;   // the resampler
+static int16_t wave[512]; static volatile uint32_t wpos = 0;
 static volatile uint32_t rw = 0, rr = 0;
 static uint32_t lastSound = 0;
 static int codecVol = -1;
@@ -62,6 +72,38 @@ void snd(int kind) {
   }
 }
 
+int sndMediaRoom() { return mring ? MRING - 1 - (int)(mw - mr) : 0; }
+int sndMediaQueued() { return (int)(mw - mr); }
+uint32_t sndMediaPlayed() { return mplayed; }
+void sndMediaPause(bool p) { mpause = p; }
+void sndMediaClear() { mr = mw; mplayed = 0; mPhase = 0; mpause = false; }
+void sndMediaPut(const int16_t* lr, int frames, int rate) {
+  if (!mring || rate <= 0) return;
+  if (rate == RATE) {
+    for (int i = 0; i < frames && (int)(mw - mr) < MRING - 1; i++) { uint32_t k = (mw % MRING) * 2; mring[k] = lr[i * 2]; mring[k + 1] = lr[i * 2 + 1]; mw++; }
+    return;
+  }
+  // linear resampling: step through the input in 16.16 steps of rate / 44100
+  uint32_t step = (uint32_t)(((uint64_t)rate << 16) / RATE);
+  int i = 0;
+  while ((int)(mw - mr) < MRING - 1) {
+    int idx = mPhase >> 16;
+    if (idx >= frames) break;
+    int fr = mPhase & 0xFFFF;
+    int16_t l0 = idx ? lr[(idx - 1) * 2] : mLastL, r0 = idx ? lr[(idx - 1) * 2 + 1] : mLastR;
+    int16_t l1 = lr[idx * 2], r1 = lr[idx * 2 + 1];
+    uint32_t k = (mw % MRING) * 2;
+    mring[k] = l0 + (((l1 - l0) * fr) >> 16); mring[k + 1] = r0 + (((r1 - r0) * fr) >> 16);
+    mw++;
+    mPhase += step;
+    i = idx;
+  }
+  (void)i;
+  mLastL = lr[(frames - 1) * 2]; mLastR = lr[(frames - 1) * 2 + 1];
+  mPhase -= (uint32_t)frames << 16;
+}
+void sndMediaWave(int16_t* out, int n) { uint32_t p = wpos; for (int i = 0; i < n; i++) out[i] = wave[(p - n + i) & 511]; }
+
 void sndFeed(const int16_t* s, int n) {
   if (!ring) return;
   int peak = 0;
@@ -83,7 +125,8 @@ static void task(void*) {
     if (want != codecVol && codec) { es8311_voice_volume_set(codec, want, nullptr); codecVol = want; }
     bool any = false;
     // a stream from the phone: wait until 120 ms are in, so it doesn't stutter
-    bool stream = (uint32_t)(rw - rr) > RATE * 12 / 100 || ((uint32_t)(rw - rr) > 0 && millis() - S.audAt > 300);
+    bool stream = (uint32_t)(rw - rr) > PHONE_RATE * 12 / 100 || ((uint32_t)(rw - rr) > 0 && millis() - S.audAt > 300);
+    bool media = mring && !mpause && mr != mw;
     for (int i = 0; i < 256; i++) {
       float m = 0;
       portENTER_CRITICAL(&mux);
@@ -107,10 +150,22 @@ static void task(void*) {
         any = true;
       }
       portEXIT_CRITICAL(&mux);
-      if (stream && rr != rw) { m += ring[rr % RING] / 32768.0f * 0.9f; rr++; any = true; }
-      if (m > 1) m = 1; if (m < -1) m = -1;
-      int16_t s = (int16_t)(m * 30000);
-      buf[i * 2] = s; buf[i * 2 + 1] = s;
+      if (stream && rr != rw) {                 // 16 kHz -> 44.1 kHz: between two phone samples
+        int16_t a = ring[rr % RING], b = (uint32_t)(rr + 1 - rw) ? ring[(rr + 1) % RING] : a;
+        m += (a + (b - a) * (int32_t)(phPhase & 0xFFFF) / 65536) / 32768.0f * 0.9f;
+        phPhase += (PHONE_RATE << 16) / RATE;
+        while (phPhase >= 65536 && rr != rw) { phPhase -= 65536; rr++; }
+        any = true;
+      }
+      float ml = m, mrr = m;
+      if (media && mr != mw) {
+        uint32_t k = (mr % MRING) * 2;
+        ml += mring[k] / 32768.0f; mrr += mring[k + 1] / 32768.0f;
+        wave[wpos & 511] = (mring[k] + mring[k + 1]) / 2; wpos++;
+        mr++; mplayed++; any = true;
+      }
+      if (ml > 1) ml = 1; if (ml < -1) ml = -1; if (mrr > 1) mrr = 1; if (mrr < -1) mrr = -1;
+      buf[i * 2] = (int16_t)(ml * 30000); buf[i * 2 + 1] = (int16_t)(mrr * 30000);
     }
     if (any) {
       lastSound = millis();
@@ -132,6 +187,7 @@ bool sndBegin() {
   es8311_sample_frequency_config(codec, clk.mclk_frequency, clk.sample_frequency);
   es8311_microphone_config(codec, false);
   ring = (int16_t*)heap_caps_malloc(RING * 2, MALLOC_CAP_SPIRAM);
+  mring = (int16_t*)heap_caps_malloc(MRING * 4, MALLOC_CAP_SPIRAM);
   ok = true;
   xTaskCreatePinnedToCore(task, "snd", 4096, nullptr, 3, nullptr, 1);
   return true;

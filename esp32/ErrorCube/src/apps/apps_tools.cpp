@@ -652,6 +652,13 @@ struct Files : Screen {
     if (f.dir) { snprintf(dir, sizeof(dir), "%s", p.c_str()); L.sel = 0; L.scroll = 0; load(); return; }
     bool bin = !strcasecmp(extOf(f.name), ".bin"), pic = imgIsPicture(f.name), txt = isText(f.name);
     if (pickWall) { if (pic) { setWall(p); uiBack(); } else toast("PICK A JPEG OR BMP"); return; }
+    const char* ex = extOf(f.name);
+    if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { std::string d = dir; musicPlayFolder(d.c_str(), f.name); uiOpen(makeNowPlaying()); return; }
+    if (!strcasecmp(ex, ".avi")) { videoOpen(p.c_str()); return; }
+    if (!strcasecmp(ex, ".mp4") || !strcasecmp(ex, ".mov")) {
+      ask("MP4", "The cube plays MJPEG AVI. Convert it at error.blue/cube/video (it can send it straight to the cube).", {"OK"}, nullptr);
+      return;
+    }
     std::vector<const char*> b;
     if (bin) b = {"INSTALL FIRMWARE", "MORE...", "CANCEL"};
     else if (pic) b = {"SHOW", "SET AS WALLPAPER", "MORE...", "CANCEL"};

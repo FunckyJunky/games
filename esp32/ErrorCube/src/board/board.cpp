@@ -308,6 +308,17 @@ bool fsCopy(const char* from, const char* to, int* pct) {
   return ok;
 }
 
+void* fsOpen(const char* path, const char* mode) { return fopen(path, mode); }
+size_t fsReadF(void* f, void* buf, size_t n) { return f ? fread(buf, 1, n, (FILE*)f) : 0; }
+bool fsSeekF(void* f, long pos) { return f && (pos < 0 ? fseek((FILE*)f, 0, SEEK_END) : fseek((FILE*)f, pos, SEEK_SET)) == 0; }
+long fsTellF(void* f) { return f ? ftell((FILE*)f) : -1; }
+void fsClose(void* f) { if (f) fclose((FILE*)f); }
+
+// the media task (core 0): music and video decoding, a bit at a time
+static void mediaTask(void*) {
+  for (;;) { if (!mediaPumpWork()) vTaskDelay(pdMS_TO_TICKS(4)); else vTaskDelay(1); }
+}
+
 // ------------------------------------------------------------------ the SD card: in at the start, or put in later
 bool sdMount() {
   if (S.sd) {                                         // still there?
@@ -483,8 +494,9 @@ void boardDrives() {
   if (!FFat.begin(true, "/c", 10, "ffat")) Serial.println("C: drive failed");
   mkdir("/c/apps", 0777); mkdir("/c/appdata", 0777);
   sdMount();
-  // sound
+  // sound, and the task that plays music and video
   S.codec = sndBegin();
+  xTaskCreatePinnedToCore(mediaTask, "media", 40960, nullptr, 2, nullptr, 0);
 }
 
 // ------------------------------------------------------------------ the loop: touch, buttons, power key, battery

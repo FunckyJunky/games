@@ -343,6 +343,9 @@ void statusBar(const char* title) {
     x -= 8;
   } else if (cfg.wifiOn) { x -= 24; wifiIcon(x, y + 7, S.rssi, S.net == NET_UP); x -= 8; }
   if (S.link) { x -= 12; fillCircle(x + 5, y + 16, 5, C_BG); x -= 6; }
+  if (musState() == MED_PLAY || musState() == MED_PAUSE) {   // a note: music is on
+    x -= 16; fillCircle(x + 4, y + 22, 4, C_BG); fillRect(x + 7, y + 7, 2, 15, C_BG); fillRect(x + 7, y + 7, 7, 3, C_BG); x -= 6;
+  }
   if (S.chatUnread) { x -= 22; rect(x, y + 9, 20, 14, C_BG); line(x, y + 9, x + 10, y + 17, C_BG); line(x + 19, y + 9, x + 10, y + 17, C_BG); x -= 6; }
   if (S.upd == UPD_NEW || S.upd == UPD_LOADING) { x -= 15; drawText(FT, x, y, "\xE2\x86\x91", C_BG, TX_FLAT); }
   hit(15, 0, 450, 50, [] { quickOpen(); }, nullptr, false);

@@ -147,6 +147,13 @@ Screen* makeHome3D();
 Screen* homeScreen();
 Screen* aodScreen();
 Screen* findProg(const char* dos);
+// music and video (apps_music.cpp)
+void musicNext(int d);
+void musicToggle();
+void musicPlayFolder(const char* dir, const char* file);
+void musicTick();
+void videoOpen(const char* path);
+Screen* makeNowPlaying();
 void openProg(const char* dos);
 void clockTick();                        // alarm / timer, also while another program is open
 extern uint32_t tmrEnd, tmrLeft;     // CLOCK's timer

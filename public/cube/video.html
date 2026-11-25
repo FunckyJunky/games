@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ERROR-CUBE · video converter</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+:root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --hi: #b8ffd0; --red: #ff5a6a; --glow: rgba(57,255,122,.5); --panel: #04180b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 22px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px var(--glow); min-height: 100vh; }
+body:after { content: ''; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); z-index: 50; }
+main { max-width: 720px; margin: 0 auto; padding: 0 12px 60px; }
+a { color: var(--hi); }
+button, select, input { font: inherit; color: inherit; }
+.bar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; background: var(--fg); color: var(--bg); text-shadow: none; padding: 4px 12px; margin: 0 -12px 12px; }
+.bar h1 { margin: 0; font-size: 26px; font-weight: normal; }
+.bar a { color: var(--bg); text-decoration: none; font-size: 20px; }
+h2 { font-size: 22px; font-weight: normal; margin: 18px 0 8px; display: flex; gap: 10px; align-items: center; }
+h2:after { content: ''; flex: 1; border-top: 3px double var(--dim); }
+.dim { color: var(--dim); text-shadow: none; }
+.red { color: var(--red); }
+.btn { background: none; border: 2px solid var(--fg); padding: 6px 14px; cursor: pointer; min-height: 44px; text-shadow: inherit; }
+.btn.big { width: 100%; font-size: 26px; padding: 10px; }
+.btn:disabled { opacity: .35; }
+.btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #0d3a1c; }
+.opt select { background: #000; border: 2px solid var(--fg); padding: 4px 8px; min-width: 170px; }
+.meter { height: 16px; border: 2px solid var(--dim); position: relative; margin: 8px 0; }
+.meter i { position: absolute; inset: 0 auto 0 0; background: var(--fg); width: 0; }
+canvas { display: block; margin: 10px auto; max-width: 100%; border: 2px solid var(--dim); background: #000; image-rendering: pixelated; }
+.hide { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar"><h1>CUBE VIDEO</h1><a href="/cube/">&lt; ERROR-CUBE</a></div>
+  <p>Turns a video from your phone or computer (MP4, MOV, WebM...) into a video the cube can play (MJPEG AVI with sound).
+  It all happens in this browser: nothing is uploaded anywhere except to your cube.</p>
+
+  <input type="file" id="file" accept="video/*" class="hide">
+  <button class="btn big" id="pick">CHOOSE A VIDEO</button>
+  <div class="dim" id="info" style="margin-top:6px"></div>
+
+  <h2>OPTIONS</h2>
+  <div class="opt"><span>PICTURE</span><select id="size">
+    <option value="240">SMALL 240 (smooth)</option><option value="320" selected>MEDIUM 320</option><option value="400">SHARP 400</option><option value="480">FULL 480 (slower)</option></select></div>
+  <div class="opt"><span>SHAPE</span><select id="shape"><option value="fit" selected>WHOLE PICTURE</option><option value="fill">FILL THE SQUARE (CROP)</option></select></div>
+  <div class="opt"><span>FRAMES / SECOND</span><select id="fps"><option>10</option><option>12</option><option selected>15</option><option>20</option></select></div>
+  <div class="opt"><span>QUALITY</span><select id="q"><option value="0.5">SMALL FILE</option><option value="0.65" selected>NORMAL</option><option value="0.8">BEST</option></select></div>
+  <div class="opt"><span>SOUND</span><select id="snd"><option value="22050" selected>ON (22 kHz)</option><option value="16000">ON (16 kHz, smaller)</option><option value="0">OFF</option></select></div>
+  <div class="opt"><span>FROM / LENGTH</span><span><select id="from"></select> <select id="len"><option value="0">ALL</option><option value="30">30 S</option><option value="60">1 MIN</option><option value="180">3 MIN</option><option value="600">10 MIN</option></select></span></div>
+
+  <button class="btn big" id="go" style="margin-top:12px" disabled>CONVERT</button>
+  <div class="meter"><i id="bar"></i></div>
+  <div id="st" class="dim">&nbsp;</div>
+  <canvas id="cv" width="320" height="180"></canvas>
+
+  <div id="done" class="hide">
+    <h2>READY</h2>
+    <div id="sum"></div>
+    <div class="grid2" style="margin-top:8px">
+      <button class="btn" id="save">SAVE THE .AVI</button>
+      <button class="btn" id="send">SEND TO THE CUBE</button>
+    </div>
+    <div class="opt"><span>CUBE</span><select id="dev"></select></div>
+    <div class="meter hide" id="sbarW"><i id="sbar"></i></div>
+    <div id="sst" class="dim">&nbsp;</div>
+    <p class="dim" style="font-size:19px">SEND goes through error.blue (works from anywhere, about 50 KB/s) into the SD card's VIDEO folder.
+    Faster: SAVE it, then on the same WiFi open the cube's page <b>http://&lt;cube&gt;/files</b> (error.blue/cube &gt; FILES &gt; FAST) and drop it in VIDEO.
+    On the cube: VIDEO.EXE.</p>
+  </div>
+</main>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+let file = null, avi = null, aviName = '';
+const fsz = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+const tm = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+$('pick').onclick = () => $('file').click();
+const vid = document.createElement('video');
+vid.muted = true; vid.playsInline = true; vid.preload = 'auto';
+$('file').onchange = () => {
+  file = $('file').files[0]; if (!file) return;
+  vid.src = URL.createObjectURL(file);
+  $('info').textContent = 'LOADING ' + file.name + '...';
+  vid.onloadedmetadata = () => {
+    $('info').textContent = file.name + ' · ' + vid.videoWidth + 'x' + vid.videoHeight + ' · ' + tm(vid.duration) + ' · ' + fsz(file.size);
+    const f = $('from'); f.innerHTML = '';
+    for (let s = 0; s < vid.duration; s += vid.duration > 600 ? 60 : 10) f.add(new Option('FROM ' + tm(s), s));
+    $('go').disabled = false;
+  };
+  vid.onerror = () => { $('info').innerHTML = '<span class="red">THIS BROWSER CAN\'T OPEN THAT VIDEO</span>'; $('go').disabled = true; };
+};
+
+// ---------------------------------------------------------------- the AVI file
+function le32(a, o, v) { a[o] = v & 255; a[o + 1] = v >> 8 & 255; a[o + 2] = v >> 16 & 255; a[o + 3] = v >>> 24 & 255; }
+function le16(a, o, v) { a[o] = v & 255; a[o + 1] = v >> 8 & 255; }
+function cc(a, o, s) { for (let i = 0; i < 4; i++) a[o + i] = s.charCodeAt(i); }
+function chunk(id, data) {               // id + size + data (+ a pad byte)
+  const h = new Uint8Array(8); cc(h, 0, id); le32(h, 4, data.length);
+  return data.length & 1 ? [h, data, new Uint8Array(1)] : [h, data];
+}
+function buildAvi(frames, audio, w, h, fps, rate) {
+  const hasA = audio && audio.length;
+  const movi = [], idx = [];
+  let off = 4, maxF = 0;
+  const spf = hasA ? rate / fps : 0;
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i]; maxF = Math.max(maxF, f.length);
+    movi.push(...chunk('00dc', f)); idx.push(['00dc', 0x10, off, f.length]); off += 8 + f.length + (f.length & 1);
+    if (hasA) {
+      const a0 = Math.round(i * spf), a1 = Math.min(audio.length, Math.round((i + 1) * spf));
+      if (a1 > a0) {
+        const pcm = new Uint8Array(audio.buffer, audio.byteOffset + a0 * 2, (a1 - a0) * 2).slice();
+        movi.push(...chunk('01wb', pcm)); idx.push(['01wb', 0, off, pcm.length]); off += 8 + pcm.length + (pcm.length & 1);
+      }
+    }
+  }
+  const moviSize = 4 + movi.reduce((s, p) => s + p.length, 0);
+  // headers
+  const avih = new Uint8Array(56);
+  le32(avih, 0, Math.round(1e6 / fps)); le32(avih, 4, maxF * fps); le32(avih, 12, 0x10); le32(avih, 16, frames.length);
+  le32(avih, 24, hasA ? 2 : 1); le32(avih, 28, maxF + 8); le32(avih, 32, w); le32(avih, 36, h);
+  const vstrh = new Uint8Array(56);
+  cc(vstrh, 0, 'vids'); cc(vstrh, 4, 'MJPG'); le32(vstrh, 20, 1); le32(vstrh, 24, fps); le32(vstrh, 32, frames.length);
+  le32(vstrh, 36, maxF + 8); le32(vstrh, 40, -1); le16(vstrh, 52, w); le16(vstrh, 54, h);
+  const vstrf = new Uint8Array(40);
+  le32(vstrf, 0, 40); le32(vstrf, 4, w); le32(vstrf, 8, h); le16(vstrf, 12, 1); le16(vstrf, 14, 24); cc(vstrf, 16, 'MJPG'); le32(vstrf, 20, w * h * 3);
+  const list = (type, parts) => { const body = parts.flat(); const n = 4 + body.reduce((s, p) => s + p.length, 0); const h8 = new Uint8Array(12); cc(h8, 0, 'LIST'); le32(h8, 4, n); cc(h8, 8, type); return [h8, ...body]; };
+  const strls = [list('strl', [chunk('strh', vstrh), chunk('strf', vstrf)])];
+  if (hasA) {
+    const astrh = new Uint8Array(56);
+    cc(astrh, 0, 'auds'); le32(astrh, 20, 1); le32(astrh, 24, rate); le32(astrh, 32, audio.length); le32(astrh, 36, rate); le32(astrh, 40, -1); le32(astrh, 44, 2);
+    const astrf = new Uint8Array(16);
+    le16(astrf, 0, 1); le16(astrf, 2, 1); le32(astrf, 4, rate); le32(astrf, 8, rate * 2); le16(astrf, 12, 2); le16(astrf, 14, 16);
+    strls.push(list('strl', [chunk('strh', astrh), chunk('strf', astrf)]));
+  }
+  const hdrl = list('hdrl', [chunk('avih', avih), ...strls]);
+  const moviH = new Uint8Array(12); cc(moviH, 0, 'LIST'); le32(moviH, 4, moviSize); cc(moviH, 8, 'movi');
+  const ix = new Uint8Array(idx.length * 16);
+  idx.forEach((e, i) => { cc(ix, i * 16, e[0]); le32(ix, i * 16 + 4, e[1]); le32(ix, i * 16 + 8, e[2]); le32(ix, i * 16 + 12, e[3]); });
+  const parts = [...hdrl, moviH, ...movi, ...chunk('idx1', ix)];
+  const total = parts.reduce((s, p) => s + p.length, 0);
+  const riff = new Uint8Array(12); cc(riff, 0, 'RIFF'); le32(riff, 4, total + 4); cc(riff, 8, 'AVI ');
+  return new Blob([riff, ...parts], { type: 'video/avi' });
+}
+
+// ---------------------------------------------------------------- converting
+function seek(t) { return new Promise(res => { const d = () => { vid.removeEventListener('seeked', d); res(); }; vid.addEventListener('seeked', d); vid.currentTime = t; }); }
+async function getAudio(rate, from, len) {
+  if (!rate) return null;
+  try {
+    const ab = await file.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await ctx.decodeAudioData(ab);
+    ctx.close();
+    const n = Math.max(1, Math.floor(len * rate));
+    const off = new OfflineAudioContext(1, n, rate);
+    const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start(0, from, len);
+    const out = await off.startRendering();
+    const f = out.getChannelData(0), pcm = new Int16Array(f.length);
+    for (let i = 0; i < f.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, f[i] * 32767));
+    return pcm;
+  } catch (e) { console.log('no sound:', e); return null; }
+}
+$('go').onclick = async () => {
+  if (!file) return;
+  $('go').disabled = true; $('pick').disabled = true; $('done').classList.add('hide');
+  const size = +$('size').value, fps = +$('fps').value, q = +$('q').value, rate = +$('snd').value, fill = $('shape').value === 'fill';
+  const from = +$('from').value || 0, lenSel = +$('len').value;
+  const len = Math.max(0.1, Math.min(vid.duration - from, lenSel || 1e9));
+  const vw = vid.videoWidth, vh = vid.videoHeight;
+  let w, h, sx = 0, sy = 0, sw = vw, sh = vh;
+  if (fill) { w = h = size; const s = Math.min(vw, vh); sw = sh = s; sx = (vw - s) / 2; sy = (vh - s) / 2; }
+  else { const k = size / Math.max(vw, vh); w = Math.round(vw * k / 2) * 2; h = Math.round(vh * k / 2) * 2; }
+  const cv = $('cv'); cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  $('st').textContent = rate ? 'THE SOUND...' : '';
+  const audio = await getAudio(rate, from, len);
+  const n = Math.max(1, Math.floor(len * fps)), frames = [];
+  const t0 = Date.now();
+  for (let i = 0; i < n; i++) {
+    await seek(from + i / fps + 0.001);
+    c.drawImage(vid, sx, sy, sw, sh, 0, 0, w, h);
+    const b = await new Promise(r => cv.toBlob(r, 'image/jpeg', q));
+    frames.push(new Uint8Array(await b.arrayBuffer()));
+    if (i % 3 === 0) {
+      const el = (Date.now() - t0) / 1000, left = el / (i + 1) * (n - i - 1);
+      $('bar').style.width = ((i + 1) / n * 100) + '%';
+      $('st').textContent = 'FRAME ' + (i + 1) + ' / ' + n + ' · ' + Math.round(left) + ' S LEFT';
+    }
+  }
+  avi = buildAvi(frames, audio, w, h, fps, rate);
+  aviName = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 40).trim() || 'video';
+  aviName += '.avi';
+  $('bar').style.width = '100%';
+  $('st').textContent = 'DONE IN ' + Math.round((Date.now() - t0) / 1000) + ' S';
+  $('sum').textContent = aviName + ' · ' + w + 'x' + h + ' · ' + fps + ' FPS · ' + tm(len) + ' · ' + (audio ? 'SOUND' : 'NO SOUND') + ' · ' + fsz(avi.size);
+  $('done').classList.remove('hide');
+  $('go').disabled = false; $('pick').disabled = false;
+};
+$('save').onclick = () => { if (!avi) return; const a = document.createElement('a'); a.href = URL.createObjectURL(avi); a.download = aviName; a.click(); };
+
+// ---------------------------------------------------------------- sending it to a cube (error.blue room, like the FILES tab)
+let devs = []; try { devs = JSON.parse(localStorage.getItem('cube.devices') || '[]'); } catch (e) {}
+const sel = localStorage.getItem('cube.sel') ? JSON.parse(localStorage.getItem('cube.sel')) : null;
+$('dev').innerHTML = devs.length ? devs.map(d => '<option value="' + d.code + '"' + (d.code === sel ? ' selected' : '') + '>' + (d.name || 'CUBE') + ' · ' + d.code + '</option>').join('')
+  : '<option value="">ADD YOUR CUBE AT ERROR.BLUE/CUBE FIRST</option>';
+$('send').onclick = async () => {
+  const code = $('dev').value;
+  if (!avi || !code) { $('sst').textContent = 'NO CUBE: add it at error.blue/cube first'; return; }
+  $('send').disabled = true; $('sbarW').classList.remove('hide');
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/room/error-cube/' + code + '?name=PANEL');
+  let wait = null;
+  ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.type === 'msg' && m.data && m.data.t === 'fack' && wait && m.data.p === wait.p) { const w = wait; wait = null; w.res(m.data); } };
+  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; setTimeout(res, 8000); });
+  const buf = new Uint8Array(await avi.arrayBuffer()), p = '/sd/VIDEO/' + aviName, CH = 9000, t0 = Date.now();
+  const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096)); return btoa(s); };
+  let o = 0, err = '';
+  while (o < buf.length) {
+    let a = null;
+    for (let tries = 0; tries < 3 && !a; tries++) {
+      ws.send(JSON.stringify({ t: 'fput', p, o, z: buf.length, d: b64(buf.subarray(o, o + CH)) }));
+      a = await new Promise(res => { wait = { p, res }; setTimeout(() => { if (wait && wait.p === p) { wait = null; res(null); } }, 15000); });
+    }
+    if (!a) { err = 'NO ANSWER FROM THE CUBE (IS IT ON AND ONLINE?)'; break; }
+    if (!a.ok) { err = a.err || 'COULD NOT WRITE'; break; }
+    o = a.o;
+    $('sbar').style.width = (o / buf.length * 100) + '%';
+    const kb = o / 1024 / Math.max(0.1, (Date.now() - t0) / 1000);
+    $('sst').textContent = 'SENDING ' + fsz(o) + ' / ' + fsz(buf.length) + ' · ' + Math.round(kb) + ' KB/s · ' + Math.round((buf.length - o) / 1024 / Math.max(1, kb)) + ' S LEFT';
+  }
+  ws.close();
+  $('sst').innerHTML = err ? '<span class="red">' + err + '</span>' : 'ON THE CUBE: A:\\VIDEO\\' + aviName + ' · open VIDEO.EXE';
+  $('send').disabled = false;
+};
+})();
+</script>
+</body>
+</html>

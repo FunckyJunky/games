@@ -135,6 +135,7 @@ Screen* makeLive() { return new Live(); }
 
 // ================================================================== what the control page asks for
 void appsLoop() {
+  musicTick();
   static uint32_t seenApp = 0, seenVid = 0, seenAud = 0, seenHome = 0, seenFile = 0;
   // a new firmware is ready: say so (once per version), UPDATE NOW or LATER
   static char askedVer[16] = "";

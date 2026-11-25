@@ -82,6 +82,21 @@ bool fsCopy(const char* a, const char* b, int* pct) {
   char buf[16384]; size_t n; while ((n = fread(buf, 1, sizeof(buf), x)) > 0) fwrite(buf, 1, n, y);
   fclose(x); fclose(y); if (pct) *pct = 100; return true;
 }
+void* fsOpen(const char* path, const char* mode) { return fopen(real(path).c_str(), mode); }
+size_t fsReadF(void* f, void* buf, size_t n) { return f ? fread(buf, 1, n, (FILE*)f) : 0; }
+bool fsSeekF(void* f, long pos) { return f && (pos < 0 ? fseek((FILE*)f, 0, SEEK_END) : fseek((FILE*)f, pos, SEEK_SET)) == 0; }
+long fsTellF(void* f) { return f ? ftell((FILE*)f) : -1; }
+void fsClose(void* f) { if (f) fclose((FILE*)f); }
+// the speaker, pretend: it plays 44.1 thousand frames a second of simulated time
+static int simQ = 0; static uint32_t simPlayed = 0; static bool simPause = false; static float simPh = 0;
+int sndMediaRoom() { return 32767 - simQ; }
+void sndMediaPut(const int16_t*, int frames, int rate) { simQ += (int)((long long)frames * 44100 / rate); if (simQ > 32767) simQ = 32767; }
+void sndMediaClear() { simQ = 0; simPlayed = 0; simPause = false; }
+uint32_t sndMediaPlayed() { return simPlayed; }
+int sndMediaQueued() { return simQ; }
+void sndMediaPause(bool p) { simPause = p; }
+void sndMediaWave(int16_t* o, int n) { for (int i = 0; i < n; i++) o[i] = simQ ? (int16_t)(9000 * sinf(simPh + i * 0.21f) + 5000 * sinf(simPh * 1.7f + i * 0.05f)) : 0; simPh += 0.4f; }
+void simAudioTick(int ms) { if (simPause) return; int k = 44100 * ms / 1000; if (k > simQ) k = simQ; simQ -= k; simPlayed += k; }
 bool simSdIn = true;
 bool sdMount() { S.sd = simSdIn; if (S.sd) strcpy(S.sdInfo, "29.7 GB SDHC"); else S.sdInfo[0] = 0; return S.sd; }
 void sdEject() { S.sd = false; S.sdInfo[0] = 0; }

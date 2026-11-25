@@ -314,10 +314,13 @@ Screen* aodScreen() { return new Aod(); }
 // ------------------------------------------------------------------ the programs
 Screen* makeClock(); Screen* makeCalc(); Screen* makePaint(); Screen* makeLevel(); Screen* makeFiles(); Screen* makeSnake();
 Screen* makeWho(); Screen* makeChat(); Screen* makeLink();
+Screen* makeMusic(); Screen* makeVideo();
 Screen* makeSetup(); Screen* makeWifi(); Screen* makeUpdate(); Screen* makeInfo(); Screen* makeCommand(); Screen* makeSound();
 void appsRegister() {
   PROGS = {
     {"CLOCK", "time alarm timer", F_APPS, makeClock},
+    {"MUSIC", "mp3 / wav player", F_APPS, makeMusic},
+    {"VIDEO", "video player", F_APPS, makeVideo},
     {"CALC", "calculator", F_APPS, makeCalc},
     {"PAINT", "draw with a finger", F_APPS, makePaint},
     {"LEVEL", "spirit level", F_APPS, makeLevel},
