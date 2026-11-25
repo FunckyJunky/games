@@ -318,6 +318,13 @@ void fsClose(void* f) { if (f) fclose((FILE*)f); }
 static void mediaTask(void*) {
   for (;;) { if (!mediaPumpWork()) vTaskDelay(pdMS_TO_TICKS(4)); else vTaskDelay(1); }
 }
+// started the first time music or video plays: until then its stack stays free for WiFi and TLS.
+// 12 KB is enough: the MP3 decoder's big scratch is in PSRAM (media.cpp)
+void mediaStart() {
+  static bool on = false;
+  if (on) return;
+  on = xTaskCreatePinnedToCore(mediaTask, "media", 12288, nullptr, 2, nullptr, 0) == pdPASS;
+}
 
 // ------------------------------------------------------------------ the SD card: in at the start, or put in later
 bool sdMount() {
@@ -496,7 +503,6 @@ void boardDrives() {
   sdMount();
   // sound, and the task that plays music and video
   S.codec = sndBegin();
-  xTaskCreatePinnedToCore(mediaTask, "media", 40960, nullptr, 2, nullptr, 0);
 }
 
 // ------------------------------------------------------------------ the loop: touch, buttons, power key, battery

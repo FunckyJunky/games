@@ -171,7 +171,8 @@ void fxInterlace(int dx) {
 }
 void fxDatamosh(uint32_t seed) {
   // blocks of the picture copied from a little way off, like a broken video stream
-  static uint16_t tmp[64 * 64];
+  static uint16_t* tmp = (uint16_t*)malloc(64 * 64 * 2);    // > 4 KB: malloc puts it in PSRAM, not internal RAM
+  if (!tmp) return;
   rnd();
   for (int i = 0; i < 7; i++) {
     int w = 16 + (seed >> (i * 3)) % 48, h = 8 + (seed >> (i * 2 + 1)) % 40;

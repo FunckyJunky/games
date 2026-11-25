@@ -56,6 +56,21 @@ static void post(uint8_t k, int id = 0, const char* a = nullptr, const char* b =
 static WiFiClientSecure tls;
 static HTTPClient http;
 static int lastTls = -1;
+// Internal RAM and TLS: mbedTLS keeps a 16 KB in and a 16 KB out buffer per connection, always in internal RAM.
+// Two connections (these requests + the live link) only fit with room to spare, so: one handshake at a time
+// (tlsMx), the requests' kept-alive connection is closed when RAM is short, and when a request that matters
+// (updates...) can't fit next to the link, the link steps aside for a moment (linkYield) and comes back after.
+static SemaphoreHandle_t tlsMx;
+static volatile bool linkYield = false;
+static bool wsUp = false;
+static uint32_t ramFree() { return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); }
+static uint32_t ramBig() { return heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); }
+static bool tlsRoom() { return ramBig() > 18500 && ramFree() > 50000; }
+static void linkStepAside() {
+  if (!wsUp) return;
+  linkYield = true;
+  for (int i = 0; i < 60 && wsUp; i++) delay(50);       // the net task drops it at its next step
+}
 static void tlsSetup() {
   if (lastTls == cfg.tls) return;
   http.end(); tls.stop();
@@ -63,7 +78,7 @@ static void tlsSetup() {
   lastTls = cfg.tls;
 }
 // one request; body (malloc'd) in *out
-static int request(const char* method, const String& path, const char* body, char** out, size_t* outLen, int timeout = 9000) {
+static int requestRaw(const char* method, const String& path, const char* body, char** out, size_t* outLen, int timeout) {
   tlsSetup();
   String url = String("https://") + CUBE_HOST + path;
   if (!http.begin(tls, url)) return -1;
@@ -89,6 +104,21 @@ static int request(const char* method, const String& path, const char* body, cha
     tls.stop();
   } else if (code == 200) S.netErr[0] = 0;
   http.end();
+  return code;
+}
+// must: updates, apps, what you asked for. Background ones (I'm online, chat in the background) wait for a
+// better moment instead of pushing the link aside.
+static int request(const char* method, const String& path, const char* body, char** out, size_t* outLen, int timeout = 9000, bool must = true) {
+  xSemaphoreTake(tlsMx, portMAX_DELAY);
+  if (!tls.connected() && !tlsRoom()) {
+    if (!must && wsUp) { xSemaphoreGive(tlsMx); return -2; }
+    linkStepAside();
+  }
+  int code = requestRaw(method, path, body, out, outLen, timeout);
+  // keep the connection for the next request only while there's room for the link's next to it
+  if (tls.connected() && (ramFree() < 70000 || ramBig() < 20000)) { http.end(); tls.stop(); }
+  linkYield = false;
+  xSemaphoreGive(tlsMx);
   return code;
 }
 
@@ -204,7 +234,8 @@ static void linkDrop();
 static void doOta() {
   if (!fw.ver[0] || fw.path[0] != '/' || fw.size < 100000) return;
   S.upd = UPD_LOADING; S.updPct = 0; snprintf(S.updMsg, sizeof(S.updMsg), "%s > %s", CUBE_VERSION, fw.ver);
-  linkDrop();
+  xSemaphoreTake(tlsMx, portMAX_DELAY);
+  linkStepAside();                                     // all the RAM for the download
   const char* err = nullptr;
   tlsSetup();
   String url = String("https://") + CUBE_HOST + fw.path;
@@ -226,6 +257,9 @@ static void doOta() {
     }
     http.end();
   }
+  if (err) { char e[64] = ""; tls.lastError(e, sizeof(e)); if (e[0]) snprintf(S.netErr, sizeof(S.netErr), "%s", e); tls.stop(); }
+  linkYield = false;
+  xSemaphoreGive(tlsMx);
   if (!err) {
     S.upd = UPD_DONE; S.updPct = 100; snprintf(S.updMsg, sizeof(S.updMsg), "DONE. RESTARTING...");
     delay(1500);
@@ -238,7 +272,7 @@ static void doOtaFile(const char* path) {
   if (!f) { S.upd = UPD_FAIL; snprintf(S.updMsg, sizeof(S.updMsg), "CAN'T OPEN THE FILE"); return; }
   fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
   S.upd = UPD_LOADING; S.updPct = 0; snprintf(S.updMsg, sizeof(S.updMsg), "FROM THE TF CARD");
-  linkDrop();
+  linkStepAside(); linkYield = false;
   const char* err = nullptr;
   if (!Update.begin(n)) err = "TOO BIG";
   else {
@@ -273,12 +307,12 @@ static void worker(void*) {
     }
     char* body = nullptr; size_t n = 0; int code;
     switch (j.kind) {
-      case J_ONLINE: request("POST", "/api/online", j.b, nullptr, nullptr); break;
+      case J_ONLINE: request("POST", "/api/online", j.b, nullptr, nullptr, 9000, false); break;
       case J_WHO: if (request("GET", "/api/online", nullptr, &body, &n) == 200 && body) parseWho(body); break;
       case J_CHAT: {
         bool bg = j.id;
         String p = String("/api/chat/") + cfg.chan + "/log?limit=30&after=" + chatLast + "&name=" + urlEnc(cfg.name) + (bg ? "&bg=1" : "");
-        if (request("GET", p, nullptr, &body, &n) == 200 && body) parseChat(body, bg);
+        if (request("GET", p, nullptr, &body, &n, 9000, !bg) == 200 && body) parseChat(body, bg);
         else { LOCK(); chat.ok = chatHave; UNLOCK(); }
         break;
       }
@@ -396,7 +430,6 @@ bool netAppMsg(char* out, size_t n) {
 
 // ================================================================== the live link (WebSocket)
 static WiFiClientSecure ws;
-static bool wsUp = false, linkPaused = false;
 static uint32_t wsNext = 0, wsBackoff = 2000, wsPing = 0, stateAt = 0, shotAt = 0;
 static bool stateDirty = true, watching = false;
 static char myId[12] = "";
@@ -815,10 +848,23 @@ static void onMessage(char* txt, size_t n) {
     stateDirty = true;
   }
 }
-static bool wsOpen() {
+static void linkErr(const char* what) {
+  char e[64] = ""; ws.lastError(e, sizeof(e));
+  snprintf(S.linkErr, sizeof(S.linkErr), "%s%s%s", what, e[0] ? ": " : "", e);
+}
+// 1 up, 0 failed, -1 not now (a request is using TLS: try again in a moment)
+static int wsOpen() {
+  if (xSemaphoreTake(tlsMx, 0) != pdTRUE) return -1;
+  if (tls.connected()) { http.end(); tls.stop(); }     // the requests' idle connection: the link comes first
   if (cfg.tls) ws.setCACert(ROOT_CAS); else ws.setInsecure();
   ws.setHandshakeTimeout(12);
-  if (!ws.connect(CUBE_HOST, CUBE_PORT)) return false;
+  if (!ws.connect(CUBE_HOST, CUBE_PORT)) {
+    linkErr("TLS");
+    char e[64] = ""; ws.lastError(e, sizeof(e)); String es = e; es.toUpperCase();
+    if (cfg.tls && (es.indexOf("X509") >= 0 || es.indexOf("VERIFY") >= 0 || es.indexOf("CERT") >= 0)) { cfg.tls = 0; cfgSave(); }
+    ws.stop();
+    xSemaphoreGive(tlsMx); return 0;
+  }
   uint8_t key[16]; for (int i = 0; i < 16; i += 4) { uint32_t r = esp_random(); memcpy(key + i, &r, 4); }
   char k64[32]; size_t o; mbedtls_base64_encode((uint8_t*)k64, sizeof(k64), &o, key, 16); k64[o] = 0;
   String req = String("GET /api/room/" LINK_GAME "/") + cfg.code + "?name=" + urlEnc(S.host) + " HTTP/1.1\r\nHost: " CUBE_HOST "\r\n" +
@@ -831,13 +877,15 @@ static bool wsOpen() {
     char c = ws.read();
     if (c == '\r') continue;
     if (c != '\n') { if (line.length() < 200) line += c; continue; }
-    if (first) { ok = line.indexOf(" 101") > 0; first = false; }
+    if (first) { ok = line.indexOf(" 101") > 0; first = false; if (!ok) snprintf(S.linkErr, sizeof(S.linkErr), "SERVER: %s", line.c_str()); }
     else if (!line.length()) break;
     line = "";
   }
-  if (!ok) { ws.stop(); return false; }
-  wsUp = true; S.link = true; wsPing = millis();
-  return true;
+  if (first) snprintf(S.linkErr, sizeof(S.linkErr), "NO ANSWER FROM ERROR.BLUE");
+  if (!ok) { ws.stop(); xSemaphoreGive(tlsMx); return 0; }
+  wsUp = true; S.link = true; wsPing = millis(); S.linkErr[0] = 0;
+  xSemaphoreGive(tlsMx);
+  return 1;
 }
 static void wsRead() {
   // whole frames only: header first, then the rest (they come in one piece)
@@ -862,6 +910,7 @@ static uint32_t onlineAt = 0, whoAt = 0, chatAt = 0, fwAt = 0, upAt = 0;
 static char sid[20];
 void cloudBegin() {
   lock = xSemaphoreCreateMutex();
+  tlsMx = xSemaphoreCreateMutex();
   jobs = xQueueCreate(12, sizeof(Job));
   fetched = xQueueCreate(8, sizeof(Fetched));
   appMsgs = xQueueCreate(8, sizeof(char*));
@@ -893,10 +942,13 @@ void cloudStep() {
   }
   // the live link
   if (!cfg.link) { if (wsUp) linkDrop(); return; }
+  if (linkYield) { if (wsUp) linkDrop(); wsNext = now + 500; return; }   // a request needs the RAM for a moment
   if (!wsUp) {
     if (now > wsNext && S.upd != UPD_LOADING) {
-      if (wsOpen()) { wsBackoff = 2000; }
-      else { wsNext = now + wsBackoff; wsBackoff = wsBackoff * 2 > 60000 ? 60000 : wsBackoff * 2; }
+      int r = wsOpen();
+      if (r > 0) { wsBackoff = 2000; }
+      else if (r < 0) wsNext = now + 700;
+      else { wsNext = now + wsBackoff; wsBackoff = wsBackoff * 2 > 30000 ? 30000 : wsBackoff * 2; }
     }
     return;
   }

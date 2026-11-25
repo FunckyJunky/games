@@ -587,8 +587,12 @@ struct Info : Screen {
       sprintf(b, "%d dBm", S.rssi); line(3, "SIGNAL", S.net == NET_UP ? b : "-");
       line(4, "MAC", S.mac);
       line(5, "NAME", S.host);
-      line(6, "ERROR.BLUE", S.link ? "LINKED" : S.netErr[0] ? S.netErr : "-");
-      line(7, "TIME", S.timeOk ? "NTP OK" : "NOT FROM NET");
+      line(6, "TIME", S.timeOk ? "NTP OK" : "NOT FROM NET");
+      sprintf(b, "%u KB FREE", (unsigned)(freeHeap() / 1024)); line(7, "FAST RAM", b);
+      line(8, "PHONE LINK", S.link ? "LINKED" : cfg.link ? "NOT LINKED" : "OFF");
+      // the last error, on its own line (long)
+      const char* er = !S.link && S.linkErr[0] ? S.linkErr : S.netErr;
+      if (er[0]) { char e[48]; snprintf(e, sizeof(e), "%s", er); utf8Cut(e, 38); drawText(FT, 27, 104 + 9 * 34 - 4, e, C_WARN, TX_FLAT); }
     }
     fkeysBack();
     redrawIn(1000);

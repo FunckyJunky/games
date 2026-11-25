@@ -286,11 +286,36 @@ function connect() {
 }
 function send(o) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); return true; } return false; }
 function linkMsg(t, bad) { $('linkMsg').innerHTML = t ? '<span class="' + (bad ? 'red' : 'dim') + '">' + esc(t) + '</span>' : ''; }
-setInterval(() => {
-  if (!ws || ws.readyState !== 1) return;
-  if (state && Date.now() - lastRx > 15000) { linkMsg('THE CUBE IS NOT ANSWERING (ASLEEP OR OFFLINE?)', true); online[wsCode] = { on: false }; renderDevices(); }
-  else if (state) linkMsg('');
+let waitN = 0;
+setInterval(async () => {
+  if (!ws || ws.readyState !== 1) { waitN = 0; return; }
+  if (state) {
+    waitN = 0;
+    if (Date.now() - lastRx > 15000) { linkMsg('THE CUBE IS NOT ANSWERING (ASLEEP OR OFFLINE?)', true); online[wsCode] = { on: false }; renderDevices(); }
+    else linkMsg('');
+    return;
+  }
+  // no answer yet: is the cube in this room at all? (after a reinstall it has a new code)
+  if (++waitN < 2) return;
+  send({ t: 'hello' });
+  const d = devices.find(x => x.code === wsCode); if (!d) return;
+  let j = null;
+  try { j = await fetch('/api/room/' + DRIVERS[d.type].room + '/' + d.code + '/who', { cache: 'no-store' }).then(r => r.json()); } catch (e) {}
+  if (!j || state) return;
+  const dev = (j.players || []).find(p => p.name && p.name !== 'PANEL');
+  online[wsCode] = { on: !!dev, name: dev && dev.name }; renderDevices();
+  if (dev) linkMsg('THE CUBE (' + dev.name + ') IS HERE, ASKING IT AGAIN...');
+  else $('linkMsg').innerHTML = '<span class="red">NO CUBE ON CODE ' + esc(wsCode) + ' RIGHT NOW.</span><br><span class="dim">On the cube open ONLINE &rsaquo; LINK: it shows its code and why it can\'t connect. ' +
+    'After a reinstall the cube gets a new code.</span><br><button class="btn" id="newCode" style="margin-top:6px">THE CUBE SHOWS ANOTHER CODE</button>';
 }, 3000);
+$('linkMsg').addEventListener('click', e => {
+  if (e.target.id !== 'newCode') return;
+  const old = wsCode, c = prompt('The code on the cube (ONLINE > LINK):');
+  if (!c) return;
+  const n = String(c).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (n.length !== 6) { flash('A LINK CODE HAS 6 LETTERS/DIGITS', true); return; }
+  devices = devices.filter(x => x.code !== old); saveDevices(); addDevice(n);
+});
 let flashT = 0;
 function flash(t, bad) { linkMsg(t, bad); clearTimeout(flashT); flashT = setTimeout(() => linkMsg(''), 3500); }
 

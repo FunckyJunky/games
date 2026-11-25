@@ -177,6 +177,10 @@ struct Link : Screen {
     if (S.link) drawText(FT, 250, 218, p, C_DIM, TX_FLAT);
     drawTextC(FT, 240, 316, "Scan it, or open", C_FG);
     drawTextC(FT, 240, 348, "error.blue/cube", C_FG);
+    if (!S.link && S.net == NET_UP && S.linkErr[0]) {      // why it doesn't connect
+      char e[72]; snprintf(e, sizeof(e), "%s", S.linkErr); utf8Cut(e, 36);
+      drawTextC(FT, 240, 384, e, C_WARN, TX_FLAT);
+    }
     fkeys({{"ESC", "Back", [] { uiBack(); }},
            {"N", "New code", [] { ask("LINK", "Make a new code? Phones with the old code lose the cube.", {"NEW CODE", "KEEP"}, [](int i) { if (!i) netLinkNewCode(); }); }},
            {"X", "Off", [] { cfg.link = 0; cfgSave(); netLinkState(); }}});

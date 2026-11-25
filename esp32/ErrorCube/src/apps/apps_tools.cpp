@@ -229,7 +229,7 @@ struct Paint : Screen {
   void save() {
     // 24-bit BMP on the TF card (or the cube's own drive)
     const char* dir = S.sd ? "/sd" : "/c";
-    char path[48]; static FileEnt ents[64]; int n = fsList(dir, ents, 64), num = 1;
+    char path[48]; static FileEnt* ents = (FileEnt*)bigAlloc(sizeof(FileEnt) * 64); int n = ents ? fsList(dir, ents, 64) : 0, num = 1;
     for (int i = 0; i < n; i++) { int k; if (sscanf(ents[i].name, "PAINT%d.BMP", &k) == 1 && k >= num) num = k + 1; }
     snprintf(path, sizeof(path), "%s/PAINT%03d.BMP", dir, num);
     int W = SCR_W, H = 404, row = W * 3;

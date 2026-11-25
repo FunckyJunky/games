@@ -1804,7 +1804,11 @@ int mp3dec_decode_frame(mp3dec_t *dec, const uint8_t *mp3, int mp3_bytes, mp3d_s
     int i = 0, igr, frame_size = 0, success = 1;
     const uint8_t *hdr;
     bs_t bs_frame[1];
+#ifdef MINIMP3_SCRATCH_PTR   /* ERROR-CUBE: the 16 KB scratch lives in PSRAM, not on the task's stack */
+    mp3dec_scratch_t &scratch = *(mp3dec_scratch_t *)MINIMP3_SCRATCH_PTR(sizeof(mp3dec_scratch_t));
+#else
     mp3dec_scratch_t scratch;
+#endif
     memset(scratch.ist_pos, 0, sizeof(scratch.ist_pos)); /* avoid use-of-uninitialized-value (scfsi reuse) */
 
     if (mp3_bytes > 4 && dec->header[0] == 0xff && hdr_compare(dec->header, mp3))

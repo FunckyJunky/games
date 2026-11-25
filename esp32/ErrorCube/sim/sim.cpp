@@ -24,6 +24,7 @@ static void dump(const std::string& p) {
 }
 static void rec(int ms) {
   // frames every 40 ms (25 a second) into outDir/rec/NNNN.ppm
+  if (getenv("SIM_LINKERR")) snprintf(S.linkErr, sizeof(S.linkErr), "%s", getenv("SIM_LINKERR"));
   system(("mkdir -p " + outDir + "/rec").c_str());
   for (int t = 0; t < ms; t += 40) {
     extern void step(uint32_t); step(40);

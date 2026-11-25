@@ -8,10 +8,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
-#define MINIMP3_IMPLEMENTATION
-#define MINIMP3_ONLY_MP3
-#define MINIMP3_NO_SIMD
-#include "../lib/minimp3.h"
+#include <new>
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -19,13 +16,23 @@ static void* big(size_t n) { void* p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM | M
 #else
 static void* big(size_t n) { return malloc(n); }
 #endif
+// the decoder's 16 KB of working memory: in PSRAM, so the media task needs only a small stack (internal RAM is
+// what WiFi and the secure connections to error.blue live on)
+static void* mp3Scratch(size_t n) { static void* p = nullptr; if (!p) p = big(n); return p; }
+#define MINIMP3_SCRATCH_PTR mp3Scratch
+#define MINIMP3_IMPLEMENTATION
+#define MINIMP3_ONLY_MP3
+#define MINIMP3_NO_SIMD
+#include "../lib/minimp3.h"
 
 // ------------------------------------------------------------------ requests from the interface
 enum { C_NONE, C_MPLAY, C_MSTOP, C_MSEEK, C_MPAUSE, C_MRESUME, C_VPLAY, C_VSTOP, C_VSEEK, C_VPAUSE, C_VRESUME };
 static volatile int req = C_NONE;
 static char reqPath[200];
 static volatile uint32_t reqMs = 0;
+struct Mus; static Mus& musGet();
 static void ask(int c, const char* p = nullptr, uint32_t ms = 0) {
+  musGet(); mediaStart();                          // the first time: the decoder's memory and its task
   for (int i = 0; i < 200 && req != C_NONE; i++) {   // the pump takes the last request first
 #ifdef ARDUINO
     delay(2);
@@ -49,7 +56,9 @@ struct Mus {
   int16_t* pcm = nullptr; int pcmN = 0, pcmPos = 0;
   char file[200] = "", title[72] = "", artist[72] = "";
 };
-static Mus M;
+static Mus* musP = nullptr;                      // in PSRAM (7 KB)
+static Mus& musGet() { if (!musP) { void* p = big(sizeof(Mus)); musP = new (p) Mus(); } return *musP; }
+#define M musGet()
 static volatile int mState = MED_STOP;
 static const int INBUF = 16384;
 

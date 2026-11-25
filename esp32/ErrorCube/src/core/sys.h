@@ -143,6 +143,7 @@ struct SysState {
   int panels = 0;           // control pages watching
   bool timeOk = false;
   char netErr[48] = "";
+  char linkErr[64] = "";                         // why the live link to error.blue/cube failed last
   // updates
   uint8_t upd = UPD_IDLE;
   char updVer[16] = "", updNotes[120] = "", updMsg[48] = "";
@@ -229,6 +230,7 @@ uint32_t vidLenMs();
 int vidInfo(int* w, int* h, int* fps);               // the frames' size, frames a second; returns the audio rate (0 = silent)
 extern uint16_t* vidFrame;                            // the newest picture (480 x 480), vidFrameSeq counts them
 extern volatile uint32_t vidFrameSeq;
+void mediaStart();                                    // starts the media task (the first time music or video plays)
 void mediaPump();                                     // the media task: read, decode (board: its own task; sim: the loop)
 bool mediaPumpWork();                                 // same, true = it did something (call again soon)
 

@@ -37,6 +37,18 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.3.2
+
+- **Phone link fixed ("SSL - Memory allocation failed"):** mbedTLS keeps 16 KB in + 16 KB out buffers per connection
+  in internal RAM, and 1.3's media task (40 KB stack) left too little for two connections. Now the media task starts
+  the first time music or video plays, with a 12 KB stack (minimp3's 16 KB scratch is in PSRAM), and the player state,
+  DATAMOSH and PAINT buffers moved to PSRAM (globals 95.7 KB -> 76 KB). The requests and the live link take turns
+  for handshakes (tlsMx); the requests' kept-alive connection closes when RAM is short; an update or another request
+  that matters makes the link step aside for a moment (linkYield), background ones wait.
+- **Why a link fails:** LINK.EXE shows the last error, INFO.EXE > NET shows FAST RAM, PHONE LINK and the last error.
+- **error.blue/cube:** when the cube doesn't answer, the page checks the room: no cube on that code (it gets a new
+  code after a reinstall) -> says so, with THE CUBE SHOWS ANOTHER CODE.
+
 ## New in 1.3.1
 
 - **Tap a file, it opens in its program:** MP3 / WAV in MUSIC (the folder becomes the playlist), AVI in VIDEO,

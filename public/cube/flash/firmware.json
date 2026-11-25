@@ -1,8 +1,8 @@
 {
-  "ver": "1.3.1",
+  "ver": "1.3.2",
   "path": "/cube/flash/cube.bin",
-  "size": 2641232,
-  "md5": "6465142e84232694c49fa5c89db106e4",
-  "notes": "Tap a file and it opens in its player (music, video, photos, text); play on the cube from your phone",
-  "date": "2026-11-25T22:42Z"
+  "size": 2643520,
+  "md5": "e7b88b99991be6e8420fb4724907cc9a",
+  "notes": "Fixes the phone link (SSL memory error): more free fast RAM, the music engine starts only when used. LINK and INFO show why a link fails.",
+  "date": "2026-11-25T23:07Z"
 }

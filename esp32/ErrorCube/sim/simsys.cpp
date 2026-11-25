@@ -91,6 +91,7 @@ void fsClose(void* f) { if (f) fclose((FILE*)f); }
 static int simQ = 0; static uint32_t simPlayed = 0; static bool simPause = false; static float simPh = 0;
 int sndMediaRoom() { return 32767 - simQ; }
 void sndMediaPut(const int16_t*, int frames, int rate) { simQ += (int)((long long)frames * 44100 / rate); if (simQ > 32767) simQ = 32767; }
+void mediaStart() {}
 void sndMediaClear() { simQ = 0; simPlayed = 0; simPause = false; }
 uint32_t sndMediaPlayed() { return simPlayed; }
 int sndMediaQueued() { return simQ; }
