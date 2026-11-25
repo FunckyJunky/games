@@ -106,6 +106,10 @@ public/                 the website
                         WOZ-waardeloket; cached, at most 30 lookups per request), 8 charts and a 3D map
                         (maplibre/ = MapLibre GL JS 4.7.1, BSD-3; PDOK base map / aerial photo). Cyberpunk view:
                         cyber.js (three/ = three.js r170, MIT): neon city of the same buildings, fly over or walk
+  other/speach/         Speech trainer (error.blue/other/speach): the ORANGE COY opening speech in Ukrainian, one sentence
+                        at a time. Tilt the phone right/left (or tip forward, or flick) for next/back; swipe and buttons too.
+                        Pronunciation line (English- or Dutch-style), English meaning, practice mode, read-aloud, 60 s
+                        silence timer. One self-contained index.html; the sentences are in the D array at the top of the script
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:

@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12150e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Speech trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, focused rehearsal tool you hold in one hand
+   IDEA: an orange-flagged cue card in an olive field case, with a spirit level for the tilt
+   PICTURE: the current sentence, huge, above a live spirit-level tilt meter
+   COLOUR and TYPE: olive-black ground, warm paper ink, signal orange; Oswald labels, IBM Plex Sans text (Cyrillic)
+   LAYOUT: counter and progress on top, sentence fills the middle, level and controls in thumb reach */
+:root{color-scheme:dark;--bg:#12150e;--panel:#1c2116;--line:#2e3624;--ink:#f2eee2;--muted:#a3a690;--dim:#6f7462;--or:#ff7a1a;--or2:#ffb070;--k:1}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer}
+[hidden]{display:none!important}
+#app{height:100dvh;max-width:760px;margin:0 auto;display:grid;grid-template-rows:auto 1fr auto auto;padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px,env(safe-area-inset-left))}
+.top{display:flex;align-items:center;gap:4px;padding-top:8px}
+.brand{font:600 16px/1 Oswald,sans-serif;color:var(--or);flex:1}
+.brand span{color:var(--muted);font-weight:500;margin-left:6px}
+#count{font:500 17px/1 Oswald,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;margin-right:6px}
+.ib{width:44px;height:44px;border:0;background:transparent;border-radius:12px;display:grid;place-items:center;color:var(--muted)}
+.ib:active{background:var(--panel)}
+.ib svg,.btn svg{width:22px;height:22px;flex:none}
+.prog{height:4px;background:var(--line);border-radius:4px;margin-top:6px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--or);width:0;transition:width .3s}
+#part{font:500 15px/1.25 Oswald,sans-serif;color:var(--muted);margin:12px 0 0}
+#stage{position:relative;overflow:hidden;display:flex;flex-direction:column;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.card{margin:auto 0;width:100%;max-height:100%;overflow-y:auto;padding:16px 2px}
+.uk{margin:0;font-weight:500;line-height:1.22;text-wrap:pretty;font-size:calc(var(--k)*clamp(27px,7.2vw,40px))}
+.uk.s0{font-size:calc(var(--k)*clamp(34px,9.5vw,54px));line-height:1.12}
+.uk.s2{font-size:calc(var(--k)*clamp(23px,6vw,32px))}
+.uk.s3{font-size:calc(var(--k)*clamp(20px,5.2vw,27px))}
+.th .uk{font-family:Oswald,sans-serif;font-weight:600;color:var(--or);line-height:1.1}
+.tc .uk{color:var(--muted);font-style:italic}
+.blur .uk{filter:blur(13px);opacity:.7}
+.w{white-space:nowrap}
+.gap{display:inline-block;width:calc(min(var(--n),9)*.36em);height:.16em;margin-left:.05em;border-radius:2px;background:currentColor;opacity:.3;vertical-align:baseline}
+.ph{margin:14px 0 0;color:var(--or2);font-style:italic;font-size:calc(var(--k)*17px);line-height:1.45}
+.mean{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:calc(var(--k)*16px)}
+.an{animation:inR .26s ease-out}.ap{animation:inL .26s ease-out}
+@keyframes inR{from{opacity:0;transform:translateX(36px)}}
+@keyframes inL{from{opacity:0;transform:translateX(-36px)}}
+.cue{display:flex;align-items:center;gap:16px;margin-top:22px}
+.tmr{--p:0;width:104px;height:104px;flex:none;border-radius:50%;border:0;padding:0;display:grid;place-content:center;background:radial-gradient(closest-side,var(--panel) 80%,transparent 81%),conic-gradient(var(--or) calc(var(--p)*1turn),var(--line) 0)}
+.tmr span{font:600 34px/1 Oswald,sans-serif;font-variant-numeric:tabular-nums}
+.tmr small{font-size:13px;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.meter{padding:8px 0 0}
+.lvl{position:relative;height:46px;border-radius:23px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.z{position:absolute;top:0;bottom:0;width:calc(12.5% + 15px);background:var(--or);opacity:.12;transition:opacity .15s}
+.zl{left:0}.zr{right:0}
+.lvl.fl .zl,.lvl.fr .zr{opacity:.55}
+.mid{position:absolute;left:50%;top:9px;bottom:9px;width:2px;margin-left:-1px;background:var(--line)}
+.lab{position:absolute;top:50%;transform:translateY(-50%);font:500 13px/1 Oswald,sans-serif;color:var(--muted)}
+.lab.l{left:14px}.lab.r{right:14px}
+#dot{position:absolute;top:50%;left:50%;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff8,transparent 42%),var(--or);box-shadow:0 2px 6px #0009,inset 0 -3px 5px #0004}
+.lvl.flick .zl{display:none}
+.lvl.dead #dot{background:var(--dim);transform:none!important}
+.lvl.dead .z{opacity:.04}
+#mstat{font-size:13px;color:var(--muted);margin:6px 2px 0;min-height:2.6em}
+.ctrl{display:flex;gap:8px;padding:6px 0 12px}
+.btn{height:54px;border-radius:14px;border:1px solid var(--line);background:var(--panel);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;flex:0 0 62px}
+.btn.on{border-color:var(--or);color:var(--or)}
+.btn.pri{background:var(--or);color:#1a0e02;border-color:var(--or);flex:1.5 1 0}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible,.ib:focus-visible,.tmr:focus-visible,.li:focus-visible{outline:2px solid var(--or2);outline-offset:2px}
+.ov{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom))}
+.ovi{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.hero{width:min(100%,300px);height:auto;align-self:center}
+.hero .tilt{transform-box:view-box;transform-origin:130px 92px;animation:tilt 3.4s ease-in-out infinite}
+@keyframes tilt{0%,25%{transform:rotate(0)}45%,65%{transform:rotate(15deg)}85%,100%{transform:rotate(0)}}
+.ov h1{font:600 clamp(34px,9vw,48px)/1.05 Oswald,sans-serif;margin:4px 0 0;color:var(--ink);text-wrap:balance}
+.ov .kick{margin:0;font:500 16px/1.3 Oswald,sans-serif;color:var(--or)}
+.ov .ukt{margin:0;color:var(--muted)}
+.how{list-style:none;padding:0;margin:6px 0;display:grid;gap:8px}
+.how li{display:flex;gap:10px;align-items:baseline}
+.how b{color:var(--or2);font-weight:600;min-width:6.5em}
+.ovi .btn{height:56px;flex:none;width:100%;font-size:17px}
+.sheet{position:fixed;inset:0;z-index:30;display:none;background:#000a}
+.sheet.on{display:flex;align-items:flex-end}
+.pan{background:var(--panel);width:100%;max-width:760px;margin:0 auto;max-height:88dvh;overflow-y:auto;border-radius:20px 20px 0 0;padding:14px 18px calc(18px + env(safe-area-inset-bottom))}
+.pan h2{font:600 24px/1 Oswald,sans-serif;margin:0 0 6px;display:flex;justify-content:space-between;align-items:center}
+.lh{font:500 14px/1.2 Oswald,sans-serif;color:var(--or);padding:16px 4px 6px}
+.li{display:grid;grid-template-columns:2.2em 1fr;gap:6px;width:100%;text-align:left;padding:10px 4px;background:none;border:0;border-bottom:1px solid var(--line);min-height:44px;line-height:1.35}
+.li .n{color:var(--dim);font-variant-numeric:tabular-nums;text-align:right;padding-right:4px}
+.li.hd{font-weight:600}
+.li.cur{color:var(--or);background:#ff7a1a14;border-radius:8px}
+.row{padding:12px 0;border-bottom:1px solid var(--line)}
+.row .t{display:block;font-weight:600;margin-bottom:8px}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.seg.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:15px}
+.seg input:checked+span{background:var(--or);color:#1a0e02;border-color:var(--or);font-weight:600}
+.seg input:focus-visible+span{outline:2px solid var(--or2);outline-offset:2px}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;font-weight:600}
+input[type=range]{width:100%;accent-color:var(--or);height:36px;margin:0}
+input[type=checkbox]{width:26px;height:26px;accent-color:var(--or);flex:none}
+.ends{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;border:0}
+.acts .btn{flex:1 1 160px}
+#toast{position:fixed;left:50%;bottom:calc(168px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;background:#000d;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;width:max-content;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+@media (max-height:600px){.uk{font-size:calc(var(--k)*24px)}.uk.s0{font-size:calc(var(--k)*30px)}.uk.s2,.uk.s3{font-size:calc(var(--k)*20px)}.btn{height:46px}.lvl{height:38px}#part{margin-top:6px}}
+@media (prefers-reduced-motion:reduce){.an,.ap,.hero .tilt{animation:none}.prog i{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="top">
+      <div class="brand">ORANGE COY<span>speech</span></div>
+      <div id="count">1 / 64</div>
+      <button class="ib" id="bList" aria-label="All sentences"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+      <button class="ib" id="bSet" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h11M18 6h3M3 12h3M10 12h11M3 18h13M20 18h1"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+    </div>
+    <div class="prog"><i id="bar"></i></div>
+    <p id="part"></p>
+  </header>
+
+  <main id="stage">
+    <article id="card" class="card">
+      <p id="uk" class="uk" lang="uk"></p>
+      <p id="ph" class="ph"></p>
+      <p id="mean" class="mean" lang="en"></p>
+      <div id="cue" class="cue" hidden>
+        <button id="tmr" class="tmr" type="button" aria-label="Minute of silence timer"><span id="tmrT">60</span><small>sec</small></button>
+        <p id="tmrH" class="hint">Tap to start the minute</p>
+      </div>
+    </article>
+  </main>
+
+  <section class="meter">
+    <div class="lvl dead" id="lvl" aria-hidden="true">
+      <i class="z zl"></i><i class="z zr"></i><i class="mid"></i>
+      <span class="lab l" id="ll">back</span><span class="lab r" id="lr">next</span>
+      <b id="dot"></b>
+    </div>
+    <p id="mstat" aria-live="polite"></p>
+  </section>
+
+  <nav class="ctrl">
+    <button class="btn" id="prev" aria-label="Previous sentence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="btn" id="spk" aria-label="Read aloud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+    <button class="btn" id="rev" hidden aria-label="Reveal sentence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="btn pri" id="next"><span>Next</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+  </nav>
+</div>
+
+<div id="start" class="ov">
+  <div class="ovi">
+    <svg class="hero" viewBox="0 0 260 170" aria-hidden="true">
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3120"/><stop offset="1" stop-color="#151910"/></linearGradient></defs>
+      <path d="M43.9 150.3A95 95 0 0 1 216.1 150.3" fill="none" stroke="#2e3624" stroke-width="12" stroke-linecap="round"/>
+      <path d="M43.9 150.3A95 95 0 0 1 75.5 112.6" fill="none" stroke="#4a5636" stroke-width="12" stroke-linecap="round"/>
+      <path d="M184.5 112.6A95 95 0 0 1 216.1 150.3" fill="none" stroke="#ff7a1a" stroke-width="12" stroke-linecap="round"/>
+      <text x="40" y="168" fill="#a3a690" font-family="Oswald,sans-serif" font-size="13">back</text>
+      <text x="196" y="168" fill="#ffb070" font-family="Oswald,sans-serif" font-size="13">next</text>
+      <g class="tilt">
+        <rect x="106" y="6" width="48" height="86" rx="9" fill="url(#g1)" stroke="#ff7a1a" stroke-width="3"/>
+        <rect x="114" y="24" width="32" height="5" rx="2.5" fill="#f2eee2"/>
+        <rect x="114" y="34" width="25" height="5" rx="2.5" fill="#f2eee2" opacity=".8"/>
+        <rect x="114" y="44" width="29" height="5" rx="2.5" fill="#f2eee2" opacity=".6"/>
+        <rect x="114" y="60" width="21" height="3" rx="1.5" fill="#ffb070" opacity=".85"/>
+        <rect x="114" y="67" width="27" height="3" rx="1.5" fill="#ffb070" opacity=".6"/>
+      </g>
+    </svg>
+    <p class="kick" id="kick">ORANGE COY · 64 sentences</p>
+    <h1>Opening speech trainer</h1>
+    <p class="ukt" lang="uk">Відкриття поглибленої вогневої та тактичної підготовки</p>
+    <ul class="how">
+      <li><b>Tilt right</b><span>next sentence</span></li>
+      <li><b>Tilt left</b><span>one back</span></li>
+      <li><b>Swipe or tap</b><span>works too, always</span></li>
+    </ul>
+    <button class="btn pri big" id="go">Start</button>
+    <button class="btn big" id="go1" hidden>Start from sentence 1</button>
+    <p class="hint">Tilt needs this page opened directly in Safari or Chrome over https. Your phone may ask to allow motion access. The screen stays on while you practise.</p>
+  </div>
+</div>
+
+<div class="sheet" id="sList" role="dialog" aria-modal="true" aria-labelledby="hList">
+  <div class="pan">
+    <h2 id="hList">All sentences <button class="ib x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></h2>
+    <div id="list"></div>
+  </div>
+</div>
+
+<div class="sheet" id="sSet" role="dialog" aria-modal="true" aria-labelledby="hSet">
+  <div class="pan">
+    <h2 id="hSet">Settings <button class="ib x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></h2>
+    <form id="setForm">
+      <div class="row"><span class="t">Gesture</span>
+        <div class="seg g4">
+          <label><input type="radio" name="mode" value="tilt"><span>Tilt sideways</span></label>
+          <label><input type="radio" name="mode" value="nod"><span>Tip forward</span></label>
+          <label><input type="radio" name="mode" value="flick"><span>Flick</span></label>
+          <label><input type="radio" name="mode" value="off"><span>Off</span></label>
+        </div>
+      </div>
+      <div class="row"><label class="t" for="fSens">Sensitivity</label>
+        <input type="range" id="fSens" name="sens" min="1" max="5" step="1">
+        <div class="ends"><span>Big move</span><span>Small move</span></div>
+      </div>
+      <div class="row sw"><label for="fFlip">Reverse direction</label><input type="checkbox" id="fFlip" name="flip"></div>
+      <div class="row"><span class="t">Pronunciation line</span>
+        <div class="seg">
+          <label><input type="radio" name="ph" value="off"><span>Off</span></label>
+          <label><input type="radio" name="ph" value="en"><span>English-style</span></label>
+          <label><input type="radio" name="ph" value="nl"><span>Dutch-style</span></label>
+        </div>
+        <p class="hint" id="legend"></p>
+      </div>
+      <div class="row sw"><label for="fEn">Show English meaning</label><input type="checkbox" id="fEn" name="en"></div>
+      <div class="row"><span class="t">Practice</span>
+        <div class="seg">
+          <label><input type="radio" name="pr" value="off"><span>Full text</span></label>
+          <label><input type="radio" name="pr" value="letters"><span>First letters</span></label>
+          <label><input type="radio" name="pr" value="hide"><span>Hidden</span></label>
+        </div>
+        <p class="hint">Practice hides the Ukrainian until you tap the card or Reveal. The English stays as your prompt.</p>
+      </div>
+      <div class="row sw"><label for="fAuto">Read each new sentence aloud</label><input type="checkbox" id="fAuto" name="auto"></div>
+      <div class="row"><label class="t" for="fRate">Reading speed</label>
+        <input type="range" id="fRate" name="rate" min="0.5" max="1.2" step="0.05">
+        <div class="ends"><span>Slow</span><span>Normal</span></div>
+      </div>
+      <div class="row"><label class="t" for="fK">Text size</label>
+        <input type="range" id="fK" name="k" min="0.8" max="1.4" step="0.05">
+      </div>
+      <div class="row acts">
+        <button type="button" class="btn" id="recal">Re-centre tilt</button>
+        <button type="button" class="btn" id="restart">Back to sentence 1</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+{
+/* [Ukrainian, English meaning, type (h = heading, c = cue), new part label] */
+const D=[
+["Добрий день, курсанти,","Good afternoon, cadets,","","Вступ · Welcome"],
+["Ласкаво просимо до Леніна!","Welcome to Lenin!"],
+["Мене звати майор Барт.","My name is Major Bart."],
+["Я — командир роти нідерландського навчального підрозділу: ORANGE COY.","I am the company commander of the Dutch training unit: ORANGE COY."],
+["Зазвичай ми — рота важкого озброєння аеромобільних сил.","Normally we are a heavy weapons company of the air assault forces."],
+["Проте протягом найближчих тижнів перед нами стоїть інше завдання: провести для вас поглиблену вогневу та тактичну підготовку.","But for the coming weeks we have a different task: to give you advanced weapons and tactical training."],
+["Наступні 21 день ви будете частиною ORANGE COY.","For the next 21 days you will be part of ORANGE COY."],
+["Протягом 18 навчальних днів попереду ми охопимо кілька тем.","In the 18 training days ahead we will cover several subjects."],
+["Серед них — вогнева підготовка, метання ручних гранат, базові навички піхоти, ведення бою в лісах та окопах, TCCC, а також протидія загрозам з боку БПЛА (дронів) під час виконання ваших вправ.","Among them: marksmanship, throwing hand grenades, basic infantry skills, fighting in woods and trenches, TCCC, and countering UAV (drone) threats during your exercises."],
+["18 навчальних днів — це небагато часу для всіх тем, які ми хочемо охопити.","18 training days is not much time for all the subjects we want to cover."],
+["Ми зробимо все можливе, щоб навчити вас якомога більшого й дати вам знання та навички, які вам потрібні.","We will do everything we can to teach you as much as possible and give you the knowledge and skills you need."],
+["Але ми не впораємося самі.","But we cannot do it alone."],
+["Ми також очікуємо від вас сильного бажання вчитися, активної участі в підготовці та готовності вдосконалюватися щодня.","We also expect from you a strong will to learn, active participation in the training and a readiness to improve every day."],
+["Ви — майбутні лідери Збройних Сил України.","You are the future leaders of the Armed Forces of Ukraine.","","Лідерство · Leadership"],
+["Це означає, що на вас рівнятимуться люди.","That means people will look up to you."],
+["Ви керуватимете солдатами, яким доведеться виконувати свої завдання у складних умовах.","You will lead soldiers who will have to carry out their tasks in difficult conditions."],
+["Лідерство починається з вас самих.","Leadership starts with yourself."],
+["Офіцер подає правильний приклад, бере на себе відповідальність і стоїть горою за своїх солдатів.","An officer sets the right example, takes responsibility and stands up for his soldiers."],
+["Під час цієї підготовки ми ставитимемося до вас з урахуванням цієї відповідальності.","During this training we will treat you with that responsibility in mind."],
+["Протягом найближчих тижнів я маю до вас п'ять очікувань.","For the coming weeks I have five expectations of you."],
+["Перше: Відданість справі.","First: commitment.","h","Очікування 1 · Commitment"],
+["Беріть активну участь у підготовці, ставте запитання і використовуйте кожну можливість навчитися.","Take an active part in the training, ask questions and use every chance to learn."],
+["Кажіть своїм інструкторам, коли чогось не розумієте.","Tell your instructors when you don't understand something."],
+["Ми тут, щоб навчити вас, але ви також маєте бути готові вчитися і переймати знання та навички, які ми пропонуємо.","We are here to teach you, but you must also be ready to learn and take on the knowledge and skills we offer."],
+["Друге: Дисципліна.","Second: discipline.","h","Очікування 2 · Discipline"],
+["Приходьте вчасно, стежте за тим, щоб ваше спорядження було готовим і в належному стані, та дотримуйтеся правил і домовленостей.","Be on time, make sure your equipment is ready and in good order, and keep to the rules and agreements."],
+["Дисципліна — це не лише про великі речі.","Discipline is not only about big things."],
+["Це також про дрібниці, які ви робите щодня.","It is also about the small things you do every day."],
+["І зрештою на полі бою дисципліна може стати різницею між життям і смертю.","And in the end, on the battlefield, discipline can be the difference between life and death."],
+["Третє: Безпека.","Third: safety.","h","Очікування 3 · Safety"],
+["Дотримуйтеся інструкцій з безпеки та ставтеся до безпеки серйозно.","Follow the safety instructions and take safety seriously."],
+["Мобільні телефони під час занять мають залишатися в таборі.","Mobile phones stay in camp during training."],
+["Негайно повідомляйте свого інструктора про будь-які небезпечні ситуації.","Report any unsafe situation to your instructor immediately."],
+["Це також стосується булінгу, залякування або будь-якої поведінки, через яку інші почуваються не в безпеці.","That also goes for bullying, intimidation or any behaviour that makes others feel unsafe."],
+["Ми маємо створити середовище, в якому кожен зможе безпечно вчитися і тренуватися.","We must create an environment where everyone can learn and train safely."],
+["Четверте: Командна робота.","Fourth: teamwork.","h","Очікування 4 · Teamwork"],
+["Допомагайте одне одному, говоріть прямо, коли щось не так, і ставтеся одне до одного з повагою.","Help each other, speak up when something is wrong, and treat each other with respect."],
+["Ви тут як команда, і кожен має свою роль у тому, щоб ця команда працювала.","You are here as a team, and everyone has a part in making this team work."],
+["Хороший офіцер розуміє, що успіх ніколи не досягається наодинці.","A good officer understands that success is never achieved alone."],
+["П'яте: Відповідальність.","Fifth: responsibility.","h","Очікування 5 · Responsibility"],
+["Ви — майбутні офіцери.","You are future officers."],
+["Ваша поведінка допоможе задати стандарт для солдатів, якими ви керуватимете в майбутньому.","Your behaviour will help set the standard for the soldiers you will lead in the future."],
+["Робити помилки — це частина навчання.","Making mistakes is part of learning."],
+["Тут нічого не відрізняється.","It is no different here."],
+["Проте ми очікуємо, що ви будете чесними щодо своїх помилок, вчитиметеся на них і братимете відповідальність за свої дії.","But we expect you to be honest about your mistakes, learn from them and take responsibility for your actions."],
+["Цього ми також очікуємо від офіцера.","That is also what we expect from an officer."],
+["Ми тут, тому що підтримуємо вас і вашу боротьбу за вільну та незалежну Україну.","We are here because we support you and your fight for a free and independent Ukraine.","","Пошана · Respect"],
+["Саме тому ми хочемо якомога краще підготувати вас до обов'язків і відповідальності, які ви матимете як офіцери в майбутньому.","That is exactly why we want to prepare you as well as we can for the duties and responsibilities you will have as officers."],
+["Водночас ми розуміємо, що український народ іде на великі жертви.","At the same time we understand that the Ukrainian people are making great sacrifices."],
+["Ми відчуваємо глибоку повагу до солдатів і цивільних, які віддали своє життя, та до всіх, хто страждає від наслідків цієї війни.","We feel deep respect for the soldiers and civilians who gave their lives, and for everyone who suffers from the consequences of this war."],
+["Ми поважаємо вашу щоденну хвилину вшанування.","We respect your daily minute of remembrance."],
+["Тому я прошу вас зараз приєднатися до мене у спільній хвилині мовчання, щоб згадати всіх українських військових і цивільних, які загинули в цій війні.","So I now ask you to join me in a minute of silence to remember all Ukrainian soldiers and civilians who have died in this war."],
+["[Хвилина мовчання]","Minute of silence","c"],
+["Дякую.","Thank you."],
+["Курсанти,","Cadets,","","Завершення · Closing"],
+["Сьогодні ми використаємо час для остаточних приготувань.","Today we will use the time for final preparations."],
+["Завтра ми офіційно розпочнемо підготовку.","Tomorrow we officially start the training."],
+["Використовуйте найближчі тижні з користю.","Make good use of the coming weeks."],
+["Будьте відкритими до навчання, допомагайте одне одному і кидайте собі виклик, щоб ставати кращими щодня.","Be open to learning, help each other and challenge yourselves to get better every day."],
+["Мета полягає не лише в тому, щоб ви успішно завершили цю підготовку.","The goal is not only that you complete this training successfully."],
+["Мета полягає в тому, щоб ви вийшли звідси кращими, сильнішими та краще підготовленими майбутніми офіцерами.","The goal is that you leave here as better, stronger and better prepared future officers."],
+["Я вірю у вашу відданість справі і з нетерпінням чекаю на найближчі тижні.","I believe in your commitment and I look forward to the coming weeks."],
+["Бажаю вам усім хорошої і, перш за все, успішної підготовки.","I wish you all a good and, above all, successful training."],
+["Командири взводів, можете розпочинати програму.","Platoon commanders, you may start the programme."]
+];
+
+const $=id=>document.getElementById(id);
+const S={mode:'tilt',sens:3,flip:false,ph:'en',en:true,pr:'off',auto:false,rate:0.85,k:1};
+const KEY='orangecoy-speech-v1';
+let idx=0,rev=false,started=false,running=false,gotData=false,noSensor=false,denied=false;
+try{const o=JSON.parse(localStorage.getItem(KEY)||'null');if(o){Object.assign(S,o.S||{});idx=Math.min(Math.max(0,o.i|0),D.length-1)}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({S,i:idx}))}catch(e){}}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- pronunciation line ---------- */
+const TR={
+ en:{'а':'a','б':'b','в':'v','г':'h','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya'},
+ nl:{'а':'a','б':'b','в':'w','г':'h','ґ':'g','д':'d','е':'e','є':'je','ж':'zj','з':'z','и':'i','і':'ie','ї':'jie','й':'j','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'oe','ф':'f','х':'ch','ц':'ts','ч':'tsj','ш':'sj','щ':'sjtsj','ь':'','ю':'joe','я':'ja'}
+};
+const VOW='аеєиіїоуюя', CYR=/[а-яіїєґ]/;
+const LEG={off:'',en:'y = i in "sit" · i = ee · kh = ch in "loch" · zh = s in "measure" · h is a soft, voiced h.',nl:'i = i in "pit" · ie = ie in "niet" · oe = oe in "boek" · ch, sj, zj, tsj zoals in het Nederlands · h stemhebbend.'};
+function cap(c,r){return r&&c!==c.toLowerCase()?r[0].toUpperCase()+r.slice(1):r}
+function translit(s,k){
+ const m=TR[k],low=s.toLowerCase();let o='';
+ for(let i=0;i<s.length;i++){
+  const c=s[i],l=low[i];
+  if(low.startsWith('ться',i)){o+=cap(c,k==='nl'?'tsja':'tsya');i+=3;continue}
+  if(l==='ь'&&low[i+1]==='о'){o+=k==='nl'?'jo':'yo';i++;continue}
+  if("'’ʼ".includes(c)&&CYR.test(low[i-1]||'')&&CYR.test(low[i+1]||''))continue;
+  if(l==='й'&&k==='en'){o+=cap(c,VOW.includes(low[i+1]||'')?'y':'i');continue}
+  if(l in m){o+=cap(c,m[l]);continue}
+  o+=c;
+ }
+ return o;
+}
+function letters(s){return s.split(/([\p{L}'’ʼ]+)/u).map((w,i)=>i%2?'<span class="w">'+esc(w[0])+(w.length>1?'<i class="gap" style="--n:'+(w.length-1)+'"></i>':'')+'</span>':esc(w)).join('')}
+function partOf(i){for(let j=i;j>=0;j--)if(D[j][3])return D[j][3];return''}
+function size(u){const n=u.length;return n<=28?0:n<=70?1:n<=140?2:3}
+
+/* ---------- render ---------- */
+function render(dir){
+ const [u,e,t]=D[idx],card=$('card'),prac=S.pr!=='off'&&t!=='c',hid=prac&&!rev;
+ card.className='card'+(t?' t'+t:'')+(hid&&S.pr==='hide'?' blur':'');
+ if(dir){void card.offsetWidth;card.classList.add(dir>0?'an':'ap')}
+ const uk=$('uk');uk.className='uk s'+size(u);
+ uk.innerHTML=hid&&S.pr==='letters'?letters(u):esc(t==='c'?u.replace(/[\[\]]/g,''):u);
+ const showPh=S.ph!=='off'&&t!=='c'&&!hid,ph=$('ph');
+ ph.hidden=!showPh;ph.textContent=showPh?translit(u,S.ph):'';
+ $('mean').hidden=!S.en;$('mean').textContent=e;
+ $('cue').hidden=t!=='c';
+ $('count').textContent=(idx+1)+' / '+D.length;
+ $('bar').style.width=((idx+1)/D.length*100)+'%';
+ $('part').textContent=partOf(idx);
+ $('rev').hidden=!prac;$('rev').setAttribute('aria-pressed',rev);$('rev').classList.toggle('on',rev);
+ card.scrollTop=0;
+ save();
+ if(S.auto&&started&&dir)speak();
+}
+function go(dir,byMotion){
+ const n=idx+dir;
+ if(n<0||n>=D.length){toast(n<0?'This is the first sentence':'End of the speech');buzz([60,60,60]);return}
+ idx=n;rev=false;stopTimer();render(dir);
+ if(byMotion){buzz(25);flash(dir)}
+}
+function buzz(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
+
+/* ---------- motion ---------- */
+const TH=[34,27,21,16,12],FL=[24,19,15,11.5,8.5];
+let base=null,armed=true,mv=0,mf=false,mq=false,lp=null,lastF=0;
+const lvl=$('lvl'),dot=$('dot');
+function meter(r,fl){mv=r;mf=fl;if(mq)return;mq=true;requestAnimationFrame(()=>{mq=false;const half=lvl.clientWidth/2-20;const c=mf?Math.min(Math.max(mv,0),1.3):Math.max(-1.3,Math.min(1.3,mv));dot.style.transform='translateX('+(c*half*.75).toFixed(1)+'px)'})}
+function flash(dir){lvl.classList.add(dir>0?'fr':'fl');setTimeout(()=>lvl.classList.remove('fr','fl'),380)}
+function sheetOpen(){return !!document.querySelector('.sheet.on')}
+function seen(){if(!gotData){gotData=true;if(noSensor){noSensor=false;modeText()}}}
+function axes(e){
+ const a=(screen.orientation&&screen.orientation.angle)??window.orientation??0;
+ switch((a+360)%360){case 90:return[e.beta,-e.gamma];case 270:return[-e.beta,e.gamma];case 180:return[-e.gamma,-e.beta];default:return[e.gamma,e.beta]}
+}
+addEventListener('deviceorientation',e=>{
+ if(e.gamma==null||e.beta==null)return;
+ seen();
+ if(!running||(S.mode!=='tilt'&&S.mode!=='nod')||sheetOpen())return;
+ const [side,fwd]=axes(e),v=S.mode==='tilt'?side:-fwd;
+ if(base==null){base=v;armed=true}
+ const d=(v-base)*(S.flip?-1:1),th=TH[S.sens-1];
+ meter(d/th,false);
+ if(armed){
+  if(d>th){armed=false;go(1,true)}
+  else if(d<-th){armed=false;go(-1,true)}
+  else if(Math.abs(d)<th*.3)base+=(v-base)*.005;
+ }else if(Math.abs(d)<th*.45)armed=true;
+});
+addEventListener('devicemotion',e=>{
+ let m=null;const a=e.acceleration;
+ if(a&&a.x!=null){m=Math.hypot(a.x,a.y||0,a.z||0)}
+ else{
+  const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
+  if(!lp)lp={x:g.x,y:g.y,z:g.z};
+  lp.x+=(g.x-lp.x)*.15;lp.y+=(g.y-lp.y)*.15;lp.z+=(g.z-lp.z)*.15;
+  m=Math.hypot(g.x-lp.x,g.y-lp.y,g.z-lp.z);
+ }
+ seen();
+ if(!running||S.mode!=='flick'||sheetOpen())return;
+ const th=FL[S.sens-1],t=performance.now();
+ meter(m/th,true);
+ if(m>th&&t-lastF>900){lastF=t;go(1,true)}
+});
+const reori=()=>{base=null};
+addEventListener('orientationchange',reori);
+try{screen.orientation&&screen.orientation.addEventListener('change',reori)}catch(e){}
+
+function modeText(){
+ const L=S.flip?['left','right']:['right','left'];
+ let t={tilt:'Tilt '+L[0]+' for next, '+L[1]+' for back.',
+  nod:S.flip?'Tip the top toward you for next, away for back.':'Tip the top away for next, toward you for back.',
+  flick:'Flick the phone for next. Use the back button to go back.',
+  off:'Motion is off. Swipe the card or use the buttons.'}[S.mode];
+ if(S.mode!=='off'){
+  if(!started)t='';
+  else if(denied)t='Motion access was refused. Reload and allow it, or swipe the card.';
+  else if(noSensor)t='No motion data here. Swipe or use the buttons. For tilt, open this page from an https site in Safari or Chrome.';
+ }
+ $('mstat').textContent=t;
+ lvl.classList.toggle('flick',S.mode==='flick');
+ lvl.classList.toggle('dead',S.mode==='off'||denied||noSensor||!running);
+ $('ll').textContent=S.mode==='flick'?'':'back';
+ $('lr').textContent=S.mode==='flick'?'flick':'next';
+ meter(0,S.mode==='flick');
+}
+
+/* ---------- read aloud ---------- */
+let voice=null,warned=false;
+function pick(){try{voice=speechSynthesis.getVoices().find(x=>/^uk/i.test(x.lang))||null}catch(e){}}
+if('speechSynthesis' in window){pick();try{speechSynthesis.onvoiceschanged=pick}catch(e){}}
+function speak(){
+ if(!('speechSynthesis' in window)){toast('Read-aloud is not available in this browser');return}
+ if(!voice)pick();
+ try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(D[idx][0].replace(/[\[\]]/g,''));u.lang='uk-UA';if(voice)u.voice=voice;u.rate=S.rate;speechSynthesis.speak(u)}catch(e){toast('Read-aloud is not available here');return}
+ if(!voice&&!warned){warned=true;toast('No Ukrainian voice found. Add one in your phone’s speech settings.')}
+}
+
+/* ---------- minute of silence ---------- */
+let tmI=null;
+function setT(s,p){$('tmrT').textContent=s;$('tmr').style.setProperty('--p',p)}
+function stopTimer(){clearInterval(tmI);tmI=null;setT(60,0);$('tmrH').textContent='Tap to start the minute'}
+$('tmr').addEventListener('click',()=>{
+ if(tmI){stopTimer();return}
+ const end=Date.now()+60000;$('tmrH').textContent='Tap to stop';
+ tmI=setInterval(()=>{const r=Math.max(0,end-Date.now());setT(Math.ceil(r/1000),1-r/60000);
+  if(!r){clearInterval(tmI);tmI=null;$('tmrH').textContent='Done. Go on to the next sentence.';buzz([200,100,200])}},200);
+});
+
+/* ---------- wake lock ---------- */
+async function wake(){try{if(navigator.wakeLock)await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&started){wake();base=null}});
+
+/* ---------- start ---------- */
+function begin(){
+ const ps=[];
+ try{
+  if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function')ps.push(DeviceOrientationEvent.requestPermission());
+  if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function')ps.push(DeviceMotionEvent.requestPermission());
+ }catch(e){}
+ try{if('speechSynthesis' in window)speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}
+ started=true;$('start').hidden=true;wake();
+ Promise.allSettled(ps).then(r=>{
+  denied=r.some(x=>x.status==='rejected'||x.value==='denied');
+  running=!denied;base=null;modeText();
+  if(!denied)setTimeout(()=>{if(!gotData){noSensor=true;modeText()}},1800);
+ });
+ render(0);
+}
+$('go').addEventListener('click',begin);
+$('go1').addEventListener('click',()=>{idx=0;begin()});
+
+/* ---------- touch, keys, buttons ---------- */
+let px=null,py=0;
+const stage=$('stage');
+stage.addEventListener('pointerdown',e=>{px=e.clientX;py=e.clientY});
+stage.addEventListener('pointercancel',()=>{px=null});
+stage.addEventListener('pointerup',e=>{
+ if(px==null)return;const dx=e.clientX-px,dy=e.clientY-py;px=null;
+ if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.3)go(dx<0?1:-1);
+ else if(Math.abs(dx)<10&&Math.abs(dy)<10&&S.pr!=='off'&&D[idx][2]!=='c'&&!e.target.closest('button')){rev=!rev;render(0)}
+});
+$('prev').addEventListener('click',()=>go(-1));
+$('next').addEventListener('click',()=>go(1));
+$('spk').addEventListener('click',speak);
+$('rev').addEventListener('click',()=>{rev=!rev;render(0)});
+addEventListener('keydown',e=>{
+ if(sheetOpen()){if(e.key==='Escape')closeSheets();return}
+ if(!started)return;
+ if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();go(1)}
+ else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(-1)}
+});
+
+/* ---------- sheets ---------- */
+function closeSheets(){document.querySelectorAll('.sheet.on').forEach(s=>s.classList.remove('on'));base=null;armed=true}
+document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{if(e.target===s||e.target.closest('.x'))closeSheets()}));
+let lh='';
+D.forEach((d,i)=>{if(d[3])lh+='<div class="lh">'+esc(d[3])+'</div>';lh+='<button class="li'+(d[2]==='h'?' hd':'')+'" data-i="'+i+'"><span class="n">'+(i+1)+'</span><span lang="uk">'+esc(d[0])+'</span></button>'});
+$('list').innerHTML=lh;
+$('list').addEventListener('click',e=>{const b=e.target.closest('.li');if(!b)return;idx=+b.dataset.i;rev=false;stopTimer();closeSheets();render(1)});
+$('bList').addEventListener('click',()=>{
+ $('list').querySelectorAll('.li').forEach(b=>b.classList.toggle('cur',+b.dataset.i===idx));
+ $('sList').classList.add('on');const c=$('list').querySelector('.cur');if(c)c.scrollIntoView({block:'center'});
+});
+$('bSet').addEventListener('click',()=>$('sSet').classList.add('on'));
+
+/* ---------- settings form ---------- */
+const F=$('setForm');
+function fill(){
+ for(const r of F.elements.mode)r.checked=r.value===S.mode;
+ for(const r of F.elements.ph)r.checked=r.value===S.ph;
+ for(const r of F.elements.pr)r.checked=r.value===S.pr;
+ F.elements.sens.value=S.sens;F.elements.flip.checked=S.flip;F.elements.en.checked=S.en;
+ F.elements.auto.checked=S.auto;F.elements.rate.value=S.rate;F.elements.k.value=S.k;
+ $('legend').textContent=(LEG[S.ph]?LEG[S.ph]+' ':'')+'No stress marks: use read-aloud to check where the stress falls.';
+ document.documentElement.style.setProperty('--k',S.k);
+}
+F.addEventListener('submit',e=>e.preventDefault());
+F.addEventListener('input',()=>{
+ S.mode=F.elements.mode.value||'tilt';S.ph=F.elements.ph.value||'off';S.pr=F.elements.pr.value||'off';
+ S.sens=+F.elements.sens.value;S.flip=F.elements.flip.checked;S.en=F.elements.en.checked;
+ S.auto=F.elements.auto.checked;S.rate=+F.elements.rate.value;S.k=+F.elements.k.value;
+ base=null;armed=true;rev=false;fill();render(0);modeText();
+});
+$('recal').addEventListener('click',()=>{base=null;armed=true;toast('Centred. Hold the phone the way you read it.')});
+$('restart').addEventListener('click',()=>{idx=0;rev=false;stopTimer();closeSheets();render(-1)});
+
+/* ---------- init ---------- */
+$('kick').textContent='ORANGE COY · '+D.length+' sentences';
+if(idx>0){$('go').textContent='Continue at sentence '+(idx+1);$('go1').hidden=false}
+fill();render(0);modeText();
+}
+</script>
+</body>
+</html>
