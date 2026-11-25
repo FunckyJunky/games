@@ -169,6 +169,20 @@ input[type=text].wide { width: 100%; background: #000; border: 2px solid var(--f
         <div class="dim" style="font-size:18px;margin-top:8px">Uploads here go through error.blue, so they work from anywhere (about 50 KB/s). On the same WiFi as the cube, FAST opens the cube's own page: much quicker for music and video.</div>
       </div>
 
+      <!-- PICO-8 -->
+      <div data-tab="pico8">
+        <div class="dim" style="font-size:18px">PICO-8 carts on the cube: tilt = arrows, - = O, + = X, PWR = menu. Saved on the SD card (A:\PICO8), or on the cube when there's no card.</div>
+        <div id="p8List" style="margin-top:8px"></div>
+        <input type="file" id="p8File" multiple accept=".p8,.png" class="hide">
+        <button class="btn big" id="p8Up" style="margin-top:8px">ADD CARTS (.P8 / .P8.PNG)</button>
+        <div class="meter hide" id="p8Bar" style="margin-top:8px"><i></i></div>
+        <div class="dim" id="p8Stat" style="font-size:18px;min-height:22px"></div>
+        <h2 style="margin-top:14px">NEW CART: PASTE THE CODE</h2>
+        <input type="text" id="p8Name" class="wide" maxlength="24" placeholder="NAME" autocomplete="off">
+        <textarea id="p8Code" style="min-height:180px;margin-top:8px;font-size:16px" placeholder="function _update() ... end&#10;function _draw() cls() print('hello',40,60,7) end&#10;&#10;(or a whole .p8 file)"></textarea>
+        <div class="grid2" style="margin-top:8px"><button class="btn" id="p8Save">SAVE</button><button class="btn" id="p8SavePlay">SAVE + PLAY</button></div>
+      </div>
+
       <!-- SYSTEM -->
       <div data-tab="system">
         <div class="kv" id="fwKv"></div>
@@ -280,9 +294,9 @@ function connect() {
     else if (x.t === 'state') { state = x; online[wsCode] = { on: true }; if (d.name !== x.name && x.name) { d.name = x.name; saveDevices(); } renderAll(); }
     else if (x.t === 'shot') drawShot(x);
     else if (x.t === 'app') appLog('APP ' + x.id + ': ' + JSON.stringify(x.data));
-    else if (x.t === 'fls') fRender(x);
+    else if (x.t === 'fls') { fRender(x); p8Render(x); }
     else if (x.t === 'fack') fAck(x);
-    else if (x.t === 'fdone') { if (!x.ok) flash(x.c === 'frm' ? 'COULD NOT DELETE (FOLDERS MUST BE EMPTY)' : 'DID NOT WORK', true); fls(); }
+    else if (x.t === 'fdone') { if (!x.ok) flash(x.c === 'frm' ? 'COULD NOT DELETE (FOLDERS MUST BE EMPTY)' : 'DID NOT WORK', true); fls(); if (tab === 'pico8') p8ls(); }
   };
   s.onclose = () => { if (ws !== s) return; ws = null; linkMsg('CONNECTION LOST. TRYING AGAIN...', true); retry = setTimeout(connect, 3000); };
 }
@@ -322,7 +336,7 @@ let flashT = 0;
 function flash(t, bad) { linkMsg(t, bad); clearTimeout(flashT); flashT = setTimeout(() => linkMsg(''), 3500); }
 
 // ===================================================================== tabs
-const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['files', 'FILES', 'files'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
+const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['files', 'FILES', 'files'], ['pico8', 'PICO-8', 'pico8'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
 let tab = store.get('cube.tab', 'status');
 function renderTabs() {
   const caps = schema ? schema.caps || [] : ['video', 'apps'];
@@ -332,6 +346,7 @@ function renderTabs() {
   document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('hide', el.dataset.tab !== tab));
   if (tab === 'apps') loadApps();
   if (tab === 'files') fls();
+  if (tab === 'pico8') p8ls();
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; store.set('cube.tab', tab); renderTabs(); });
 document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
@@ -569,7 +584,7 @@ function fRender(x) {
     !e.length ? '<div class="empty">EMPTY</div>' :
     e.map(f => '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all;cursor:pointer" data-open="' + (f[1] ? esc(f[0]) : '') + '">' +
       (f[1] ? '&#9618; ' : '') + esc(f[0]) + '</span><span class="dim">' + (f[1] ? '&lt;DIR&gt;' : fsz(f[2])) + '</span>' +
-      (!f[1] && /\.(mp3|wav|avi|mp4|m4v|mov|mkv|webm|3gp|jpe?g|bmp|txt|md|json|csv|log|p8)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
+      (!f[1] && /\.(mp3|wav|avi|mp4|m4v|mov|mkv|webm|3gp|jpe?g|bmp|txt|md|json|csv|log|p8|p8\.png)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-ren="' + esc(f[0]) + '">REN</button>' +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-del="' + esc(f[0]) + '">DEL</button></div>').join('') + (x.more ? '<div class="dim">(more files: use the FAST page to see all)</div>' : '');
 }
@@ -614,6 +629,65 @@ function putFile(p, buf, prog) {
   });
 }
 function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096)); return btoa(s); }
+// ===================================================================== PICO-8: the cube's carts
+let p8Carts = { '/sd/PICO8': null, '/c/pico8': null }, p8Sd = false, p8Busy = false;
+function p8ls() { p8Carts = { '/sd/PICO8': null, '/c/pico8': null }; if (!send({ t: 'fls', d: '/sd/PICO8' }) || !send({ t: 'fls', d: '/c/pico8' })) $('p8List').innerHTML = '<div class="empty">NOT CONNECTED</div>'; }
+const isCart = n => /\.p8(\.png)?$/i.test(n);
+function p8Render(x) {
+  if (!(x.d in p8Carts)) return;
+  if (x.d === '/sd/PICO8') p8Sd = !!x.sd;
+  p8Carts[x.d] = (x.e || []).filter(f => !f[1] && isCart(f[0])).map(f => ({ d: x.d, n: f[0], z: f[2] }));
+  const all = [...(p8Carts['/sd/PICO8'] || []), ...(p8Carts['/c/pico8'] || [])].sort((a, b) => a.n.localeCompare(b.n));
+  $('p8List').innerHTML = !all.length ? '<div class="empty">NO CARTS YET</div>' : all.map(c =>
+    '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all">' + esc(c.n.replace(/\.p8(\.png)?$/i, '').toUpperCase()) +
+    ' <span class="dim">' + (c.d === '/sd/PICO8' ? 'A:' : 'C:') + ' ' + fsz(c.z) + '</span></span>' +
+    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 10px" data-p8play="' + esc(c.d + '/' + c.n) + '">&#9654; PLAY</button>' +
+    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-p8del="' + esc(c.d + '/' + c.n) + '">DEL</button></div>').join('');
+}
+$('p8List').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.p8play) { if (send({ t: 'fopen', p: t.dataset.p8play })) flash('PLAYING ON THE CUBE: ' + t.dataset.p8play.split('/').pop()); }
+  else if (t.dataset.p8del) { if (confirm('Delete ' + t.dataset.p8del.split('/').pop() + '?')) send({ t: 'frm', p: t.dataset.p8del }); }
+});
+const p8Dir = () => p8Sd ? '/sd/PICO8' : '/c/pico8';
+async function p8Put(name, buf) {
+  const p = p8Dir() + '/' + name, t0 = Date.now();
+  $('p8Bar').classList.remove('hide');
+  const fail = await putFile(p, buf, (o, n) => { $('p8Bar').firstElementChild.style.width = (n ? o / n * 100 : 100) + '%'; $('p8Stat').textContent = 'SENDING ' + name + ' ' + fsz(o) + ' / ' + fsz(n); });
+  $('p8Bar').classList.add('hide');
+  return fail ? fail : '';
+}
+$('p8Up').onclick = () => { if (!p8Busy) $('p8File').click(); };
+$('p8File').onchange = async () => {
+  const files = [...$('p8File').files].filter(f => isCart(f.name)); $('p8File').value = '';
+  if (!files.length) { flash('PICK .P8 OR .P8.PNG FILES', true); return; }
+  p8Busy = true; let ok = 0;
+  for (const f of files) {
+    const fail = await p8Put(f.name.replace(/[^A-Za-z0-9._ -]/g, '_'), new Uint8Array(await f.arrayBuffer()));
+    if (fail) { flash(f.name + ': ' + fail, true); break; }
+    ok++;
+  }
+  p8Busy = false; $('p8Stat').textContent = ok + ' CART(S) ON THE CUBE'; p8ls();
+};
+async function p8SaveCode(play) {
+  let name = $('p8Name').value.trim().toLowerCase().replace(/[^a-z0-9_ -]/g, '').replace(/ +/g, '_').slice(0, 24);
+  let code = $('p8Code').value;
+  if (!name) { flash('GIVE IT A NAME', true); return; }
+  if (!code.trim()) { flash('PASTE THE CODE FIRST', true); return; }
+  // just Lua: make it a .p8 file
+  if (!/^pico-8 cartridge/.test(code.trim())) code = 'pico-8 cartridge // http://www.pico-8.com\nversion 41\n__lua__\n' + code.replace(/\r\n/g, '\n') + '\n';
+  if (p8Busy) return;
+  p8Busy = true;
+  const fail = await p8Put(name + '.p8', new TextEncoder().encode(code));
+  p8Busy = false;
+  if (fail) { flash(fail, true); return; }
+  $('p8Stat').textContent = 'SAVED ' + name.toUpperCase() + ' ON THE CUBE';
+  if (play) send({ t: 'fopen', p: p8Dir() + '/' + name + '.p8' });
+  p8ls();
+}
+$('p8Save').onclick = () => p8SaveCode(false);
+$('p8SavePlay').onclick = () => p8SaveCode(true);
+
 $('fFile').onchange = async () => {
   const files = [...$('fFile').files]; $('fFile').value = '';
   if (!files.length) return;

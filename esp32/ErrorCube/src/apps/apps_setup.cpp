@@ -397,6 +397,22 @@ static Screen* pageUpdates() {
     r.push_back(action("OPEN UPDATE.EXE", [] { openProg("UPDATE"); }));
   });
 }
+static Screen* pageP8() {
+  return page("PICO-8", "C:\\SETUP\\PICO-8>", [](std::vector<Row>& r) {
+    r.push_back(heading("TILT = THE ARROWS", IC_HOLO));
+    r.push_back(action("CALIBRATE", [] { ask("CALIBRATE", "Hold the cube the way you want to play, then OK.", {"OK", "CANCEL"}, [](int i) { if (!i) p8Calibrate(); }); },
+                       [](char* o) { strcpy(o, cfg.p8CalOk ? "DONE" : "NOT YET"); }));
+    r.push_back(number("TILT BEFORE IT MOVES", &cfg.p8Dead, 4, 30, 2, "\xC2\xB0"));
+    r.push_back(toggle("INVERT LEFT/RIGHT", &cfg.p8InvX));
+    r.push_back(toggle("INVERT UP/DOWN", &cfg.p8InvY));
+    r.push_back(info("NOT CALIBRATED =", [](char* o) { strcpy(o, "HOW YOU HOLD IT AT START"); }));
+    r.push_back(heading("BUTTONS", IC_KEY));
+    r.push_back(choice("- AND +", &cfg.p8Swap, 2, [](int i) { return i ? "X AND O" : "O AND X"; }));
+    r.push_back(info("PWR", [](char* o) { strcpy(o, "MENU / QUIT"); }));
+    r.push_back(action("TEST IT", [] { p8Open("/c/pico8/tilttest.p8"); }));
+  });
+}
+Screen* makeP8Setup() { return pageP8(); }
 static Row section(const char* n, const char* desc, uint8_t ic, Screen* (*open)()) {
   Row r; r.name = n; r.kind = 0; r.icon = ic;
   r.val = [desc](char* o) { strcpy(o, desc); };
@@ -412,6 +428,7 @@ Screen* makeSetup() {
     r.push_back(heading("CONTROLS", IC_KEY));
     r.push_back(section("SOUND", "volume, clicks", IC_SOUND, pageSound));
     r.push_back(section("BUTTONS", "hold, combos", IC_KEY, pageButtons));
+    r.push_back(section("PICO-8", "tilt, O / X", IC_KEY, pageP8));
     r.push_back(heading("CONNECT", IC_WIFI));
     r.push_back(section("WIFI", "networks", IC_WIFI, [] { return findProg("WIFI"); }));
     { Row o = toggle("OFFLINE", &cfg.offline, [] { netOffline(cfg.offline); }); o.icon = IC_OFFLINE; r.push_back(o); }

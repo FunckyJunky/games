@@ -585,6 +585,7 @@ bool openFile(const char* path) {
   std::string p = path, dir = p.substr(0, p.rfind('/'));
   if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { musicPlayFolder(dir.c_str(), nm); uiOpen(makeNowPlaying()); return true; }
   if (!strcasecmp(ex, ".avi") || isPhoneVideo(nm)) { videoOrConvert(path); return true; }
+  { size_t l = strlen(nm); if ((l > 3 && !strcasecmp(nm + l - 3, ".p8")) || (l > 7 && !strcasecmp(nm + l - 7, ".p8.png"))) { p8Open(path); return true; } }
   if (imgIsPicture(nm)) { std::vector<std::string> pics; int at; listPics(path, pics, at); uiOpen(new ImageView(pics, at)); return true; }
   if (isText(nm)) {
     size_t max = 96000, got = 0;

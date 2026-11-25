@@ -1071,6 +1071,7 @@ bool uiFrame() {
     return true;
   }
   bool calm = cfg.saver;
+  { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) calm = true; }
   gfxTheme(cfg.color, calm ? 0 : cfg.glow);
   fxLensSetup(calm ? 0 : cfg.lens);
   { Screen* s0 = uiCurrent(); holoFrameStart(s0 && s0->fullScreen()); }
@@ -1158,6 +1159,7 @@ bool uiFrame() {
     redrawIn(40);
     wasFx = true;
   }
+  { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) { lastPre = fxSpare(); return true; } }   // a game: as it is
   holoGlass();                                         // HOLO: the glass moves the other way
   fxPost(cfg.fringe && !calm, cfg.scan);
   lastPre = fxSpare();

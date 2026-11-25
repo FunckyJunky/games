@@ -37,6 +37,23 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.4: PICO-8
+
+- **PICO8.EXE:** plays PICO-8 carts (.p8 and .p8.png) from A:\PICO8 (SD card) and C:\pico8. Comes with TOLK and
+  TILT TEST (carts/*.p8 -> src/p8/carts.h with tools/cube-carts.py). Tap a cart in FILES and it plays too.
+- **Controls:** tilt the cube = the arrows (degrees from how you hold it: CALIBRATE, or how it's held when a cart
+  starts), - = O, + = X (SWAP), PWR = the cube's menu (CONTINUE, RESTART, CALIBRATE, QUIT), long touch too.
+  SETUP > PICO-8: tilt before it moves, invert left/right and up/down, swap, TEST IT. Buttons reach the game raw
+  (btnHook), a press waits until the cart reads it (30 fps carts read every other step).
+- **The emulator:** FAKE-08 (MIT, github.com/jtothebell/fake-08) on z8lua (MIT) in src/p8, trimmed for the ESP32:
+  no iostreams / regex / codecvt / map (cart.cpp, vm.cpp, filehelpers.cpp, emojiconversion.cpp rewritten in those
+  parts), lodepng -> p8png.cpp (the ROM's inflate), no zip / ini / eris save states, its audio in float (the S3 has
+  no double FPU). Lua's memory is in PSRAM (lauxlib l_alloc). The cart runs in its own task on core 0 (28 KB stack,
+  60 steps a second), sound into the media stream at 22.05 kHz, the picture (128x128) scaled to 480x480 with no
+  glass or scanlines (Screen::plain). ~300 KB of flash.
+- **From the phone:** error.blue/cube > PICO-8: the carts on the cube (PLAY, DEL), ADD CARTS (.p8 / .p8.png) and
+  NEW CART: paste Lua (or a whole .p8) and SAVE / SAVE + PLAY. Into A:\PICO8, or C:\pico8 without a card.
+
 ## New in 1.3.3
 
 - **MP4 (MOV, WebM...) on the cube:** the chip can't decode phone video (H.264 High profile, HD), so the phone converts

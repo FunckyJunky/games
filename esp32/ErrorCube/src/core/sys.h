@@ -109,6 +109,12 @@ struct Cfg {
   uint8_t wallLight = 40;   // how bright the picture is behind the text, %
   // UPDATES (1.2): a message when a new firmware is ready (UPDATE NOW / LATER)
   uint8_t updAsk = 1;
+  // PICO-8 (1.4): tilt = the arrows, - = O, + = X
+  uint8_t p8Dead = 12;      // degrees of tilt before an arrow counts (4..30)
+  uint8_t p8InvX = 0, p8InvY = 0;
+  uint8_t p8Swap = 0;       // - is X, + is O
+  uint8_t p8CalOk = 0;      // calibrated: p8Cal is how you hold it to play (else: how you hold it when a cart starts)
+  int16_t p8Cal[3] = {0, 0, 1000};   // gravity, x1000 (screen directions)
   // new settings go here, at the end
 };
 extern Cfg cfg;
@@ -190,6 +196,7 @@ bool jpegDecode(const uint8_t* d, size_t n, uint16_t* out, int ow, int oh, int m
 // buttons (buttons.cpp): the board reports - / + up and down, and the power chip's PWR presses
 void btnRaw(int id, bool down);        // id 0 = -, 1 = +
 void btnPwr(bool held);
+extern bool (*btnHook)(int id, bool down);   // a game takes - (0), + (1), PWR (2) raw; true = taken
 void btnPoll();                        // every loop: double press and hold timers
 void btnDo(int action);
 const char* btnName(int action);

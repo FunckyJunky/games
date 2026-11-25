@@ -44,6 +44,7 @@ struct Screen {
   virtual bool fullScreen() { return false; }   // no status bar
   virtual bool keepAwake() { return false; }    // the screen doesn't go off by itself
   virtual bool noSwipeBack() { return false; }  // a swipe to the right isn't BACK here (PAINT)
+  virtual bool plain() { return false; }        // the picture as it is: no glass, scanlines or glitches (games)
 };
 
 void uiInit();
@@ -153,7 +154,10 @@ void musicToggle();
 void musicPlayFolder(const char* dir, const char* file);
 void musicTick();
 void videoOpen(const char* path);
-void videoOrConvert(const char* path);       // AVI plays; MP4/MOV... plays its converted twin, or the phone converts it
+void videoOrConvert(const char* path);
+void p8Open(const char* path);               // PICO-8: play a cart (.p8 / .p8.png)
+void p8Calibrate();                          // PICO-8: the way the cube is held now is straight
+Screen* makeP8Setup();       // AVI plays; MP4/MOV... plays its converted twin, or the phone converts it
 bool isPhoneVideo(const char* name);
 Screen* makeNowPlaying();
 bool openFile(const char* path);         // a file in the program made for it (music, video, picture, text...); false = none

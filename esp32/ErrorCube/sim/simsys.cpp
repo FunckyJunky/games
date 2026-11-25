@@ -47,6 +47,7 @@ static std::string real(const char* p) {
   if (!strncmp(p, "/c", 2)) return root + "/c" + (p + 2);
   return root + p;
 }
+std::string simRealPath(const char* p) { return real(p); }   // PICO-8 opens its files itself
 int fsList(const char* dir, FileEnt* out, int max) {
   DIR* d = opendir(real(dir).c_str()); if (!d) return -1;
   int n = 0; struct dirent* e;

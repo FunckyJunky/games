@@ -599,7 +599,7 @@ static void sendSchema() {
   JsonDocument d;
   d["t"] = "schema"; d["dev"] = "error-cube"; d["v"] = CUBE_VERSION;
   JsonArray caps = d["caps"].to<JsonArray>();
-  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power", "files"}) caps.add(c);
+  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power", "files", "pico8"}) caps.add(c);
   JsonArray g = d["sets"].to<JsonArray>();
   static const char* TY[] = {"toggle", "choice", "slider", "text"};
   for (int i = 0; i < N_SETS; i++) {
