@@ -37,6 +37,19 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.3.3
+
+- **MP4 (MOV, WebM...) on the cube:** the chip can't decode phone video (H.264 High profile, HD), so the phone converts
+  it once into the cube's MJPEG AVI. Tap an MP4 on the cube: if its AVI twin (same name, .avi) is there it plays;
+  else a QR code opens the cube's own page http://IP/cv -> /files?conv=PATH, which loads the MP4, converts it in the
+  phone's browser (error.blue/cube/conv.js), sends the AVI next to it, says DONE (POST /api/prog) and plays it
+  (POST /api/open). The cube shows the phone's progress. VIDEO lists MP4s (hidden once converted).
+- **Uploads convert videos:** error.blue/cube > FILES and the cube's /files page convert MP4s on the way (checkbox).
+  error.blue/cube uploads now keep 4 pieces on the way (faster); a lost piece is sent again.
+- **conv.js** (public/cube/conv.js): plays the video muted at 2x and copies frames with requestVideoFrameCallback
+  (slows down when frames get skipped), sound decoded once at 22.05 kHz mono; seek per frame on old browsers.
+- **Volume slider** in MUSIC's NOW PLAYING (tap VOL to mute) and in VIDEO's overlay (on the right).
+
 ## New in 1.3.2
 
 - **Phone link fixed ("SSL - Memory allocation failed"):** mbedTLS keeps 16 KB in + 16 KB out buffers per connection

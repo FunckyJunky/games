@@ -232,6 +232,25 @@ static void filesApi() {
     if (okPath(p)) { snprintf(S.openPath, sizeof(S.openPath), "%s", p.c_str()); S.openAt = millis() | 1; }
     sendJson(j);
   });
+  // an MP4 on the cube: its QR code opens this, the page converts it on the phone (error.blue/cube/conv.js)
+  web->on("/cv", [] {
+    String p = S.convPath[0] ? String(S.convPath) : String("");
+    String u = "/files";
+    if (p.length()) {
+      u += "?conv=";
+      for (size_t i = 0; i < p.length(); i++) {
+        char c = p[i];
+        if (isalnum((unsigned char)c) || c == '/' || c == '-' || c == '_' || c == '.') u += c;
+        else { char h[4]; snprintf(h, sizeof(h), "%%%02X", (uint8_t)c); u += h; }
+      }
+    }
+    web->sendHeader("Location", u); web->send(302, "text/plain", "");
+  });
+  web->on("/api/prog", HTTP_POST, [] {             // the phone: how far the conversion is
+    S.convPct = web->arg("v").toInt(); snprintf(S.convMsg, sizeof(S.convMsg), "%s", web->arg("s").c_str());
+    S.convAt = millis() | 1; uiDirty();
+    JsonDocument j; j["ok"] = true; sendJson(j);
+  });
   web->on("/api/mk", HTTP_POST, [] { String p = web->arg("p"); JsonDocument j; j["ok"] = okPath(p) && fsMkdir(p.c_str()); sendJson(j); uiDirty(); });
   web->on("/api/mv", HTTP_POST, [] {
     String a = web->arg("a"), b = web->arg("b"); JsonDocument j;

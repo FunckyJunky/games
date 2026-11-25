@@ -153,6 +153,8 @@ void musicToggle();
 void musicPlayFolder(const char* dir, const char* file);
 void musicTick();
 void videoOpen(const char* path);
+void videoOrConvert(const char* path);       // AVI plays; MP4/MOV... plays its converted twin, or the phone converts it
+bool isPhoneVideo(const char* name);
 Screen* makeNowPlaying();
 bool openFile(const char* path);         // a file in the program made for it (music, video, picture, text...); false = none
 void openProg(const char* dos);

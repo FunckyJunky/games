@@ -38,7 +38,8 @@ canvas { display: block; margin: 10px auto; max-width: 100%; border: 2px solid v
 <main>
   <div class="bar"><h1>CUBE VIDEO</h1><a href="/cube/">&lt; ERROR-CUBE</a></div>
   <p>Turns a video from your phone or computer (MP4, MOV, WebM...) into a video the cube can play (MJPEG AVI with sound).
-  It all happens in this browser: nothing is uploaded anywhere except to your cube.</p>
+  It all happens in this browser: nothing is uploaded anywhere except to your cube. Keep this page on the screen while it works.</p>
+  <p class="dim" style="font-size:19px">Easier: upload MP4s in error.blue/cube &gt; FILES (they're converted on the way), or tap an MP4 on the cube and scan its QR code.</p>
 
   <input type="file" id="file" accept="video/*" class="hide">
   <button class="btn big" id="pick">CHOOSE A VIDEO</button>
@@ -57,6 +58,7 @@ canvas { display: block; margin: 10px auto; max-width: 100%; border: 2px solid v
   <div class="meter"><i id="bar"></i></div>
   <div id="st" class="dim">&nbsp;</div>
   <canvas id="cv" width="320" height="180"></canvas>
+  <div id="pv"></div>
 
   <div id="done" class="hide">
     <h2>READY</h2>
@@ -73,6 +75,7 @@ canvas { display: block; margin: 10px auto; max-width: 100%; border: 2px solid v
     On the cube: VIDEO.EXE.</p>
   </div>
 </main>
+<script src="/cube/conv.js"></script>
 <script>
 (() => {
 'use strict';
@@ -97,111 +100,21 @@ $('file').onchange = () => {
   vid.onerror = () => { $('info').innerHTML = '<span class="red">THIS BROWSER CAN\'T OPEN THAT VIDEO</span>'; $('go').disabled = true; };
 };
 
-// ---------------------------------------------------------------- the AVI file
-function le32(a, o, v) { a[o] = v & 255; a[o + 1] = v >> 8 & 255; a[o + 2] = v >> 16 & 255; a[o + 3] = v >>> 24 & 255; }
-function le16(a, o, v) { a[o] = v & 255; a[o + 1] = v >> 8 & 255; }
-function cc(a, o, s) { for (let i = 0; i < 4; i++) a[o + i] = s.charCodeAt(i); }
-function chunk(id, data) {               // id + size + data (+ a pad byte)
-  const h = new Uint8Array(8); cc(h, 0, id); le32(h, 4, data.length);
-  return data.length & 1 ? [h, data, new Uint8Array(1)] : [h, data];
-}
-function buildAvi(frames, audio, w, h, fps, rate) {
-  const hasA = audio && audio.length;
-  const movi = [], idx = [];
-  let off = 4, maxF = 0;
-  const spf = hasA ? rate / fps : 0;
-  for (let i = 0; i < frames.length; i++) {
-    const f = frames[i]; maxF = Math.max(maxF, f.length);
-    movi.push(...chunk('00dc', f)); idx.push(['00dc', 0x10, off, f.length]); off += 8 + f.length + (f.length & 1);
-    if (hasA) {
-      const a0 = Math.round(i * spf), a1 = Math.min(audio.length, Math.round((i + 1) * spf));
-      if (a1 > a0) {
-        const pcm = new Uint8Array(audio.buffer, audio.byteOffset + a0 * 2, (a1 - a0) * 2).slice();
-        movi.push(...chunk('01wb', pcm)); idx.push(['01wb', 0, off, pcm.length]); off += 8 + pcm.length + (pcm.length & 1);
-      }
-    }
-  }
-  const moviSize = 4 + movi.reduce((s, p) => s + p.length, 0);
-  // headers
-  const avih = new Uint8Array(56);
-  le32(avih, 0, Math.round(1e6 / fps)); le32(avih, 4, maxF * fps); le32(avih, 12, 0x10); le32(avih, 16, frames.length);
-  le32(avih, 24, hasA ? 2 : 1); le32(avih, 28, maxF + 8); le32(avih, 32, w); le32(avih, 36, h);
-  const vstrh = new Uint8Array(56);
-  cc(vstrh, 0, 'vids'); cc(vstrh, 4, 'MJPG'); le32(vstrh, 20, 1); le32(vstrh, 24, fps); le32(vstrh, 32, frames.length);
-  le32(vstrh, 36, maxF + 8); le32(vstrh, 40, -1); le16(vstrh, 52, w); le16(vstrh, 54, h);
-  const vstrf = new Uint8Array(40);
-  le32(vstrf, 0, 40); le32(vstrf, 4, w); le32(vstrf, 8, h); le16(vstrf, 12, 1); le16(vstrf, 14, 24); cc(vstrf, 16, 'MJPG'); le32(vstrf, 20, w * h * 3);
-  const list = (type, parts) => { const body = parts.flat(); const n = 4 + body.reduce((s, p) => s + p.length, 0); const h8 = new Uint8Array(12); cc(h8, 0, 'LIST'); le32(h8, 4, n); cc(h8, 8, type); return [h8, ...body]; };
-  const strls = [list('strl', [chunk('strh', vstrh), chunk('strf', vstrf)])];
-  if (hasA) {
-    const astrh = new Uint8Array(56);
-    cc(astrh, 0, 'auds'); le32(astrh, 20, 1); le32(astrh, 24, rate); le32(astrh, 32, audio.length); le32(astrh, 36, rate); le32(astrh, 40, -1); le32(astrh, 44, 2);
-    const astrf = new Uint8Array(16);
-    le16(astrf, 0, 1); le16(astrf, 2, 1); le32(astrf, 4, rate); le32(astrf, 8, rate * 2); le16(astrf, 12, 2); le16(astrf, 14, 16);
-    strls.push(list('strl', [chunk('strh', astrh), chunk('strf', astrf)]));
-  }
-  const hdrl = list('hdrl', [chunk('avih', avih), ...strls]);
-  const moviH = new Uint8Array(12); cc(moviH, 0, 'LIST'); le32(moviH, 4, moviSize); cc(moviH, 8, 'movi');
-  const ix = new Uint8Array(idx.length * 16);
-  idx.forEach((e, i) => { cc(ix, i * 16, e[0]); le32(ix, i * 16 + 4, e[1]); le32(ix, i * 16 + 8, e[2]); le32(ix, i * 16 + 12, e[3]); });
-  const parts = [...hdrl, moviH, ...movi, ...chunk('idx1', ix)];
-  const total = parts.reduce((s, p) => s + p.length, 0);
-  const riff = new Uint8Array(12); cc(riff, 0, 'RIFF'); le32(riff, 4, total + 4); cc(riff, 8, 'AVI ');
-  return new Blob([riff, ...parts], { type: 'video/avi' });
-}
-
-// ---------------------------------------------------------------- converting
-function seek(t) { return new Promise(res => { const d = () => { vid.removeEventListener('seeked', d); res(); }; vid.addEventListener('seeked', d); vid.currentTime = t; }); }
-async function getAudio(rate, from, len) {
-  if (!rate) return null;
-  try {
-    const ab = await file.arrayBuffer();
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const buf = await ctx.decodeAudioData(ab);
-    ctx.close();
-    const n = Math.max(1, Math.floor(len * rate));
-    const off = new OfflineAudioContext(1, n, rate);
-    const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start(0, from, len);
-    const out = await off.startRendering();
-    const f = out.getChannelData(0), pcm = new Int16Array(f.length);
-    for (let i = 0; i < f.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, f[i] * 32767));
-    return pcm;
-  } catch (e) { console.log('no sound:', e); return null; }
-}
+// ---------------------------------------------------------------- converting (conv.js: plays it fast and copies the frames)
 $('go').onclick = async () => {
   if (!file) return;
   $('go').disabled = true; $('pick').disabled = true; $('done').classList.add('hide');
-  const size = +$('size').value, fps = +$('fps').value, q = +$('q').value, rate = +$('snd').value, fill = $('shape').value === 'fill';
-  const from = +$('from').value || 0, lenSel = +$('len').value;
-  const len = Math.max(0.1, Math.min(vid.duration - from, lenSel || 1e9));
-  const vw = vid.videoWidth, vh = vid.videoHeight;
-  let w, h, sx = 0, sy = 0, sw = vw, sh = vh;
-  if (fill) { w = h = size; const s = Math.min(vw, vh); sw = sh = s; sx = (vw - s) / 2; sy = (vh - s) / 2; }
-  else { const k = size / Math.max(vw, vh); w = Math.round(vw * k / 2) * 2; h = Math.round(vh * k / 2) * 2; }
-  const cv = $('cv'); cv.width = w; cv.height = h;
-  const c = cv.getContext('2d');
-  $('st').textContent = rate ? 'THE SOUND...' : '';
-  const audio = await getAudio(rate, from, len);
-  const n = Math.max(1, Math.floor(len * fps)), frames = [];
-  const t0 = Date.now();
-  for (let i = 0; i < n; i++) {
-    await seek(from + i / fps + 0.001);
-    c.drawImage(vid, sx, sy, sw, sh, 0, 0, w, h);
-    const b = await new Promise(r => cv.toBlob(r, 'image/jpeg', q));
-    frames.push(new Uint8Array(await b.arrayBuffer()));
-    if (i % 3 === 0) {
-      const el = (Date.now() - t0) / 1000, left = el / (i + 1) * (n - i - 1);
-      $('bar').style.width = ((i + 1) / n * 100) + '%';
-      $('st').textContent = 'FRAME ' + (i + 1) + ' / ' + n + ' · ' + Math.round(left) + ' S LEFT';
-    }
-  }
-  avi = buildAvi(frames, audio, w, h, fps, rate);
-  aviName = file.name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 40).trim() || 'video';
-  aviName += '.avi';
-  $('bar').style.width = '100%';
-  $('st').textContent = 'DONE IN ' + Math.round((Date.now() - t0) / 1000) + ' S';
-  $('sum').textContent = aviName + ' · ' + w + 'x' + h + ' · ' + fps + ' FPS · ' + tm(len) + ' · ' + (audio ? 'SOUND' : 'NO SOUND') + ' · ' + fsz(avi.size);
-  $('done').classList.remove('hide');
+  const o = { size: +$('size').value, fps: +$('fps').value, q: +$('q').value, rate: +$('snd').value, fill: $('shape').value === 'fill',
+              from: +$('from').value || 0, len: +$('len').value || 0, view: $('pv'), name: file.name };
+  $('cv').classList.add('hide');
+  try {
+    const r = await CubeConv.convert(file, o, (v, t) => { $('bar').style.width = (v * 100) + '%'; $('st').textContent = t; });
+    avi = r.blob; aviName = r.name;
+    $('bar').style.width = '100%';
+    $('st').textContent = 'DONE IN ' + r.secs + ' S';
+    $('sum').textContent = aviName + ' · ' + r.w + 'x' + r.h + ' · ' + r.fps + ' FPS · ' + tm(r.len) + ' · ' + (r.sound ? 'SOUND' : 'NO SOUND') + ' · ' + fsz(avi.size);
+    $('done').classList.remove('hide');
+  } catch (e) { $('st').innerHTML = '<span class="red">' + e.message + '</span>'; }
   $('go').disabled = false; $('pick').disabled = false;
 };
 $('save').onclick = () => { if (!avi) return; const a = document.createElement('a'); a.href = URL.createObjectURL(avi); a.download = aviName; a.click(); };

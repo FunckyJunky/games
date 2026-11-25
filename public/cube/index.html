@@ -159,6 +159,8 @@ input[type=text].wide { width: 100%; background: #000; border: 2px solid var(--f
         <div class="dim" id="fInfo" style="font-size:18px;margin:4px 0"></div>
         <input type="file" id="fFile" multiple class="hide">
         <button class="btn big" id="fSend">UPLOAD FILES HERE</button>
+        <label class="dim" style="display:block;font-size:18px;margin-top:6px"><input type="checkbox" id="fConv" checked> VIDEOS (MP4, MOV...): CONVERT THEM FOR THE CUBE ON THE WAY</label>
+        <div id="fPv"></div>
         <div class="meter hide" id="fBar" style="margin-top:8px"><i></i></div>
         <div class="dim" id="fStat" style="font-size:18px;min-height:22px"></div>
         <div id="fList"></div>
@@ -567,7 +569,7 @@ function fRender(x) {
     !e.length ? '<div class="empty">EMPTY</div>' :
     e.map(f => '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all;cursor:pointer" data-open="' + (f[1] ? esc(f[0]) : '') + '">' +
       (f[1] ? '&#9618; ' : '') + esc(f[0]) + '</span><span class="dim">' + (f[1] ? '&lt;DIR&gt;' : fsz(f[2])) + '</span>' +
-      (!f[1] && /\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
+      (!f[1] && /\.(mp3|wav|avi|mp4|m4v|mov|mkv|webm|3gp|jpe?g|bmp|txt|md|json|csv|log|p8)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-ren="' + esc(f[0]) + '">REN</button>' +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-del="' + esc(f[0]) + '">DEL</button></div>').join('') + (x.more ? '<div class="dim">(more files: use the FAST page to see all)</div>' : '');
 }
@@ -584,33 +586,56 @@ $('fUpDir').onclick = () => { if (fDir === '/sd' || fDir === '/c') return; fDir 
 $('fRef').onclick = fls;
 $('fMk').onclick = () => { const n = prompt('Folder name'); if (n && !n.includes('/')) send({ t: 'fmk', p: fDir + '/' + n }); };
 $('fSend').onclick = () => { if (!fBusy) $('fFile').click(); };
-function fAck(x) { if (fWait && x.p === fWait.p) { const w = fWait; fWait = null; w.res(x); } }
-function waitAck(p, ms) { return new Promise(res => { fWait = { p, res }; setTimeout(() => { if (fWait && fWait.p === p) { fWait = null; res(null); } }, ms); }); }
+function fAck(x) { if (fWait && x.p === fWait.p) fWait.on(x); }
+// one file to the cube in 9 KB pieces, a few on the way at once (the cube answers each with how far it got)
+function putFile(p, buf, prog) {
+  return new Promise(done => {
+    const CH = 9000, W = 4; let next = 0, acked = 0, timer = 0, tries = 0, over = false;
+    const finish = err => { if (over) return; over = true; clearTimeout(timer); fWait = null; done(err || ''); };
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { if (++tries > 3) return finish('NO ANSWER FROM THE CUBE'); next = acked; pump(); }, 15000); };
+    const pump = () => {
+      if (!buf.length) { if (!send({ t: 'fput', p, o: 0, z: 0, d: '' })) return finish('NOT CONNECTED'); return arm(); }
+      while (next < buf.length && next - acked < W * CH) {
+        const n = Math.min(CH, buf.length - next);
+        if (!send({ t: 'fput', p, o: next, z: buf.length, d: b64(buf.subarray(next, next + n)) })) return finish('NOT CONNECTED');
+        next += n;
+      }
+      arm();
+    };
+    fWait = { p, on: a => {
+      if (!a.ok) return finish(a.err || 'COULD NOT WRITE');
+      if (!buf.length) return finish('');
+      if (a.o !== Math.min(acked + CH, buf.length)) return;    // only the next piece counts (a lost one: sent again)
+      acked = a.o; tries = 0; prog(acked, buf.length);
+      if (acked >= buf.length) return finish('');
+      pump();
+    } };
+    pump();
+  });
+}
 function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096)); return btoa(s); }
 $('fFile').onchange = async () => {
   const files = [...$('fFile').files]; $('fFile').value = '';
   if (!files.length) return;
   fBusy = true; $('fSend').disabled = true; $('fBar').classList.remove('hide');
+  const bar = v => { $('fBar').firstElementChild.style.width = v + '%'; };
   let ok = 0;
   for (let k = 0; k < files.length; k++) {
-    const f = files[k], p = fDir + '/' + f.name, buf = new Uint8Array(await f.arrayBuffer()), CH = 9000, t0 = Date.now();
-    let o = 0, fail = '';
-    while (o < buf.length || (o === 0 && buf.length === 0)) {
-      const part = buf.subarray(o, o + CH);
-      let a = null;
-      for (let tries = 0; tries < 3 && !a; tries++) {
-        if (!send({ t: 'fput', p, o, z: buf.length, d: b64(part) })) { fail = 'NOT CONNECTED'; break; }
-        a = await waitAck(p, 15000);
-      }
-      if (fail) break;
-      if (!a) { fail = 'NO ANSWER FROM THE CUBE'; break; }
-      if (!a.ok) { fail = a.err || 'COULD NOT WRITE'; break; }
-      o = a.o;
-      const kb = o / 1024 / Math.max(0.1, (Date.now() - t0) / 1000);
-      $('fBar').firstElementChild.style.width = (buf.length ? o / buf.length * 100 : 100) + '%';
-      $('fStat').textContent = 'SENDING ' + f.name + ' (' + (k + 1) + '/' + files.length + ') ' + fsz(o) + ' / ' + fsz(buf.length) + ' · ' + Math.round(kb) + ' KB/s';
-      if (!buf.length) break;
+    let f = files[k];
+    // a video the cube can't play as it is: made into the cube's AVI here first (smaller too)
+    if ($('fConv').checked && window.CubeConv && CubeConv.isVideo(f.name)) {
+      try {
+        const r = await CubeConv.convert(f, { size: 240, fps: 12, q: 0.55, view: $('fPv'), name: f.name }, (v, t) => { bar(v * 100); $('fStat').textContent = f.name + ': ' + t; });
+        f = new File([r.blob], r.name, { type: 'video/avi' });
+      } catch (e) { flash(f.name + ': ' + e.message, true); continue; }
     }
+    const p = fDir + '/' + f.name, buf = new Uint8Array(await f.arrayBuffer()), t0 = Date.now();
+    bar(0);
+    const fail = await putFile(p, buf, (o, n) => {
+      const kb = o / 1024 / Math.max(0.1, (Date.now() - t0) / 1000);
+      bar(n ? o / n * 100 : 100);
+      $('fStat').textContent = 'SENDING ' + f.name + ' (' + (k + 1) + '/' + files.length + ') ' + fsz(o) + ' / ' + fsz(n) + ' · ' + Math.round(kb) + ' KB/s';
+    });
     if (fail) { flash(f.name + ': ' + fail, true); break; }
     ok++;
   }
@@ -620,6 +645,7 @@ $('fFile').onchange = async () => {
 };
 })();
 </script>
+<script src="/cube/conv.js"></script>
 <script src="/lib/online.js" defer></script>
 </body>
 </html>

@@ -4,6 +4,7 @@
 #include "../ui/ui.h"
 #include "../core/holo.h"
 #include "../core/g3d.h"
+#include "../lib/cubeqr.h"
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
@@ -21,7 +22,68 @@ static void* bigAlloc(size_t n) { return malloc(n); }
 
 static bool isAudio(const char* n) { const char* e = strrchr(n, '.'); return e && (!strcasecmp(e, ".mp3") || !strcasecmp(e, ".wav")); }
 static bool isVideo(const char* n) { const char* e = strrchr(n, '.'); return e && !strcasecmp(e, ".avi"); }
+// a video from a phone or camera (MP4, MOV, WebM...): the cube plays it after the phone converts it once
+bool isPhoneVideo(const char* n) {
+  static const char* X[] = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".3gp", ".3g2", ".ogv", ".mpg", ".mpeg", ".wmv", ".flv", ".ts"};
+  const char* e = strrchr(n, '.'); if (!e) return false;
+  for (const char* x : X) if (!strcasecmp(e, x)) return true;
+  return false;
+}
+// "A:\VIDEO\holiday.mp4" -> "A:\VIDEO\holiday.avi": the name the phone gives the converted video
+// (the same rules as error.blue/cube/conv.js: no \ / : * ? " < > | or control characters, at most 60)
+std::string aviTwin(const char* path) {
+  std::string p = path; size_t sl = p.rfind('/'), dot = p.rfind('.');
+  std::string dir = p.substr(0, sl), b = p.substr(sl + 1, dot != std::string::npos && dot > sl ? dot - sl - 1 : std::string::npos);
+  for (auto& c : b) if (strchr("\\/:*?\"<>|", c) || (unsigned char)c < 32) c = '_';
+  while (!b.empty() && b.back() == ' ') b.pop_back();
+  while (!b.empty() && b[0] == ' ') b.erase(0, 1);
+  if (b.size() > 60) b.resize(60);
+  if (b.empty()) b = "video";
+  return dir + "/" + b + ".avi";
+}
 static void fmtMs(char* o, uint32_t ms) { uint32_t s = ms / 1000; if (s >= 3600) sprintf(o, "%u:%02u:%02u", (unsigned)(s / 3600), (unsigned)(s / 60 % 60), (unsigned)(s % 60)); else sprintf(o, "%u:%02u", (unsigned)(s / 60), (unsigned)(s % 60)); }
+
+// ------------------------------------------------------------------ VOLUME: a slider for the players (cfg.vol, like SETUP)
+// x, y: where "VOL" starts; w: the whole width. Drag or tap anywhere on it.
+static bool volDrag = false;
+static void volSlider(int x, int y, int w) {
+  drawText(FT, x, y, "VOL", C_DIM, TX_FLAT);
+  int bx = x + 52, bw = w - 52 - 62;
+  meter(bx, y + 3, bw, 18, cfg.vol, true);
+  int kx = bx + bw * cfg.vol / 100;
+  fillRect(kx - 3, y - 1, 7, 26, volDrag ? C_WARN : C_FG);       // the knob
+  char v[8]; snprintf(v, sizeof(v), cfg.vol ? "%d%%" : "OFF", cfg.vol);
+  drawTextR(FT, x + w, y, v, cfg.vol ? C_FG : C_WARN, TX_FLAT);
+}
+static bool volEv(const Ev& e, int x, int y, int w) {
+  int bx = x + 52, bw = w - 52 - 62;
+  bool on = e.y0 >= y - 8 && e.y0 < y + 30 && e.x0 >= x && e.x0 < x + w;
+  if (on && (e.t == EV_DOWN || e.t == EV_MOVE)) {
+    int v = (e.x - bx) * 100 / bw; v = v < 0 ? 0 : v > 100 ? 100 : v;
+    if (e.x0 < bx) v = e.t == EV_DOWN ? (cfg.vol ? 0 : 60) : cfg.vol;   // tap on VOL: mute / back on
+    cfg.vol = v; volDrag = true; uiDirty(); return true;
+  }
+  if (volDrag && (e.t == EV_UP || e.t == EV_TAP || e.t == EV_LONG)) { volDrag = false; cfgChanged(); uiDirty(); return true; }
+  return on && (e.t == EV_TAP || e.t == EV_LONG);
+}
+// the same, standing up (video: on the right side)
+static void volSliderV(int x, int y, int h) {
+  blendRect(x - 10, y - 34, 64, h + 74, 0, 24);
+  drawTextC(FT, x + 22, y - 30, "VOL", C_DIM, TX_FLAT);
+  rect(x + 10, y, 24, h, C_FG);
+  int f = (h - 4) * cfg.vol / 100;
+  fillRect(x + 12, y + h - 2 - f, 20, f, C_FG);
+  char v[8]; snprintf(v, sizeof(v), cfg.vol ? "%d" : "OFF", cfg.vol);
+  drawTextC(FT, x + 22, y + h + 6, v, cfg.vol ? C_FG : C_WARN, TX_FLAT);
+}
+static bool volEvV(const Ev& e, int x, int y, int h) {
+  bool on = e.x0 >= x - 10 && e.x0 < x + 54 && e.y0 >= y - 34 && e.y0 < y + h + 40;
+  if (on && (e.t == EV_DOWN || e.t == EV_MOVE)) {
+    int v = (y + h - e.y) * 100 / h; cfg.vol = v < 0 ? 0 : v > 100 ? 100 : v; volDrag = true; uiDirty(); return true;
+  }
+  if (volDrag && (e.t == EV_UP || e.t == EV_TAP || e.t == EV_LONG)) { volDrag = false; cfgChanged(); uiDirty(); return true; }
+  return on && (e.t == EV_TAP || e.t == EV_LONG);
+}
 
 // ------------------------------------------------------------------ the player (keeps going when MUSIC is closed)
 static std::vector<std::string> plist;          // the playlist: the files of a folder
@@ -119,12 +181,13 @@ struct NowPlaying : Screen {
     if (st == MED_ERR) drawTextC(FT, 240, 304, "CAN'T PLAY THIS FILE", C_RED);
     else if (musKbps()) { snprintf(t, sizeof(t), "%d KBPS", musKbps()); drawTextC(FT, 240, 304, t, C_DIM, TX_FLAT); }
     // the buttons
-    int by = 344;
-    dosButton(40, by, 90, 50, "|<", [] { musicNext(-1); });
-    dosButton(140, by, 120, 50, st == MED_PLAY ? "PAUSE" : "PLAY", [] { musicToggle(); }, st == MED_PLAY);
-    dosButton(270, by, 90, 50, ">|", [] { musicNext(1); });
+    int by = 336;
+    dosButton(40, by, 90, 46, "|<", [] { musicNext(-1); });
+    dosButton(140, by, 120, 46, st == MED_PLAY ? "PAUSE" : "PLAY", [] { musicToggle(); }, st == MED_PLAY);
+    dosButton(270, by, 90, 46, ">|", [] { musicNext(1); });
     static const char* RP[3] = {"RPT-", "RPT*", "RPT1"};
-    dosButton(370, by, 70, 50, RP[repeatMode % 3], [] { repeatMode = (repeatMode + 1) % 3; toast(repeatMode == 0 ? "REPEAT OFF" : repeatMode == 1 ? "REPEAT ALL" : "REPEAT ONE", 900); }, repeatMode != 0);
+    dosButton(370, by, 70, 46, RP[repeatMode % 3], [] { repeatMode = (repeatMode + 1) % 3; toast(repeatMode == 0 ? "REPEAT OFF" : repeatMode == 1 ? "REPEAT ALL" : "REPEAT ONE", 900); }, repeatMode != 0);
+    volSlider(40, 394, 400);
     fkeys({{"ESC", "Back", [] { uiBack(); }}, {"S", shuffle ? "Shuffle*" : "Shuffle", [] { shuffle = !shuffle; makeOrder(); toast(shuffle ? "SHUFFLE ON" : "SHUFFLE OFF", 900); }},
            {"X", "Stop", [] { musStop(); }}});
   }
@@ -141,6 +204,7 @@ struct NowPlaying : Screen {
       dragSeek = true; seekTo = (uint32_t)((uint64_t)(x - 40) * musLenMs() / 400); uiDirty(); return true;
     }
     if (dragSeek && (e.t == EV_UP || e.t == EV_TAP)) { dragSeek = false; musSeek(seekTo); uiDirty(); return true; }
+    if (volEv(e, 40, 394, 400)) return true;
     if (e.t == EV_SWIPE && e.dir == SW_LEFT) { musicNext(1); return true; }
     return false;
   }
@@ -250,6 +314,7 @@ struct VideoPlay : Screen {
     drawTextR(FT, 464, 400, ab, C_DIM, TX_FLAT);
     meter(16, 440, 448, 20, len ? (int)((uint64_t)pos * 100 / len) : 0, true);
     if (vidState() == MED_PAUSE) { fillRect(206, 196, 22, 70, C_FG); fillRect(252, 196, 22, 70, C_FG); }
+    volSliderV(410, 110, 220);
   }
   bool ev(const Ev& e) override {
     if (e.t == EV_KEY) {
@@ -258,6 +323,9 @@ struct VideoPlay : Screen {
       else if (e.key == K_PREV) vidSeek(vidPosMs() > 10000 ? vidPosMs() - 10000 : 0);
       else uiBack();
       overlayAt = msNow(); uiDirty(); return true;
+    }
+    if (msNow() - overlayAt < 3000 || vidState() == MED_PAUSE) {
+      if (volEvV(e, 410, 110, 220)) { overlayAt = msNow(); return true; }
     }
     if (e.t == EV_TAP) {
       if (e.y > 430 && vidLenMs()) { vidSeek((uint32_t)((uint64_t)(e.x - 16 < 0 ? 0 : e.x - 16) * vidLenMs() / 448)); }
@@ -274,6 +342,75 @@ void videoOpen(const char* path) {
   uiOpen(new VideoPlay(path));
 }
 
+// ------------------------------------------------------------------ an MP4: converted once by the phone, then it plays
+// A QR code opens the cube's own page (http://IP/cv), which converts the video in the phone's browser and sends the
+// AVI back next to it (then asks the cube to play it). Sent from error.blue/cube instead, it arrives the same way.
+struct ConvWait : Screen {
+  std::string path, twin, twinName; uint32_t seenFile;
+  ConvWait(const char* p) : path(p), twin(aviTwin(p)) {
+    twinName = twin.substr(twin.rfind('/') + 1);
+    seenFile = S.fileAt;
+    snprintf(S.convPath, sizeof(S.convPath), "%s", p);
+    S.convAt = 0; S.convPct = 0; S.convMsg[0] = 0;
+  }
+  const char* name() override { return "VIDEO.EXE"; }
+  bool keepAwake() override { return S.convAt && msNow() - S.convAt < 15000; }
+  void draw() override {
+    pathLine(path.compare(0, 3, "/sd") ? "C:\\VIDEO\\MP4>" : "A:\\VIDEO\\MP4>");
+    const char* nm = strrchr(path.c_str(), '/'); char t[64]; snprintf(t, sizeof(t), "%s", nm ? nm + 1 : path.c_str()); utf8Cut(t, 28);
+    drawTextC(FT, 240, 90, t, C_FG);
+    bool net = S.net == NET_UP && !cfg.offline && S.ip[0];
+    if (!net) {
+      drawTextC(FT, 240, 150, "MP4 plays after one quick", C_FG, TX_FLAT);
+      drawTextC(FT, 240, 180, "conversion on your phone.", C_FG, TX_FLAT);
+      drawTextC(FT, 240, 236, cfg.offline ? "TURN OFFLINE MODE OFF" : "CONNECT THE CUBE TO WIFI", C_WARN);
+      drawTextC(FT, 240, 290, "or on the phone:", C_DIM, TX_FLAT);
+      drawTextC(FT, 240, 320, "error.blue/cube/video", C_FG, TX_FLAT);
+      fkeysBack(); redrawIn(1000); return;
+    }
+    char url[48]; snprintf(url, sizeof(url), "http://%s/cv", S.ip);
+    static uint8_t qr[cubeqr_BUFFER_LEN_FOR_VERSION(4)], tmp[cubeqr_BUFFER_LEN_FOR_VERSION(4)];
+    if (cubeqr_encodeText(url, tmp, qr, cubeqr_Ecc_MEDIUM, 1, 4, cubeqr_Mask_AUTO, true)) {
+      int n = cubeqr_getSize(qr), sc = 190 / (n + 4), sz = sc * (n + 4), x0 = 240 - sz / 2, y0 = 118;
+      fillRect(x0, y0, sz, sz, C_FG);
+      for (int y = 0; y < n; y++) for (int x = 0; x < n; x++)
+        if (cubeqr_getModule(qr, x, y)) fillRect(x0 + (x + 2) * sc, y0 + (y + 2) * sc, sc, sc, C_BG);
+    }
+    drawTextC(FT, 240, 318, url, C_FG, TX_FLAT);
+    bool busy = S.convAt && msNow() - S.convAt < 10000;
+    if (busy) {
+      meter(40, 352, 400, 18, S.convPct, true);
+      char m[48]; snprintf(m, sizeof(m), "PHONE: %s", S.convMsg[0] ? S.convMsg : "WORKING"); utf8Cut(m, 34);
+      drawTextC(FT, 240, 376, m, C_FG, TX_FLAT);
+    } else {
+      drawTextC(FT, 240, 350, "Scan it with your phone", C_DIM, TX_FLAT);
+      drawTextC(FT, 240, 378, "(same WiFi). It converts", C_DIM, TX_FLAT);
+      drawTextC(FT, 240, 406, "it once, then it plays.", C_DIM, TX_FLAT);
+    }
+    fkeysBack();
+    redrawIn(500);
+  }
+  void tick() override {
+    // from error.blue/cube (FILES upload): the converted file arrived
+    if (S.fileAt != seenFile) {
+      seenFile = S.fileAt;
+      if (!strcasecmp(S.fileName, twinName.c_str()) && fsSize(twin.c_str()) > 0) { std::string t = twin; uiBack(); videoOpen(t.c_str()); return; }
+    }
+    // from the cube's own page: it says DONE and asks the cube to play the AVI (which opens on top of this)
+    if (S.convPct >= 100 && fsSize(twin.c_str()) > 0) { S.convPct = 0; uiBack(); return; }
+  }
+};
+// a video file: the AVI plays; an MP4 (MOV...) plays its converted twin if there is one, else asks the phone
+void videoOrConvert(const char* path) {
+  if (!isPhoneVideo(path)) { videoOpen(path); return; }
+  std::string t = aviTwin(path);
+  if (fsSize(t.c_str()) > 0) { videoOpen(t.c_str()); return; }
+  // or the same name in A:\VIDEO (sent with error.blue/cube/video)
+  std::string v = "/sd/VIDEO" + t.substr(t.rfind('/'));
+  if (fsSize(v.c_str()) > 0) { videoOpen(v.c_str()); return; }
+  uiOpen(new ConvWait(path));
+}
+
 struct Video : Screen {
   char dir[120] = "";
   FileEnt ents[160]; int n = 0;
@@ -285,9 +422,13 @@ struct Video : Screen {
     static FileEnt* tmp = (FileEnt*)bigAlloc(sizeof(FileEnt) * 160);
     if (!tmp) return;
     int k = fsList(dir, tmp, 159);
-    for (int i = 0; i < k; i++) {
-      const char* e = strrchr(tmp[i].name, '.');
-      if (tmp[i].dir || isVideo(tmp[i].name) || (e && (!strcasecmp(e, ".mp4") || !strcasecmp(e, ".mov")))) ents[n++] = tmp[i];
+    for (int i = 0; i < k && n < 160; i++) {
+      if (isPhoneVideo(tmp[i].name)) {          // its converted twin is in the list already: show only that
+        std::string tw = aviTwin((std::string("/x/") + tmp[i].name).c_str()).substr(3);
+        bool twin = false;
+        for (int j = 0; j < k; j++) if (!strcasecmp(tmp[j].name, tw.c_str())) twin = true;
+        if (!twin) ents[n++] = tmp[i];
+      } else if (tmp[i].dir || isVideo(tmp[i].name)) ents[n++] = tmp[i];
     }
     for (int a = 1; a < n; a++) for (int b = a + 1; b < n; b++) {
       bool sw = ents[a].dir != ents[b].dir ? ents[b].dir : strcasecmp(ents[a].name, ents[b].name) > 0;
@@ -300,8 +441,7 @@ struct Video : Screen {
     if (i == 0) { if (!strcmp(dir, "/sd") || !strcmp(dir, "/c")) { strcpy(dir, !strcmp(dir, "/sd") ? "/c" : "/sd"); } else { char* s = strrchr(dir, '/'); if (s && s != dir) *s = 0; } load(); return; }
     char p[200]; snprintf(p, sizeof(p), "%s/%s", dir, ents[i].name);
     if (ents[i].dir) { snprintf(dir, sizeof(dir), "%s", p); load(); return; }
-    if (!isVideo(ents[i].name)) { ask("MP4", "The cube plays MJPEG AVI. Convert it on your phone or computer: error.blue/cube/video (it can send it straight here).", {"OK"}, nullptr); return; }
-    videoOpen(p);
+    videoOrConvert(p);
   }
   void draw() override {
     char path[40]; snprintf(path, sizeof(path), "%c:%s>", dir[1] == 's' ? 'A' : 'C', strchr(dir + 1, '/') ? strchr(dir + 1, '/') : "\\");
@@ -315,11 +455,14 @@ struct Video : Screen {
       if (sel) invBar(x + 2, y + 3, w - 4, h - 6);
       uint16_t c = sel ? C_BG : C_FG; int m = sel ? TX_FLAT : TX_GLOW;
       char nm[64]; snprintf(nm, sizeof(nm), "%s%s", f.dir && i ? "\xE2\x96\x92 " : "", i == 0 ? ".." : f.name); utf8Cut(nm, 22);
-      drawText(FT, x + 10, ty, nm, isVideo(f.name) || f.dir || sel ? c : C_DIM, m);
-      if (!f.dir) { char sz[16]; snprintf(sz, sizeof(sz), "%.1fM", f.size / 1048576.0); drawTextR(FT, x + w - 10, ty, sz, sel ? C_BG : C_DIM, TX_FLAT); }
+      drawText(FT, x + 10, ty, nm, c, m);
+      if (!f.dir) {
+        char sz[16]; snprintf(sz, sizeof(sz), isPhoneVideo(f.name) ? "MP4 %.0fM" : "%.1fM", f.size / 1048576.0);
+        drawTextR(FT, x + w - 10, ty, sz, sel ? C_BG : isPhoneVideo(f.name) ? C_WARN : C_DIM, TX_FLAT);
+      }
     }, nullptr);
     if (n <= 1) drawTextC(FT, 240, 250, "NO VIDEOS HERE", C_DIM, TX_FLAT);
-    drawText(FT, colX(0), rowY(12) + 6, "MP4? error.blue/cube/video", C_DIM, TX_FLAT);
+    drawText(FT, colX(0), rowY(12) + 6, "MP4? tap it, phone converts", C_DIM, TX_FLAT);
     fkeys({{"ESC", "Back", [] { uiBack(); }}, {"R", "Refresh", [this] { load(); }}});
   }
   void tick() override { L.tick(); }

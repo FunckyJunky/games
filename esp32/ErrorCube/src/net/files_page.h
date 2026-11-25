@@ -15,10 +15,12 @@ button{cursor:pointer}button.on{background:#39ff7a;color:#031208}.row{display:fl
 <div class=row><button id=bsd onclick="go('/sd')">SD CARD</button><button id=bc onclick="go('/c')">CUBE FLASH</button><span id=info class=dim></span></div>
 <div class=row><button onclick=up1()>&lt; UP</button><span id=path></span></div>
 <div id=drop>Drop files here, or <button onclick="fi.click()">CHOOSE FILES</button><input id=fi type=file multiple hidden>
-<div class=dim>MUSIC, VIDEO, PICS, apps... they go into the folder you're in</div></div>
+<div class=dim>MUSIC, VIDEO, PICS, apps... they go into the folder you're in</div>
+<label class=dim><input type=checkbox id=cvon checked> videos (MP4, MOV...): convert them for the cube first</label></div>
+<div id=pv></div>
 <div id=bar><div id=fill></div></div><div id=st class=dim>&nbsp;</div>
 <div class=row><button onclick=mk()>NEW FOLDER</button><button onclick=ls()>REFRESH</button></div>
-<div id=list></div></main><script>
+<div id=list></div></main><script src="https://error.blue/cube/conv.js"></script><script>
 let cur='/sd';const $=i=>document.getElementById(i);
 function sz(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?Math.round(n/1024)+' KB':n+' B'}
 function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c])}
@@ -33,24 +35,56 @@ async function ls(){
   const e=(j.e||[]).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
   $('list').innerHTML=e.length?e.map(f=>{const p=cur+'/'+f[0];
     return '<div><span class=n data-d="'+(f[1]?esc(p):'')+'">'+(f[1]?'&#9618; ':'')+esc(f[0])+'</span><span class=s>'+(f[1]?'&lt;DIR&gt;':sz(f[2]))+'</span>'+
-    (f[1]||!/\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8|bin)$/i.test(f[0])?'':'<span class=x data-o="'+esc(p)+'">&#9654;</span>')+
+    (f[1]?'':isV(f[0])?'<span class=x data-c="'+esc(p)+'">CONVERT</span>':!/\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8|bin)$/i.test(f[0])?'':'<span class=x data-o="'+esc(p)+'">&#9654;</span>')+
     (f[1]?'':'<a href="/dl?p='+encodeURIComponent(p)+'">&#8595;</a>')+'<span class=x data-r="'+esc(p)+'">REN</span><span class=x data-x="'+esc(p)+'">DEL</span></div>'}).join(''):
     '<div class=dim>'+(j.ok?'Empty':(cur.startsWith('/sd')?'No SD card in the cube':'Can\'t read this folder'))+'</div>';
 }
 $('list').onclick=async e=>{const t=e.target;
   if(t.dataset.d){cur=t.dataset.d;ls()}
+  else if(t.dataset.c){if(!busy)conv(t.dataset.c)}
   else if(t.dataset.o){await post('/api/open?p='+encodeURIComponent(t.dataset.o));$('st').textContent='OPENED ON THE CUBE: '+t.dataset.o.split('/').pop()}
   else if(t.dataset.x){if(confirm('Delete '+t.dataset.x.split('/').pop()+'?')){const j=await post('/api/rm?p='+encodeURIComponent(t.dataset.x));if(!j.ok)alert('Could not delete (folders must be empty)');ls()}}
   else if(t.dataset.r){const o=t.dataset.r,n=prompt('New name',o.split('/').pop());if(n&&n.indexOf('/')<0){await post('/api/mv?a='+encodeURIComponent(o)+'&b='+encodeURIComponent(o.slice(0,o.lastIndexOf('/')+1)+n));ls()}}};
 async function mk(){const n=prompt('Folder name');if(n&&n.indexOf('/')<0){await post('/api/mk?p='+encodeURIComponent(cur+'/'+n));ls()}}
-function send(f,i,n){return new Promise(res=>{const x=new XMLHttpRequest(),fd=new FormData();fd.append('f',f,f.name);
-  x.open('POST','/api/up?d='+encodeURIComponent(cur));
-  x.upload.onprogress=e=>{$('fill').style.width=(e.loaded/e.total*100)+'%';$('st').textContent='SENDING '+f.name+' ('+(i+1)+'/'+n+') '+sz(e.loaded)+' / '+sz(e.total)};
+function send(f,i,n,dir,cb){return new Promise(res=>{const x=new XMLHttpRequest(),fd=new FormData();fd.append('f',f,f.name);
+  x.open('POST','/api/up?d='+encodeURIComponent(dir||cur));
+  x.upload.onprogress=e=>{if(cb)return cb(e.loaded,e.total);$('fill').style.width=(e.loaded/e.total*100)+'%';$('st').textContent='SENDING '+f.name+' ('+(i+1)+'/'+n+') '+sz(e.loaded)+' / '+sz(e.total)};
   x.onload=()=>{let ok=false;try{ok=JSON.parse(x.responseText).ok}catch(_){}res(ok)};x.onerror=()=>res(false);x.send(fd)})}
-async function upload(fs){let ok=0;for(let i=0;i<fs.length;i++)if(await send(fs[i],i,fs.length))ok++;
-  $('st').textContent=ok+' of '+fs.length+' file(s) sent'+(ok<fs.length?' · some failed (SD card full or missing?)':'');$('fill').style.width='0';ls()}
+let busy=false,progAt=0;
+const isV=n=>/\.(mp4|m4v|mov|mkv|webm|3gp|3g2|ogv|mpg|mpeg|wmv|flv|ts)$/i.test(n);
+function show(pc,t){$('fill').style.width=Math.min(100,pc)+'%';$('st').textContent=t;
+  if(Date.now()-progAt>900){progAt=Date.now();fetch('/api/prog?v='+Math.round(pc)+'&s='+encodeURIComponent(t.slice(0,36)),{method:'POST'}).catch(()=>{})}}
+async function toAvi(blob,name){
+  if(!window.CubeConv)throw new Error('the converter comes from error.blue: this phone/computer needs internet');
+  return CubeConv.convert(blob,{name,view:$('pv')},(f,t)=>show(30+f*55,t));
+}
+// an MP4 on the cube: load it, convert it here, send the AVI next to it, play it on the cube
+async function conv(p){
+  busy=true;const name=p.split('/').pop(),dir=p.slice(0,p.lastIndexOf('/'));
+  try{
+    show(0,'LOADING '+name);
+    const r=await fetch('/dl?p='+encodeURIComponent(p));if(!r.ok)throw new Error('can\'t read it on the cube');
+    const tot=+r.headers.get('Content-Length')||0,rd=r.body.getReader(),parts=[];let got=0;
+    for(;;){const c=await rd.read();if(c.done)break;parts.push(c.value);got+=c.value.length;show(tot?got/tot*30:5,'LOADING '+sz(got)+(tot?' / '+sz(tot):''))}
+    const res=await toAvi(new Blob(parts,{type:'video/mp4'}),name);
+    const ok=await send(new File([res.blob],res.name,{type:'video/avi'}),0,1,dir,(a,b)=>show(85+a/b*15,'SENDING '+sz(a)+' / '+sz(b)));
+    if(!ok)throw new Error('could not save it on the cube (card full?)');
+    show(100,'DONE');await post('/api/prog?v=100&s=DONE');await post('/api/open?p='+encodeURIComponent(dir+'/'+res.name));
+    $('st').textContent='DONE: '+res.name+' ('+sz(res.blob.size)+') is playing on the cube';
+  }catch(e){$('st').textContent='CONVERT FAILED: '+e.message;fetch('/api/prog?v=0&s='+encodeURIComponent('FAILED'),{method:'POST'}).catch(()=>{})}
+  busy=false;$('fill').style.width='0';ls();
+}
+async function upload(fs){let ok=0;busy=true;
+  for(let i=0;i<fs.length;i++){let f=fs[i];
+    if($('cvon').checked&&isV(f.name)){
+      try{show(0,'CONVERTING '+f.name+' ('+(i+1)+'/'+fs.length+')');const r=await toAvi(f,f.name);f=new File([r.blob],r.name,{type:'video/avi'})}
+      catch(e){$('st').textContent=f.name+': '+e.message;continue}
+    }
+    if(await send(f,i,fs.length))ok++}
+  busy=false;$('st').textContent=ok+' of '+fs.length+' file(s) sent'+(ok<fs.length?' · some failed (SD card full or missing?)':'');$('fill').style.width='0';ls()}
 $('fi').onchange=()=>upload([...$('fi').files]);
 const dr=$('drop');dr.ondragover=e=>{e.preventDefault();dr.classList.add('hot')};dr.ondragleave=()=>dr.classList.remove('hot');
 dr.ondrop=e=>{e.preventDefault();dr.classList.remove('hot');upload([...e.dataTransfer.files])};
-ls();
+const cq=new URLSearchParams(location.search).get('conv');
+if(cq){history.replaceState(null,'','/files');cur=cq.slice(0,cq.lastIndexOf('/'))||'/sd';ls();conv(cq)}else ls();
 </script></body></html>)HTML";

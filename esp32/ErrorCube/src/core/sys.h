@@ -164,6 +164,8 @@ struct SysState {
   uint32_t wakeAt = 0, sleepAt = 0;            // the control page wants the screen on / off
   uint32_t fileAt = 0; char fileName[48] = "";  // a file came in from the control page
   uint32_t openAt = 0; char openPath[200] = "";  // the control page asks to open a file (in its player)
+  // an MP4 the phone converts for the cube (its own page http://IP/cv): which file, and how far the phone is
+  char convPath[200] = ""; uint32_t convAt = 0; int convPct = 0; char convMsg[40] = "";
 };
 extern SysState S;
 

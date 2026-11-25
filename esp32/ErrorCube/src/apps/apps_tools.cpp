@@ -584,11 +584,7 @@ bool openFile(const char* path) {
   const char* ex = extOf(nm);
   std::string p = path, dir = p.substr(0, p.rfind('/'));
   if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { musicPlayFolder(dir.c_str(), nm); uiOpen(makeNowPlaying()); return true; }
-  if (!strcasecmp(ex, ".avi")) { videoOpen(path); return true; }
-  if (!strcasecmp(ex, ".mp4") || !strcasecmp(ex, ".mov") || !strcasecmp(ex, ".mkv") || !strcasecmp(ex, ".webm")) {
-    ask("VIDEO", "The cube plays AVI videos. Convert this one at error.blue/cube/video (it can send it straight to the cube).", {"OK"}, nullptr);
-    return true;
-  }
+  if (!strcasecmp(ex, ".avi") || isPhoneVideo(nm)) { videoOrConvert(path); return true; }
   if (imgIsPicture(nm)) { std::vector<std::string> pics; int at; listPics(path, pics, at); uiOpen(new ImageView(pics, at)); return true; }
   if (isText(nm)) {
     size_t max = 96000, got = 0;
