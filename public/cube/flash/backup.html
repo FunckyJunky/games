@@ -38,11 +38,20 @@
     Takes about 2–5 minutes: don't unplug.
   </div>
 
-  <h2>BACKUP</h2>
+  <h2>1 · ALLOW USB</h2>
+  <p class="dim">Once per computer: pick the cube (COMx) in Chrome's little window and press Connect.</p>
+  <p><button class="btn small" id="allow">ALLOW USB</button> <span id="allowed" class="dim"></span></p>
+
+  <h2>2 · BACKUP</h2>
   <p><button class="btn" id="bk">BACK UP THE CUBE</button></p>
   <p id="again" hidden><button class="btn small" id="save">SAVE THE FILE AGAIN</button></p>
 
-  <h2>RESTORE</h2>
+  <h2>3 · INSTALL ERROR-CUBE</h2>
+  <p class="dim">Writes ERROR-CUBE <span id="ver">?</span> onto the cube over USB.</p>
+  <p><label><input type="checkbox" id="erase" checked> erase the cube first (do this the first time)</label></p>
+  <p><button class="btn" id="in">INSTALL ERROR-CUBE</button></p>
+
+  <h2>RESTORE A BACKUP</h2>
   <p class="dim">Writes a backup file back onto the cube, over everything that's on it now.</p>
   <p><input type="file" id="file" accept=".bin,application/octet-stream"></p>
   <p><button class="btn small red" id="rs" disabled>RESTORE THIS BACKUP</button></p>
@@ -74,11 +83,39 @@ if (!('serial' in navigator)) {
   $('bk').disabled = true;
 }
 
-function lock(on) { busy = on; $('bk').disabled = on; $('rs').disabled = on || !$('file').files.length; $('file').disabled = on; }
+function lock(on) { busy = on; for (const id of ['bk', 'in', 'allow']) $(id).disabled = on; $('rs').disabled = on || !$('file').files.length; $('file').disabled = on; }
+
+async function pickPort() {
+  // A port this site was already allowed to use needs no dialog; otherwise ask.
+  const ok = (await navigator.serial.getPorts()).filter(p => $('all').checked || p.getInfo().usbVendorId === 0x303a);
+  if (ok.length) return ok[ok.length - 1];
+  const filters = $('all').checked ? [] : [{ usbVendorId: 0x303a }];
+  return navigator.serial.requestPort({ filters });
+}
+
+async function showAllowed() {
+  if (!('serial' in navigator)) return;
+  const ps = (await navigator.serial.getPorts()).filter(p => p.getInfo().usbVendorId === 0x303a);
+  $('allowed').textContent = ps.length ? 'USB OK · this page may use the cube (' + ps.length + ' port' + (ps.length > 1 ? 's' : '') + ')' : 'Not allowed yet.';
+  $('allow').textContent = ps.length ? 'USB ALLOWED ✓' : 'ALLOW USB';
+}
+showAllowed();
+navigator.serial && navigator.serial.addEventListener('connect', showAllowed);
+navigator.serial && navigator.serial.addEventListener('disconnect', showAllowed);
+
+$('allow').onclick = async () => {
+  try {
+    const filters = $('all').checked ? [] : [{ usbVendorId: 0x303a }];
+    await navigator.serial.requestPort({ filters });
+    state('USB allowed. Now BACK UP, then INSTALL.', 'ok');
+  } catch (e) {
+    state(e && e.name === 'NotFoundError' ? 'No port picked. Press ALLOW USB again and pick the cube.' : String(e.message || e), 'err');
+  }
+  showAllowed();
+};
 
 async function connect() {
-  const filters = $('all').checked ? [] : [{ usbVendorId: 0x303a }];
-  const port = await navigator.serial.requestPort({ filters });
+  const port = await pickPort();
   const transport = new Transport(port, false);
   const loader = new ESPLoader({ transport, baudrate: 921600, romBaudrate: 115200, terminal });
   state('Connecting…');
@@ -156,6 +193,53 @@ $('bk').onclick = async () => {
     $('again').hidden = false;
   } catch (e) {
     if (e && e.name === 'NotFoundError') state('No port picked. Press the button again and pick the cube (COMx).', 'err');
+    else state(String(e.message || e), 'err');
+  } finally {
+    await finish(c);
+    lock(false);
+  }
+};
+
+
+fetch('firmware.json', { cache: 'no-store' }).then(r => r.json()).then(j => {
+  $('ver').textContent = j.ver; $('in').textContent = 'INSTALL ERROR-CUBE ' + j.ver;
+}).catch(() => {});
+
+$('in').onclick = async () => {
+  if (busy) return;
+  lock(true); $('log').textContent = ''; bar(0);
+  let c = null;
+  try {
+    state('Downloading the firmware…');
+    const man = await (await fetch('manifest.json', { cache: 'no-store' })).json();
+    const parts = man.builds.find(b => /ESP32-S3/i.test(b.chipFamily)).parts;
+    const files = [];
+    for (const p of parts) {
+      const r = await fetch(p.path + '?v=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error("Can't download " + p.path + ' (' + r.status + ')');
+      files.push({ data: new Uint8Array(await r.arrayBuffer()), address: p.offset });
+      log(p.path + ' · ' + files[files.length - 1].data.length + ' bytes @ 0x' + p.offset.toString(16));
+    }
+    const sum = files.reduce((s, f) => s + f.data.length, 0);
+    c = await connect();
+    const erase = $('erase').checked;
+    if (erase) state('Erasing the cube (about 30 s)…');
+    const t0 = Date.now();
+    await c.loader.writeFlash({
+      fileArray: files, flashMode: 'keep', flashFreq: 'keep', flashSize: 'keep',
+      eraseAll: erase, compress: true,
+      reportProgress: (i, w, t) => {
+        const before = files.slice(0, i).reduce((s, f) => s + f.data.length, 0);
+        const f = (before + files[i].data.length * (t ? w / t : 0)) / sum;
+        bar(f); state('Writing ' + Math.round(f * 100) + '% (part ' + (i + 1) + '/' + files.length + ')');
+      },
+      calculateMD5Hash: md5,
+    });
+    bar(1);
+    state('INSTALL OK · ERROR-CUBE ' + ($('ver').textContent || '') + ' written and checked. The cube restarts now.', 'ok');
+    log('Done in ' + Math.round((Date.now() - t0) / 1000) + ' s');
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') state('No port picked. Press ALLOW USB and pick the cube (COMx).', 'err');
     else state(String(e.message || e), 'err');
   } finally {
     await finish(c);
