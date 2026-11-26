@@ -65,7 +65,7 @@
   <h1>LAMPLIGHTER</h1>
   <div id="boxBody">
     <p>Night fell on the valley and the 8 lanterns went out. Walk from the meadow to the hill, light every lantern, and bring back the dawn.</p>
-    <p class="dim">Your real lamp follows the light around you: the campfire, the fireflies, the lake, the crystal cave, the lava, the neon street. Stand on the disco floor and see.</p>
+    <p class="dim">Your real lamp follows the light around you: the campfire, the fireflies, the lake, the crystal cave, the lava, the neon street. In the dark it goes OFF. Stand on the disco floor and see.</p>
     <p class="dim">&larr; &rarr; or A D walk &middot; &uarr; W or SPACE jump &middot; touch: the round buttons &middot; gamepads too</p>
   </div>
   <div id="lampBox">
@@ -222,58 +222,24 @@ function lightHere(L) {
   }
   if (finished) return { key: dawn < 0.6 ? 'r2' : 'w', i: 1, mode: dawn > 0.95 ? 'smooth' : 'color' };
   if (px > DISCO[0] && px < DISCO[1] && P.ground) return { key: 'b4', i: 0.9, mode: 'smooth' };
-  if (!best || bi < 0.12) return { key: 'b', i: 0.05, mode: 'color' };      // just the night: deep blue, dim
+  if (!best || bi < 0.15) return { key: 'b', i: 0, mode: 'color' };         // just the night: the lamp goes OFF
   return { key: best.key, i: bi, mode: 'color' };
 }
 
 // ======================= the real lamp =======================
-let link = null, sync = true, calib = 0, wasOn = false, inflight = 0, lastTx = 0, want = null, wantSince = 0, wantKey = '', levelSince = 0, wantLevel = -1;
-function lampStart() {
-  const code = LAMP.savedCode();
-  $('backLink').href = '/lamp/' + (code ? '?code=' + code : '');
-  if (!code) { lampUi(); return; }
-  link = new LampLink({ code, name: 'LAMPLIGHTER',
-    onStatus: () => { lampUi(); if (link.online && !wasOn && started && sync && !calib) calibrate(); wasOn = link.online; },
-    onChange: () => lampUi(),
-    onEvent: (ev) => { if (ev.mine && ev.type === 'tx') { inflight = Math.max(0, inflight - 1); lastTx = performance.now(); } },
-  });
-  lampUi();
+// The lamp follows the light where you stand: nothing near = OFF (it can't dim below ~30 %),
+// a faint light = dimmest, nearer = brighter. The disco floor = SMOOTH, dawn = white, then SMOOTH.
+const kit = LampKit({ name: 'LAMPLIGHTER',
+  onOnline: () => { if (started) kit.calibrate('b'); },
+  onSyncOn: () => { if (started) kit.calibrate('b'); } });
+function lampWish() {
+  const h = lightHere(allLights());
+  if (h.mode === 'smooth') return { mode: 'smooth', level: 7 };
+  const lv = finished ? 7 : LAMP.lightLevel(h.i);
+  if (lv < 0) return { on: false };
+  return { key: h.key, level: lv <= 2 ? 0 : lv <= 5 ? 4 : 7 };       // three steps: few IR presses
 }
-function lampUi() {
-  const on = link && link.online;
-  $('lampLine').innerHTML = !link ? 'LAMP: not linked — type the code from the ESP32 page, or play without' :
-    on ? 'LAMP: ● online (' + link.codeStr + '). It plays along.' : 'LAMP: ' + link.codeStr + ' — offline, waiting for the ESP32…';
-  $('codeRow').classList.toggle('hide', !!on);
-  const st = on ? link.state : null;
-  const lk = st ? LAMP.look(st, t) : null;
-  $('lampTxt').textContent = !link ? 'NO LAMP' : !on ? 'LAMP OFFLINE' : !sync ? 'SYNC OFF' : calib ? 'SYNCING…' : !st.on ? 'LAMP OFF' : (st.mode === 'color' ? LAMP.BY_ID[st.key].name : st.mode).toUpperCase();
-  $('lampSw').style.background = lk && lk.i > 0 ? `rgb(${lk.rgb.join(',')})` : '#000';
-  $('syncBtn').textContent = sync ? 'SYNC ON' : 'SYNC OFF';
-}
-function send(id, r) { if (!link || !link.ready) return; link.press(id, r); inflight += r || 1; lastTx = performance.now(); }
-function calibrate() {
-  // switch it on and turn it all the way down, so we know where the brightness is
-  calib = 1; inflight = 0;
-  send('on'); send('down', 8);
-  setTimeout(() => { calib = 0; lampUi(); }, 3200);
-  lampUi();
-}
-const band = (i) => i < 0.2 ? 0 : i < 0.55 ? 3 : 7;            // three brightness steps: night, near a light, at a light
-function drive() {
-  if (!link || !link.ready || !sync || !started || calib) return;
-  if (performance.now() - lastTx > 3500) inflight = 0;            // lost a confirmation
-  if (inflight > 1) return;
-  const h = lightHere(allLights()), now = performance.now(), st = link.state;
-  const key = h.mode === 'smooth' ? 'smooth' : h.key;
-  if (key !== wantKey) { wantKey = key; wantSince = now; }
-  const lv = band(h.i);
-  if (lv !== wantLevel) { wantLevel = lv; levelSince = now; }
-  if (!st.on) { send('on'); return; }
-  if (key === 'smooth') { if (st.mode !== 'smooth' && now - wantSince > 350) send('smooth'); return; }
-  if ((st.mode !== 'color' || st.key !== key) && now - wantSince > (finished ? 0 : 380)) { send(key); return; }
-  if (st.level !== lv && now - levelSince > 550) { const d = lv - st.level; send(d > 0 ? 'up' : 'down', Math.min(4, Math.abs(d))); }
-}
-setInterval(() => { drive(); lampUi(); }, 120);
+setInterval(() => { if (started) kit.set(lampWish()); }, 100);
 
 // ======================= sound =======================
 let ac = null;
@@ -483,10 +449,6 @@ for (const [id, k] of [['bL', 'l'], ['bR', 'r'], ['bJ', 'j']]) {
   const up = () => { touch[k] = false; b.classList.remove('on'); };
   b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
 }
-$('syncBtn').onclick = () => {
-  sync = !sync; lampUi();
-  if (sync && link && link.online && started) calibrate();
-};
 
 function showOver(end) {
   $('over').classList.remove('hide');
@@ -506,15 +468,9 @@ $('playBtn').onclick = () => {
   const first = !started;
   started = true; sfx('jump');
   say(ZONES[0][1]);
-  if (first && link && link.online && sync) calibrate();
+  if (first) kit.calibrate('b');
 };
-$('codeBtn').onclick = () => {
-  const c = LAMP.cleanCode($('codeIn').value); if (c.length < 3) return;
-  LAMP.saveCode(c); if (link) link.close(); link = null; lampStart();
-};
-$('codeIn').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('codeBtn').click(); };
 
-lampStart();
 showOver(false);
 requestAnimationFrame(frame);
 </script>

@@ -90,7 +90,7 @@
     font-family: 'VT323', monospace; font-size: 40px; letter-spacing: .35em; color: var(--fg); text-transform: uppercase; box-sizing: border-box;
     -webkit-user-select: text; user-select: text;
   }
-  .play { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--fg); padding: 10px 12px; margin-top: 12px; text-decoration: none; }
+  .play { display: flex; margin-bottom: 8px; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--fg); padding: 10px 12px; margin-top: 12px; text-decoration: none; }
   .play:active { background: var(--fg); color: var(--bg); text-shadow: none; }
   .play b { font-weight: normal; font-size: 26px; }
   #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translate(-50%, 140px); background: var(--bg); border: 1px solid var(--fg); padding: 6px 14px; z-index: 30; transition: transform .25s; max-width: 90%; text-align: center; }
@@ -123,7 +123,12 @@
     <div id="remoteWrap"><div id="remote"><div id="irwin"></div><div id="keys"></div><div id="rlabel">RGB CONTROLLER</div></div></div>
 
     <div class="sec">
-      <a class="play" id="playLink" href="/lamp/game/"><span><b>&#9654; LAMPLIGHTER</b><br><span class="dim">walk the night world, the lights you pass light your room</span></span><span>GO</span></a>
+      <a class="play" data-p="alarm/" href="/lamp/alarm/"><span><b>&#9200; ALARM CLOCK</b><br><span class="dim">sunrise wake-up light, runs on the ESP32 itself</span></span><span>GO</span></a>
+      <div class="h"><span>GAMES WITH YOUR LAMP</span></div>
+      <a class="play" data-p="game/" href="/lamp/game/"><span><b>&#9654; LAMPLIGHTER</b><br><span class="dim">walk the night world; the light you stand in lights your room, dark = lamp off</span></span><span>GO</span></a>
+      <a class="play" data-p="thief/" href="/lamp/thief/"><span><b>&#9654; NIGHT THIEF</b><br><span class="dim">stealth: the lamp shows the light on you; off = hidden, red = caught</span></span><span>GO</span></a>
+      <a class="play" data-p="prism/" href="/lamp/prism/"><span><b>&#9654; PRISM</b><br><span class="dim">turn mirrors, mix red, green and blue beams; the lamp is the room crystal</span></span><span>GO</span></a>
+      <a class="play" data-p="chroma/" href="/lamp/chroma/"><span><b>&#9654; CHROMA</b><br><span class="dim">colour memory: the lamp plays the row, you tap it back</span></span><span>GO</span></a>
 
       <div id="otherBox" class="hide">
         <div class="h"><span>OTHER BUTTONS ON THE BOARD</span></div>
@@ -194,7 +199,8 @@ function showState() {
   for (const id of ['flash', 'strobe', 'fade', 'smooth']) keyEls[id].classList.toggle('cur', st.on && st.mode === id);
   const name = !st.on ? 'OFF' : st.mode === 'color' ? BY_ID[st.key].name.toUpperCase() : BY_ID[st.mode].name.toUpperCase();
   $('cname').textContent = name;
-  $('cmode').textContent = !st.known ? 'state not known yet' : !st.on ? 'switched off' : st.mode === 'color' ? 'brightness ' + (st.level + 1) + '/' + LEVELS : 'effect \u00b7 brightness ' + (st.level + 1) + '/' + LEVELS;
+  const pct = Math.round((LAMP.MIN_LIGHT + (1 - LAMP.MIN_LIGHT) * st.level / (LEVELS - 1)) * 100);
+  $('cmode').textContent = !st.known ? 'state not known yet' : !st.on ? 'switched off' : (st.mode === 'color' ? '' : 'effect \u00b7 ') + 'brightness ' + pct + ' %';
   [...$('levels').children].forEach((s, i) => s.classList.toggle('lit', st.on && i <= st.level));
 }
 function addLog(who, k, extra) {
@@ -235,7 +241,7 @@ function start(code) {
   demo = false;
   LAMP.saveCode(code);
   $('codeBtn').textContent = code;
-  $('playLink').href = '/lamp/game/?code=' + encodeURIComponent(code);
+  for (const a of document.querySelectorAll('a.play[data-p]')) a.href = '/lamp/' + a.dataset.p + '?code=' + encodeURIComponent(code);
   if (!link) link = new LampLink({
     code, name: 'LAMP',
     onStatus: setStatus,

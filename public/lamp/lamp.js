@@ -1,17 +1,24 @@
 /* LAMP.EXE link: talks to the IR-LAMP (an ESP32 with an IR LED, firmware esp32/IrLamp) through
    the room /api/room/ir-lamp/<CODE>. The board shows the 6-letter LINK CODE on its own web page.
 
-   const link = new LampLink({ code, name: 'LAMP', onChange(state, why), onStatus(online, info), onEvent(ev) });
+   const link = new LampLink({ code, name: 'LAMP', onChange(state, why), onStatus(online, info), onEvent(ev), onMsg(data) });
    link.press('r')            send one key of the remote (see LAMP_KEYS)
    link.code('00F720DF', 3)   send any NEC code (3 times)
    link.button(4)             send the board's own saved button #4 (learned signal)
    link.clear()               drop what's still waiting in the board's queue
+   link.send({t: ...})        any message to the board (alarms: see esp32/IrLamp/README.md)
    link.state                 { on, key, level, mode } as far as we know (rebuilt from what the board sent)
 
-   Messages, page -> board (sent "to" the board only):  {t:"ir", c, r} {t:"btn", i} {t:"clr"} {t:"hi"}
-   board -> everyone:  {t:"dev", n, v, ip, rssi, b:[[name, protocol, code]], h:[last NEC codes]}
-                       {t:"tx", c, f}  sent (f = who asked)   {t:"rx", c}  the real remote was pressed
-                       {t:"full"}  the board's queue is full */
+   const drv = new LampDriver(link)   for games: say what the lamp should look like, it sends what's needed
+   drv.set({ on: false })  /  drv.set({ key: 'r', level: 3 })  /  drv.set({ mode: 'smooth' })   (now: true = no waiting)
+   drv.calibrate(key)      on + all the way down (so the brightness is known) + that colour
+   drv.tick()              call ~10 times a second (LampKit does it)
+
+   LampKit({ name, onOnline })  the lamp pill, SYNC button and code box that the lamp games share
+   (elements #lampSw #lampTxt #syncBtn #lampLine #codeRow #codeIn #codeBtn #backLink, all optional)
+
+   Messages, page -> board (sent "to" the board only):  {t:"ir", c, r} {t:"btn", i} {t:"clr"} {t:"hi"} + alarm ones
+   board -> everyone:  {t:"dev", ...} {t:"tx", c, f} {t:"rx", c} {t:"full"} {t:"alarms", al} {t:"alarm", ...} */
 (function () {
   'use strict';
 
@@ -42,12 +49,13 @@
     { id: 'b4', c: '00F76897', name: 'Blue 4', rgb: '#ff2cd2' },
     { id: 'smooth', c: '00F7E817', name: 'Smooth', short: 'SMOOTH', kind: 'fx' },
   ];
-  // learned from the real remote (ir_signals.txt); the 4 effect keys are the standard codes
+  // learned from the real remote (ir_signals.txt); the 4 effect keys are the standard codes of that remote
   const LEARNED = new Set(KEYS.filter((k) => k.kind !== 'fx').map((k) => k.c));
   const BY_ID = {}, BY_CODE = {};
   for (const k of KEYS) { BY_ID[k.id] = k; BY_CODE[k.c] = k; }
   const COLORS = KEYS.filter((k) => k.rgb);
-  const LEVELS = 8;                                   // brightness steps we count (0 = dimmest)
+  const LEVELS = 8;                                   // brightness steps we count (0 = dimmest, which is still ~30 %)
+  const MIN_LIGHT = 0.3;                              // the lamp can't dim below about 30 %: darker = OFF
 
   const hexRgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
   // the remote colour closest to any colour (rgb array or #hex)
@@ -61,6 +69,11 @@
     }
     return best;
   }
+  // a light strength 0..1 -> what the lamp can do: off, or a brightness step
+  function lightLevel(i) {
+    if (i < 0.15) return -1;                           // dark: OFF
+    return Math.max(0, Math.min(LEVELS - 1, Math.round((i - 0.15) / 0.85 * (LEVELS - 1))));
+  }
 
   function freshState() { return { on: true, key: 'w', level: LEVELS - 1, mode: 'color', known: false }; }
   // what one code does to the lamp
@@ -69,8 +82,8 @@
     if (!k) return false;
     st.known = true;
     if (k.kind === 'power') st.on = k.on;
-    else if (k.kind === 'dim') { st.level = Math.max(0, Math.min(LEVELS - 1, st.level + k.d)); st.on = true; }
-    else if (k.kind === 'fx') { st.mode = k.id; st.on = true; }
+    else if (k.kind === 'dim') { st.level = Math.max(0, Math.min(LEVELS - 1, st.level + k.d)); }
+    else if (k.kind === 'fx') { st.mode = k.id; }
     else { st.key = k.id; st.mode = 'color'; }
     return true;
   }
@@ -81,7 +94,7 @@
     smooth: ['r', 'r1', 'r2', 'r3', 'r4', 'g', 'g1', 'g2', 'g3', 'g4', 'b', 'b1', 'b2', 'b3', 'b4'] };
   function look(st, t) {
     if (!st.on) return { rgb: [0, 0, 0], i: 0 };
-    const base = 0.22 + 0.78 * st.level / (LEVELS - 1);
+    const base = MIN_LIGHT + (1 - MIN_LIGHT) * st.level / (LEVELS - 1);
     const col = (id) => hexRgb(BY_ID[id].rgb);
     if (st.mode === 'flash') return { rgb: col(FX_SEQ.flash[Math.floor(t / 0.6) % 4]), i: base };
     if (st.mode === 'strobe') return { rgb: col(FX_SEQ.strobe[Math.floor(t / 1.2) % 4]), i: (t * 4) % 1 < 0.5 ? base : base * 0.15 };
@@ -111,8 +124,10 @@
       this.tries = 0;
       this.closed = false;
       this.pingT = null;
+      this.listeners = [];
       if (this.codeStr.length >= 3) this.open();
     }
+    listen(fn) { this.listeners.push(fn); }
     setCode(c) {
       this.codeStr = cleanCode(c);
       this.close();
@@ -167,6 +182,7 @@
         this.info = d;
         const st = freshState();
         for (const c of d.h || []) apply(st, c);
+        if (d.h && d.h.length) st.known = true;
         this.state = st;
         const was = this.online;
         this.online = true;
@@ -175,11 +191,16 @@
       } else if (d.t === 'tx' || d.t === 'rx') {
         if (!this.online) { this.online = true; this._status(); }
         const changed = d.c ? apply(this.state, d.c) : false;
-        const who = d.t === 'rx' ? 'remote' : d.f === 'local' ? 'board page' : d.f === this.myId ? 'you' : ((this.names || {})[d.f] || 'another page');
-        this.o.onEvent && this.o.onEvent({ type: d.t, code: d.c || d.code, key: d.c ? BY_CODE[d.c] : null, from: d.f, who, mine: !!d.f && d.f === this.myId, proto: d.p, queue: d.q });
+        const who = d.t === 'rx' ? 'remote' : d.f === 'local' ? 'board page' : d.f === 'alarm' ? 'alarm' : d.f === this.myId ? 'you' : ((this.names || {})[d.f] || 'another page');
+        const ev = { type: d.t, code: d.c || d.code, key: d.c ? BY_CODE[d.c] : null, from: d.f, who, mine: !!d.f && d.f === this.myId, proto: d.p, queue: d.q };
+        for (const fn of this.listeners) fn(ev);
+        this.o.onEvent && this.o.onEvent(ev);
         if (changed) this.o.onChange && this.o.onChange(this.state, d.t);
       } else if (d.t === 'full') {
         this.o.onEvent && this.o.onEvent({ type: 'full' });
+      } else {
+        if (d.t === 'alarms' && this.info) this.info.al = d.al;
+        this.o.onMsg && this.o.onMsg(d);
       }
     }
     _send(data) {
@@ -187,11 +208,59 @@
       this.ws.send(JSON.stringify(this.devId ? { to: this.devId, data } : data));
       return true;
     }
+    send(data) { return this._send(data); }
     get ready() { return this.online && !!this.ws && this.ws.readyState === 1; }
     code(c, r) { return this._send(r > 1 ? { t: 'ir', c, r: Math.min(10, r | 0) } : { t: 'ir', c }); }
     press(id, r) { const k = BY_ID[id]; return k ? this.code(k.c, r) : false; }
     button(i) { return this._send({ t: 'btn', i }); }
     clear() { return this._send({ t: 'clr' }); }
+  }
+
+  // Makes the real lamp follow what a game wants, without flooding the IR queue:
+  // one step at a time (on/off, effect, colour, brightness), only when the wish holds for a moment.
+  class LampDriver {
+    constructor(link, o) {
+      o = o || {};
+      this.link = link;
+      this.stable = o.stable == null ? 350 : o.stable;          // ms a new colour / on / off must hold
+      this.levelStable = o.levelStable == null ? 550 : o.levelStable;
+      this.target = null;
+      this.inflight = 0; this.lastTx = 0; this.busyUntil = 0;
+      this.sig = ''; this.since = 0; this.lvWant = -9; this.lvSince = 0;
+      link.listen((ev) => { if (ev.type === 'tx' && ev.mine) { this.inflight = Math.max(0, this.inflight - 1); this.lastTx = Date.now(); } });
+    }
+    set(t) { this.target = t; }
+    _press(id, r) { if (this.link.press(id, r)) { this.inflight += r || 1; this.lastTx = Date.now(); } }
+    // on, then all the way down (the brightness is then known), then a colour
+    calibrate(key) {
+      if (!this.link.ready) return false;
+      this.link.clear();
+      this.inflight = 0;
+      this._press('on'); this._press('down', 8); this._press(key || 'w');
+      this.busyUntil = Date.now() + 3300;
+      return true;
+    }
+    tick() {
+      const L = this.link, t = this.target, now = Date.now();
+      if (!t || !L.ready || now < this.busyUntil) return;
+      if (now - this.lastTx > 3000) this.inflight = 0;          // a confirmation got lost
+      if (this.inflight > 0) return;                            // one thing at a time: wait for the board's "sent"
+      const st = L.state;
+      const sig = t.on === false ? 'off' : (t.mode && t.mode !== 'color' ? t.mode : t.key);
+      if (sig !== this.sig) { this.sig = sig; this.since = now; }
+      const ok = t.now || now - this.since >= this.stable;
+      if (t.on === false) { if (st.on && ok) this._press('off'); return; }
+      if (!st.on) { if (ok) this._press('on'); return; }
+      if (t.mode && t.mode !== 'color') { if (st.mode !== t.mode) { if (ok) this._press(t.mode); return; } }
+      else if (t.key && (st.mode !== 'color' || st.key !== t.key)) { if (ok) this._press(t.key); return; }
+      if (t.level != null && t.level >= 0) {
+        if (t.level !== this.lvWant) { this.lvWant = t.level; this.lvSince = now; }
+        if (st.level !== t.level && (t.now || now - this.lvSince >= this.levelStable)) {
+          const d = t.level - st.level;
+          this._press(d > 0 ? 'up' : 'down', Math.min(4, Math.abs(d)));
+        }
+      }
+    }
   }
 
   // the link code: ?code=XXXXXX in the address, else the last one used on this browser
@@ -202,7 +271,81 @@
   }
   function saveCode(c) { try { localStorage.setItem('lamp.code', cleanCode(c)); } catch (e) {} }
 
+  // What the lamp games share: link + driver, the lamp pill in the HUD, SYNC on/off and the code box.
+  function LampKit(o) {
+    o = o || {};
+    const $ = (id) => document.getElementById(id);
+    const k = { link: null, driver: null, sync: true, wasOn: false, label: '' };
+    function ui() {
+      const L = k.link, on = !!(L && L.online);
+      if ($('lampLine')) $('lampLine').textContent = !L ? 'LAMP: not linked — type the code from the ESP32 page, or play without' :
+        on ? 'LAMP: ● online (' + L.codeStr + '). It plays along.' : 'LAMP: ' + L.codeStr + ' — offline, waiting for the ESP32…';
+      if ($('codeRow')) $('codeRow').classList.toggle('hide', on);
+      const st = on ? L.state : null, lk = st ? look(st, performance.now() / 1000) : null;
+      if ($('lampTxt')) $('lampTxt').textContent = !L ? 'NO LAMP' : !on ? 'LAMP OFFLINE' : !k.sync ? 'SYNC OFF' :
+        Date.now() < k.driver.busyUntil ? 'SYNCING…' : !st.on ? 'LAMP OFF' : (st.mode === 'color' ? BY_ID[st.key].name : st.mode).toUpperCase();
+      if ($('lampSw')) $('lampSw').style.background = lk && lk.i > 0 ? `rgb(${lk.rgb.join(',')})` : '#000';
+      if ($('syncBtn')) $('syncBtn').textContent = k.sync ? 'SYNC ON' : 'SYNC OFF';
+      if ($('backLink')) $('backLink').href = '/lamp/' + (L ? '?code=' + L.codeStr : '');
+    }
+    function start() {
+      const code = savedCode();
+      if (k.link) k.link.close();
+      k.link = null; k.driver = null; k.wasOn = false;
+      if (code) {
+        k.link = new LampLink({ code, name: o.name || 'GAME',
+          onStatus: () => { ui(); if (k.link.online && !k.wasOn && o.onOnline) o.onOnline(); k.wasOn = k.link.online; },
+          onChange: ui, onEvent: o.onEvent, onMsg: o.onMsg });
+        k.driver = new LampDriver(k.link, o.driver);
+      }
+      ui();
+    }
+    k.ready = () => !!(k.link && k.link.ready && k.sync);
+    k.set = (t) => { if (k.driver) k.driver.set(t); };
+    k.calibrate = (key) => { if (k.ready()) k.driver.calibrate(key); ui(); };
+    k.ui = ui;
+    setInterval(() => { if (k.driver && k.sync) k.driver.tick(); ui(); }, 110);
+    if ($('syncBtn')) $('syncBtn').onclick = () => { k.sync = !k.sync; ui(); if (k.sync && o.onSyncOn) o.onSyncOn(); };
+    if ($('codeBtn')) $('codeBtn').onclick = () => { const c = cleanCode($('codeIn').value); if (c.length < 3) return; saveCode(c); start(); };
+    if ($('codeIn')) $('codeIn').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('codeBtn').click(); };
+    start();
+    return k;
+  }
+
+  // a browser time zone (IANA name) as a POSIX TZ string for the board (same as Home Front's)
+  function posixTZ(tz) {
+    let f;
+    try { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); } catch (e) { return ''; }
+    const off = (ms) => {
+      const q = {}; for (const x of f.formatToParts(new Date(ms))) q[x.type] = +x.value;
+      return Math.round((Date.UTC(q.year, q.month - 1, q.day, q.hour % 24, q.minute, q.second) - Math.floor(ms / 1000) * 1000) / 60000);
+    };
+    const hm = (m) => { const a = Math.abs(m), s = (m < 0 ? '-' : '') + Math.floor(a / 60); return a % 60 ? s + ':' + String(a % 60).padStart(2, '0') : s; };
+    const y = new Date().getUTCFullYear(), t0 = Date.UTC(y, 0, 1), t1 = Date.UTC(y + 1, 0, 1), DAY = 86400000;
+    const changes = [];
+    let prev = off(t0);
+    for (let t = t0 + DAY; t <= t1; t += DAY) {
+      const o = off(t);
+      if (o === prev) continue;
+      let lo = t - DAY, hi = t;
+      while (hi - lo > 60000) { const mid = lo + Math.floor((hi - lo) / 120000) * 60000; if (off(mid) === prev) lo = mid; else hi = mid; }
+      changes.push({ at: hi, from: prev, to: o });
+      prev = o;
+    }
+    const offs = [off(t0), off(Date.UTC(y, 6, 1))], std = Math.min(...offs), dst = Math.max(...offs);
+    if (changes.length !== 2 || std === dst) return 'STD' + hm(-off(Date.now()));
+    const rule = (c) => {
+      const l = new Date(c.at + c.from * 60000), day = l.getUTCDate(), dim = new Date(Date.UTC(l.getUTCFullYear(), l.getUTCMonth() + 1, 0)).getUTCDate();
+      const wk = day + 7 > dim ? 5 : Math.ceil(day / 7), mins = l.getUTCHours() * 60 + l.getUTCMinutes();
+      return 'M' + (l.getUTCMonth() + 1) + '.' + wk + '.' + l.getUTCDay() + '/' + hm(mins);
+    };
+    const on = changes.find((c) => c.to === dst), offc = changes.find((c) => c.to === std);
+    return 'STD' + hm(-std) + 'DST' + hm(-dst) + ',' + rule(on) + ',' + rule(offc);
+  }
+
   window.LAMP_KEYS = KEYS;
-  window.LAMP = { KEYS, BY_ID, BY_CODE, COLORS, LEVELS, LEARNED, nearestKey, hexRgb, apply, look, freshState, savedCode, saveCode, cleanCode };
+  window.LAMP = { KEYS, BY_ID, BY_CODE, COLORS, LEVELS, MIN_LIGHT, LEARNED, nearestKey, lightLevel, hexRgb, apply, look, freshState, savedCode, saveCode, cleanCode, posixTZ };
   window.LampLink = LampLink;
+  window.LampDriver = LampDriver;
+  window.LampKit = LampKit;
 })();

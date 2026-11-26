@@ -122,7 +122,22 @@ public/                 the website
                         the dawn. With a lamp linked (SYNC ON) the real lamp takes the colour of the strongest light where
                         you stand (nothing near = deep blue, dim), in 3 brightness steps; the disco floor = SMOOTH, dawn =
                         white at full, then SMOOTH. It turns the lamp on and all the way down once at the start. Best time
-                        in localStorage lamplighter.best. ?code= like LAMP.EXE
+                        in localStorage lamplighter.best. ?code= like LAMP.EXE. In the dark the lamp goes OFF (it can't dim
+                        below ~30 %)
+  lamp/thief/           Night Thief: top-down stealth in a museum (40x22 tiles). Light per tile with walls blocking it, guards
+                        with torch cones, 8 light switches (E; back on after 20 s). Seen = light on you > 0.3 in a guard's view
+                        (10 tiles) or his torch on you (6.5). Lamp: light on you (colour + 3 steps), OFF = hidden, yellow =
+                        suspicious guard, red = caught, SMOOTH = escaped. Best in thief.best
+  lamp/prism/           Prism: beams R/G/B, turnable mirrors and half mirrors, crystals need an exact mixed colour. Levels 1-3
+                        by hand, then generate(n): solver-checked (1-4 answers, 2-7 turns). Lamp = the colour reaching the
+                        ringed crystal (none = OFF), SMOOTH when solved. Progress in prism.level
+  lamp/chroma/          Chroma: colour memory. The lamp plays the row (screen blank unless SCREEN TOO), white = your turn,
+                        taps light the lamp, FLASH then OFF when wrong. 4 / 8 / 15 colours, best per size in chroma.best.N
+  lamp/alarm/           ALARM.EXE: sunrise alarms kept and run on the IR-LAMP board (firmware 2.1): days, sunrise length,
+                        wake colour, effect, auto-off, TRY IT (30 s), FALL ASLEEP (dim then off). Sends the board its POSIX
+                        time zone. Protocol in esp32/IrLamp/README.md
+  lamp/lamp.css         the shared look of the lamp games; lamp.js also has LampDriver (sends one step at a time, waits for
+                        the board's "sent") and LampKit (link + driver + the HUD lamp pill / SYNC / code box)
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:

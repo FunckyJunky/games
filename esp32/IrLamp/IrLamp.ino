@@ -1,14 +1,17 @@
 /*
   ============================================================
-   ESP32 IR LEARNER + WI-FI REMOTE + error.blue LINK    v2.0
+   ESP32 IR LEARNER + WI-FI REMOTE + error.blue LINK    v2.1
   ============================================================
    - IR receiver learns any remote button
    - Web page (phone / PC): name it, save it, tap it to send it again
    - Saved signals stay in flash (survive power-off and re-upload)
    - Download all names + values as a .txt file (and restore from it)
    - NEW in 2.0: joins your home Wi-Fi and keeps a live link to
-     error.blue, so error.blue/lamp and error.blue/lamp/game can
+     error.blue, so error.blue/lamp and the lamp games can
      send IR from anywhere
+   - NEW in 2.1: alarm clock (sunrise wake-up light). The alarms live
+     on the board and run without any page open; set them on
+     error.blue/lamp/alarm. OFF on the real remote stops a running one.
 
    Made for: classic ESP32 (DevKit / WROOM). Works on other ESP32s,
              just change the pins below.
@@ -48,7 +51,7 @@
       "Restore .txt" puts them back after a wipe.
 
    Serial Monitor (115200, Newline): HELP, STATUS, CODE, NEWCODE,
-   LINK ON / LINK OFF, WIFI "network name" password, WIFI OFF
+   LINK ON / LINK OFF, WIFI "network name" password, WIFI OFF, ALARMS
   ============================================================
 */
 
@@ -61,8 +64,9 @@
 #include <Preferences.h>
 #include <time.h>
 #include <vector>
+#include <algorithm>
 
-#define FW_VERSION "2.0"
+#define FW_VERSION "2.1"
 
 // ============================================================
 //  SETTINGS
@@ -255,6 +259,11 @@ void histPush(uint32_t c) { hist[histHead] = c; histHead = (histHead + 1) % 24; 
 
 void cloudSay(const String& s);   // further down
 void cloudTx(const IrSignal& s, const char* from);
+bool alarmRunning();
+void stopAlarms(const char* why);
+String alarmHelloPart();
+void alarmCommand(const char* t, const char* d);
+String tzStr = "";                // POSIX time zone for the alarms (set from error.blue/lamp/alarm)
 
 // ============================================================
 //  OLED
@@ -480,6 +489,7 @@ void pollReceiver() {
   if (isNec32(last)) {
     uint32_t c = codeValue(last.code);
     histPush(c);
+    if (c == 0x00F740BF && alarmRunning()) stopAlarms("remote");   // OFF on the remote: good morning
     cloudSay("{\"t\":\"rx\",\"c\":\"" + hex8(c) + "\"}");
   } else {
     cloudSay("{\"t\":\"rx\",\"p\":\"" + last.protocol + "\",\"c\":\"" + last.code + "\"}");
@@ -1141,7 +1151,7 @@ void staStep() {
     if (!staWasUp) {
       staWasUp = true; staTrying = false; staUpAt = millis(); staMsg = "";
       Serial.printf("Home Wi-Fi: connected to %s, IP %s\n", staSsid.c_str(), WiFi.localIP().toString().c_str());
-      configTime(0, 0, "pool.ntp.org", "time.google.com");   // the certificate check needs the date
+      configTzTime(tzStr.length() ? tzStr.c_str() : "UTC0", "pool.ntp.org", "time.google.com");   // the certificate check (and the alarms) need the date
       oledShow("IR Remote", WiFi.localIP().toString(), staSsid, "online");
     }
     return;
@@ -1198,7 +1208,7 @@ WiFiClientSecure tls;
 static bool     wsUp = false, tlsSkip = false;
 static uint32_t wsNextTry = 0, wsBackoff = 2000, wsLastPing = 0, wsLastRx = 0, helloAt = 0;
 static String   cloudErr = "", myId = "";
-static char     wsMsg[8193];
+static char     wsMsg[12289];
 static size_t   wsMsgLen = 0;
 static bool     wsMsgBig = false;
 
@@ -1250,7 +1260,6 @@ void wsDrop(const char* why) {
   tls.stop();
   wsUp = false;
   myId = "";
-  queueClear();
 }
 
 void cloudSay(const String& s) {
@@ -1282,7 +1291,7 @@ void sendHello() {
     if (i) s += ',';
     s += "\"" + hex8(hist[(histHead + 24 - histN + i) % 24]) + "\"";
   }
-  s += "]}";
+  s += "]," + alarmHelloPart() + "}";
   cloudSay(s);
 }
 
@@ -1332,6 +1341,8 @@ void cloudCommand(const char* d, const char* from) {
     queueClear();
   } else if (!strcmp(t, "hi")) {
     helloAt = millis() + 20;
+  } else if (!strcmp(t, "al") || !strcmp(t, "tz") || !strcmp(t, "run") || !strcmp(t, "stop")) {
+    alarmCommand(t, d);
   }
 }
 
@@ -1533,6 +1544,238 @@ void handleCloud() {
 }
 
 // ============================================================
+//  ALARMS  (sunrise wake-up light: the board runs them itself)
+// ============================================================
+// Kept in /alarms.txt as one text: alarms joined by '^', each  id|on|hh|mm|days|steps|meta
+//   days:  bit 0 = Sunday .. bit 6 = Saturday; 0 = once (it switches itself off afterwards)
+//   steps: offset:code,offset:code,...  seconds from the alarm time (negative = before it), NEC code in hex
+//   meta:  the page's own settings (URL-encoded), kept as they are
+// error.blue/lamp/alarm writes the whole list ({t:"al", a}), the board runs it with its own clock.
+struct AlarmStep { int32_t off; uint32_t code; };
+struct Alarm {
+  uint16_t id = 0; bool on = true; uint8_t hh = 7, mm = 0, days = 0;
+  std::vector<AlarmStep> steps;
+  String meta;
+  time_t runE = 0, doneE = 0;      // the alarm time being run now / the last one finished
+  uint16_t next = 0;
+};
+std::vector<Alarm> alarms;
+Alarm program;                     // a one-off from a page (try a sunrise, fall asleep), id 0
+bool programOn = false;
+static const char* AL_FILE = "/alarms.txt";
+#define MAX_ALARMS 8
+#define MAX_STEPS  64
+
+void parseSteps(const char* s, std::vector<AlarmStep>& out) {
+  out.clear();
+  while (*s && out.size() < MAX_STEPS) {
+    char* e;
+    long off = strtol(s, &e, 10);
+    if (e == s || *e != ':') break;
+    s = e + 1;
+    uint32_t code = (uint32_t)strtoul(s, &e, 16);
+    if (e == s) break;
+    out.push_back({ (int32_t)off, code });
+    s = e;
+    if (*s == ',') s++; else break;
+  }
+  std::stable_sort(out.begin(), out.end(), [](const AlarmStep& a, const AlarmStep& b) { return a.off < b.off; });
+}
+
+bool parseAlarm(const String& line, Alarm& a) {
+  int p[6], from = 0;
+  for (int i = 0; i < 6; i++) { int q = line.indexOf('|', from); if (q < 0) return false; p[i] = q; from = q + 1; }
+  a.id   = (uint16_t)line.substring(0, p[0]).toInt();
+  a.on   = line.substring(p[0] + 1, p[1]).toInt() != 0;
+  a.hh   = (uint8_t)constrain((int)line.substring(p[1] + 1, p[2]).toInt(), 0, 23);
+  a.mm   = (uint8_t)constrain((int)line.substring(p[2] + 1, p[3]).toInt(), 0, 59);
+  a.days = (uint8_t)(line.substring(p[3] + 1, p[4]).toInt() & 127);
+  String st = line.substring(p[4] + 1, p[5]);
+  parseSteps(st.c_str(), a.steps);
+  a.meta = line.substring(p[5] + 1);
+  if (a.meta.length() > 400) a.meta = a.meta.substring(0, 400);
+  return a.id > 0;
+}
+
+String stepsText(const std::vector<AlarmStep>& v) {
+  String o;
+  for (size_t i = 0; i < v.size(); i++) { if (i) o += ','; o += String((long)v[i].off) + ":" + hex8(v[i].code); }
+  return o;
+}
+
+String alarmsText() {
+  String o;
+  for (size_t i = 0; i < alarms.size(); i++) {
+    const Alarm& a = alarms[i];
+    if (i) o += '^';
+    o += String(a.id) + "|" + (a.on ? "1" : "0") + "|" + String(a.hh) + "|" + String(a.mm) + "|" + String(a.days) + "|" + stepsText(a.steps) + "|" + a.meta;
+  }
+  return o;
+}
+
+bool setAlarms(const String& txt, bool save) {
+  std::vector<Alarm> nv;
+  int from = 0;
+  while (from < (int)txt.length() && nv.size() < MAX_ALARMS) {
+    int q = txt.indexOf('^', from);
+    if (q < 0) q = txt.length();
+    Alarm a;
+    if (parseAlarm(txt.substring(from, q), a)) {
+      for (const Alarm& o : alarms) if (o.id == a.id && o.hh == a.hh && o.mm == a.mm) { a.runE = o.runE; a.doneE = o.doneE; a.next = o.next; }
+      nv.push_back(a);
+    }
+    from = q + 1;
+  }
+  alarms = nv;
+  if (save) {
+    File f = LittleFS.open(AL_FILE, "w");
+    if (!f) return false;
+    f.print(alarmsText());
+    f.close();
+  }
+  return true;
+}
+
+void loadAlarms() {
+  if (!LittleFS.exists(AL_FILE)) return;
+  File f = LittleFS.open(AL_FILE, "r");
+  if (!f) return;
+  String t = f.readString();
+  f.close();
+  setAlarms(t, false);
+  Serial.printf("Loaded %u alarms\n", (unsigned)alarms.size());
+}
+
+bool alarmRunning() {
+  if (programOn) return true;
+  for (const Alarm& a : alarms) if (a.runE) return true;
+  return false;
+}
+
+String nowText() {
+  time_t now = time(nullptr);
+  if (now < 1600000000) return String("");
+  struct tm tm;
+  localtime_r(&now, &tm);
+  char b[24];
+  strftime(b, sizeof(b), "%a %H:%M:%S", &tm);
+  return String(b);
+}
+
+// the part of the hello about alarms: board time, time zone, the list, what runs now
+String alarmHelloPart() {
+  time_t now = time(nullptr);
+  int run = -1;
+  if (programOn) run = 0;
+  for (const Alarm& a : alarms) if (a.runE) run = a.id;
+  return "\"ts\":" + String((unsigned long)(now > 1600000000 ? now : 0)) + ",\"lt\":\"" + nowText() + "\",\"tz\":\"" + jsonEsc(tzStr) +
+         "\",\"run\":" + String(run) + ",\"al\":\"" + jsonEsc(alarmsText()) + "\"";
+}
+
+void sayAlarms() { cloudSay("{\"t\":\"alarms\"," + alarmHelloPart() + "}"); }
+
+void finishAlarm(Alarm& a, const char* why) {
+  cloudSay("{\"t\":\"alarm\",\"s\":\"" + String(why) + "\",\"i\":" + String(a.id) + "}");
+  Serial.printf("Alarm %u: %s\n", a.id, why);
+  a.doneE = a.runE; a.runE = 0; a.next = 0;
+  if (&a == &program) { programOn = false; return; }
+  if (!a.days && a.on) { a.on = false; setAlarms(alarmsText(), true); }   // a one-time alarm switches itself off
+  sayAlarms();
+}
+
+void stopAlarms(const char* why) {
+  bool any = false;
+  for (Alarm& a : alarms) if (a.runE) { finishAlarm(a, why); any = true; }
+  if (programOn) { finishAlarm(program, why); any = true; }
+  if (any) queueClear();
+}
+
+// the alarm time on the day 'shift' days from today (local time, summer time handled by the TZ)
+time_t alarmEpoch(time_t now, int shift, int hh, int mm, int& wday) {
+  struct tm tm;
+  localtime_r(&now, &tm);
+  tm.tm_mday += shift; tm.tm_hour = hh; tm.tm_min = mm; tm.tm_sec = 0; tm.tm_isdst = -1;
+  time_t e = mktime(&tm);
+  struct tm t2;
+  localtime_r(&e, &t2);
+  wday = t2.tm_wday;
+  return e;
+}
+
+void runSteps(Alarm& a, time_t now) {
+  while (a.next < a.steps.size() && now >= a.runE + a.steps[a.next].off) {
+    if (!queuePush(0, a.steps[a.next].code, "alarm")) break;
+    a.next++;
+  }
+  if (a.next >= a.steps.size()) finishAlarm(a, "done");
+}
+
+void alarmStep() {
+  static uint32_t last = 0;
+  if (millis() - last < 500) return;
+  last = millis();
+  time_t now = time(nullptr);
+  if (now < 1600000000) return;                      // no clock yet (needs home Wi-Fi once)
+  for (Alarm& a : alarms) {
+    if (!a.on || a.steps.empty()) continue;
+    if (!a.runE) {
+      for (int sh = -1; sh <= 1; sh++) {
+        int wd;
+        time_t E = alarmEpoch(now, sh, a.hh, a.mm, wd);
+        if (a.days && !((a.days >> wd) & 1)) continue;
+        if (E == a.doneE) continue;
+        time_t s0 = E + a.steps.front().off, s1 = E + a.steps.back().off;
+        if (now < s0 || now > s1 + 2) continue;
+        a.runE = E; a.next = 0;
+        while (a.next < a.steps.size() && E + a.steps[a.next].off < now - 90) a.next++;   // started late: skip what's long past
+        Serial.printf("Alarm %u %02u:%02u: starting\n", a.id, a.hh, a.mm);
+        cloudSay("{\"t\":\"alarm\",\"s\":\"start\",\"i\":" + String(a.id) + "}");
+        break;
+      }
+    }
+    if (a.runE) runSteps(a, now);
+  }
+  if (programOn) runSteps(program, now);
+}
+
+void alarmCommand(const char* t, const char* d) {
+  static char buf[8192];
+  if (!strcmp(t, "al")) {
+    if (!jStr(d, "a", buf, sizeof(buf))) buf[0] = 0;
+    setAlarms(String(buf), true);
+    Serial.printf("Alarms set from error.blue: %u\n", (unsigned)alarms.size());
+    sayAlarms();
+  } else if (!strcmp(t, "tz")) {
+    char z[72];
+    if (!jStr(d, "z", z, sizeof(z)) || !z[0]) return;
+    tzStr = z;
+    prefs.putString("tz", tzStr);
+    setenv("TZ", z, 1); tzset();
+    Serial.printf("Time zone: %s (now %s)\n", z, nowText().c_str());
+    sayAlarms();
+  } else if (!strcmp(t, "run")) {
+    if (!jStr(d, "s", buf, sizeof(buf))) return;
+    time_t now = time(nullptr);
+    if (now < 1600000000) { cloudSay("{\"t\":\"alarm\",\"s\":\"noclock\",\"i\":0}"); return; }
+    if (programOn) finishAlarm(program, "replaced");
+    program = Alarm();
+    parseSteps(buf, program.steps);
+    if (program.steps.empty()) return;
+    program.runE = now;
+    programOn = true;
+    cloudSay("{\"t\":\"alarm\",\"s\":\"start\",\"i\":0}");
+  } else if (!strcmp(t, "stop")) {
+    stopAlarms("stopped");
+  }
+}
+
+void printAlarms() {
+  Serial.printf("Board time: %s  TZ: %s\n", nowText().length() ? nowText().c_str() : "(no clock yet)", tzStr.c_str());
+  for (const Alarm& a : alarms)
+    Serial.printf("  #%u %s %02u:%02u days=%u steps=%u%s\n", a.id, a.on ? "ON " : "off", a.hh, a.mm, a.days, (unsigned)a.steps.size(), a.runE ? "  RUNNING" : "");
+}
+
+// ============================================================
 //  SERIAL MONITOR COMMANDS (115200 baud, "Newline")
 // ============================================================
 void printStatus() {
@@ -1545,6 +1788,7 @@ void printStatus() {
 }
 
 void runCommand(String line) {
+  if (line.equalsIgnoreCase("ALARMS")) { printAlarms(); return; }
   line.trim();
   String up = line; up.toUpperCase();
   if (up == "HELP") {
@@ -1613,6 +1857,9 @@ void setup() {
   staPass = prefs.getString("pass", HOME_PASS);
   cloudOn = prefs.getBool("cloud", true);
   linkCode = prefs.getString("code", "");
+  tzStr = prefs.getString("tz", "");
+  if (tzStr.length()) { setenv("TZ", tzStr.c_str(), 1); tzset(); }
+  loadAlarms();
   if (linkCode.length() < 3) { linkCode = newLinkCode(); prefs.putString("code", linkCode); }
 
   irTxBegin();
@@ -1648,6 +1895,7 @@ void loop() {
   pollReceiver();
   staStep();
   cloudStep();
+  alarmStep();
   queueStep();
   serialStep();
   delay(2);

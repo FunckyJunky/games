@@ -154,5 +154,45 @@
     "folder": "apps",
     "logo": "lamp",
     "added": "2026-11-26T18:30"
+  },
+  {
+    "id": "lamp-thief",
+    "title": "Night Thief",
+    "dos": "THIEF",
+    "description": "Steal 5 jewels from a museum at night. Guards with torches, light switches you can turn off. Light gives you away. With your lamp linked it shows the light on you: off = hidden, yellow = a guard is wondering, red = caught.",
+    "path": "lamp/thief/",
+    "folder": "games",
+    "logo": "lamp",
+    "added": "2026-11-26T19:30"
+  },
+  {
+    "id": "lamp-prism",
+    "title": "Prism",
+    "dos": "PRISM",
+    "description": "Red, green and blue beams, mirrors to turn, crystals that want one exact colour. Light adds up: red + green = yellow. Endless puzzles. Your lamp shows the light reaching the room crystal.",
+    "path": "lamp/prism/",
+    "folder": "games",
+    "logo": "lamp",
+    "added": "2026-11-26T19:30"
+  },
+  {
+    "id": "lamp-chroma",
+    "title": "Chroma",
+    "dos": "CHROMA",
+    "description": "Colour memory played on your real lamp: it shows a row of colours, the room goes white, you tap them back. One more each round. Without a lamp the screen shows them.",
+    "path": "lamp/chroma/",
+    "folder": "games",
+    "logo": "lamp",
+    "added": "2026-11-26T19:30"
+  },
+  {
+    "id": "lamp-alarm",
+    "title": "ALARM.EXE",
+    "dos": "ALARM",
+    "description": "Wake-up light for your RGB lamp: a sunrise from deep red to full light before the alarm, workdays or once, a fade-out to fall asleep. The alarms run on the IR-LAMP board itself; OFF on the real remote stops them.",
+    "path": "lamp/alarm/",
+    "folder": "apps",
+    "logo": "lamp",
+    "added": "2026-11-26T19:30"
   }
 ]

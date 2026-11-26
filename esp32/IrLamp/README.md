@@ -28,7 +28,7 @@ Uploading again keeps the saved buttons, the Wi-Fi and the link code (LittleFS +
 - **Online · error.blue** card: Wi-Fi settings (scan, password, Connect, Forget), the 6-letter **LINK CODE**,
   New code, Link on/off, and a button that opens error.blue/lamp with the code filled in.
 - Serial Monitor (115200, Newline): `HELP`, `STATUS`, `CODE`, `NEWCODE`, `LINK ON|OFF`,
-  `WIFI "network name" password`, `WIFI OFF`.
+  `WIFI "network name" password`, `WIFI OFF`, `ALARMS`.
 
 ## How it talks to error.blue
 
@@ -44,6 +44,10 @@ Pages send to the board (`{to: <board id>, data}`):
 | `{t:"btn", i:4}` | send saved button #4 (the learned signal, any protocol) |
 | `{t:"clr"}` | drop what still waits in the queue |
 | `{t:"hi"}` | the board answers with `dev` |
+| `{t:"tz", z:"CET-1CEST,M3.5.0,M10.5.0/3"}` | its time zone (POSIX), kept in Preferences |
+| `{t:"al", a:"..."}` | replace all alarms (format below), kept in /alarms.txt |
+| `{t:"run", s:"0:00F7C03F,600:00F740BF"}` | a one-off light program from now (TRY IT, FALL ASLEEP) |
+| `{t:"stop"}` | stop a running alarm / program (OFF on the real remote does it too) |
 
 The board sends to everyone in the room:
 
@@ -53,6 +57,8 @@ The board sends to everyone in the room:
 | `{t:"tx", c, f, q}` | a code went out (`f` = the room id of the page that asked, or `local` for the board's own page) |
 | `{t:"rx", c}` | the real remote was pressed (NEC); other protocols: `{t:"rx", p, c}` |
 | `{t:"full"}` | the queue (32) is full |
+| `{t:"alarms", ts, lt, tz, run, al}` | after a change; `dev` has the same fields (ts = board time, 0 = no clock yet) |
+| `{t:"alarm", s:"start"/"done"/"remote"/"stopped"/"noclock", i}` | an alarm (i = id, 0 = one-off program) |
 
 Commands from error.blue go out one at a time, `IR_QUEUE_GAP_MS` (220 ms) apart, so the lamp catches every press.
 
@@ -68,3 +74,13 @@ Brightness is counted in 8 steps; Lamplighter turns the lamp all the way down on
 
 error.blue/lamp has **Try the remote without one** (a demo that only draws the lamp), and Lamplighter plays fine
 without a lamp linked.
+
+## Alarms (firmware 2.1)
+
+The board gets its clock from the internet (NTP) once it is on the home Wi-Fi, in the time zone error.blue/lamp/alarm
+sends it. Alarms are one text: alarms joined by `^`, each `id|on|hh|mm|days|steps|meta`.
+`days`: bit 0 = Sunday ... bit 6 = Saturday (Mon-Fri = 62), 0 = once (it switches itself off after).
+`steps`: `seconds:NECcode,...` from the alarm time (negative = before it): the page builds the sunrise
+(on, red, all the way down, then orange / light orange / yellow / the wake colour and 7 x brighter spread over the
+sunrise, the effect at the alarm time, OFF after the auto-off). `meta`: the page's settings, URL-encoded.
+At most 8 alarms and 64 steps each. A sunrise that starts late (board just switched on) skips steps older than 90 s.

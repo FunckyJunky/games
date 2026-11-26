@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>NIGHT THIEF</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%23000%27/%3E%3Cpath d=%27M8 2l4 4-4 8-4-8z%27 fill=%27%23ff2cd2%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="/lamp/lamp.css">
+<style>
+  #game { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  #stick { position: fixed; left: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); width: 124px; height: 124px; border-radius: 50%; border: 2px solid #39ff7a66; z-index: 6; display: none; touch-action: none; }
+  #knob { position: absolute; left: 37px; top: 37px; width: 50px; height: 50px; border-radius: 50%; background: #39ff7a44; border: 2px solid #39ff7a; }
+  .touch #stick { display: block; }
+  #padR { right: 18px; }
+  #vis { display: inline-flex; gap: 2px; align-items: center; }
+  #vis i { width: 7px; height: 12px; border: 1px solid var(--dim); display: block; }
+  #vis i.on { background: #fff; border-color: #fff; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="176"></canvas>
+<div id="hud">
+  <span class="title">NIGHT THIEF</span><span id="hGems">&#9670; 0/5</span><span id="hLives">&#9829;&#9829;&#9829;</span><span id="vis" title="how much light is on you"></span><span id="hTime">0:00</span><span class="sp"></span>
+  <span id="lampPill"><span id="lampSw"></span><span id="lampTxt">NO LAMP</span></span>
+  <button id="syncBtn">SYNC ON</button><a href="/lamp/" id="backLink">LAMP</a>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div class="pad" id="padR"><button id="bA">E</button></div>
+<div id="msg"></div>
+<div id="over"><div id="box">
+  <h1>NIGHT THIEF</h1>
+  <div id="boxBody">
+    <p>Steal the 5 jewels from the museum at night and get out by the green door. Guards with torches walk their rounds.</p>
+    <p>Light gives you away: in a lit room a guard sees you from far, in the dark only when his torch is on you. Stand at a switch and press E (or the round button) to turn a room's lights off. They come back on after 20 seconds.</p>
+    <p class="dim">Your lamp shows the light that falls on you: OFF = hidden. Yellow = a guard is getting suspicious. Red = caught. You can play by watching the room.</p>
+    <p class="dim">Arrows / WASD move &middot; E or SPACE = switch &middot; touch: the stick and E</p>
+  </div>
+  <div id="lampBox">
+    <p id="lampLine">LAMP: not linked</p>
+    <p id="codeRow"><input id="codeIn" maxlength="8" placeholder="CODE" autocomplete="off" spellcheck="false"> <button class="btn" id="codeBtn">LINK</button></p>
+  </div>
+  <p><button class="btn on" id="playBtn">&#9654; PLAY</button><a class="btn" href="/lamp/" style="text-decoration:none">LAMP.EXE</a></p>
+  <p class="dim" id="best"></p>
+</div></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const T = 8, MW = 40, MH = 22, VW = MW * T, VH = MH * T;
+const cv = $('game'), ctx = cv.getContext('2d');
+const RGB = (k) => LAMP.hexRgb(LAMP.BY_ID[k].rgb);
+
+// ======================= the museum =======================
+const M = Array.from({ length: MH }, (_, y) => Array.from({ length: MW }, (_, x) => (x === 0 || y === 0 || x === MW - 1 || y === MH - 1) ? '#' : '.'));
+const hw = (y, x0, x1, doors) => { for (let x = x0; x <= x1; x++) if (!doors.includes(x)) M[y][x] = '#'; };
+const vw = (x, y0, y1, doors) => { for (let y = y0; y <= y1; y++) if (!doors.includes(y)) M[y][x] = '#'; };
+vw(9, 1, 6, [4]); vw(20, 1, 6, [4, 5]); vw(30, 1, 6, [2]);      // the top rooms
+hw(7, 1, 38, [4, 5, 14, 15, 25, 34, 35]);                         // their doors to the hall
+hw(12, 1, 38, [6, 7, 18, 19, 31]);                                // the bottom rooms
+vw(13, 13, 20, [17]); vw(25, 13, 20, [15, 16]);
+for (const [x, y] of [[12, 9], [12, 10], [27, 9], [27, 10], [5, 17], [6, 17], [33, 16]]) M[y][x] = '#';   // pillars, a statue base
+M[3][39] = 'W'; M[16][0] = 'W'; M[21][20] = 'W';                 // windows: moonlight
+const ROOMS = [['START ROOM', 1, 1, 8, 6], ['EAST WING', 10, 1, 19, 6], ['GALLERY', 21, 1, 29, 6], ['TREASURY', 31, 1, 38, 6], ['GREAT HALL', 1, 8, 38, 11], ['OLD WING', 1, 13, 12, 20], ['AQUARIUM', 14, 13, 24, 20], ['VAULT', 26, 13, 38, 20]];
+const START = [2.5, 2.5], EXIT = [1, 20];
+const solid = (x, y) => { const c = M[y] && M[y][x]; return !c || c === '#' || c === 'W'; };
+
+// lights: tile position, colour, reach (tiles), strength, switch group ('' = always on)
+const LIGHTS = [
+  { x: 5, y: 1.5, key: 'r1', r: 6, p: 0.9, g: 'A' },                 // start room torch
+  { x: 15, y: 3.5, key: 'r2', r: 7, p: 1, g: 'B' },                 // east wing chandelier
+  { x: 25, y: 3.5, key: 'w', r: 7, p: 1, g: 'C' },                  // gallery
+  { x: 35, y: 4, key: 'b4', r: 5, p: 0.9, g: 'D' },                 // treasury display case
+  { x: 38, y: 3, key: 'b1', r: 8, p: 0.55, g: '' },                 // moon through the window
+  { x: 6, y: 9.5, key: 'w', r: 6, p: 0.9, g: 'H' }, { x: 19.5, y: 9.5, key: 'w', r: 6, p: 0.9, g: 'H' }, { x: 33, y: 9.5, key: 'w', r: 6, p: 0.9, g: 'H' },   // great hall
+  { x: 7, y: 15, key: 'r', r: 6, p: 0.9, g: 'E' },                  // old wing (red)
+  { x: 1, y: 16, key: 'b1', r: 7, p: 0.5, g: '' },                  // moon
+  { x: 1.5, y: 19.5, key: 'g', r: 3, p: 0.7, g: '' },               // the exit sign
+  { x: 19.5, y: 16, key: 'g3', r: 6, p: 0.9, g: 'F' },              // aquarium
+  { x: 20, y: 20, key: 'b1', r: 5, p: 0.45, g: '' },                // moon
+  { x: 31, y: 17, key: 'r3', r: 6, p: 0.9, g: 'V' }, { x: 36, y: 15, key: 'r3', r: 5, p: 0.8, g: 'V' },   // vault
+];
+const SWITCHES = [{ x: 1, y: 6, g: 'A', name: 'START ROOM' }, { x: 10, y: 6, g: 'B', name: 'EAST WING' }, { x: 21, y: 6, g: 'C', name: 'GALLERY' }, { x: 31, y: 1, g: 'D', name: 'TREASURY' },
+  { x: 20, y: 11, g: 'H', name: 'GREAT HALL' }, { x: 12, y: 13, g: 'E', name: 'OLD WING' }, { x: 14, y: 20, g: 'F', name: 'AQUARIUM' }, { x: 38, y: 13, g: 'V', name: 'VAULT' }];
+const GEMS0 = [[15, 2, 'r'], [25, 2, 'w'], [36, 5, 'b4'], [19, 18, 'g3'], [35, 19, 'r3']];
+const GUARDS0 = [
+  { path: [[3, 9], [36, 9], [36, 10.5], [3, 10.5]], sp: 2.1 },              // the great hall
+  { path: [[11, 2.5], [18, 2.5], [18, 4.5], [28, 4.5], [28, 2.5], [22, 2.5], [22, 4.5], [11, 4.5]], sp: 1.9 },   // east wing + gallery
+  { path: [[15.5, 14.5], [23.5, 14.5], [23.5, 19.5], [15.5, 19.5]], sp: 1.7 },    // aquarium
+  { path: [[27.5, 14], [37, 14], [37, 19.5], [27.5, 19.5]], sp: 1.8 },          // vault
+];
+
+// light only reaches a tile it can see (walls block it)
+function los(x0, y0, x1, y1) {
+  const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2);
+  for (let i = 1; i < n; i++) { const x = Math.floor(x0 + (x1 - x0) * i / n), y = Math.floor(y0 + (y1 - y0) * i / n); if (solid(x, y)) return false; }
+  return true;
+}
+for (const l of LIGHTS) {                                          // which tiles each light reaches, worked out once
+  l.reach = [];
+  for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+    if (solid(x, y)) continue;
+    const d = Math.hypot(x + 0.5 - l.x, y + 0.5 - l.y);
+    if (d > l.r) continue;
+    if (!los(l.x, l.y, x + 0.5, y + 0.5)) continue;
+    l.reach.push([x, y, l.p * Math.pow(1 - d / l.r, 0.8)]);
+  }
+}
+
+// ======================= state =======================
+const P = { x: 0, y: 0, vx: 0, vy: 0, face: 1, walk: 0 };
+let gems = [], guards = [], lives = 3, have = 0, started = false, done = false, caughtT = 0, t = 0, runT = 0, offUntil = {}, msgT = 0, gemFlash = 0;
+const keys = {}, stick = { x: 0, y: 0 };
+function reset(full) {
+  P.x = START[0]; P.y = START[1];
+  guards = GUARDS0.map((g) => ({ ...g, x: g.path[0][0], y: g.path[0][1], i: 1, wait: 0, dir: 0, sus: 0, look: 0 }));
+  if (full) { gems = GEMS0.map(([x, y, k]) => ({ x: x + 0.5, y: y + 0.5, k, got: false })); have = 0; lives = 3; runT = 0; done = false; offUntil = {}; }
+  hud();
+}
+function hud() {
+  $('hGems').textContent = '◆ ' + have + '/' + GEMS0.length;
+  $('hLives').textContent = '♥'.repeat(Math.max(0, lives)) || '-';
+}
+function say(s, sec) { const m = $('msg'); m.textContent = s; m.style.opacity = 1; msgT = sec || 2.2; }
+const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+// ======================= light, every frame =======================
+const LI = new Float32Array(MW * MH), LK = new Array(MW * MH), LR = new Float32Array(MW * MH * 3);
+function lightUp() {
+  LI.fill(0); LR.fill(0); LK.fill(null);
+  const add = (x, y, i, key) => {
+    const k = y * MW + x, c = RGB(key);
+    LR[k * 3] += c[0] * i; LR[k * 3 + 1] += c[1] * i; LR[k * 3 + 2] += c[2] * i;
+    if (i > LI[k]) { LI[k] = i; LK[k] = key; }
+  };
+  for (const l of LIGHTS) {
+    if (l.g && offUntil[l.g] > t) continue;
+    for (const [x, y, i] of l.reach) add(x, y, i, l.key);
+  }
+  for (const g of guards) {                                        // torches
+    for (let y = Math.max(1, Math.floor(g.y - 7)); y <= Math.min(MH - 2, g.y + 7); y++)
+      for (let x = Math.max(1, Math.floor(g.x - 7)); x <= Math.min(MW - 2, g.x + 7); x++) {
+        if (solid(x, y)) continue;
+        const dx = x + 0.5 - g.x, dy = y + 0.5 - g.y, d = Math.hypot(dx, dy);
+        if (d > 6.5) continue;
+        let a = Math.atan2(dy, dx) - g.dir; a = Math.atan2(Math.sin(a), Math.cos(a));
+        if (Math.abs(a) > 0.5 && d > 0.8) continue;
+        if (!los(g.x, g.y, x + 0.5, y + 0.5)) continue;
+        add(x, y, 0.95 * (1 - d / 6.5) + 0.15, 'w');
+      }
+  }
+}
+const lightAt = (x, y) => { const k = Math.floor(y) * MW + Math.floor(x); return { i: Math.min(1, LI[k] || 0), key: LK[k] }; };
+
+// ======================= moving =======================
+function moveBody(o, dx, dy, r) {
+  const tryMove = (nx, ny) => !solid(Math.floor(nx - r), Math.floor(ny - r)) && !solid(Math.floor(nx + r), Math.floor(ny - r)) && !solid(Math.floor(nx - r), Math.floor(ny + r)) && !solid(Math.floor(nx + r), Math.floor(ny + r));
+  if (tryMove(o.x + dx, o.y)) o.x += dx;
+  if (tryMove(o.x, o.y + dy)) o.y += dy;
+}
+function step(dt) {
+  if (done) return;
+  runT += dt;
+  if (caughtT > 0) { caughtT -= dt; if (caughtT <= 0) { if (lives <= 0) return gameOver(); reset(false); } return; }
+  // the thief
+  let ix = (keys.ArrowRight || keys.d || keys.D ? 1 : 0) - (keys.ArrowLeft || keys.a || keys.A ? 1 : 0) + stick.x + padX;
+  let iy = (keys.ArrowDown || keys.s || keys.S ? 1 : 0) - (keys.ArrowUp || keys.w || keys.W ? 1 : 0) + stick.y + padY;
+  const m = Math.hypot(ix, iy); if (m > 1) { ix /= m; iy /= m; }
+  if (m > 0.15) { moveBody(P, ix * 3.6 * dt, iy * 3.6 * dt, 0.32); P.walk += dt * 8; if (Math.abs(ix) > 0.2) P.face = Math.sign(ix); }
+  // jewels, exit
+  for (const g of gems) if (!g.got && Math.hypot(g.x - P.x, g.y - P.y) < 0.7) { g.got = true; have++; hud(); gemFlash = 1.2; sfx('gem'); say(have === gems.length ? 'ALL 5! GET TO THE GREEN DOOR' : 'JEWEL ' + have + '/' + gems.length); }
+  if (have === gems.length && Math.floor(P.x) === EXIT[0] && Math.floor(P.y) === EXIT[1]) return win();
+  // guards walk their rounds, look round at the corners, and stare at what they half-see
+  const me = lightAt(P.x, P.y);
+  for (const g of guards) {
+    const dx = P.x - g.x, dy = P.y - g.y, d = Math.hypot(dx, dy);
+    let a = Math.atan2(dy, dx) - g.dir; a = Math.atan2(Math.sin(a), Math.cos(a));
+    const inView = Math.abs(a) < 0.62 && d < (me.i > 0.3 ? 10 : 6.5);
+    const seen = (d < 1.4) || (inView && los(g.x, g.y, P.x, P.y) && (me.i > 0.3 || d < 6.5 && Math.abs(a) < 0.5));
+    if (seen) g.sus = Math.min(1, g.sus + dt * (0.55 + me.i * 1.6 + (d < 2.5 ? 1 : 0)));
+    else g.sus = Math.max(0, g.sus - dt * 0.35);
+    if (g.sus >= 1) { caught(); return; }
+    if (g.sus > 0.35 && seen) { g.dir = turnTo(g.dir, Math.atan2(dy, dx), dt * 3); continue; }   // stops and stares
+    if (g.wait > 0) { g.wait -= dt; g.dir += Math.sin(t * 1.7 + g.x) * dt * 1.6; continue; }
+    const [tx, ty] = g.path[g.i], ex = tx - g.x, ey = ty - g.y, ed = Math.hypot(ex, ey);
+    if (ed < 0.08) { g.i = (g.i + 1) % g.path.length; g.wait = 0.9; continue; }
+    const s = Math.min(ed, g.sp * dt);
+    g.x += ex / ed * s; g.y += ey / ed * s; g.dir = turnTo(g.dir, Math.atan2(ey, ex), dt * 5);
+  }
+}
+function turnTo(a, b, k) { let d = Math.atan2(Math.sin(b - a), Math.cos(b - a)); return a + Math.max(-k, Math.min(k, d)); }
+function useSwitch() {
+  if (!started || done || caughtT > 0) return;
+  for (const s of SWITCHES) if (Math.hypot(s.x + 0.5 - P.x, s.y + 0.5 - P.y) < 1.3) {
+    if (offUntil[s.g] > t) { offUntil[s.g] = 0; say(s.name + ': LIGHTS ON'); }
+    else { offUntil[s.g] = t + 20; say(s.name + ': LIGHTS OFF (20 s)'); }
+    sfx('click'); return;
+  }
+  say('NO SWITCH HERE', 1);
+}
+function caught() { caughtT = 2.2; lives--; hud(); say(lives > 0 ? 'CAUGHT! ' + lives + ' LEFT' : 'CAUGHT!'); sfx('caught'); }
+function win() {
+  done = true; sfx('win');
+  try { const b = +localStorage.getItem('thief.best') || 0; if (!b || runT < b) localStorage.setItem('thief.best', runT.toFixed(1)); } catch (e) {}
+  say('ESCAPED IN ' + fmt(runT) + '!', 4);
+  setTimeout(() => showOver('win'), 4500);
+}
+function gameOver() { done = true; setTimeout(() => showOver('lose'), 400); }
+
+// ======================= the real lamp =======================
+// what light falls on the thief. OFF = hidden (the lamp can't go darker than ~30 %).
+const kit = LampKit({ name: 'NIGHT THIEF', driver: { stable: 300 }, onOnline: () => { if (started) kit.calibrate('b1'); }, onSyncOn: () => { if (started) kit.calibrate('b1'); } });
+function lampWish() {
+  if (done && have === gems.length) return { mode: 'smooth', level: 7 };
+  if (caughtT > 0 || (done && lives <= 0)) return { key: 'r', level: 7, now: true };
+  const sus = Math.max(0, ...guards.map((g) => g.sus));
+  if (sus > 0.3) return { key: 'r3', level: 7 };
+  if (gemFlash > 0) return { key: 'b4', level: 7 };
+  const me = lightAt(P.x, P.y), lv = LAMP.lightLevel(me.i);
+  if (lv < 0 || !me.key) return { on: false };
+  return { key: me.key, level: lv <= 2 ? 0 : lv <= 5 ? 4 : 7 };
+}
+setInterval(() => { if (started) kit.set(lampWish()); }, 100);
+
+// ======================= drawing =======================
+const lm = document.createElement('canvas'); lm.width = MW; lm.height = MH;
+const lctx = lm.getContext('2d'), lmImg = lctx.createImageData(MW, MH);
+function draw() {
+  ctx.imageSmoothingEnabled = false;
+  // the museum, unlit
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const c = M[y][x];
+    if (c === '#') { ctx.fillStyle = '#4a4f66'; ctx.fillRect(x * T, y * T, T, T); ctx.fillStyle = '#5c6380'; ctx.fillRect(x * T, y * T, T, 2); }
+    else if (c === 'W') { ctx.fillStyle = '#4a4f66'; ctx.fillRect(x * T, y * T, T, T); ctx.fillStyle = '#7fa8ff'; ctx.fillRect(x * T + 2, y * T + 1, T - 4, T - 2); }
+    else { ctx.fillStyle = (x + y) % 2 ? '#8a8276' : '#7f776c'; ctx.fillRect(x * T, y * T, T, T); }
+  }
+  // rugs and the exit
+  ctx.fillStyle = '#6a2a2a'; ctx.fillRect(14 * T, 9 * T, 12 * T, 2 * T);
+  ctx.fillStyle = have === gems.length ? '#3dff6a' : '#2a6a3a'; ctx.fillRect(EXIT[0] * T + 1, EXIT[1] * T + 1, T - 2, T - 2);
+  // switches
+  for (const s of SWITCHES) { const on = !(offUntil[s.g] > t); ctx.fillStyle = '#222'; ctx.fillRect(s.x * T + 2, s.y * T + 2, 4, 4); ctx.fillStyle = on ? '#ffd23c' : '#444'; ctx.fillRect(s.x * T + 3, s.y * T + (on ? 2 : 4), 2, 2); }
+  // light fittings
+  for (const l of LIGHTS) if (l.g) { ctx.fillStyle = offUntil[l.g] > t ? '#333' : LAMP.BY_ID[l.key].rgb; ctx.fillRect(Math.floor(l.x * T) - 1, Math.floor(l.y * T) - 1, 3, 3); }
+  // jewels
+  for (const g of gems) if (!g.got) {
+    const x = g.x * T, y = g.y * T + Math.sin(t * 3 + g.x) * 0.8;
+    ctx.fillStyle = LAMP.BY_ID[g.k].rgb; ctx.beginPath(); ctx.moveTo(x, y - 3); ctx.lineTo(x + 3, y); ctx.lineTo(x, y + 3); ctx.lineTo(x - 3, y); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillRect(x - 1, y - 2, 1, 1);
+  }
+  // guards
+  for (const g of guards) {
+    const x = Math.round(g.x * T), y = Math.round(g.y * T);
+    ctx.fillStyle = '#1d2c6a'; ctx.fillRect(x - 3, y - 3, 6, 7); ctx.fillStyle = '#e8c09a'; ctx.fillRect(x - 2, y - 6, 4, 3); ctx.fillStyle = '#0f1530'; ctx.fillRect(x - 3, y - 7, 6, 2);
+    ctx.fillStyle = '#ddd'; ctx.fillRect(x + Math.round(Math.cos(g.dir) * 4) - 1, y + Math.round(Math.sin(g.dir) * 4) - 1, 2, 2);
+  }
+  // the thief
+  if (!(caughtT > 0 && Math.floor(t * 10) % 2)) {
+    const x = Math.round(P.x * T), y = Math.round(P.y * T), st = Math.floor(P.walk) % 2;
+    ctx.fillStyle = '#121218'; ctx.fillRect(x - 3, y - 6, 6, 9); ctx.fillRect(x - 3 + st, y + 3, 2, 2); ctx.fillRect(x + 1 - st, y + 3, 2, 2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(x - 1 + (P.face > 0 ? 1 : -1), y - 4, 1, 1); ctx.fillRect(x + 1 + (P.face > 0 ? 1 : -1), y - 4, 1, 1);
+    ctx.fillStyle = '#6a1a4a'; ctx.fillRect(x - 3, y - 1, 6, 1);
+  }
+  // the light: per tile, softened, multiplied over everything
+  const d = lmImg.data;
+  for (let k = 0; k < MW * MH; k++) {
+    const amb = 26;
+    d[k * 4] = Math.min(255, amb + LR[k * 3] * 0.95); d[k * 4 + 1] = Math.min(255, amb + LR[k * 3 + 1] * 0.95); d[k * 4 + 2] = Math.min(255, amb + 12 + LR[k * 3 + 2] * 0.95); d[k * 4 + 3] = 255;
+  }
+  lctx.putImageData(lmImg, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.drawImage(lm, 0, 0, VW, VH);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.imageSmoothingEnabled = false;
+  // what you can still see in the dark: the guards' eyes, suspicion marks
+  for (const g of guards) {
+    const x = Math.round(g.x * T), y = Math.round(g.y * T);
+    ctx.fillStyle = '#fffbe0'; ctx.fillRect(x - 1, y - 5, 1, 1); ctx.fillRect(x + 1, y - 5, 1, 1);
+    if (g.sus > 0.15) { ctx.fillStyle = g.sus > 0.6 ? '#ff4040' : '#ffd23c'; ctx.font = '9px monospace'; ctx.fillText(g.sus > 0.6 ? '!' : '?', x - 2, y - 9); }
+  }
+  // the thief's outline, so you never lose yourself
+  if (!(caughtT > 0)) { ctx.strokeStyle = 'rgba(255,44,210,.45)'; ctx.strokeRect(Math.round(P.x * T) - 4.5, Math.round(P.y * T) - 7.5, 9, 13); }
+  if (caughtT > 0) { ctx.fillStyle = `rgba(255,0,0,${0.25 + 0.15 * Math.sin(t * 20)})`; ctx.fillRect(0, 0, VW, VH); }
+  // room name
+  const room = ROOMS.find(([, x0, y0, x1, y1]) => P.x >= x0 && P.x < x1 + 1 && P.y >= y0 && P.y < y1 + 1);
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.font = '7px monospace'; if (room) ctx.fillText(room[0], 3, VH - 2);
+}
+function visMeter() {
+  const i = lightAt(P.x, P.y).i, n = Math.round(i * 5), V = $('vis');
+  if (V.children.length !== 5) { V.innerHTML = ''; for (let k = 0; k < 5; k++) V.append(document.createElement('i')); }
+  [...V.children].forEach((c, k) => c.classList.toggle('on', k < n));
+}
+
+// ======================= sound =======================
+function sfx(k) {
+  try {
+    const ac = sfx.ac || (sfx.ac = new (window.AudioContext || window.webkitAudioContext)());
+    const N = { gem: [[880, 0.08], [1320, 0.15]], click: [[300, 0.03]], caught: [[220, 0.25], [160, 0.4]], win: [[523, 0.2], [659, 0.2], [784, 0.2], [1046, 0.5]] }[k] || [];
+    let at = ac.currentTime;
+    for (const [f, d] of N) { const o = ac.createOscillator(), g = ac.createGain(); o.type = k === 'caught' ? 'sawtooth' : 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.07, at); g.gain.exponentialRampToValueAtTime(0.001, at + d); o.connect(g); g.connect(ac.destination); o.start(at); o.stop(at + d + 0.02); at += d * 0.8; }
+  } catch (e) {}
+}
+
+// ======================= loop + input =======================
+let last = performance.now(), padX = 0, padY = 0, padA = false;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  const gp = navigator.getGamepads ? [...navigator.getGamepads()].find((g) => g) : null;
+  padX = gp ? (Math.abs(gp.axes[0]) > 0.2 ? gp.axes[0] : 0) : 0; padY = gp ? (Math.abs(gp.axes[1]) > 0.2 ? gp.axes[1] : 0) : 0;
+  const a = gp && gp.buttons[0] && gp.buttons[0].pressed; if (a && !padA) useSwitch(); padA = a;
+  if (started) step(dt);
+  gemFlash = Math.max(0, gemFlash - dt);
+  if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').style.opacity = 0; }
+  lightUp(); draw(); visMeter();
+  $('hTime').textContent = fmt(runT);
+  requestAnimationFrame(frame);
+}
+function fit() {
+  const s = Math.max(1, Math.min(innerWidth / VW, (innerHeight - (innerHeight > innerWidth ? 0 : 0)) / VH));
+  cv.style.width = Math.floor(VW * s) + 'px'; cv.style.height = Math.floor(VH * s) + 'px';
+  cv.style.top = innerHeight > innerWidth ? Math.max(VH * s / 2 + 70, innerHeight * 0.34) + 'px' : '50%';
+}
+addEventListener('resize', fit); fit();
+addEventListener('keydown', (e) => {
+  keys[e.key] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+  if ((e.key === 'e' || e.key === 'E' || e.key === ' ') && !e.repeat) useSwitch();
+  if (e.key === 'Enter' && !$('over').classList.contains('hide')) $('playBtn').click();
+});
+addEventListener('keyup', (e) => { keys[e.key] = false; });
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+(() => {
+  const S = $('stick'), K = $('knob'); let id = null;
+  const mv = (e) => { const r = S.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), m = Math.hypot(dx, dy), R = r.width / 2 - 10, k = m > R ? R / m : 1;
+    stick.x = dx * k / R; stick.y = dy * k / R; K.style.transform = `translate(${dx * k}px, ${dy * k}px)`; };
+  S.addEventListener('pointerdown', (e) => { id = e.pointerId; S.setPointerCapture(id); mv(e); });
+  S.addEventListener('pointermove', (e) => { if (e.pointerId === id) mv(e); });
+  const up = () => { id = null; stick.x = stick.y = 0; K.style.transform = ''; };
+  S.addEventListener('pointerup', up); S.addEventListener('pointercancel', up);
+  $('bA').addEventListener('pointerdown', (e) => { e.preventDefault(); useSwitch(); });
+})();
+function showOver(why) {
+  $('over').classList.remove('hide');
+  if (why === 'win') { $('boxBody').innerHTML = `<p>You got out with all 5 jewels in <b>${fmt(runT)}</b>.</p><p class="dim">The lamp is celebrating. Again, faster?</p>`; $('playBtn').innerHTML = '&#9654; AGAIN'; }
+  if (why === 'lose') { $('boxBody').innerHTML = `<p>Caught three times. You had ${have} of 5 jewels.</p><p class="dim">Tip: switch the lights off before you cross a room, and watch the lamp: OFF means nobody can see you.</p>`; $('playBtn').innerHTML = '&#9654; AGAIN'; }
+  const b = +localStorage.getItem('thief.best') || 0; $('best').textContent = b ? 'BEST ESCAPE: ' + fmt(b) : '';
+}
+$('playBtn').onclick = () => {
+  $('over').classList.add('hide');
+  const first = !started;
+  if (first || done) reset(true);
+  started = true;
+  if (first || done) kit.calibrate('b1');
+  done = false; caughtT = 0;
+  say('START ROOM');
+};
+reset(true);
+showOver();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

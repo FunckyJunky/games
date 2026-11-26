@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>PRISM</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%2305060f%27/%3E%3Cpath d=%27M2 8h6%27 stroke=%27%23ff2020%27/%3E%3Cpath d=%27M8 2v6%27 stroke=%27%2316ff3a%27/%3E%3Cpath d=%27M8 8l6 6%27 stroke=%27%23ffc21c%27 stroke-width=%272%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="/lamp/lamp.css">
+<style>
+  body { background: #04050c; }
+  #cv { position: fixed; left: 0; top: 0; width: 100vw; height: 100dvh; display: block; touch-action: none; }
+  #bottom { position: fixed; left: 0; right: 0; bottom: calc(8px + env(safe-area-inset-bottom)); display: flex; justify-content: center; gap: 8px; z-index: 5; }
+  #bottom .btn { background: #031208cc; margin: 0; }
+  #lampBig { position: fixed; right: 12px; bottom: calc(52px + env(safe-area-inset-bottom)); z-index: 5; text-align: center; font-size: 18px; color: var(--dim); text-shadow: none; }
+  #lampBig i { display: block; width: 46px; height: 46px; border-radius: 50%; margin: 0 auto 4px; border: 1px solid #fff4; background: #000; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <span class="title">PRISM</span><span id="hLvl">LEVEL 1</span><span id="hMoves">0 TURNS</span><span class="sp"></span>
+  <span id="lampPill"><span id="lampSw"></span><span id="lampTxt">NO LAMP</span></span>
+  <button id="syncBtn">SYNC ON</button><a href="/lamp/" id="backLink">LAMP</a>
+</div>
+<div id="lampBig"><i id="mainSw"></i>ROOM</div>
+<div id="bottom"><button class="btn" id="resetBtn">RESET</button><button class="btn" id="skipBtn">NEW PUZZLE</button><button class="btn" id="helpBtn">?</button></div>
+<div id="over"><div id="box">
+  <h1>PRISM</h1>
+  <div id="boxBody">
+    <p>Red, green and blue light. Tap a mirror to turn it. Light adds up where beams meet: red + green = yellow, green + blue = cyan, red + blue = pink, all three = white.</p>
+    <p>Light every crystal with exactly its colour. The crystal with the ring is your room: your lamp shows the light that reaches it, and goes off when nothing does.</p>
+    <p class="dim">Mirrors with a dot turn, dark ones don't. A half mirror lets light through and reflects it too.</p>
+  </div>
+  <div id="lampBox">
+    <p id="lampLine">LAMP: not linked</p>
+    <p id="codeRow"><input id="codeIn" maxlength="8" placeholder="CODE" autocomplete="off" spellcheck="false"> <button class="btn" id="codeBtn">LINK</button></p>
+  </div>
+  <p><button class="btn on" id="playBtn">&#9654; PLAY</button><a class="btn" href="/lamp/" style="text-decoration:none">LAMP.EXE</a></p>
+  <p class="dim" id="best"></p>
+</div></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+// ======================= the puzzle =======================
+// cells: '.' empty  '#' wall  '/' '\\' mirror you can turn  '[' ']' fixed mirror (/ and \\)
+//        's' 'z' half mirror you can turn (/ and \\)   'A'.. emitter (L.e)   '1'.. crystal (L.t)
+const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];               // 0 east, 1 south, 2 west, 3 north
+const SLASH = [3, 2, 1, 0], BACK = [1, 0, 3, 2];             // '/' and '\\' turn a beam
+const BITS = { R: 1, G: 2, B: 4, Y: 3, C: 6, M: 5, W: 7 };
+const BIT_RGB = ['#000', '#ff2020', '#16ff3a', '#ffc21c', '#2a3cff', '#ff2cd2', '#16e6ff', '#f2f5ff'];
+const BIT_KEY = [null, 'r', 'g', 'r3', 'b', 'b4', 'g3', 'w'];
+const BIT_NAME = ['NOTHING', 'RED', 'GREEN', 'YELLOW', 'BLUE', 'PINK', 'CYAN', 'WHITE'];
+
+const LEVELS = [
+  { name: 'FIRST LIGHT', rows: ['A./..', '.....', '..1..'], e: { A: ['R', 0] }, t: { 1: 'R' } },
+  { name: 'YELLOW', rows: ['B.....', '......', '/.../.', '......', 'A...1.'], e: { A: ['R', 0], B: ['G', 1] }, t: { 1: 'Y' } },
+  { name: 'HALF MIRROR', rows: ['..B..', '.....', 'A.s.1', '.....', '.....'], e: { A: ['R', 0], B: ['G', 1] }, t: { 1: 'Y' } },
+];
+let L = null, grid = [], W = 0, H = 0, lvlNo = 0, moves = 0, solvedAt = 0, seed = 1;
+
+function load(def) {
+  L = { name: def.name, e: def.e, t: def.t, main: def.main || '1' };
+  grid = def.rows.map((r) => r.split(''));
+  H = grid.length; W = grid[0].length;
+  for (const [x, y, c] of def.fix || []) if (c !== '.') grid[y][x] = c;
+  moves = 0; solvedAt = 0;
+  $('hLvl').textContent = 'LEVEL ' + (lvlNo + 1) + (L.name ? ' · ' + L.name : '');
+  $('hMoves').textContent = '0 TURNS';
+  trace(); lampFollow(true);
+}
+const isEm = (c) => c >= 'A' && c <= 'F', isTg = (c) => c >= '1' && c <= '9';
+// follow every beam: the segments to draw and what each crystal gets
+function trace(g) {
+  g = g || grid;
+  const segs = [], got = {}, seen = new Set(), ends = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (isTg(g[y][x])) got[g[y][x]] = 0;
+  const stack = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (isEm(g[y][x])) { const [c, d] = L.e[g[y][x]]; stack.push([x, y, d, BITS[c]]); }
+  while (stack.length) {
+    let [x, y, d, col] = stack.pop();
+    let sx = x, sy = y;
+    for (let n = 0; n < 200; n++) {
+      const key = x + ',' + y + ',' + d + ',' + col;
+      if (seen.has(key)) break; seen.add(key);
+      const nx = x + DX[d], ny = y + DY[d];
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) { segs.push([sx, sy, x + DX[d] * 0.5, y + DY[d] * 0.5, col]); ends.push([x, y]); break; }
+      const c = g[ny][nx];
+      if (c === '#' || isEm(c)) { segs.push([sx, sy, nx - DX[d] * 0.5, ny - DY[d] * 0.5, col]); ends.push([x, y]); break; }
+      x = nx; y = ny;
+      if (isTg(c)) { segs.push([sx, sy, x, y, col]); got[c] |= col; break; }
+      if (c === '/' || c === '[' || c === '\\' || c === ']') { segs.push([sx, sy, x, y, col]); sx = x; sy = y; d = (c === '/' || c === '[') ? SLASH[d] : BACK[d]; continue; }
+      if (c === 's' || c === 'z') { segs.push([sx, sy, x, y, col]); stack.push([x, y, c === 's' ? SLASH[d] : BACK[d], col]); sx = x; sy = y; continue; }
+    }
+  }
+  return { segs, got, ends };
+}
+function solved(r) { for (const k in L.t) if (r.got[k] !== BITS[L.t[k]]) return false; return true; }
+const turnable = (c) => c === '/' || c === '\\' || c === 's' || c === 'z';
+const flip = (c) => ({ '/': '\\', '\\': '/', s: 'z', z: 's' })[c];
+
+// ---------- new puzzles: build a board, turn its mirrors to a hidden answer, put crystals where the light ends ----------
+function rnd() { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+// how many ways solve it, and the fewest turns from here
+function solveInfo(g) {
+  const turn = []; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (turnable(g[y][x])) turn.push([x, y]);
+  let sols = 0, best = 99;
+  for (let m = 0; m < (1 << turn.length); m++) {
+    const gg = g.map((r) => r.slice()); let f = 0;
+    turn.forEach(([x, y], i) => { if (m >> i & 1) { gg[y][x] = flip(gg[y][x]); f++; } });
+    if (solved(trace(gg))) { sols++; best = Math.min(best, f); }
+  }
+  return { sols, best, n: turn.length };
+}
+function generate(n) {
+  const size = Math.min(9, 6 + Math.floor(n / 3)), w = size, h = Math.max(5, size - 1);
+  for (let tries = 0; tries < 2500; tries++) {
+    const g = Array.from({ length: h }, () => Array(w).fill('.'));
+    const e = {}, cols = n < 6 ? ['R', 'G'] : n < 9 ? ['R', 'G', 'B'].sort(() => rnd() - 0.5).slice(0, 2 + Math.floor(rnd() * 2)) : ['R', 'G', 'B'];
+    if (n < 6) cols.push(rnd() < 0.5 ? 'B' : 'R');
+    const used = new Set();
+    cols.forEach((c, i) => {                               // emitters on the edges, pointing in
+      for (let k = 0; k < 20; k++) {
+        const side = Math.floor(rnd() * 4), p = 1 + Math.floor(rnd() * ((side % 2 ? h : w) - 2));
+        const x = side === 0 ? p : side === 2 ? p : side === 1 ? w - 1 : 0, y = side === 0 ? 0 : side === 2 ? h - 1 : p;
+        const d = side === 0 ? 1 : side === 1 ? 2 : side === 2 ? 3 : 0;
+        if (used.has(x + ',' + y)) continue;
+        used.add(x + ',' + y); const id = 'ABCDEF'[i]; g[y][x] = id; e[id] = [c, d]; break;
+      }
+    });
+    const nm = 3 + Math.min(5, Math.floor(n / 2)), nw = Math.floor(rnd() * 3);
+    const free = () => { for (let k = 0; k < 50; k++) { const x = 1 + Math.floor(rnd() * (w - 2)), y = 1 + Math.floor(rnd() * (h - 2)); if (g[y][x] === '.') return [x, y]; } return null; };
+    for (let i = 0; i < nm; i++) { const p = free(); if (p) g[p[1]][p[0]] = rnd() < (n < 6 ? 0.25 : 0.35) ? (rnd() < 0.5 ? 's' : 'z') : (rnd() < 0.5 ? '/' : '\\'); }
+    for (let i = 0; i < nw; i++) { const p = free(); if (p) g[p[1]][p[0]] = rnd() < 0.5 ? '#' : (rnd() < 0.5 ? '[' : ']'); }
+    // the answer: trace and drop crystals where beams run out (or hit a wall)
+    L = { e, t: {} };
+    W = w; H = h;
+    const ends = trace(g).ends.filter(([x, y]) => g[y][x] === '.');
+    const uniq = [...new Set(ends.map((p) => p.join(',')))].map((s) => s.split(',').map(Number));
+    if (uniq.length < 1) continue;
+    const nt = Math.min(uniq.length, n < 4 ? 1 : n < 8 ? 2 : 3);
+    uniq.sort(() => rnd() - 0.5);
+    for (let i = 0; i < nt; i++) g[uniq[i][1]][uniq[i][0]] = String(i + 1);
+    const r1 = trace(g);
+    let mixed = 0, ok = true;
+    for (let i = 1; i <= nt; i++) { const b = r1.got[String(i)]; if (!b) ok = false; L.t[String(i)] = 'RGYBMCW'[[1, 2, 3, 4, 5, 6, 7].indexOf(b)] || 'R'; if (b && b !== 1 && b !== 2 && b !== 4) mixed++; }
+    if (!ok || (n >= 3 && !mixed)) continue;
+    // mirrors the light never touches in the answer only add dead ends: take them away
+    const touched = new Set(); for (const [x1, y1, x2, y2] of r1.segs) { touched.add(Math.round(x1) + ',' + Math.round(y1)); touched.add(Math.round(x2) + ',' + Math.round(y2)); }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (turnable(g[y][x]) && !touched.has(x + ',' + y)) g[y][x] = '.';
+    // put the main crystal on the most mixed one
+    let main = '1', mb = 0; for (const k in r1.got) { const b = r1.got[k], c = (b & 1) + (b >> 1 & 1) + (b >> 2 & 1); if (c > mb) { mb = c; main = k; } }
+    L.main = main;
+    // scramble the turnable pieces, then make sure it isn't solved and the answer takes some turns
+    const turn = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (turnable(g[y][x])) turn.push([x, y]);
+    if (turn.length < 2) continue;
+    let flips = 0;
+    for (const [x, y] of turn) if (rnd() < 0.6) { g[y][x] = flip(g[y][x]); flips++; }
+    if (solved(trace(g))) continue;
+    const info = solveInfo(g), want = Math.min(5, 2 + Math.floor(n / 4));
+    if (!info.sols || info.sols > (n < 8 ? 2 : 4) || info.best < Math.min(want, turn.length)) continue;
+    if (info.n < Math.min(3 + Math.floor(n / 5), 6)) continue;          // enough pieces to think about
+    void flips;
+    return { name: '', rows: g.map((r) => r.join('')), e, t: L.t, main };
+  }
+  return n > 3 ? generate(n - 2) : LEVELS[n % LEVELS.length];     // couldn't make one this hard: an easier one
+}
+
+// ======================= the lamp =======================
+const kit = LampKit({ name: 'PRISM', driver: { stable: 300 }, onOnline: () => kit.calibrate('w'), onSyncOn: () => kit.calibrate('w') });
+function mainBits() { const r = trace(); return r.got[L.main] || 0; }
+function lampFollow() {
+  if (!L) return;
+  if (solvedAt) { kit.set({ mode: 'smooth', level: 7 }); return; }
+  const b = mainBits();
+  kit.set(b ? { key: BIT_KEY[b], level: 7 } : { on: false });
+}
+setInterval(lampFollow, 150);
+
+// ======================= drawing + input =======================
+const cv = $('cv'), ctx = cv.getContext('2d');
+let cell = 40, ox = 0, oy = 0, t0 = performance.now(), anim = {};
+function layout() {
+  const dpr = Math.min(2, devicePixelRatio || 1), vw = innerWidth, vh = innerHeight;
+  cv.width = vw * dpr; cv.height = vh * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const top = 70, bottom = 70;
+  cell = Math.floor(Math.min((vw - 24) / W, (vh - top - bottom) / H));
+  ox = Math.floor((vw - cell * W) / 2); oy = Math.floor(top + (vh - top - bottom - cell * H) / 2);
+}
+addEventListener('resize', layout);
+function cx(x) { return ox + (x + 0.5) * cell; } function cy(y) { return oy + (y + 0.5) * cell; }
+function draw(now) {
+  const t = (now - t0) / 1000;
+  if (!L) { requestAnimationFrame(draw); return; }
+  if (cv.width !== Math.round(innerWidth * Math.min(2, devicePixelRatio || 1))) layout();
+  ctx.fillStyle = '#04050c'; ctx.fillRect(0, 0, innerWidth, innerHeight);
+  // board
+  ctx.strokeStyle = '#121a2a'; ctx.lineWidth = 1;
+  for (let y = 0; y <= H; y++) { ctx.beginPath(); ctx.moveTo(ox, oy + y * cell); ctx.lineTo(ox + W * cell, oy + y * cell); ctx.stroke(); }
+  for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(ox + x * cell, oy); ctx.lineTo(ox + x * cell, oy + H * cell); ctx.stroke(); }
+  const r = trace(), win = solved(r);
+  // beams (added up where they cross)
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [x1, y1, x2, y2, col] of r.segs) {
+    const c = BIT_RGB[col];
+    ctx.strokeStyle = c; ctx.globalAlpha = 0.22; ctx.lineWidth = cell * 0.34; line(x1, y1, x2, y2);
+    ctx.globalAlpha = 0.9; ctx.lineWidth = Math.max(2, cell * 0.07); line(x1, y1, x2, y2);
+    // light running along the beam
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#fff';
+    const len = Math.hypot(x2 - x1, y2 - y1), ph = (t * 3) % 1;
+    for (let k = ph; k < len; k += 1) { const f = k / len; ctx.beginPath(); ctx.arc(cx(x1 + (x2 - x1) * f), cy(y1 + (y2 - y1) * f), Math.max(1.2, cell * 0.035), 0, 7); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  // pieces
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = grid[y][x], X = cx(x), Y = cy(y), s = cell * 0.42;
+    if (c === '#') { ctx.fillStyle = '#1b1f2e'; ctx.fillRect(X - cell / 2 + 2, Y - cell / 2 + 2, cell - 4, cell - 4); ctx.strokeStyle = '#2b3350'; ctx.strokeRect(X - cell / 2 + 2.5, Y - cell / 2 + 2.5, cell - 5, cell - 5); }
+    else if (isEm(c)) {
+      const [col, d] = L.e[c], rgb = BIT_RGB[BITS[col]];
+      ctx.fillStyle = '#10131c'; ctx.fillRect(X - s, Y - s, s * 2, s * 2); ctx.strokeStyle = rgb; ctx.lineWidth = 2; ctx.strokeRect(X - s, Y - s, s * 2, s * 2);
+      ctx.fillStyle = rgb; ctx.beginPath(); ctx.moveTo(X + DX[d] * s * 0.9, Y + DY[d] * s * 0.9);
+      ctx.lineTo(X - DY[d] * s * 0.5 - DX[d] * s * 0.3, Y + DX[d] * s * 0.5 - DY[d] * s * 0.3); ctx.lineTo(X + DY[d] * s * 0.5 - DX[d] * s * 0.3, Y - DX[d] * s * 0.5 - DY[d] * s * 0.3); ctx.fill();
+    } else if (isTg(c)) {
+      const need = BITS[L.t[c]], got = r.got[c] || 0, ok = got === need, main = c === L.main;
+      ctx.save(); ctx.translate(X, Y); ctx.rotate(Math.PI / 4);
+      if (got) { ctx.shadowColor = BIT_RGB[got]; ctx.shadowBlur = ok ? 30 : 12; }
+      ctx.fillStyle = got ? BIT_RGB[got] : '#151826'; ctx.fillRect(-s * 0.55, -s * 0.55, s * 1.1, s * 1.1);
+      ctx.shadowBlur = 0; ctx.lineWidth = Math.max(2, cell * 0.07); ctx.strokeStyle = BIT_RGB[need]; ctx.strokeRect(-s * 0.72, -s * 0.72, s * 1.44, s * 1.44);
+      ctx.restore();
+      if (main) { ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, s * 1.15 + Math.sin(t * 3) * 1.5, 0, 7); ctx.stroke(); }
+      if (ok) { ctx.fillStyle = '#000'; ctx.font = `${Math.floor(cell * 0.4)}px VT323, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', X, Y + 1); }
+    } else if (c !== '.') {
+      const slash = c === '/' || c === '[' || c === 's', fixed = c === '[' || c === ']', half = c === 's' || c === 'z';
+      const a = anim[x + ',' + y], k = a ? Math.min(1, (now - a.t) / 160) : 1;
+      let ang = slash ? -Math.PI / 4 : Math.PI / 4; if (a && k < 1) ang += (1 - k) * (slash ? Math.PI / 2 : -Math.PI / 2);
+      ctx.save(); ctx.translate(X, Y); ctx.rotate(ang);
+      ctx.strokeStyle = fixed ? '#5a6078' : half ? '#a8e8ff' : '#e8f0ff'; ctx.lineWidth = Math.max(3, cell * 0.1);
+      if (half) ctx.setLineDash([cell * 0.09, cell * 0.06]);
+      ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+      if (!fixed) { ctx.fillStyle = '#39ff7a'; ctx.beginPath(); ctx.arc(X + cell * 0.36, Y - cell * 0.36, Math.max(2, cell * 0.05), 0, 7); ctx.fill(); }
+    }
+  }
+  // the room swatch
+  const b = r.got[L.main] || 0;
+  $('mainSw').style.background = b ? BIT_RGB[b] : '#000'; $('mainSw').style.boxShadow = b ? '0 0 18px ' + BIT_RGB[b] : 'none';
+  if (win && !solvedAt) { solvedAt = now; onSolved(); }
+  requestAnimationFrame(draw);
+}
+function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(cx(x1), cy(y1)); ctx.lineTo(cx(x2), cy(y2)); ctx.stroke(); }
+cv.addEventListener('pointerdown', (e) => {
+  if (!L || solvedAt) return;
+  const x = Math.floor((e.clientX - ox) / cell), y = Math.floor((e.clientY - oy) / cell);
+  if (x < 0 || y < 0 || x >= W || y >= H || !turnable(grid[y][x])) return;
+  grid[y][x] = flip(grid[y][x]); anim[x + ',' + y] = { t: performance.now() };
+  moves++; $('hMoves').textContent = moves + ' TURN' + (moves === 1 ? '' : 'S');
+  click(); lampFollow();
+});
+function click() { try { const ac = click.ac || (click.ac = new (window.AudioContext || window.webkitAudioContext)()); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.04, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.06); o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.07); } catch (x) {} }
+function chord() { try { const ac = click.ac || (click.ac = new (window.AudioContext || window.webkitAudioContext)()); [523, 659, 784, 1046].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; const at = ac.currentTime + i * 0.09; g.gain.setValueAtTime(0.06, at); g.gain.exponentialRampToValueAtTime(0.001, at + 0.5); o.connect(g); g.connect(ac.destination); o.start(at); o.stop(at + 0.55); }); } catch (x) {} }
+function onSolved() {
+  chord(); lampFollow();
+  try { const best = +localStorage.getItem('prism.level') || 0; if (lvlNo + 1 > best) localStorage.setItem('prism.level', lvlNo + 1); } catch (e) {}
+  setTimeout(() => { lvlNo++; start(); }, 2600);
+}
+let current = null;
+function start() {
+  seed = 1000 + lvlNo * 7919;
+  current = lvlNo < LEVELS.length ? LEVELS[lvlNo] : generate(lvlNo);
+  load(current); layout();
+}
+$('resetBtn').onclick = () => { if (current) { load(current); layout(); } };
+$('skipBtn').onclick = () => { lvlNo++; start(); };
+$('helpBtn').onclick = () => { $('over').classList.remove('hide'); $('playBtn').innerHTML = '&#9654; BACK TO LEVEL ' + (lvlNo + 1); };
+$('playBtn').onclick = () => { $('over').classList.add('hide'); if (!L) { try { lvlNo = Math.max(0, (+localStorage.getItem('prism.level') || 0)); } catch (e) {} start(); } kit.calibrate(BIT_KEY[mainBits()] || 'w'); };
+const bestLv = +localStorage.getItem('prism.level') || 0;
+$('best').textContent = bestLv ? 'You solved ' + bestLv + ' puzzle' + (bestLv === 1 ? '' : 's') + '. PLAY goes on from there.' : '';
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>CHROMA</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%23031208%27/%3E%3Ccircle cx=%275%27 cy=%275%27 r=%273%27 fill=%27%23ff2020%27/%3E%3Ccircle cx=%2711%27 cy=%275%27 r=%273%27 fill=%27%2316ff3a%27/%3E%3Ccircle cx=%275%27 cy=%2711%27 r=%273%27 fill=%27%232a3cff%27/%3E%3Ccircle cx=%2711%27 cy=%2711%27 r=%273%27 fill=%27%23ffc21c%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="/lamp/lamp.css">
+<style>
+  body { background: #031208; }
+  #wrap { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vmin; padding: 56px 12px calc(14px + env(safe-area-inset-bottom)); }
+  #orb { width: min(38vmin, 260px); height: min(38vmin, 260px); border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center;
+    border: 2px solid var(--dim); background: radial-gradient(circle at 40% 35%, #0d2a17, #020a05 70%); transition: background .12s, box-shadow .12s; font-size: 26px; padding: 18px; }
+  #orb.lit { border-color: #fff8; }
+  #dots { display: flex; gap: 6px; min-height: 12px; flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+  #dots i { width: 10px; height: 10px; border: 1px solid var(--dim); display: block; }
+  #dots i.ok { background: var(--fg); border-color: var(--fg); }
+  #pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: min(2.4vmin, 14px); width: min(92vw, 460px); }
+  #pads.n4 { grid-template-columns: repeat(2, 1fr); width: min(70vw, 300px); }
+  .pd { aspect-ratio: 1.6; border-radius: 14px; box-shadow: 0 4px 0 #000, inset 0 1px 0 #fff6; transition: transform .06s, filter .12s; filter: saturate(.85) brightness(.8); }
+  .pd:active, .pd.hit { transform: translateY(3px); filter: none; box-shadow: 0 1px 0 #000, 0 0 22px var(--c); }
+  #pads.wait .pd { opacity: .35; }
+  #state { min-height: 26px; text-align: center; }
+  @media (orientation: landscape) and (max-height: 520px) {
+    #wrap { flex-direction: row; gap: 5vw; }
+    #left { display: flex; flex-direction: column; align-items: center; gap: 2vmin; }
+    #pads { width: min(52vw, 440px); }
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <span class="title">CHROMA</span><span id="hRound">ROUND 0</span><span id="hBest"></span><span class="sp"></span>
+  <span id="lampPill"><span id="lampSw"></span><span id="lampTxt">NO LAMP</span></span>
+  <button id="syncBtn">SYNC ON</button><a href="/lamp/" id="backLink">LAMP</a>
+</div>
+<div id="wrap">
+  <div id="left"><div id="orb">CHROMA</div><div id="dots"></div><div id="state" class="dim"></div></div>
+  <div id="pads"></div>
+</div>
+<div id="over"><div id="box">
+  <h1>CHROMA</h1>
+  <div id="boxBody">
+    <p>Your lamp plays a row of colours. Then the room goes white: your turn. Tap them back in the same order. One more colour every round.</p>
+    <p class="dim">With the lamp linked the screen stays blank while it plays: watch the room, not the phone. No lamp? The circle shows them.</p>
+  </div>
+  <div><span class="seg" id="lvlSeg"><button data-n="4" class="on">EASY 4</button><button data-n="8">NORMAL 8</button><button data-n="15">HARD 15</button></span></div>
+  <div><span class="seg" id="showSeg"><button data-v="0" class="on">LAMP ONLY</button><button data-v="1">SCREEN TOO</button></span></div>
+  <div id="lampBox">
+    <p id="lampLine">LAMP: not linked</p>
+    <p id="codeRow"><input id="codeIn" maxlength="8" placeholder="CODE" autocomplete="off" spellcheck="false"> <button class="btn" id="codeBtn">LINK</button></p>
+  </div>
+  <p><button class="btn on" id="playBtn">&#9654; PLAY</button><a class="btn" href="/lamp/" style="text-decoration:none">LAMP.EXE</a></p>
+  <p class="dim" id="best"></p>
+</div></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const SETS = {
+  4: ['r', 'g', 'b', 'r3'],
+  8: ['r', 'g', 'b', 'r3', 'g3', 'b4', 'r1', 'b2'],
+  15: ['r', 'r1', 'r2', 'r3', 'r4', 'g', 'g1', 'g2', 'g3', 'g4', 'b', 'b1', 'b2', 'b3', 'b4'],
+};
+let nCols = 4, screenToo = false, seq = [], round = 0, pos = 0, phase = 'idle', token = 0;
+const kit = LampKit({ name: 'CHROMA', driver: { stable: 0, levelStable: 0 } });
+const lampMode = () => kit.ready();
+
+// ---------------- pads ----------------
+function buildPads() {
+  const P = $('pads'); P.innerHTML = ''; P.className = nCols === 4 ? 'n4' : '';
+  for (const id of SETS[nCols]) {
+    const k = LAMP.BY_ID[id], b = document.createElement('button');
+    b.className = 'pd'; b.style.background = `radial-gradient(circle at 50% 30%, #fff6, transparent 60%), ${k.rgb}`; b.style.setProperty('--c', k.rgb);
+    b.title = k.name; b.dataset.id = id;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(id, b); });
+    P.append(b);
+  }
+}
+function orb(id, text) {
+  const o = $('orb');
+  if (id) { const c = LAMP.BY_ID[id].rgb; o.style.background = `radial-gradient(circle at 40% 35%, #fff, ${c} 45%, ${c})`; o.style.boxShadow = `0 0 60px ${c}`; o.classList.add('lit'); o.textContent = ''; }
+  else { o.style.background = ''; o.style.boxShadow = ''; o.classList.remove('lit'); o.textContent = text || ''; }
+}
+function dots(n, ok) { const D = $('dots'); D.innerHTML = ''; for (let i = 0; i < n; i++) { const x = document.createElement('i'); if (i < ok) x.className = 'ok'; D.append(x); } }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// wait until the lamp really shows that colour (the board confirmed it), at most ms
+async function waitLamp(id, ms, level) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    const st = kit.link.state;
+    if (st.on && st.mode === 'color' && st.key === id && (level == null || st.level === level)) return true;
+    await sleep(40);
+  }
+  return false;
+}
+function tone(i) {
+  try {
+    const ac = tone.ac || (tone.ac = new (window.AudioContext || window.webkitAudioContext)());
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle';
+    o.frequency.value = i < 0 ? 110 : 262 * Math.pow(2, i / 6);
+    g.gain.setValueAtTime(0.08, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + (i < 0 ? 0.6 : 0.25));
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.65);
+  } catch (e) {}
+}
+
+// ---------------- the game ----------------
+async function nextRound(my) {
+  round++; $('hRound').textContent = 'ROUND ' + round;
+  const set = SETS[nCols];
+  let c; do { c = set[Math.floor(Math.random() * set.length)]; } while (c === seq[seq.length - 1]);
+  seq.push(c);
+  phase = 'show'; $('pads').classList.add('wait');
+  dots(seq.length, 0);
+  const lamp = lampMode(), show = screenToo || !lamp;
+  $('state').textContent = lamp ? 'WATCH THE LAMP' : 'WATCH';
+  orb(null, lamp && !show ? '◉\nWATCH THE LAMP' : '');
+  if (lamp) { kit.set({ key: 'w', level: 7, now: true }); await waitLamp('w', 6000, 7); }   // full white first
+  await sleep(700);
+  const hold = Math.max(420, 900 - round * 30);
+  for (let i = 0; i < seq.length; i++) {
+    if (my !== token) return;
+    const id = seq[i];
+    if (lamp) { kit.set({ key: id, level: 7, now: true }); await waitLamp(id, 2500); }
+    if (show) orb(id);
+    tone(SETS[nCols].indexOf(id));
+    dots(seq.length, i + 1);
+    await sleep(hold);
+    if (show) { orb(null, ''); await sleep(140); }
+  }
+  if (my !== token) return;
+  if (lamp) kit.set({ key: 'w', level: 7, now: true });         // white room: your turn
+  orb(null, 'YOUR TURN'); dots(seq.length, 0);
+  $('state').textContent = 'TAP THE ' + seq.length + ' COLOUR' + (seq.length > 1 ? 'S' : '');
+  phase = 'input'; pos = 0; $('pads').classList.remove('wait');
+}
+function tap(id, el) {
+  el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 160);
+  if (phase !== 'input') return;
+  const i = SETS[nCols].indexOf(id);
+  if (lampMode()) kit.set({ key: id, level: 7, now: true });
+  orb(id);
+  if (id !== seq[pos]) { lose(); return; }
+  tone(i); pos++; dots(seq.length, pos);
+  if (pos === seq.length) win();
+}
+async function win() {
+  phase = 'wait'; $('pads').classList.add('wait');
+  const my = token;
+  $('state').textContent = 'YES!';
+  if (lampMode()) kit.set({ mode: 'smooth', level: 7, now: true });
+  saveBest(round);
+  await sleep(1600);
+  if (my === token) nextRound(my);
+}
+async function lose() {
+  phase = 'over'; token++;
+  tone(-1); $('pads').classList.add('wait');
+  $('state').textContent = 'WRONG — IT WAS ' + LAMP.BY_ID[seq[pos]].name.toUpperCase();
+  orb(seq[pos]);
+  if (lampMode()) kit.set({ mode: 'flash', level: 7, now: true });
+  await sleep(2200);
+  if (lampMode()) kit.set({ on: false, now: true });
+  showOver(round - 1);
+}
+function bestKey() { return 'chroma.best.' + nCols; }
+function saveBest(r) { try { if (r > (+localStorage.getItem(bestKey()) || 0)) localStorage.setItem(bestKey(), r); } catch (e) {} }
+function showBest() { const b = +localStorage.getItem(bestKey()) || 0; $('hBest').textContent = b ? 'BEST ' + b : ''; $('best').textContent = b ? 'BEST (' + nCols + ' colours): ' + b + ' rounds' : ''; }
+function showOver(score) {
+  $('over').classList.remove('hide');
+  if (score != null) {
+    $('boxBody').innerHTML = `<p>You remembered <b>${score}</b> round${score === 1 ? '' : 's'}.</p><p class="dim">The lamp is off. Again?</p>`;
+    $('playBtn').innerHTML = '&#9654; AGAIN';
+  }
+  showBest();
+}
+$('playBtn').onclick = () => {
+  $('over').classList.add('hide');
+  seq = []; round = 0; token++;
+  buildPads();
+  if (lampMode()) kit.calibrate('w');
+  const my = token;
+  setTimeout(() => nextRound(my), lampMode() ? 2600 : 300);
+};
+for (const b of $('lvlSeg').children) b.onclick = () => { for (const x of $('lvlSeg').children) x.classList.toggle('on', x === b); nCols = +b.dataset.n; buildPads(); showBest(); };
+for (const b of $('showSeg').children) b.onclick = () => { for (const x of $('showSeg').children) x.classList.toggle('on', x === b); screenToo = b.dataset.v === '1'; };
+addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !$('over').classList.contains('hide')) { $('playBtn').click(); return; }
+  const n = parseInt(e.key, 10); const set = SETS[nCols];
+  if (n >= 1 && n <= Math.min(9, set.length)) { const el = $('pads').children[n - 1]; tap(set[n - 1], el); }
+});
+buildPads(); showBest(); orb(null, 'CHROMA');
+</script>
+</body>
+</html>
