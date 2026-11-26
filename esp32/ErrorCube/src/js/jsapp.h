@@ -15,3 +15,5 @@ void jsMsg(const char* json);                            // from the control pag
 void jsFetched(int id, int status, const char* body);
 bool jsWantsExit();
 int jsFps();
+bool jsKeep();                                           // the app asked keep(true): draw() goes into a picture kept between frames
+bool jsOverlay(char* err, size_t errLen);                // overlay(): on top of the kept picture, not kept (menus, text)

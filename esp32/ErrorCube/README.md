@@ -35,6 +35,15 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.5.2
+
+- **Web apps: keep() + overlay()** (for public/cube/apps/savers.js, SAVERS): `keep(true)` keeps the app's picture
+  between frames in its own 460 KB PSRAM buffer (only while the app runs), so trails and drawings that build up
+  work; `overlay()` is called after `draw()` and draws on top without being kept (menus, text). touch() / key() /
+  swipe() / onmsg() draw into the kept picture too.
+- **Safer drawing:** line() and thick() are clipped to the screen first (a line with far-away ends took millions of
+  steps and froze the cube); radii are capped at 1200 and NaN / huge numbers from JavaScript are cut to range.
+
 ## New in 1.5.1
 
 - **Fix:** GET on a map (HOME in MAP.EXE) froze the cube (task watchdog in the "https" task): HTTPClient's

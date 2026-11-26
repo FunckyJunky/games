@@ -108,7 +108,29 @@ void blendRect(int x, int y, int w, int h, uint16_t c, int a) {
 void hline(int x, int y, int w, uint16_t c) { fillRect(x, y, w, 1, c); }
 void vline(int x, int y, int h, uint16_t c) { fillRect(x, y, 1, h, c); }
 void rect(int x, int y, int w, int h, uint16_t c) { hline(x, y, w, c); hline(x, y + h - 1, w, c); vline(x, y, h, c); vline(x + w - 1, y, h, c); }
+// the part of a line inside a box (Liang-Barsky). false = none of it. Lines are clipped before they're drawn:
+// a line whose ends are far off the screen (a web app's maths) would otherwise take millions of steps
+static bool clipLine(float& ax, float& ay, float& bx, float& by, float x0, float y0, float x1, float y1) {
+  float t0 = 0, t1 = 1, dx = bx - ax, dy = by - ay;
+  float p[4] = {-dx, dx, -dy, dy}, q[4] = {ax - x0, x1 - ax, ay - y0, y1 - ay};
+  for (int i = 0; i < 4; i++) {
+    if (p[i] == 0) { if (q[i] < 0) return false; continue; }
+    float r = q[i] / p[i];
+    if (p[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+    else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  float nx0 = ax + t0 * dx, ny0 = ay + t0 * dy; bx = ax + t1 * dx; by = ay + t1 * dy; ax = nx0; ay = ny0;
+  return true;
+}
+static bool clipToScreen(int& x0, int& y0, int& x1, int& y1, int m) {
+  if (x0 >= -m && x0 < SCR_W + m && y0 >= -m && y0 < SCR_H + m && x1 >= -m && x1 < SCR_W + m && y1 >= -m && y1 < SCR_H + m) return true;
+  float ax = x0, ay = y0, bx = x1, by = y1;
+  if (!clipLine(ax, ay, bx, by, -m, -m, SCR_W - 1 + m, SCR_H - 1 + m)) return false;
+  x0 = (int)lroundf(ax); y0 = (int)lroundf(ay); x1 = (int)lroundf(bx); y1 = (int)lroundf(by);
+  return true;
+}
 void line(int x0, int y0, int x1, int y1, uint16_t c) {
+  if (!clipToScreen(x0, y0, x1, y1, 1)) return;
   int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1, e = dx + dy;
   for (;;) {
     pset(x0, y0, c);
@@ -120,6 +142,8 @@ void line(int x0, int y0, int x1, int y1, uint16_t c) {
 }
 void thickLine(int x0, int y0, int x1, int y1, int t, uint16_t c) {
   // round brush along the line
+  if (t > 64) t = 64;
+  if (!clipToScreen(x0, y0, x1, y1, t)) return;
   int dx = x1 - x0, dy = y1 - y0;
   int n = (int)sqrtf((float)(dx * dx + dy * dy)) + 1;
   for (int i = 0; i <= n; i++) fillCircle(x0 + dx * i / n, y0 + dy * i / n, t / 2, c);

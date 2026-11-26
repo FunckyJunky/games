@@ -11,6 +11,14 @@
       "info": "start here"
     },
     {
+      "id": "savers",
+      "name": "SAVERS",
+      "file": "savers.js",
+      "v": "1",
+      "color": "#ff4fd8",
+      "info": "screensavers"
+    },
+    {
       "id": "cube3d",
       "name": "CUBE3D",
       "file": "cube3d.js",

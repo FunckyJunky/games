@@ -1,8 +1,8 @@
 {
-  "ver": "1.5.1",
+  "ver": "1.5.2",
   "path": "/cube/flash/cube.bin",
-  "size": 2673344,
-  "md5": "7493ef08907fe62e3180b83f0614e78d",
-  "notes": "1.5.1: fix the freeze when getting a map (HOME in MAP.EXE)",
-  "date": "2026-11-26T01:11Z"
+  "size": 2674560,
+  "md5": "128584ec390493a21a3d6f381ff8e806",
+  "notes": "1.5.2: web apps can keep their picture (trails) + draw an overlay; lines clipped (no freezes from far-away lines); for the new SAVERS app",
+  "date": "2026-11-26T16:34Z"
 }

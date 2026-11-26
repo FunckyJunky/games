@@ -22,6 +22,7 @@ file: cubes with an older copy download it again.
 | `swipe(dir)` | `'left'`, `'right'`, `'up'`, `'down'`. A swipe to the right from the left edge always goes back |
 | `key(k)` | the buttons: `'prev'` (-), `'next'` (+), `'ok'` (hold +), `'back'` (hold -). Return `true` if you used it; otherwise `'back'` leaves the app |
 | `onmsg(data)` | the control page (APPS tab) sent `data` to the app |
+| `overlay()` | firmware 1.5.2+: after `draw()`, on top of the picture, and not kept (menus, text over trails) |
 
 ## What an app can use
 
@@ -52,6 +53,7 @@ Colours are numbers `0xRRGGBB`. `FG`, `DIM`, `BG` follow the cube's colour schem
 | `get(path, function (status, text) {})` | GET something from error.blue, e.g. `get('/api/online', ...)` |
 | `send(obj)` | to the control page (shows in its APPS log) |
 | `fps(n)`, `exit()`, `print(s)` | frames per second (1-60); back to the menu; a line on the USB serial port |
+| `keep(on)` | firmware 1.5.2+: `keep(true)` keeps the picture between frames (no clearing): draw only what changes, use `fade()` for trails. Returns `true` (undefined on older firmware: test `typeof keep == 'function'`) |
 | `APP`, `VERSION`, `W`, `H` | this app's id, the firmware version, 480, 480 |
 
 Errors stop the app with the message on screen (R = try again). Keep `draw()` light: Duktape is a small

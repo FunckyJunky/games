@@ -10,13 +10,15 @@ struct WebApp : Screen {
   char id[24], title[28], err[160] = "";
   int state = 0;            // 0 loading, 1 running, 2 failed
   uint32_t last = 0, startAt = 0;
+  uint16_t* canvas = nullptr;        // keep(true): the app's picture, kept between frames (PSRAM, only while it runs)
+  ~WebApp() { free(canvas); }
   WebApp(const char* i, const char* n) { snprintf(id, sizeof(id), "%s", i); snprintf(title, sizeof(title), "%s", n && n[0] ? n : i); }
   const char* name() override { return title; }
   bool fullScreen() override { return state == 1; }
   bool noSwipeBack() override { return state == 1; }
   bool keepAwake() override { return state == 1; }
   void enter() override { startAt = msNow(); netReportProg(title); }
-  void leave() override { jsStop(); }
+  void leave() override { jsStop(); free(canvas); canvas = nullptr; }
   void start() {
     size_t n = 0;
     char* src = netAppSource(id, &n);
@@ -36,11 +38,13 @@ struct WebApp : Screen {
     }
     if (state != 1) return;
     if (jsWantsExit()) { uiBack(); return; }
-    // messages and answers for the app
+    // messages and answers for the app (keep(true): what they draw goes into the kept picture)
+    uint16_t* scr = fb; if (jsKeep() && canvas) fb = canvas;
     char m[1024];
     while (netAppMsg(m, sizeof(m))) jsMsg(m);
     int fid, fst; char* body;
     while (netFetchDone(fid, fst, body)) { jsFetched(fid, fst, body); free(body); }
+    fb = scr;
     uint32_t now = msNow(), every = 1000 / jsFps();
     if (now - last >= every) uiDirty();
     redrawIn(every);
@@ -49,7 +53,23 @@ struct WebApp : Screen {
     if (state == 1) {
       uint32_t now = msNow(), dt = now - last; last = now;
       if (dt > 250) dt = 250;
-      if (!jsFrame(dt, err, sizeof(err))) { jsStop(); state = 2; snd(SND_ERR); uiDirty(); }
+      bool ok;
+      if (jsKeep() && !canvas) {      // malloc: >= 512 bytes go to PSRAM first
+        canvas = (uint16_t*)malloc(SCR_W * SCR_H * 2);
+        if (canvas) memset(canvas, 0, SCR_W * SCR_H * 2);
+      }
+      if (jsKeep() && canvas) {
+        // the app draws into its own picture (kept: trails), the screen gets a copy, overlay() goes on top of that
+        uint16_t* screen = fb; fb = canvas;
+        ok = jsFrame(dt, err, sizeof(err));
+        fb = screen;
+        memcpy(fb, canvas, SCR_W * SCR_H * 2);
+      } else {
+        if (canvas && !jsKeep()) { free(canvas); canvas = nullptr; }
+        ok = jsFrame(dt, err, sizeof(err));
+      }
+      if (ok) ok = jsOverlay(err, sizeof(err));
+      if (!ok) { jsStop(); state = 2; snd(SND_ERR); uiDirty(); }
       return;
     }
     char p[48]; snprintf(p, sizeof(p), "C:\\WEB>%s", id);
@@ -67,6 +87,8 @@ struct WebApp : Screen {
   }
   bool ev(const Ev& e) override {
     if (state != 1) return false;
+    // keep(true): what touch() / key() / swipe() draw goes into the kept picture too
+    struct FbSwap { uint16_t* s; FbSwap(uint16_t* c) : s(fb) { if (c) fb = c; } ~FbSwap() { fb = s; } } swap(jsKeep() ? canvas : nullptr);
     switch (e.t) {
       case EV_DOWN: jsTouch("down", e.x, e.y); break;
       case EV_MOVE: jsTouch("move", e.x, e.y); break;

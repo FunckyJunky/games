@@ -21,6 +21,7 @@ static duk_context* ctx = nullptr;
 static char appId[24] = "";
 static bool wantExit = false;
 static int fpsWant = 30;
+static bool keepOn = false;           // keep(true): the picture stays from frame to frame (trails); overlay() draws on top, not kept
 static char crash[160] = "";
 
 static void fatal(void*, const char* msg) {
@@ -31,7 +32,12 @@ static void fatal(void*, const char* msg) {
 }
 
 // ------------------------------------------------------------------ helpers
-static int I(duk_context* c, int i, int d) { return duk_is_number(c, i) ? (int)floor(duk_get_number(c, i)) : d; }
+static int I(duk_context* c, int i, int d) {     // a whole number (NaN = the default, huge = cut to +-1000000)
+  if (!duk_is_number(c, i)) return d;
+  double v = duk_get_number(c, i);
+  if (v != v) return d;
+  return v > 1e6 ? 1000000 : v < -1e6 ? -1000000 : (int)floor(v);
+}
 static double D(duk_context* c, int i, double d) { return duk_is_number(c, i) ? duk_get_number(c, i) : d; }
 static uint16_t C(duk_context* c, int i) { return duk_is_number(c, i) ? rgb((uint32_t)duk_get_number(c, i)) : C_FG; }
 
@@ -41,8 +47,9 @@ static duk_ret_t j_rect(duk_context* c) { fillRect(I(c, 0, 0), I(c, 1, 0), I(c, 
 static duk_ret_t j_frame(duk_context* c) { rect(I(c, 0, 0), I(c, 1, 0), I(c, 2, 0), I(c, 3, 0), C(c, 4)); return 0; }
 static duk_ret_t j_line(duk_context* c) { line(I(c, 0, 0), I(c, 1, 0), I(c, 2, 0), I(c, 3, 0), C(c, 4)); return 0; }
 static duk_ret_t j_thick(duk_context* c) { thickLine(I(c, 0, 0), I(c, 1, 0), I(c, 2, 0), I(c, 3, 0), I(c, 4, 3), C(c, 5)); return 0; }
-static duk_ret_t j_circ(duk_context* c) { fillCircle(I(c, 0, 0), I(c, 1, 0), I(c, 2, 1), C(c, 3)); return 0; }
-static duk_ret_t j_ring(duk_context* c) { ring(I(c, 0, 0), I(c, 1, 0), I(c, 2, 1), I(c, 4, 2), C(c, 3)); return 0; }
+static int R(duk_context* c, int i, int d) { int r = I(c, i, d); return r < 0 ? 0 : r > 1200 ? 1200 : r; }   // a radius: not so big it takes forever
+static duk_ret_t j_circ(duk_context* c) { fillCircle(I(c, 0, 0), I(c, 1, 0), R(c, 2, 1), C(c, 3)); return 0; }
+static duk_ret_t j_ring(duk_context* c) { ring(I(c, 0, 0), I(c, 1, 0), R(c, 2, 1), R(c, 4, 2), C(c, 3)); return 0; }
 static duk_ret_t j_pset(duk_context* c) { pset(I(c, 0, 0), I(c, 1, 0), C(c, 2)); return 0; }
 static duk_ret_t j_fade(duk_context* c) { blendRect(I(c, 0, 0), I(c, 1, 0), I(c, 2, 0), I(c, 3, 0), C(c, 4), (int)(D(c, 5, 0.5) * 32)); return 0; }
 static duk_ret_t j_text(duk_context* c) {
@@ -107,6 +114,7 @@ static duk_ret_t j_clock(duk_context* c) {
 }
 static duk_ret_t j_battery(duk_context* c) { duk_push_int(c, S.battery ? S.batPct : -1); return 1; }
 static duk_ret_t j_exit(duk_context*) { wantExit = true; return 0; }
+static duk_ret_t j_keep(duk_context* c) { keepOn = duk_get_top(c) < 1 || duk_to_boolean(c, 0); duk_push_true(c); return 1; }
 static duk_ret_t j_fps(duk_context* c) { int f = I(c, 0, 30); fpsWant = f < 1 ? 1 : f > 60 ? 60 : f; return 0; }
 static duk_ret_t j_print(duk_context* c) { printf("[%s] %s\n", appId, duk_safe_to_string(c, 0)); return 0; }
 static duk_ret_t j_load(duk_context* c) {
@@ -132,7 +140,7 @@ static const duk_function_list_entry FUNCS[] = {
   {"fade", j_fade, DUK_VARARGS}, {"text", j_text, DUK_VARARGS}, {"textw", j_textw, DUK_VARARGS}, {"box", j_box, DUK_VARARGS},
   {"button", j_button, DUK_VARARGS}, {"bar", j_bar, DUK_VARARGS},
   {"tilt", j_tilt, 0}, {"gyro", j_gyro, 0}, {"tone", j_tone, DUK_VARARGS}, {"beep", j_beep, DUK_VARARGS},
-  {"ms", j_ms, 0}, {"clock", j_clock, 0}, {"battery", j_battery, 0}, {"exit", j_exit, 0}, {"fps", j_fps, 1}, {"print", j_print, 1},
+  {"ms", j_ms, 0}, {"clock", j_clock, 0}, {"battery", j_battery, 0}, {"exit", j_exit, 0}, {"fps", j_fps, 1}, {"keep", j_keep, DUK_VARARGS}, {"print", j_print, 1},
   {"__load", j_load, 0}, {"__save", j_save, 1}, {"__get", j_get, 2}, {"__send", j_send, 1},
   {nullptr, nullptr, 0}};
 
@@ -194,7 +202,7 @@ static bool call(const char* fn, int nargs, char* err, size_t errLen, bool* retu
 bool jsStart(const char* id, const char* src, size_t n, char* err, size_t errLen) {
   jsStop();
   snprintf(appId, sizeof(appId), "%s", id);
-  wantExit = false; fpsWant = 30; crash[0] = 0;
+  wantExit = false; fpsWant = 30; keepOn = false; crash[0] = 0;
   ctx = duk_create_heap(jsA, jsR, jsF, nullptr, fatal);
   if (!ctx) { setErr(err, errLen, "NO MEMORY FOR JAVASCRIPT"); return false; }
   duk_push_global_object(ctx);
@@ -225,6 +233,13 @@ void jsStop() { if (ctx) { duk_destroy_heap(ctx); ctx = nullptr; } }
 bool jsRunning() { return ctx != nullptr; }
 bool jsWantsExit() { return wantExit; }
 int jsFps() { return fpsWant; }
+bool jsKeep() { return ctx && keepOn; }
+bool jsOverlay(char* err, size_t errLen) {
+  if (!ctx) return false;
+  if (!call("overlay", 0, err, errLen)) return false;
+  if (crash[0]) { setErr(err, errLen, crash); return false; }
+  return true;
+}
 
 bool jsFrame(uint32_t dt, char* err, size_t errLen) {
   if (!ctx) return false;

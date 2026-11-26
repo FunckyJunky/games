@@ -55,7 +55,8 @@ button.b:active { background: var(--fg); color: var(--bg); }
 // The ERROR-CUBE web app API, for the browser. Same names and numbers as on the cube (src/js/jsapp.cpp there).
 (() => {
 'use strict';
-const cv = document.getElementById('cv'), g = cv.getContext('2d');
+const cv = document.getElementById('cv'), gMain = cv.getContext('2d');
+let g = gMain, kept = null, keepOn = false;   // keep(true): the app draws into a kept picture, overlay() on top
 const FONTS = { 1: [37.5, 15, 25], 2: [50, 20, 33], 3: [150, 60, 90] };   // size: font px, cell width, baseline
 const css = c => '#' + ((c === undefined ? FG : c) >>> 0 & 0xffffff).toString(16).padStart(6, '0');
 let glowOn = true, exitAsked = false, fpsWant = 30;
@@ -102,6 +103,11 @@ Object.assign(W, {
   battery() { return -1; },
   exit() { exitAsked = true; },
   fps(n) { fpsWant = Math.max(1, Math.min(60, n | 0)); },
+  keep(on) {
+    keepOn = on === undefined ? true : !!on;
+    if (keepOn && !kept) { kept = document.createElement('canvas'); kept.width = kept.height = 480; const k = kept.getContext('2d'); k.fillStyle = '#000'; k.fillRect(0, 0, 480, 480); }
+    return true;
+  },
   print(s) { console.log('[app]', s); log('print: ' + s); },
   save(k, v) { const st = JSON.parse(localStorage.getItem('cubeapp.' + APP) || '{}'); st[k] = v; localStorage.setItem('cubeapp.' + APP, JSON.stringify(st)); return true; },
   load(k, d) { const st = JSON.parse(localStorage.getItem('cubeapp.' + APP) || '{}'); return k in st ? st[k] : d; },
@@ -148,7 +154,11 @@ tp.addEventListener('dblclick', () => setTilt(0, 0));
 window.addEventListener('devicemotion', e => { const a = e.accelerationIncludingGravity; if (a && a.x !== null) tiltV = [-a.x / 9.81, a.y / 9.81, -a.z / 9.81]; });
 
 // input
-const call = (fn, ...a) => { try { return typeof W[fn] === 'function' ? W[fn](...a) : undefined; } catch (e) { crash(fn, e); } };
+const call = (fn, ...a) => {
+  // keep(true): drawing from touch(), key(), swipe()... goes into the kept picture too (like on the cube)
+  const g0 = g; if (keepOn && kept && fn !== 'overlay' && g === gMain) g = kept.getContext('2d');
+  try { return typeof W[fn] === 'function' ? W[fn](...a) : undefined; } catch (e) { crash(fn, e); } finally { g = g0; }
+};
 let down = null;
 function pos(e) { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * 480 / r.width), Math.round((e.clientY - r.top) * 480 / r.height)]; }
 cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); const [x, y] = pos(e); down = { x, y, t: performance.now(), moved: false }; call('touch', 'down', x, y); });
@@ -187,6 +197,8 @@ function frame(t) {
   if (t - last < 1000 / fpsWant - 2) return;
   const dt = Math.min(250, last ? t - last : 16); last = t;
   call('update', dt); call('draw');
+  if (keepOn && kept) gMain.drawImage(kept, 0, 0);
+  call('overlay');
   // the cube's scanlines
   g.fillStyle = 'rgba(0,0,0,.22)'; for (let y = 0; y < 480; y += 3) g.fillRect(0, y, 480, 1);
 }
