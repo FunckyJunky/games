@@ -31,7 +31,7 @@
   </ol>
   <p>
     <esp-web-install-button manifest="manifest.json">
-      <button slot="activate" class="btn">INSTALL HOME FRONT 1.0</button>
+      <button slot="activate" class="btn" id="inst">INSTALL HOME FRONT</button>
       <span slot="unsupported">This browser can't talk to USB boards. Use Chrome or Edge on a computer.</span>
       <span slot="not-allowed">Open this page over https.</span>
     </esp-web-install-button>
@@ -42,5 +42,6 @@
   </div>
   <p><a href="/thuisfront/">&lt; HOME FRONT</a></p>
 </main>
+<script>fetch('manifest.json', { cache: 'no-store' }).then((r) => r.json()).then((m) => { document.getElementById('inst').textContent = 'INSTALL HOME FRONT ' + m.version; }).catch(() => {});</script>
 </body>
 </html>
