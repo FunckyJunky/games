@@ -1,8 +1,8 @@
 {
-  "ver": "1.4.1",
+  "ver": "1.4.2",
   "path": "/cube/flash/cube.bin",
-  "size": 2958176,
-  "md5": "965a27c7693305626b4a5ed360ecf746",
-  "notes": "PICO-8 fixes (no more crashes we know of), crash report, settings + WiFi kept in a file, LOW GRAPHICS mode, alarm with your song at full volume, move the cube to snooze.",
-  "date": "2026-11-26T00:07Z"
+  "size": 2958352,
+  "md5": "a2ee413aca7e9de8032a5efee2778052",
+  "notes": "PICO-8 fixes, crash report, settings + WiFi kept in a file, LOW GRAPHICS mode, alarm with your song at full volume, move the cube to snooze.",
+  "date": "2026-11-26T00:09Z"
 }

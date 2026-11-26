@@ -565,11 +565,14 @@ static void crashCheck() {
   esp_reset_reason_t r = esp_reset_reason();
   const char* why = r == ESP_RST_PANIC ? "CRASH" : r == ESP_RST_TASK_WDT ? "FROZE (TASK WDT)" : r == ESP_RST_INT_WDT ? "FROZE (INT WDT)" :
                     r == ESP_RST_WDT ? "WATCHDOG" : r == ESP_RST_BROWNOUT ? "POWER DIP" : nullptr;
-  if (!why) return;
-  int k = snprintf(S.crash, sizeof(S.crash), "%s", why);
+  // a core dump in flash from any earlier crash (even one before an update) is reported too, once
   esp_core_dump_summary_t* s = (esp_core_dump_summary_t*)malloc(sizeof(esp_core_dump_summary_t));
-  if (s && esp_core_dump_get_summary(s) == ESP_OK) {
-    k += snprintf(S.crash + k, sizeof(S.crash) - k, " IN %s PC %08lx C%lu A%08lx BT", s->exc_task, (unsigned long)s->exc_pc,
+  bool have = s && esp_core_dump_image_check() == ESP_OK && esp_core_dump_get_summary(s) == ESP_OK;
+  if (!why && !have) { free(s); return; }
+  int k = snprintf(S.crash, sizeof(S.crash), "%s", why ? why : "AN EARLIER CRASH");
+  if (have) {
+    char fw[9]; memcpy(fw, s->app_elf_sha256, 8); fw[8] = 0;
+    k += snprintf(S.crash + k, sizeof(S.crash) - k, " IN %s FW %s PC %08lx C%lu A%08lx BT", s->exc_task, fw, (unsigned long)s->exc_pc,
                   (unsigned long)s->ex_info.exc_cause, (unsigned long)s->ex_info.exc_vaddr);
     for (int i = 0; i < (int)s->exc_bt_info.depth && i < 10 && k < (int)sizeof(S.crash) - 10; i++)
       k += snprintf(S.crash + k, sizeof(S.crash) - k, " %08lx", (unsigned long)s->exc_bt_info.bt[i]);

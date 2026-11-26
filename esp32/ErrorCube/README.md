@@ -37,7 +37,7 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
-## New in 1.4.1
+## New in 1.4.1 (and 1.4.2: a core dump left by an earlier firmware is reported too, with its ELF SHA)
 
 - **PICO-8 steadier:** z8lua uses setjmp/longjmp (LUA_USE_LONGJMP) instead of C++ exceptions, which it threw on
   every coroutine yield (every frame); the cart task runs at priority 0 (a long cart start can't starve core 0's

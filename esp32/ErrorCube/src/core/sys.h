@@ -159,7 +159,7 @@ struct SysState {
   bool timeOk = false;
   char netErr[48] = "";
   char linkErr[64] = "";                         // why the live link to error.blue/cube failed last
-  char crash[200] = ""; uint8_t crashAt = 0;     // the last start was a crash: what (and the core dump's PC + backtrace)
+  char crash[240] = ""; uint8_t crashAt = 0;     // the last start was a crash: what (and the core dump's PC + backtrace)
   uint8_t cfgRestored = 0;                       // the settings came back from C:\cube.cfg / A:\ERRORCUBE\cube.cfg
   // updates
   uint8_t upd = UPD_IDLE;
