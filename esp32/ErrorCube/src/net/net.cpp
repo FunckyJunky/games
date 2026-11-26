@@ -40,6 +40,38 @@ static void savedStore() {
     snprintf(k, sizeof(k), "s%d", i); wp.putString(k, i < nSaved ? saved[i].ssid : "");
     snprintf(k, sizeof(k), "p%d", i); wp.putString(k, i < nSaved ? saved[i].pass : "");
   }
+  cfgSave();                                       // the settings file keeps the networks too
+}
+// the saved networks as bytes for the settings file (board.cpp), straight from NVS: "ssid\0pass\0" x n
+size_t netSavedGet(uint8_t* out, size_t max) {
+  Preferences p; p.begin("wifi", true);
+  size_t n = 0;
+  for (int i = 0; i < 6; i++) {
+    char k[4]; snprintf(k, sizeof(k), "s%d", i);
+    String s = p.getString(k, "");
+    if (!s.length()) continue;
+    snprintf(k, sizeof(k), "p%d", i);
+    String w = p.getString(k, "");
+    if (n + s.length() + w.length() + 2 > max) break;
+    memcpy(out + n, s.c_str(), s.length() + 1); n += s.length() + 1;
+    memcpy(out + n, w.c_str(), w.length() + 1); n += w.length() + 1;
+  }
+  p.end();
+  return n;
+}
+void netSavedSet(const uint8_t* in, size_t n) {
+  Preferences p; p.begin("wifi", false);
+  size_t o = 0; int i = 0;
+  while (o < n && i < 6) {
+    const char* s = (const char*)in + o; size_t a = strnlen(s, n - o); if (o + a >= n) break;
+    const char* w = s + a + 1; size_t b = strnlen(w, n - o - a - 1); if (o + a + 1 + b >= n) break;
+    char k[4];
+    snprintf(k, sizeof(k), "s%d", i); p.putString(k, s);
+    snprintf(k, sizeof(k), "p%d", i); p.putString(k, w);
+    o += a + b + 2; i++;
+  }
+  for (; i < 6; i++) { char k[4]; snprintf(k, sizeof(k), "s%d", i); p.putString(k, ""); snprintf(k, sizeof(k), "p%d", i); p.putString(k, ""); }
+  p.end();
 }
 static void savedPut(const char* ssid, const char* pass) {
   Saved s; snprintf(s.ssid, 33, "%s", ssid); snprintf(s.pass, 65, "%s", pass ? pass : "");

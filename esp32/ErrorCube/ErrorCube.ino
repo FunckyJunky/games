@@ -31,11 +31,11 @@ void setup() {
   boardBegin();
   appsRegister();
   uiInit();
-  uiOpen(cfg.boot == 0 && cfg.intro ? introScreen() : bootScreen());
+  uiOpen(cfg.boot == 0 && cfg.intro && !cfg.lowGfx ? introScreen() : bootScreen());
   uiFrame();
   boardShow();
   sysBrightness(uiBrightNow());
-  if (cfg.crt) boardCrt(1);
+  if (cfg.crt && !cfg.lowGfx) boardCrt(1);
   boardDrives();
   netBegin();
   cloudBegin();

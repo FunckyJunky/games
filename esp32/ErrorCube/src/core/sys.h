@@ -115,10 +115,19 @@ struct Cfg {
   uint8_t p8Swap = 0;       // - is X, + is O
   uint8_t p8CalOk = 0;      // calibrated: p8Cal is how you hold it to play (else: how you hold it when a cart starts)
   int16_t p8Cal[3] = {0, 0, 1000};   // gravity, x1000 (screen directions)
+  // LOW GRAPHICS (1.4.1): the plainest interface: no 3D, glass, glow, scanlines, glitches, animations, wallpaper
+  uint8_t lowGfx = 0;
+  // the ALARM (1.4.1): a song instead of beeps, at full volume; moving the cube snoozes it
+  char alarmSong[96] = "";  // MP3 / WAV ("" = beeps)
+  uint8_t alarmLoud = 1;    // full volume while it rings (whatever VOLUME is)
+  uint8_t alarmMove = 1;    // moving / picking up the cube = snooze
+  uint8_t alarmSnooze = 5;  // minutes
   // new settings go here, at the end
 };
 extern Cfg cfg;
+static inline bool lowFx() { return cfg.saver || cfg.lowGfx; }   // no effects: BATTERY SAVER or LOW GRAPHICS
 void cfgSave();             // write to flash (the board waits a moment, so many quick changes are one write)
+void cfgFlushNow();         // write it now (before something that could go wrong)
 void cfgReset();            // factory reset: every setting back to the default, WiFi forgotten
 
 extern const uint16_t OFF_SECS[]; extern const int N_OFF;
@@ -150,6 +159,8 @@ struct SysState {
   bool timeOk = false;
   char netErr[48] = "";
   char linkErr[64] = "";                         // why the live link to error.blue/cube failed last
+  char crash[200] = ""; uint8_t crashAt = 0;     // the last start was a crash: what (and the core dump's PC + backtrace)
+  uint8_t cfgRestored = 0;                       // the settings came back from C:\cube.cfg / A:\ERRORCUBE\cube.cfg
   // updates
   uint8_t upd = UPD_IDLE;
   char updVer[16] = "", updNotes[120] = "", updMsg[48] = "";
@@ -206,6 +217,7 @@ extern char btnLast[48];               // what the buttons did last (BUTTONS > T
 enum { SND_KEY, SND_MOVE, SND_BEEP, SND_THUD, SND_CRACKLE, SND_FLOPPY, SND_OK, SND_ERR, SND_MSG, SND_ALARM, SND_ON, SND_OFF };
 void snd(int kind);
 void tone(int hz, int ms, int vol = 100);
+void sndForceVolume(int v);                            // the alarm: this volume (0..100) whatever VOLUME is; -1 = back to normal
 void sndStop();
 // media sound (music, video): stereo 16-bit at any rate, mixed with the beeps at 44.1 kHz
 int sndMediaRoom();                                   // frames (44.1 kHz) that still fit

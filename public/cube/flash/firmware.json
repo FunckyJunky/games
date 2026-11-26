@@ -1,8 +1,8 @@
 {
-  "ver": "1.4",
+  "ver": "1.4.1",
   "path": "/cube/flash/cube.bin",
-  "size": 2948640,
-  "md5": "48cbf68ccaac6fc3a81f3d85f305acdd",
-  "notes": "PICO-8: play carts on the cube (TOLK included). Tilt = arrows, - = O, + = X, PWR = menu. Add and paste carts from error.blue/cube > PICO-8.",
-  "date": "2026-11-25T23:40Z"
+  "size": 2958176,
+  "md5": "965a27c7693305626b4a5ed360ecf746",
+  "notes": "PICO-8 fixes (no more crashes we know of), crash report, settings + WiFi kept in a file, LOW GRAPHICS mode, alarm with your song at full volume, move the cube to snooze.",
+  "date": "2026-11-26T00:07Z"
 }

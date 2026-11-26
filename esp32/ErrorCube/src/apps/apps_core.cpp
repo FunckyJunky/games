@@ -62,9 +62,10 @@ void openProg(const char* dos) {
 
 void cfgChanged() {
   static int lastView = -1;
-  if (lastView >= 0 && lastView != cfg.view) uiReplaceRoot(homeScreen());   // DOS list <-> 3D carousel
-  lastView = cfg.view;
-  gfxTheme(cfg.color, cfg.saver ? 0 : cfg.glow);
+  int view = cfg.view && !cfg.lowGfx;
+  if (lastView >= 0 && lastView != view) uiReplaceRoot(homeScreen());   // DOS list <-> 3D carousel
+  lastView = view;
+  gfxTheme(cfg.color, lowFx() ? 0 : cfg.glow);
   sysBrightness(uiBrightNow());
   sysApplyRotation();
   sysApplyButtons();
@@ -259,7 +260,7 @@ struct Home : Screen {
     return L.ev(e, [this](int i) { run(i); });
   }
 };
-Screen* homeScreen() { return cfg.view ? makeHome3D() : (Screen*)new Home(); }
+Screen* homeScreen() { return cfg.view && !cfg.lowGfx ? makeHome3D() : (Screen*)new Home(); }
 
 // ------------------------------------------------------------------ always-on clock (screen "off")
 struct Aod : Screen {

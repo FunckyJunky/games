@@ -16,6 +16,8 @@ Cfg cfg;
 SysState S;
 uint16_t* vidBuf = nullptr;
 void cfgSave() {}
+void cfgFlushNow() {}
+void sndForceVolume(int) {}
 void cfgReset() { cfg = Cfg(); }
 std::string root = "/tmp/cubesim", appsDir = "";
 

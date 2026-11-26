@@ -40,7 +40,7 @@ void redrawIn(uint32_t ms) { uint32_t t = msNow() + ms; if (!nextDraw || (int32_
 Screen* uiCurrent() { return stack.empty() ? nullptr : stack.back(); }
 
 void uiTransition(int dir) {
-  if (cfg.anim < 2 || cfg.saver || !uiAwake() || !lastPre) { if (cfg.anim) uiGlitch(1, 120); return; }
+  if (cfg.anim < 2 || lowFx() || !uiAwake() || !lastPre) { if (cfg.anim) uiGlitch(1, 120); return; }
   uint16_t* a = fxBuf(0);
   if (!a || !fxBuf(1)) return;
   memcpy(a, lastPre, SCR_W * SCR_H * 2);
@@ -94,7 +94,7 @@ void uiWake() {
   uiActivity();
   if (awake) return;
   awake = true; aodOn = false; dimmed = false;
-  crtWant = cfg.crt ? 1 : 0;
+  crtWant = cfg.crt && !cfg.lowGfx ? 1 : 0;
   dirty = true;
   snd(SND_ON);
 }
@@ -102,7 +102,7 @@ void uiSleep() {
   if (!awake) return;
   awake = false; dimmed = false; sleptAt = msNow();
   aodOn = cfg.aod;
-  crtWant = cfg.crt ? -1 : 0;
+  crtWant = cfg.crt && !cfg.lowGfx ? -1 : 0;
   while (!ovl.empty()) { delete ovl.back(); ovl.pop_back(); }
   if (kbIsOpen()) {}
   snd(SND_OFF);
@@ -446,7 +446,7 @@ void ListView::draw(std::function<void(int, int, int, int, int, bool)> row, std:
                     std::function<void(int, int)>) {
   clampScroll();
   uint32_t now = msNow();
-  bool anim = cfg.anim && !cfg.saver;
+  bool anim = cfg.anim && !lowFx();
   // the selection bar slides from row to row
   float target = sel * rowH;
   if (barY < 0 || !anim) barY = target;
@@ -932,34 +932,70 @@ void quickOpen() {
 }
 
 // ------------------------------------------------------------------ alarm
+static uint32_t snoozeAt = 0;              // ring again then (moving the cube or +N MIN)
+static char snoozeWhat[32];
 struct Ring : Overlay {
   char what[32]; uint32_t at, nextBeep = 0;
-  Ring(const char* w) { snprintf(what, sizeof(what), "%s", w); at = msNow(); }
+  bool song = false;                         // the alarm's song (cfg.alarmSong) instead of beeps
+  float a0[3] = {0, 0, 0}, motion = 0; bool aOk = false;
+  Ring(const char* w) {
+    snprintf(what, sizeof(what), "%s", w); at = msNow();
+    bool alarm = !strcmp(w, "ALARM");
+    if (alarm && cfg.alarmLoud) sndForceVolume(100);
+    if (alarm && cfg.alarmSong[0] && fsSize(cfg.alarmSong) > 0) { song = true; musPlay(cfg.alarmSong); }
+  }
+  ~Ring() { if (song) musStop(); sndForceVolume(-1); }
   int kind() override { return 3; }
+  void stop() { sndStop(); ovlClose(this); }
+  void snooze() {
+    snprintf(snoozeWhat, sizeof(snoozeWhat), "%s", what);
+    snoozeAt = msNow() + (cfg.alarmSnooze ? cfg.alarmSnooze : 5) * 60000u;
+    char t[32]; snprintf(t, sizeof(t), "SNOOZE: AGAIN IN %d MIN", cfg.alarmSnooze ? cfg.alarmSnooze : 5); toast(t, 2500);
+    stop();
+  }
   void draw() override {
-    holoShadow(15, 90, 450, 300, holoAt() - H_TEXT);
-    holoWalls(15, 90, 450, 300, C_FG, 0.6f, true);
-    fillRect(15, 90, 450, 300, C_BG);
-    dosBox(15, 90, 450, 300, C_FG);
+    holoShadow(15, 84, 450, 330, holoAt() - H_TEXT);
+    holoWalls(15, 84, 450, 330, C_FG, 0.6f, true);
+    fillRect(15, 84, 450, 330, C_BG);
+    dosBox(15, 84, 450, 330, C_FG);
     bool blink = (msNow() / 400) % 2;
     if (blink) invBar(40, 112, 400, 52);
     drawTextC(FB, 240, 116, what, blink ? C_BG : C_FG, blink ? TX_FLAT : TX_GLOW);
     struct tm t; char c[12] = "--:--";
     if (sysLocalTime(t)) fmtTime(c, t.tm_hour, t.tm_min, 0, false);
     drawTextC(FH, 240, 172, c, C_FG);
-    dosButton(40, 300, 190, 60, "STOP", [this] { sndStop(); ovlClose(this); }, true);
-    dosButton(250, 300, 190, 60, "+5 MIN", [this] {
-      sndStop(); tmrEnd = msNow() + 300000; tmrRun = true; toast("AGAIN IN 5 MIN"); ovlClose(this);
-    });
+    if (song) { char t[48]; snprintf(t, sizeof(t), "\xE2\x99\xAA %s", musTitle()[0] ? musTitle() : "SONG"); utf8Cut(t, 26); drawTextC(FT, 240, 270, t, C_DIM, TX_FLAT); }
+    if (cfg.alarmMove) drawTextC(FT, 240, 372, "MOVE THE CUBE = SNOOZE", C_DIM, TX_FLAT);
+    dosButton(40, 300, 190, 60, "STOP", [this] { stop(); }, true);
+    char sn[16]; snprintf(sn, sizeof(sn), "+%d MIN", cfg.alarmSnooze ? cfg.alarmSnooze : 5);
+    dosButton(250, 300, 190, 60, sn, [this] { snooze(); });
     redrawIn(100);
   }
   bool ev(const Ev& e) override {
-    if (e.t == EV_KEY) { sndStop(); ovlClose(this); }
+    if (e.t == EV_KEY) stop();
     return true;
   }
   void tick() {
-    if ((int32_t)(msNow() - nextBeep) >= 0) { snd(SND_ALARM); nextBeep = msNow() + 1000; }
-    if (msNow() - at > 120000) { sndStop(); ovlClose(this); }
+    uint32_t now = msNow();
+    if (song) {                                   // again and again; a file that won't play: beeps
+      int st = musState();
+      if (st == MED_END) musPlay(cfg.alarmSong);
+      else if (st == MED_ERR) song = false;
+    }
+    else if ((int32_t)(now - nextBeep) >= 0) { snd(SND_ALARM); nextBeep = now + 1000; }
+    // moving it: the change in the motion sensor's reading (after 2 s, so putting it down after setting doesn't count)
+    float a[3], g[3];
+    if (cfg.alarmMove && imuRead(a, g)) {
+      if (aOk) {
+        float d = fabsf(a[0] - a0[0]) + fabsf(a[1] - a0[1]) + fabsf(a[2] - a0[2]);
+        float r = fabsf(g[0]) + fabsf(g[1]) + fabsf(g[2]);
+        motion = motion * 0.8f + d + r / 40;
+      }
+      for (int i = 0; i < 3; i++) a0[i] = a[i];
+      aOk = true;
+      if (now - at > 2000 && motion > 9) { snooze(); return; }
+    }
+    if (now - at > (song ? 600000u : 180000u)) stop();     // nobody there: stop after 10 min (song) / 3 min (beeps)
   }
 };
 static Ring* ringing() { for (auto* o : ovl) if (o->kind() == 3) return (Ring*)o; return nullptr; }
@@ -969,6 +1005,10 @@ void alarmRing(const char* what) {
   ovl.push_back(new Ring(what));
   dirty = true;
 }
+// the snooze: ring again when it's time (from the loop)
+static void snoozeTick() {
+  if (snoozeAt && (int32_t)(msNow() - snoozeAt) >= 0) { snoozeAt = 0; alarmRing(snoozeWhat); }
+}
 
 // ------------------------------------------------------------------ the loop
 static uint32_t glitchNext = 0, fxUntil = 0, fxSeed = 0;
@@ -976,12 +1016,12 @@ static int fxKind = -1;
 static bool wasFx = false;
 static void scheduleGlitch(uint32_t now) {
   static const uint32_t MEAN[4] = {0, 9000, 4000, 1500};
-  int g = cfg.saver ? 0 : cfg.glitch;
+  int g = lowFx() ? 0 : cfg.glitch;
   glitchNext = MEAN[g & 3] ? now + MEAN[g & 3] * (40 + rnd() % 120) / 100 : 0;
 }
 
 void uiGlitch(int kind, uint32_t ms) {
-  if (!awake || cfg.saver) return;
+  if (!awake || lowFx()) return;
   uint32_t now = msNow();
   if (kind < 0) {
     // which one: tears and colour splits most, the full signal loss now and then
@@ -997,7 +1037,7 @@ void uiGlitch(int kind, uint32_t ms) {
 
 void uiInit() {
   gfxInit();
-  gfxTheme(cfg.color, cfg.saver ? 0 : cfg.glow);
+  gfxTheme(cfg.color, lowFx() ? 0 : cfg.glow);
   lastAct = msNow();
   scheduleGlitch(msNow());
 }
@@ -1009,6 +1049,7 @@ void uiStart() {
 
 void uiLoop() {
   uint32_t now = msNow();
+  snoozeTick();
   if (holoTick()) dirty = true;               // HOLO: the cube moved, the picture moves with it
   // a finger held still: a long press (the button's long action, or EV_LONG for the screen)
   if (tDown && !tDrag && !tLongDone && !tSwallow && now - tAt > 550) {
@@ -1042,7 +1083,7 @@ void uiLoop() {
     bool calm = (c && (c->fullScreen() || c->noSwipeBack())) || kbIsOpen() || dimmed;
     if (!calm) uiGlitch(-1, 0);
   }
-  if (!glitchNext && cfg.glitch && !cfg.saver) scheduleGlitch(now);
+  if (!glitchNext && cfg.glitch && !lowFx()) scheduleGlitch(now);
   // a message from the control page
   static uint32_t seenMsg = 0;
   if (S.msgAt && S.msgAt != seenMsg) {
@@ -1070,7 +1111,7 @@ bool uiFrame() {
     delete a;
     return true;
   }
-  bool calm = cfg.saver;
+  bool calm = lowFx();
   { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) calm = true; }
   gfxTheme(cfg.color, calm ? 0 : cfg.glow);
   fxLensSetup(calm ? 0 : cfg.lens);
@@ -1161,7 +1202,7 @@ bool uiFrame() {
   }
   { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) { lastPre = fxSpare(); return true; } }   // a game: as it is
   holoGlass();                                         // HOLO: the glass moves the other way
-  fxPost(cfg.fringe && !calm, cfg.scan);
+  fxPost(cfg.fringe && !calm, cfg.scan && !cfg.lowGfx);
   lastPre = fxSpare();
   return true;
 }

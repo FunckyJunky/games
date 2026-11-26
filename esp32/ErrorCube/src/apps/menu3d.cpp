@@ -89,7 +89,7 @@ struct Home3D : Screen {
       // HOLO 3D on: the camera follows the same tilt as the rest of the interface (range, centre, invert...)
       float k = cfg.holoDepth / 9.0f;
       tx = -holoTX() * 0.55f * k; ty = -holoTY() * 0.55f * k;
-    } else if (cfg.parallax && S.imu && !cfg.saver) {
+    } else if (cfg.parallax && S.imu && !lowFx()) {
       float a[3], g[3];
       if (imuRead(a, g)) { tx += (a[0] / 9.81f - tx) * 0.12f; ty += (a[2] / 9.81f - ty) * 0.12f; }
     } else { tx *= 0.9f; ty *= 0.9f; }
@@ -103,7 +103,7 @@ struct Home3D : Screen {
   void draw() override {
     uint32_t now = msNow();
     float t = (now - t0) / 1000.0f;
-    bool calm = cfg.saver;
+    bool calm = lowFx();
     // ------------------------------------------------ the sky: stars, a striped sun on the horizon
     float yaw = tx * 0.22f, pitch = 0.1f - ty * 0.15f;
     g3dCam(0, -30, 0, yaw, pitch, -tx * 0.05f, 430, 240, 244);

@@ -26,6 +26,7 @@ static void tabs(const char* const* names, int n, int cur, std::function<void(in
 }
 
 // ================================================================== CLOCK
+Screen* makeAlarmSetup();
 uint32_t tmrEnd = 0, tmrLeft = 0;
 bool tmrRun = false;
 static uint32_t swStart = 0, swAcc = 0, swLaps[3];
@@ -103,7 +104,11 @@ struct Clock : Screen {
       int bit = i;
       dosButton(27 + i * 62, 266, 54, 46, D[i], [bit] { cfg.alarmDays ^= 1 << bit; cfgSave(); }, on);
     }
-    dosButton(60, 330, 360, 56, cfg.alarmOn ? "ALARM IS ON" : "ALARM IS OFF", [] { cfg.alarmOn = !cfg.alarmOn; cfgSave(); }, cfg.alarmOn);
+    dosButton(60, 322, 250, 56, cfg.alarmOn ? "ALARM IS ON" : "ALARM IS OFF", [] { cfg.alarmOn = !cfg.alarmOn; cfgSave(); }, cfg.alarmOn);
+    dosButton(320, 322, 100, 56, "SOUND", [] { uiOpen(makeAlarmSetup()); });
+    const char* n = strrchr(cfg.alarmSong, '/');
+    char s[48]; snprintf(s, sizeof(s), "%s%s", cfg.alarmSong[0] ? "\xE2\x99\xAA " : "BEEPS", cfg.alarmSong[0] ? (n ? n + 1 : cfg.alarmSong) : ""); utf8Cut(s, 30);
+    drawTextC(FT, 240, 392, s, C_DIM, TX_FLAT);
   }
   void drawTimer() {
     uint32_t left = tmrRun ? (uint32_t)((int32_t)(tmrEnd - msNow()) > 0 ? tmrEnd - msNow() : 0) : (tmrLeft ? tmrLeft : tmrSet * 1000u);
@@ -610,7 +615,8 @@ struct Files : Screen {
   FileEnt ents[160]; int n = 0;
   ListView L;
   bool pickWall = false;             // choosing a wallpaper picture (SETUP > DISPLAY)
-  const char* name() override { return pickWall ? "PICK PICTURE" : "FILES.EXE"; }
+  bool pickSong = false;             // choosing the alarm's song (CLOCK > ALARM)
+  const char* name() override { return pickWall ? "PICK PICTURE" : pickSong ? "PICK SONG" : "FILES.EXE"; }
   void load() {
     n = 0;
     if (!dir[0]) {
@@ -665,14 +671,18 @@ struct Files : Screen {
     bool onSd = !strncmp(dir, "/sd", 3);
     std::vector<const char*> b;
     bool pic = !f.dir && imgIsPicture(f.name);
+    const char* ex = strrchr(f.name, '.');
+    bool song = !f.dir && ex && (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav"));
     if (pic) b.push_back("SET AS WALLPAPER");
+    if (song) b.push_back("ALARM SONG");
     if (!f.dir) b.push_back(onSd ? "COPY TO FLASH" : "COPY TO SD");
     b.push_back("RENAME"); b.push_back("DELETE"); b.push_back("CANCEL");
     char info[120], sz[16];
     if (f.size >= 1048576) snprintf(sz, sizeof(sz), "%.1f MB", f.size / 1048576.0); else snprintf(sz, sizeof(sz), "%u bytes", (unsigned)f.size);
     if (f.dir) snprintf(info, sizeof(info), "%s", f.name); else snprintf(info, sizeof(info), "%s\n%s", f.name, sz);
-    ask(f.dir ? "FOLDER" : "FILE", info, b, [this, f, p, onSd, pic](int k) {
+    ask(f.dir ? "FOLDER" : "FILE", info, b, [this, f, p, onSd, pic, song](int k) {
       if (pic) { if (k == 0) { setWall(p); return; } k--; }
+      if (song) { if (k == 0) { snprintf(cfg.alarmSong, sizeof(cfg.alarmSong), "%s", p.c_str()); cfgChanged(); toast("ALARM SONG SET"); return; } k--; }
       if (!f.dir) k--;                          // the first button was COPY
       if (k == -1) {
         char to[200]; snprintf(to, sizeof(to), "%s/%s", onSd ? "/c" : "/sd", f.name);
@@ -704,6 +714,12 @@ struct Files : Screen {
     std::string p = pathOf(i);
     if (f.dir) { snprintf(dir, sizeof(dir), "%s", p.c_str()); L.sel = 0; L.scroll = 0; load(); return; }
     if (pickWall) { if (imgIsPicture(f.name)) { setWall(p); uiBack(); } else toast("PICK A JPEG OR BMP"); return; }
+    if (pickSong) {
+      const char* e = strrchr(f.name, '.');
+      if (e && (!strcasecmp(e, ".mp3") || !strcasecmp(e, ".wav"))) { snprintf(cfg.alarmSong, sizeof(cfg.alarmSong), "%s", p.c_str()); cfgChanged(); toast("ALARM SONG SET"); uiBack(); }
+      else toast("PICK AN MP3 OR WAV");
+      return;
+    }
     if (openFile(p.c_str())) return;              // music, video, pictures, text, firmware: straight into its program
     more(i);                                       // nothing plays it: what to do with it
   }
@@ -767,4 +783,11 @@ struct Files : Screen {
   }
 };
 Screen* makeFilePicker() { Files* f = new Files(); f->pickWall = true; return f; }
+Screen* makeSongPicker() {
+  Files* f = new Files(); f->pickSong = true;
+  sdMount();
+  const char* d = S.sd && fsSize("/sd/MUSIC") >= 0 ? "/sd/MUSIC" : S.sd ? "/sd" : "/c";
+  snprintf(f->dir, sizeof(f->dir), "%s", d);
+  return f;
+}
 Screen* makeFiles() { return new Files(); }

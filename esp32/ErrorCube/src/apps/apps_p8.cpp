@@ -92,7 +92,10 @@ static bool restartWanted = false, quitWanted = false;
 void p8Menu() {
   if (menuOpen) return;
   menuOpen = true; p8Pause(true); uiWake();
-  ask("PICO-8", "", {"CONTINUE", "RESTART", "CALIBRATE", "QUIT"}, [](int i) {
+  static char info[64];
+  int sl = p8StackLeft();
+  if (sl >= 0) snprintf(info, sizeof(info), "%d FPS \xC2\xB7 STACK %d KB FREE", p8Fps(), sl / 1024); else snprintf(info, sizeof(info), "%d FPS", p8Fps());
+  ask("PICO-8", info, {"CONTINUE", "RESTART", "CALIBRATE", "QUIT"}, [](int i) {
     menuOpen = false; keys = 0;
     if (i == 1) restartWanted = true;
     else if (i == 2) p8Calibrate();
@@ -111,6 +114,7 @@ struct P8Play : Screen {
   bool plain() override { return true; }
   void start() {
     keys = 0; arrows = 0; restartWanted = quitWanted = false;
+    cfgFlushNow();                        // settings safe on flash first
     useCal();
     if (!p8Start(path.c_str())) { fail(); return; }
     startAt = msNow();

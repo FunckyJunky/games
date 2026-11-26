@@ -37,6 +37,25 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.4.1
+
+- **PICO-8 steadier:** z8lua uses setjmp/longjmp (LUA_USE_LONGJMP) instead of C++ exceptions, which it threw on
+  every coroutine yield (every frame); the cart task runs at priority 0 (a long cart start can't starve core 0's
+  idle task: the task watchdog panics after 5 s), a 32 KB stack (it checks there's room for it first), and C++
+  errors inside FAKE-08 end the cart instead of the cube. The pause menu shows FPS and the stack left.
+- **Crash report:** after a crash or watchdog restart the cube says so once, with the task, PC, cause and backtrace
+  from the core dump (INFO > SYSTEM and the phone's STATUS show it too). Decode with
+  `xtensa-esp32s3-elf-addr2line -pfiaC -e ErrorCube.ino.elf <addresses>` against that version's ELF.
+- **Settings kept:** also in C:\cube.cfg and A:\ERRORCUBE\cube.cfg (settings + saved WiFi, CRC checked), restored
+  when NVS has none (a reinstall that erased the flash). Settings from a newer firmware load too (after a rollback).
+  Saved 0.6 s after a change (was 1.5 s), and right before a PICO-8 cart starts. FACTORY RESET removes the files.
+- **LOW GRAPHICS** (SETUP, LOOK, phone): the plainest interface: DOS menu, no HOLO 3D, glass, glow, scanlines,
+  glitches, animations, wallpaper, CRT or intro (lowFx(): what BATTERY SAVER turns off, without slowing the CPU).
+- **Alarm:** plays a song (CLOCK > ALARM > SOUND > SONG, or hold a song in MUSIC / FILES: ALARM SONG), at FULL
+  VOLUME (sndForceVolume) whatever VOLUME is; moving or picking up the cube snoozes it (motion from the IMU after
+  2 s), SNOOZE FOR 1..30 min. A song alarm stops after 10 min, beeps after 3.
+- The glass table isn't worked out again when coming back from a game or LOW GRAPHICS.
+
 ## New in 1.4: PICO-8
 
 - **PICO8.EXE:** plays PICO-8 carts (.p8 and .p8.png) from A:\PICO8 (SD card) and C:\pico8. Comes with TOLK and

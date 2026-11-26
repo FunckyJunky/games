@@ -13,6 +13,7 @@
 #include <esp_system.h>
 #include <esp_timer.h>
 #include <esp_mac.h>
+#include <esp_core_dump.h>
 #include "Arduino_GFX_Library.h"
 #define XPOWERS_CHIP_AXP2101
 #include "XPowersLib.h"
@@ -42,24 +43,87 @@ static int rotNow = 0, autoRot = 0;
 static bool sdSpi = false;
 
 // ------------------------------------------------------------------ settings in flash
+// Kept in NVS ("cube"/"cfg"), and as a file too: C:\cube.cfg and, with a TF card, A:\ERRORCUBE\cube.cfg (the
+// settings and the saved WiFi networks). A reinstall that erases the flash, or an older firmware after an update
+// went back, finds them there.
 static Preferences prefs;
 static uint32_t cfgDirtyAt = 0;
+static bool cfgFromNvs = false;
+// settings from this, an older or a newer firmware: fields are only ever added at the end, so the part both
+// know keeps its value; newer settings start at their default
+static bool cfgFromBytes(const uint8_t* b, size_t n) {
+  if (n < 8) return false;
+  Cfg c;
+  memcpy(&c, b, n < sizeof(Cfg) ? n : sizeof(Cfg));
+  if ((c.magic & 0xFFFF0000u) != 0xC0BE0000u) return false;
+  cfg = c; cfg.magic = Cfg().magic;
+  return true;
+}
 static void cfgLoad() {
   prefs.begin("cube", false);
-  // settings from this or an older firmware: what was saved keeps its value, newer settings start at their default
   size_t n = prefs.getBytesLength("cfg");
-  if (n >= 8 && n <= sizeof(Cfg)) {
-    Cfg c;
-    prefs.getBytes("cfg", &c, n);
-    if ((c.magic & 0xFFFF0000u) == 0xC0BE0000u) { cfg = c; cfg.magic = Cfg().magic; }
+  if (n >= 8 && n < 8192) {
+    uint8_t* b = (uint8_t*)malloc(n);
+    if (b && prefs.getBytes("cfg", b, n) == n) cfgFromNvs = cfgFromBytes(b, n);
+    free(b);
   }
+}
+static uint32_t crc32(const uint8_t* p, size_t n) {
+  uint32_t c = 0xFFFFFFFFu;
+  while (n--) { c ^= *p++; for (int k = 0; k < 8; k++) c = c & 1 ? (c >> 1) ^ 0xEDB88320u : c >> 1; }
+  return ~c;
+}
+size_t netSavedGet(uint8_t* out, size_t max);        // net.cpp: the saved WiFi networks, as bytes
+void netSavedSet(const uint8_t* in, size_t n);
+struct CfgFile { char magic[4]; uint32_t ver, cfgLen, wifiLen, crc; };
+static void cfgWriteFile(const char* path, const uint8_t* b, size_t n) {
+  char tmp[64]; snprintf(tmp, sizeof(tmp), "%s.new", path);
+  FILE* f = fopen(tmp, "wb");
+  if (!f) return;
+  bool ok = fwrite(b, 1, n, f) == n;
+  fclose(f);
+  if (ok) { remove(path); rename(tmp, path); } else remove(tmp);
+}
+static void cfgBackup() {
+  uint8_t wifi[1024];
+  size_t wn = netSavedGet(wifi, sizeof(wifi));
+  size_t n = sizeof(CfgFile) + sizeof(Cfg) + wn;
+  uint8_t* b = (uint8_t*)malloc(n);
+  if (!b) return;
+  CfgFile h = {{'E', 'C', 'F', 'G'}, 1, sizeof(Cfg), (uint32_t)wn, 0};
+  memcpy(b + sizeof(h), &cfg, sizeof(Cfg));
+  memcpy(b + sizeof(h) + sizeof(Cfg), wifi, wn);
+  h.crc = crc32(b + sizeof(h), sizeof(Cfg) + wn);
+  memcpy(b, &h, sizeof(h));
+  cfgWriteFile("/c/cube.cfg", b, n);
+  if (S.sd) { mkdir("/sd/ERRORCUBE", 0777); cfgWriteFile("/sd/ERRORCUBE/cube.cfg", b, n); }
+  free(b);
+}
+static bool cfgRestore(const char* path) {
+  FILE* f = fopen(path, "rb");
+  if (!f) return false;
+  fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+  uint8_t* b = n > (long)sizeof(CfgFile) && n < 16384 ? (uint8_t*)malloc(n) : nullptr;
+  bool ok = b && fread(b, 1, n, f) == (size_t)n;
+  fclose(f);
+  CfgFile h;
+  if (ok) { memcpy(&h, b, sizeof(h)); ok = !memcmp(h.magic, "ECFG", 4) && sizeof(h) + h.cfgLen + h.wifiLen == (size_t)n && crc32(b + sizeof(h), h.cfgLen + h.wifiLen) == h.crc; }
+  if (ok) ok = cfgFromBytes(b + sizeof(h), h.cfgLen);
+  if (ok) { netSavedSet(b + sizeof(h) + h.cfgLen, h.wifiLen); prefs.putBytes("cfg", &cfg, sizeof(cfg)); }
+  free(b);
+  return ok;
 }
 void cfgSave() { cfgDirtyAt = millis() | 1; }
 static void cfgFlush(bool now = false) {
-  if (cfgDirtyAt && (now || millis() - cfgDirtyAt > 1500)) { prefs.putBytes("cfg", &cfg, sizeof(cfg)); cfgDirtyAt = 0; }
+  if (cfgDirtyAt && (now || millis() - cfgDirtyAt > 600)) {
+    prefs.putBytes("cfg", &cfg, sizeof(cfg));
+    cfgDirtyAt = 0;
+    cfgBackup();
+  }
 }
+void cfgFlushNow() { cfgFlush(true); }
 void netForgetAll();
-void cfgReset() { prefs.clear(); netForgetAll(); cfg = Cfg(); }
+void cfgReset() { prefs.clear(); remove("/c/cube.cfg"); remove("/sd/ERRORCUBE/cube.cfg"); netForgetAll(); cfg = Cfg(); cfgSave(); }
 
 // ------------------------------------------------------------------ time
 static void applyTz() {
@@ -496,11 +560,33 @@ void boardBegin() {
 }
 
 // the drives and the speaker: after the first picture is on the screen (the first start formats drive C:)
+// the last start: was it a crash? (what, where: from the core dump the crash left in flash)
+static void crashCheck() {
+  esp_reset_reason_t r = esp_reset_reason();
+  const char* why = r == ESP_RST_PANIC ? "CRASH" : r == ESP_RST_TASK_WDT ? "FROZE (TASK WDT)" : r == ESP_RST_INT_WDT ? "FROZE (INT WDT)" :
+                    r == ESP_RST_WDT ? "WATCHDOG" : r == ESP_RST_BROWNOUT ? "POWER DIP" : nullptr;
+  if (!why) return;
+  int k = snprintf(S.crash, sizeof(S.crash), "%s", why);
+  esp_core_dump_summary_t* s = (esp_core_dump_summary_t*)malloc(sizeof(esp_core_dump_summary_t));
+  if (s && esp_core_dump_get_summary(s) == ESP_OK) {
+    k += snprintf(S.crash + k, sizeof(S.crash) - k, " IN %s PC %08lx C%lu A%08lx BT", s->exc_task, (unsigned long)s->exc_pc,
+                  (unsigned long)s->ex_info.exc_cause, (unsigned long)s->ex_info.exc_vaddr);
+    for (int i = 0; i < (int)s->exc_bt_info.depth && i < 10 && k < (int)sizeof(S.crash) - 10; i++)
+      k += snprintf(S.crash + k, sizeof(S.crash) - k, " %08lx", (unsigned long)s->exc_bt_info.bt[i]);
+    esp_core_dump_image_erase();
+  }
+  free(s);
+  S.crashAt = 1;
+}
 void boardDrives() {
   // drives: the cube's own flash (C:), the TF card (A:)
   if (!FFat.begin(true, "/c", 10, "ffat")) Serial.println("C: drive failed");
   mkdir("/c/apps", 0777); mkdir("/c/appdata", 0777);
   sdMount();
+  // no settings in NVS (a reinstall that erased the flash...): the file on the TF card, or on C:
+  if (!cfgFromNvs && (cfgRestore("/sd/ERRORCUBE/cube.cfg") || cfgRestore("/c/cube.cfg"))) { S.cfgRestored = 1; cfgDirtyAt = 0; }
+  else if (fsSize("/c/cube.cfg") <= 0 || (S.sd && fsSize("/sd/ERRORCUBE/cube.cfg") <= 0)) cfgBackup();
+  crashCheck();
   // sound, and the task that plays music and video
   S.codec = sndBegin();
 }

@@ -34,6 +34,7 @@ static char err[96] = "";
 static uint32_t stepN = 0, fpsAt = 0, fpsN = 0; static int fps = 0;
 static uint8_t prevHeld = 0, pendDown = 0;
 static int16_t* abuf = nullptr;
+static const int P8_STACK = 32768;
 
 // the picture: 128x128 4-bit + the screen palette -> RGB565
 static void takeFrame() {
@@ -87,7 +88,7 @@ static void freeAll() {
 
 // the cart: loaded where the stack is big enough for Lua's parser (the task on the board)
 static std::string cartPath;
-static bool load() {
+static bool loadIt() {
   host = new Host();
   host->setUpPaletteColors();
   host->setCartDirectory(cartPath.substr(0, cartPath.rfind('/')));
@@ -102,12 +103,23 @@ static bool load() {
   vm->vm_run();
   return true;
 }
+// C++ trouble inside FAKE-08 (out of memory, a bad cart...) ends the cart, not the cube
+static bool load() {
+  try { return loadIt(); }
+  catch (...) { snprintf(err, sizeof(err), "THE CART CAN'T START (NOT ENOUGH MEMORY?)"); return false; }
+}
+static bool stepSafe() {
+  try { step(); return true; }
+  catch (...) { snprintf(err, sizeof(err), "THE CART STOPPED (AN ERROR IN THE EMULATOR)"); running = false; return false; }
+}
 #ifdef ARDUINO
+static volatile uint32_t stackLeft = 0;
 static void task(void*) {
   if (!load()) running = false;
   TickType_t last = xTaskGetTickCount();
   while (!quit && running) {
-    if (!paused) step(); else vTaskDelay(pdMS_TO_TICKS(20));
+    if (!paused) stepSafe(); else vTaskDelay(pdMS_TO_TICKS(20));
+    if ((stepN & 63) == 0) stackLeft = uxTaskGetStackHighWaterMark(nullptr);
     // 60 a second if it can; if a step took longer, the next one comes right away
     TickType_t now = xTaskGetTickCount();
     if (now - last < pdMS_TO_TICKS(16)) vTaskDelayUntil(&last, pdMS_TO_TICKS(16)); else { last = now; vTaskDelay(1); }
@@ -135,7 +147,14 @@ bool p8Start(const char* path) {
   running = true;
 #ifdef ARDUINO
   taskDone = false;
-  if (xTaskCreatePinnedToCore(task, "pico8", 28672, nullptr, 1, nullptr, 0) != pdPASS) {
+  // priority 0 (with the idle task): a long cart start can't starve it (the watchdog would restart the cube).
+  // The stack is internal RAM (the carts' files are on flash): check there's room for it and for WiFi after it
+  if (heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < P8_STACK + 12000) {
+    snprintf(err, sizeof(err), "NOT ENOUGH FAST RAM (%u KB FREE)", (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+    running = false; taskDone = true;
+    return false;
+  }
+  if (xTaskCreatePinnedToCore(task, "pico8", P8_STACK, nullptr, 0, nullptr, 0) != pdPASS) {
     snprintf(err, sizeof(err), "NOT ENOUGH MEMORY TO START");
     running = false; taskDone = true; freeAll();
     return false;
@@ -167,7 +186,14 @@ void p8Buttons(uint8_t h) {
 void p8Pause(bool on) { paused = on; sndMediaPause(on); }
 void p8Pump() {
 #ifndef ARDUINO
-  if (running && !paused && vm) step();
+  if (running && !paused && vm) stepSafe();
+#endif
+}
+int p8StackLeft() {
+#ifdef ARDUINO
+  return stackLeft;
+#else
+  return -1;
 #endif
 }
 const uint16_t* p8Frame(uint32_t* seq) { if (seq) *seq = frameSeq; return frames[frameSeq & 1]; }

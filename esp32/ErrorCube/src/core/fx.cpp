@@ -42,6 +42,8 @@ void fxLensSetup(int mode) {
   if (!mode) { memset(fcol, 0, sizeof(fcol)); memset(frow, 0, sizeof(frow)); return; }
   if (!disp) disp = (uint32_t*)bigAlloc((size_t)TW * TW * 4);
   if (!disp || !spare) { lensMode = 0; return; }
+  static int dispFor = -1;                 // the table is already for this glass (back from a game / LOW GRAPHICS)
+  if (dispFor != mode)
   for (int v = 0; v < TW; v++)
     for (int u = 0; u < TW; u++) {
       float ox = u - LM, oy = v - LM, sx, sy;
@@ -50,6 +52,7 @@ void fxLensSetup(int mode) {
       if (dx < -32000) dx = -32000; if (dx > 32000) dx = 32000; if (dy < -32000) dy = -32000; if (dy > 32000) dy = 32000;
       disp[v * TW + u] = ((uint32_t)(uint16_t)(int16_t)dy << 16) | (uint16_t)(int16_t)dx;
     }
+  dispFor = mode;
   // the fringe grows toward the edges, up to 3 px
   for (int i = 0; i < SCR_W; i++) { float n = (i - 240) / 240.0f; fcol[i] = (int8_t)roundf(n * n * n * (mode == 2 ? 3.4f : 2.4f)); }
   for (int i = 0; i < SCR_H; i++) { float n = (i - 240) / 240.0f; frow[i] = (int8_t)roundf(n * n * n * (mode == 2 ? 3.0f : 2.0f)); }

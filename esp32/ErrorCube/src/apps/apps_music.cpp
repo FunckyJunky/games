@@ -136,7 +136,9 @@ void musicPlayFolder(const char* dir, const char* file) {
 void musicTick() {
   static int last = MED_STOP;
   int st = musState();
-  if (st == MED_END && last != MED_END) {
+  // the playlist goes on only for its own songs (not the alarm's)
+  bool mine = pidx >= 0 && pidx < (int)plist.size() && !strcmp(musFile(), plist[pidx].c_str());
+  if (mine && st == MED_END && last != MED_END) {
     if (repeatMode == 2) playAt(pidx); else musicNext(1);
   }
   if (st != last) uiDirty();
@@ -279,6 +281,18 @@ struct Music : Screen {
   void tick() override { L.tick(); }
   bool ev(const Ev& e) override {
     if (e.t == EV_SWIPE && e.dir == SW_LEFT) { uiOpen(new NowPlaying()); return true; }
+    if (e.t == EV_LONG && e.y0 >= L.y && e.y0 < L.y + L.h) {      // hold a song: play it, or wake up to it
+      int i = (int)((e.y0 - L.y + L.scroll) / L.rowH);
+      if (i > 0 && i < n && !ents[i].dir) {
+        L.sel = i;
+        std::string p = std::string(dir) + "/" + ents[i].name;
+        ask(ents[i].name, "", {"PLAY", "ALARM SONG", "CANCEL"}, [this, p, i](int k) {
+          if (k == 0) open(i);
+          else if (k == 1) { snprintf(cfg.alarmSong, sizeof(cfg.alarmSong), "%s", p.c_str()); cfgChanged(); toast("ALARM SONG SET"); }
+        });
+        return true;
+      }
+    }
     return L.ev(e, [this](int i) { open(i); uiDirty(); });
   }
 };

@@ -45,6 +45,8 @@ static Row number(const char* n, uint8_t* v, int lo, int hi, int step, const cha
   return r;
 }
 
+static Row section(const char* n, const char* desc, uint8_t ic, Screen* (*open)());
+static Screen* pageAlarm();
 struct Page : Screen {
   char title[24], path[40];
   std::function<void(std::vector<Row>&)> build;
@@ -118,6 +120,8 @@ static Screen* pageDisplay() {
 }
 static Screen* pageLook() {
   return page("LOOK", "C:\\SETUP\\LOOK>", [](std::vector<Row>& r) {
+    r.push_back(toggle("LOW GRAPHICS", &cfg.lowGfx));
+    if (cfg.lowGfx) r.push_back(info("ON =", [](char* o) { strcpy(o, "NO 3D, GLASS, GLOW, GLITCH"); }));
     r.push_back(choice("MENU", &cfg.view, 2, [](int i) { return i ? "3D" : "DOS"; }));
     r.push_back(toggle("HOLO 3D", &cfg.holo, [] { holoRecenter(); }));
     r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
@@ -151,6 +155,7 @@ static Screen* pageTime() {
     r.push_back(choice("TIME ZONE", &cfg.tzIdx, N_TZ, [](int i) { return TIMEZONES[i].name; }));
     r.push_back(toggle("24 HOURS", &cfg.h24));
     r.push_back(toggle("SECONDS", &cfg.secs));
+    r.push_back(section("ALARM SOUND", "song, snooze", IC_SOUND, pageAlarm));
     r.push_back(action("SET TIME", [] {
       struct tm t; char init[8] = "12:00"; if (sysLocalTime(t)) sprintf(init, "%02d:%02d", t.tm_hour, t.tm_min);
       kbOpen("TIME HH:MM", init, 5, [](const char* s) {
@@ -413,6 +418,23 @@ static Screen* pageP8() {
   });
 }
 Screen* makeP8Setup() { return pageP8(); }
+Screen* makeSongPicker();
+static Screen* pageAlarm() {
+  return page("ALARM", "C:\\CLOCK\\ALARM>", [](std::vector<Row>& r) {
+    r.push_back(heading("WHAT IT PLAYS", IC_SOUND));
+    r.push_back(action("SONG", [] { uiOpen(makeSongPicker()); }, [](char* o) {
+      const char* n = strrchr(cfg.alarmSong, '/');
+      snprintf(o, 40, "%s", cfg.alarmSong[0] ? (n ? n + 1 : cfg.alarmSong) : "BEEPS (PICK ONE)");
+    }));
+    if (cfg.alarmSong[0]) r.push_back(action("BEEPS INSTEAD", [] { cfg.alarmSong[0] = 0; cfgChanged(); }));
+    r.push_back(toggle("FULL VOLUME", &cfg.alarmLoud));
+    r.push_back(heading("SNOOZE", IC_TIME));
+    r.push_back(toggle("MOVE THE CUBE = SNOOZE", &cfg.alarmMove));
+    r.push_back(number("SNOOZE FOR", &cfg.alarmSnooze, 1, 30, 1, " MIN"));
+    r.push_back(action("TEST IT", [] { alarmRing("ALARM"); }));
+  });
+}
+Screen* makeAlarmSetup() { return pageAlarm(); }
 static Row section(const char* n, const char* desc, uint8_t ic, Screen* (*open)()) {
   Row r; r.name = n; r.kind = 0; r.icon = ic;
   r.val = [desc](char* o) { strcpy(o, desc); };
@@ -422,6 +444,7 @@ static Row section(const char* n, const char* desc, uint8_t ic, Screen* (*open)(
 Screen* makeSetup() {
   Page* p = (Page*)page("SETUP.EXE", "C:\\SETUP>", [](std::vector<Row>& r) {
     r.push_back(heading("SCREEN", IC_SCREEN));
+    { Row o = toggle("LOW GRAPHICS", &cfg.lowGfx); o.icon = IC_LOOK; r.push_back(o); }
     r.push_back(section("SCREEN", "light, wallpaper", IC_LIGHT, pageDisplay));
     r.push_back(section("LOOK", "colour, glitch", IC_LOOK, pageLook));
     r.push_back(section("HOLO 3D", "tilt, depth", IC_HOLO, pageHolo));
@@ -573,7 +596,10 @@ struct Info : Screen {
       fmtUptime(b); line(5, "UP", b);
       sprintf(b, "%.1f C", S.chipTemp); line(6, "CHIP TEMP", b);
       line(7, "LAST START", resetReason());
-      line(8, "BUILT", __DATE__);
+      if (S.crash[0]) {          // what crashed last (for the person fixing it: task, PC, backtrace)
+        char c[48]; snprintf(c, sizeof(c), "%s", S.crash); utf8Cut(c, 38);
+        drawText(FT, 27, 104 + 8 * 34, c, C_WARN, TX_FLAT);
+      } else line(8, "BUILT", __DATE__);
     } else if (tab == 1) {
       line(0, "POWER CHIP", S.pmu ? "AXP2101" : "NOT FOUND");
       if (S.battery) sprintf(b, "%d%%", S.batPct); else strcpy(b, "NONE"); line(1, "BATTERY", b);

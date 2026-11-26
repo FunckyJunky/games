@@ -49,7 +49,7 @@ static const float CENTRE_S[4] = {0, 8, 3, 1};          // auto centre: OFF, SLO
 
 static void norm(float v[3]) { float l = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); if (l < 1e-6f) { v[0] = v[1] = 0; v[2] = 1; return; } v[0] /= l; v[1] /= l; v[2] /= l; }
 
-bool holoActive() { return cfg.holo && !cfg.saver && uiAwake(); }
+bool holoActive() { return cfg.holo && !lowFx() && uiAwake(); }
 bool holoLayersOn() { return holoActive() && cfg.holoLayers && !frameFlat; }
 float holoTX() { return tX; }
 float holoTY() { return tY; }
@@ -210,7 +210,7 @@ bool holoWallOk() { wallLoad(); return wallOk; }
 
 void holoBackdrop() {
   // the wallpaper: also without HOLO (then it doesn't move); not behind full-screen programs
-  if (frameFlat || cfg.saver || !cfg.holoBack) return;
+  if (frameFlat || lowFx() || !cfg.holoBack) return;
   float p = holoSet(H_BACK);
   switch (cfg.holoBack) {
     case 5: {  // PICTURE

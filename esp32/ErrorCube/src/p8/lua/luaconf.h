@@ -8,6 +8,10 @@
 #ifndef lconfig_h
 #define lconfig_h
 
+/* ERROR-CUBE: errors and coroutine yields with setjmp/longjmp, not C++ exceptions (a yield happens every frame:
+   exceptions are slow on the ESP32 and need a lot of stack to unwind) */
+#define LUA_USE_LONGJMP
+
 #include <limits.h>
 #include <stddef.h>
 

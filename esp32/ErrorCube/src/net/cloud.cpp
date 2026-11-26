@@ -520,6 +520,7 @@ static Set SETS[] = {
   {"DISPLAY", "tapWake", "TAP TO WAKE", T_TOGGLE, &cfg.tapWake, 0, 1, nullptr},
   {"DISPLAY", "moveWake", "LIFT TO WAKE", T_TOGGLE, &cfg.moveWake, 0, 1, nullptr},
   {"DISPLAY", "rot", "ROTATION", T_CHOICE, &cfg.rot, 0, 4, lRot},
+  {"LOOK", "lowGfx", "LOW GRAPHICS (PLAINEST)", T_TOGGLE, &cfg.lowGfx, 0, 1, nullptr},
   {"LOOK", "view", "MENU", T_CHOICE, &cfg.view, 0, 1, lView},
   {"LOOK", "lens", "GLASS", T_CHOICE, &cfg.lens, 0, 2, lLens},
   {"LOOK", "fringe", "COLOUR FRINGE", T_TOGGLE, &cfg.fringe, 0, 1, nullptr},
@@ -562,6 +563,9 @@ static Set SETS[] = {
   {"TIME", "alarmOn", "ALARM", T_TOGGLE, &cfg.alarmOn, 0, 1, nullptr},
   {"TIME", "alarmH", "ALARM HOUR", T_SLIDER, &cfg.alarmH, 0, 23, nullptr},
   {"TIME", "alarmM", "ALARM MINUTE", T_SLIDER, &cfg.alarmM, 0, 59, nullptr},
+  {"TIME", "alarmLoud", "ALARM AT FULL VOLUME", T_TOGGLE, &cfg.alarmLoud, 0, 1, nullptr},
+  {"TIME", "alarmMove", "MOVE THE CUBE = SNOOZE", T_TOGGLE, &cfg.alarmMove, 0, 1, nullptr},
+  {"TIME", "alarmSnooze", "SNOOZE (MIN)", T_SLIDER, &cfg.alarmSnooze, 1, 30, nullptr},
   {"POWER", "chgIdx", "CHARGE CURRENT", T_CHOICE, &cfg.chgIdx, 0, N_CHARGE - 1, lChg},
   {"POWER", "autoOffIdx", "OFF WHEN ASLEEP", T_CHOICE, &cfg.autoOffIdx, 0, N_AUTO_OFF - 1, lAuto},
   {"POWER", "saver", "BATTERY SAVER", T_TOGGLE, &cfg.saver, 0, 1, nullptr},
@@ -620,6 +624,7 @@ static void sendState() {
   d["ssid"] = S.ssid; d["ip"] = S.ip; d["rssi"] = S.rssi; d["up"] = uptimeSecs();
   d["heap"] = freeHeap() / 1024; d["psram"] = freePsram() / 1024; d["temp"] = (int)S.chipTemp;
   d["sd"] = S.sd ? S.sdInfo : "";
+  if (S.crash[0]) d["crash"] = S.crash;
   JsonObject u = d["upd"].to<JsonObject>();
   static const char* US[] = {"idle", "checking", "new", "loading", "done", "failed", "latest"};
   u["st"] = US[S.upd % 7]; u["ver"] = S.updVer; u["pct"] = S.updPct; u["msg"] = S.updMsg; u["notes"] = S.updNotes;

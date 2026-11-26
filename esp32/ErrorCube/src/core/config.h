@@ -3,7 +3,7 @@
 // QMI8658, ES8311 + ES7210, TF card). Pins from Waveshare's wiki and pin_config.h.
 #pragma once
 
-#define CUBE_VERSION "1.4"
+#define CUBE_VERSION "1.4.1"
 #define CUBE_HOST "error.blue"
 #define CUBE_PORT 443
 #define FW_INFO_PATH "/cube/flash/firmware.json"     // newest firmware: {ver, path, size, md5, notes}

@@ -147,6 +147,13 @@ void appsLoop() {
     ask("NEW FIRMWARE", t, {"UPDATE NOW", "LATER"}, [](int i) { if (i == 0) { netUpdateInstall(); openProg("UPDATE"); } });
     snd(SND_MSG);
   }
+  // the last start was a crash: say so once (the details go to INFO and the phone's STATUS)
+  if (S.crashAt == 1 && uiAwake() && !kbIsOpen()) {
+    S.crashAt = 2;
+    char t[240]; snprintf(t, sizeof(t), "The cube restarted after a problem:\n%s", S.crash);
+    ask("LAST TIME", t, {"OK"}, nullptr);
+  }
+  if (S.cfgRestored == 1 && uiAwake()) { S.cfgRestored = 2; cfgChanged(); toast("SETTINGS + WIFI RESTORED FROM FILE", 2500); }
   static uint32_t seenOpen = 0;
   if (S.openAt && S.openAt != seenOpen) {             // the phone: "open this on the cube"
     seenOpen = S.openAt;

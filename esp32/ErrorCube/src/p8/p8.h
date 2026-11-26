@@ -19,3 +19,4 @@ void p8Pump();                           // the simulator: one step (the board h
 // the latest picture: 128x128 RGB565, and a number that changes with every new one
 const uint16_t* p8Frame(uint32_t* seq);
 int p8Fps();                             // steps a second it actually manages
+int p8StackLeft();                       // bytes of the cart task's stack never used (-1: not known)

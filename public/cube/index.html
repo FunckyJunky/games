@@ -369,7 +369,8 @@ function renderAll() {
     ['UP', fmtUp(s.up)], ['MEMORY', s.heap + 'K + ' + s.psram + 'K PSRAM'], ['CHIP', s.temp + ' C'],
     ['TF CARD', s.sd || 'NONE'], ['FIRMWARE', s.v],
   ];
-  $('kv').innerHTML = rows.map(r => '<span>' + r[0] + '</span><span>' + esc(r[1]) + '</span>').join('');
+  $('kv').innerHTML = rows.map(r => '<span>' + r[0] + '</span><span>' + esc(r[1]) + '</span>').join('') +
+    (s.crash ? '<span class="red" style="grid-column:1/-1;text-align:left;white-space:normal;word-break:break-all;font-size:17px">LAST CRASH: ' + esc(s.crash) + '</span>' : '');
   const u = s.upd || {};
   const st = { idle: 'NOT CHECKED', checking: 'CHECKING...', new: 'NEW: ' + u.ver, loading: 'INSTALLING ' + u.pct + '%', done: 'DONE, RESTARTING', failed: 'FAILED: ' + u.msg, latest: 'UP TO DATE' }[u.st] || u.st;
   $('fwKv').innerHTML = [['ON THE CUBE', s.v], ['ON ERROR.BLUE', u.ver || latest || '?'], ['STATE', st], ['NOTES', u.notes || '-']]

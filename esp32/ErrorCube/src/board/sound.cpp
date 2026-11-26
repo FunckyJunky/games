@@ -116,12 +116,15 @@ void sndFeed(const int16_t* s, int n) {
   S.audAt = millis();
 }
 
+static volatile int forceVol = -1;
+void sndForceVolume(int v) { forceVol = v; }
 static void task(void*) {
   static int16_t buf[256 * 2];
   bool pa = false;
   for (;;) {
     if (stopAll) { portENTER_CRITICAL(&mux); for (Voice& v : vs) v.on = false; portEXIT_CRITICAL(&mux); stopAll = false; }
-    int want = cfg.vol ? 45 + cfg.vol * 55 / 100 : 0;
+    int vol = forceVol >= 0 ? forceVol : cfg.vol;
+    int want = vol ? 45 + vol * 55 / 100 : 0;
     if (want != codecVol && codec) { es8311_voice_volume_set(codec, want, nullptr); codecVol = want; }
     bool any = false;
     // a stream from the phone: wait until 120 ms are in, so it doesn't stutter
