@@ -26,6 +26,10 @@ struct EarCfg {
   char apName[24] = "";      // "" = EAR-CUBE-XXXX
   char apPass[24] = "";      // "" = open; else 8 or more characters
   uint8_t liveLines = 1;     // LIVE text: 0 small (more lines), 1 normal
+  // 1.1: ERROR-CHAT on error.blue: every line into a channel (as chat messages), the transcripts kept there, and
+  // its buttons there (record, live, pause, stop, screen, lock, delete)
+  uint8_t chatOn = 1;
+  char chatChan[9] = "EAR1";
   // new settings go here, at the end
 };
 extern EarCfg ecfg;
@@ -66,7 +70,9 @@ int earWaiting();                      // pieces waiting for error.blue
 int earDoneCount();                    // pieces written in this session
 uint32_t earWords();                   // words in this session
 bool earSending();                     // a piece is on its way to error.blue now
-enum { ST_READY, ST_LISTEN, ST_HEAR, ST_SEND, ST_OFFLINE, ST_LIMIT, ST_ERROR, ST_NOMIC };
+void earPauseWant(bool p);             // pause / go on (the session stays: same file, the time stops)
+bool earPaused();
+enum { ST_READY, ST_LISTEN, ST_HEAR, ST_SEND, ST_OFFLINE, ST_LIMIT, ST_ERROR, ST_NOMIC, ST_PAUSED };
 int earStatus();                       // for the screen and the page
 const char* earStatusText(int st);
 const char* earErr();                  // the last problem with error.blue
@@ -85,6 +91,19 @@ void earNiceName(const char* file, char* out, size_t n);   // "2026-11-26_22-55.
 void enetSwitch();                     // back to ERROR-CUBE: download it, restart in it (S.upd / S.updMsg like an update)
 extern volatile bool enetSwitching;
 uint32_t enetSttMs();                  // how long error.blue took for the last piece
+
+// ERROR-CHAT (1.1): the lines for the channel, the transcripts to send whole, the channel's commands
+struct ChatLine { char file[48]; char at[12]; char text[500]; uint8_t late; };
+bool chatNext(ChatLine& l);            // the oldest line not sent yet
+void chatDone();                       // ... it's in the channel
+int chatWaiting();
+bool upNext(char* path, size_t n);     // a transcript to send whole (its pieces are all written)
+void upDone(const char* path);
+void earRemote(const char* cmd, const char* arg);   // from the channel: rec live pause resume stop screen lock sync rm
+void earChatNote(const char* err);     // how the last talk with the channel went ("" = fine)
+const char* earChatErr();
+bool chanOk(const char* c);            // 3..8 letters / digits
+void earNick(char* out, size_t n);     // "EAR-4F2A": its name in the channel
 
 // for enet.cpp: the next piece for error.blue, and what came back
 struct SttJob { const uint8_t* wav; size_t len; const char* lang; uint8_t task; uint32_t id; };

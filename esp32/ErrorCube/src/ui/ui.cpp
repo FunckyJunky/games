@@ -127,8 +127,16 @@ static bool deliver(const Ev& e) {
   return s && s->ev(e);
 }
 
+volatile bool uiLocked = false;
+const char* uiLockMsg = "LOCKED";
 void uiTouch(bool down, int x, int y) {
   uint32_t now = msNow();
+  if (uiLocked) {                        // nothing gets through; a touch on the lit screen says why
+    static bool was = false;
+    if (down && !was && awake) toast(uiLockMsg, 1500);
+    was = down; tDown = false;
+    return;
+  }
   if (down && !tDown) {
     tDown = true; tDrag = false; tLongDone = false;
     tx0 = tx = x; ty0 = ty = y; tAt = now;
@@ -189,6 +197,7 @@ void uiTouch(bool down, int x, int y) {
 }
 
 void uiKey(int key) {
+  if (uiLocked) { if (awake) toast(uiLockMsg, 1500); return; }
   if (!awake) {
     if (key == K_PWR_LONG) { powerMenu(); }
     uiWake();

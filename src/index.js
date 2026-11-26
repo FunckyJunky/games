@@ -949,6 +949,15 @@ export default {
 
       if (path === "/api/online") return await handleOnline(request, env, url);
 
+      // EAR-CUBE's transcripts in a channel (ChatRoom.ear)
+      m = path.match(/^\/api\/chat\/([^/]+)\/ear\/(line|file|files|get|rm|cmd|cmds)$/);
+      if (m) {
+        const code = m[1].toUpperCase();
+        if (!ROOM_RE.test(code)) return json({ error: "bad channel code" }, 400);
+        const u = new URL(request.url); u.pathname = "/ear/" + m[2] + "/" + code;
+        return env.CHAT.get(env.CHAT.idFromName(code)).fetch(new Request(u, request));
+      }
+
       m = path.match(/^\/api\/chat\/([^/]+)\/(log|say|frame)$/);
       if (m) {
         const code = m[1].toUpperCase();
@@ -1288,6 +1297,12 @@ const CHAT_MSG_MAX = 24000;            // one WebSocket message (WebRTC offers a
 const CHAT_FRAME_MAX = 20000;          // base64 of one picture
 const CHAT_FRAME_OLD = 6000;           // a picture older than this is not shown
 const CHAT_WATCH_EVERY = 2000;         // tell the sharer "someone watches" at most this often
+// EAR-CUBE in a channel: the cube's id (CUBE-4F2A), its transcripts' names (2026-11-26_22-55.txt), how big one gets
+const EAR_CUBE_RE = /^CUBE-[0-9A-F]{4}$/;
+const EAR_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.txt$/;
+const EAR_FILE_MAX = 1500 * 1024;
+const EAR_ONLINE_MS = 45 * 1000;
+const EAR_CMDS = ["rec", "live", "pause", "resume", "stop", "screen", "lock", "sync"];
 
 function chatId() {
   const b = new Uint8Array(6);
@@ -1331,6 +1346,15 @@ export class ChatRoom extends DurableObject {
     );
     // people who read the channel over HTTP instead of a WebSocket (ERROR-OLED)
     this.sql.exec(`CREATE TABLE IF NOT EXISTS http_who (name TEXT PRIMARY KEY, seen INTEGER NOT NULL)`);
+    // EAR-CUBE (esp32/EarCube): the transcripts of the cubes that write into this channel, what the page asks the
+    // cubes to do (delete a transcript, send them all again), and the cubes themselves. Kept until deleted (the
+    // 7-day wipe is only for the messages).
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ear_files (name TEXT PRIMARY KEY, cube TEXT NOT NULL, text TEXT NOT NULL,
+       lines INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ear_cmds (id INTEGER PRIMARY KEY AUTOINCREMENT, cmd TEXT NOT NULL,
+       name TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS ear_cubes (cube TEXT PRIMARY KEY, nick TEXT NOT NULL, seen INTEGER NOT NULL, st TEXT NOT NULL)`);
+    this.earViewAt = 0;                  // someone has the EAR panel open: the cubes ask more often
     this.lastSay = new Map();
     this.frames = new Map();             // sharer id -> the newest little picture
     this.watched = new Map();            // sharer id -> when we last told them someone watches
@@ -1478,6 +1502,8 @@ export class ChatRoom extends DurableObject {
     const code = (url.pathname.split("/").pop() || "").toUpperCase();
     const hm = url.pathname.match(/^\/http\/(log|say|frame)\//);
     if (hm) return this.httpChat(request, url, hm[1], code);
+    const em = url.pathname.match(/^\/ear\/(line|file|files|get|rm|cmd|cmds)\//);
+    if (em) return this.ear(request, url, em[1]);
     const name = cleanName(url.searchParams.get("name")) || "guest";
 
     const pair = new WebSocketPair();
@@ -1496,9 +1522,141 @@ export class ChatRoom extends DurableObject {
       .exec(`SELECT id, at, kind, name, text FROM msgs ORDER BY id DESC LIMIT ?`, CHAT_HISTORY)
       .toArray()
       .reverse();
-    server.send(JSON.stringify({ type: "hello", code, name, id: me.id, history, who: this.who(), peers: this.peers(server) }));
+    server.send(JSON.stringify({ type: "hello", code, name, id: me.id, history, who: this.who(), peers: this.peers(server), ear: this.earSummary() }));
     this.broadcast({ type: "join", name, id: me.id, peer: { id: me.id, name, cam: false, mic: false, rtc: me.rtc }, who: this.who() }, server);
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // ---- EAR-CUBE: transcripts in this channel ----
+  earCubes() {
+    const now = Date.now();
+    return this.sql.exec(`SELECT cube, nick, seen, st FROM ear_cubes ORDER BY seen DESC LIMIT 8`).toArray().map((c) => {
+      let st = {};
+      try { st = JSON.parse(c.st); } catch {}
+      const online = now - c.seen < EAR_ONLINE_MS;
+      const run = online && st.mode !== "idle" && !st.paused;
+      return { cube: c.cube, nick: c.nick, seen: c.seen, online, ...st, secs: (st.secs || 0) + (run ? Math.round((now - c.seen) / 1000) : 0) };
+    });
+  }
+  earSummary() {
+    const n = this.sql.exec(`SELECT COUNT(*) AS n FROM ear_files`).one().n;
+    const c = this.earCubes();
+    return n || c.length ? { files: n, cubes: c } : null;
+  }
+  earChanged() { this.broadcast({ type: "ear", ear: this.earSummary() }); }
+  // a line from a cube into the channel: as chat messages (300 characters each), and onto its transcript
+  earSay(nick, text) {
+    const parts = [];
+    let t = text;
+    while (t.length > CHAT_MAX_LEN) {
+      let k = t.lastIndexOf(" ", CHAT_MAX_LEN);
+      if (k < CHAT_MAX_LEN / 2) k = CHAT_MAX_LEN;
+      parts.push(t.slice(0, k).trim()); t = t.slice(k).trim();
+    }
+    if (t) parts.push(t);
+    for (const p of parts) this.broadcast({ type: "msg", ...this.save("msg", nick, p) });
+  }
+  async ear(request, url, op) {
+    const now = Date.now();
+    const cubeOk = (c) => EAR_CUBE_RE.test(c || "");
+    if (op === "files") this.earViewAt = now;
+    if (op === "files") return json({ files: this.sql.exec(`SELECT name, cube, length(text) AS size, lines, updated FROM ear_files ORDER BY name DESC`).toArray(), cubes: this.earCubes() });
+    if (op === "get") {
+      const name = url.searchParams.get("name") || "";
+      const row = EAR_FILE_RE.test(name) ? this.sql.exec(`SELECT text FROM ear_files WHERE name = ?`, name).toArray()[0] : null;
+      if (!row) return new Response("Not found", { status: 404 });
+      const h = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
+      if (url.searchParams.get("dl") === "1") h["content-disposition"] = `attachment; filename="${name}"`;
+      return new Response(row.text, { headers: h });
+    }
+    if (op === "cmds") {                 // a cube asks what to do (every few seconds), and says how it is
+      const q = url.searchParams, cube = q.get("cube") || "";
+      if (!cubeOk(cube)) return json({ error: "bad cube" }, 400);
+      const nick = cleanName(q.get("nick")) || cube;
+      const st = {
+        mode: ["idle", "live", "rec"].includes(q.get("mode")) ? q.get("mode") : "idle",
+        paused: q.get("paused") === "1", scr: q.get("scr") !== "0", lock: q.get("lock") === "1",
+        secs: Math.max(0, parseInt(q.get("secs") || "0", 10) || 0), wait: Math.max(0, parseInt(q.get("wait") || "0", 10) || 0),
+        bat: Math.max(-1, Math.min(100, parseInt(q.get("bat") ?? "-1", 10))), file: EAR_FILE_RE.test(q.get("file") || "") ? q.get("file") : "",
+        words: Math.max(0, parseInt(q.get("words") || "0", 10) || 0), net: String(q.get("net") || "").slice(0, 32), ver: String(q.get("v") || "").slice(0, 12),
+      };
+      const row = this.sql.exec(`SELECT seen, st FROM ear_cubes WHERE cube = ?`, cube).toArray()[0];
+      let was = {};
+      try { was = row ? JSON.parse(row.st) : {}; } catch {}
+      const key = (x) => [x.mode, x.paused, x.scr, x.lock, x.file, x.wait > 0].join("|");
+      const changed = !row || key(was) !== key(st);
+      const back = row && now - row.seen > EAR_ONLINE_MS;
+      if (changed || back || now - row.seen > 20000) {
+        this.sql.exec(`INSERT OR REPLACE INTO ear_cubes (cube, nick, seen, st) VALUES (?, ?, ?, ?)`, cube, nick, now, JSON.stringify(st));
+        // say in the channel what changed on the cube
+        if (row && !back) {
+          const say = [];
+          if (was.mode !== st.mode) say.push(st.mode === "rec" ? "started recording" + (st.file ? " (" + st.file + ")" : "") : st.mode === "live" ? "is listening live" : was.mode === "rec" ? "stopped recording" : "stopped listening");
+          else if (st.mode !== "idle" && !!was.paused !== st.paused) say.push(st.paused ? "paused" : "goes on");
+          if (!!was.scr !== st.scr && was.scr !== undefined) say.push(st.scr ? "screen on" : "screen off");
+          if (!!was.lock !== st.lock) say.push(st.lock ? "buttons locked" : "buttons unlocked");
+          if (say.length) this.earSay(nick, "/me " + say.join(", "));
+        }
+        if (changed || back) this.earChanged();
+      }
+      this.sql.exec(`DELETE FROM ear_cmds WHERE at < ?`, now - 3 * 24 * 3600 * 1000);
+      const last = this.sql.exec(`SELECT MAX(id) AS id FROM ear_cmds`).one().id || 0;
+      const next = now - this.earViewAt < 3 * 60 * 1000 ? 3000 : 15000;
+      const after = parseInt(q.get("after") || "", 10);
+      if (!(after >= 0)) return json({ cmds: [], last, next });     // a new cube here: only what comes from now on
+      return json({ cmds: this.sql.exec(`SELECT id, cmd, name FROM ear_cmds WHERE id > ? ORDER BY id LIMIT 20`, after).toArray(), last, next });
+    }
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+    if (op === "line") {
+      let b;
+      try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
+      if (!cubeOk(b.cube)) return json({ error: "bad cube" }, 400);
+      const nick = cleanName(b.nick) || b.cube;
+      const text = String(b.text ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000);
+      const at = /^\+?[0-9:]{4,8}$/.test(b.at || "") ? b.at : "";
+      if (!text) return json({ ok: true });
+      this.earSay(nick, (b.late && at ? "[" + at + "] " : "") + text);
+      if (b.file && EAR_FILE_RE.test(b.file)) {
+        const line = (at ? "[" + at + "] " : "") + text + "\n";
+        const row = this.sql.exec(`SELECT length(text) AS n FROM ear_files WHERE name = ?`, b.file).toArray()[0];
+        if (!row) this.sql.exec(`INSERT INTO ear_files (name, cube, text, lines, updated) VALUES (?, ?, ?, 1, ?)`, b.file, b.cube, line, now);
+        else if (row.n < EAR_FILE_MAX) this.sql.exec(`UPDATE ear_files SET text = text || ?, lines = lines + 1, updated = ? WHERE name = ?`, line, now, b.file);
+        this.earChanged();
+      }
+      await this.planAlarm(true);
+      return json({ ok: true });
+    }
+    if (op === "file") {                 // a whole transcript from a cube (after a recording, or SYNC): replaces ours
+      const cube = url.searchParams.get("cube") || "", name = url.searchParams.get("file") || "";
+      if (!cubeOk(cube) || !EAR_FILE_RE.test(name)) return json({ error: "bad cube or file" }, 400);
+      const text = await request.text();
+      if (text.length > EAR_FILE_MAX) return json({ error: "too big" }, 413);
+      const lines = (text.match(/^\[[^\]]{4,9}\] /gm) || []).length;
+      this.sql.exec(`INSERT OR REPLACE INTO ear_files (name, cube, text, lines, updated) VALUES (?, ?, ?, ?, ?)`, name, cube, text, lines, now);
+      this.earChanged();
+      return json({ ok: true, lines });
+    }
+    if (op === "rm") {                   // the page: delete it here and on the cube
+      let b;
+      try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
+      const name = String(b.name || "");
+      if (!EAR_FILE_RE.test(name)) return json({ error: "bad name" }, 400);
+      if (this.earCubes().some((c) => c.online && c.mode === "rec" && c.file === name)) return json({ error: "it's being recorded now: stop the recording first" }, 409);
+      this.sql.exec(`DELETE FROM ear_files WHERE name = ?`, name);
+      this.sql.exec(`INSERT INTO ear_cmds (cmd, name, at) VALUES ('rm', ?, ?)`, name, now);
+      this.earChanged();
+      return json({ ok: true });
+    }
+    if (op === "cmd") {                  // the page: start, pause, stop, screen, lock, send all the transcripts again
+      let b;
+      try { b = JSON.parse(await request.text()); } catch { return json({ error: "send JSON" }, 400); }
+      const cmd = String(b.cmd || ""), arg = String(b.arg || "");
+      if (!EAR_CMDS.includes(cmd) || !/^(on|off|)$/.test(arg)) return json({ error: "bad command" }, 400);
+      this.earViewAt = now;
+      this.sql.exec(`INSERT INTO ear_cmds (cmd, name, at) VALUES (?, ?, ?)`, cmd, arg, now);
+      return json({ ok: true });
+    }
+    return json({ error: "not found" }, 404);
   }
 
   async webSocketMessage(ws, message) {

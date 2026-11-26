@@ -22,11 +22,14 @@ uint32_t enetSttMs() { return 1840; }
 
 // ---- the microphones: a voice that comes and goes
 static int mode = EAR_IDLE, runMode = 0;
+static bool simPaused = false;
+static struct SimInit { SimInit() { if (getenv("SIM_LOCK")) uiLocked = true; } } simInit;
 bool micBegin() { return true; }
 bool micOk() { return !getenv("SIM_NOMIC"); }
 void micGain(int) {}
 void micRun(int m) { runMode = m; }
 void micFlush() { runMode = 0; }
+// SIM_LOCK=1: locked from ERROR-CHAT; SIM_PAUSE=1: a session pauses as soon as it starts
 static bool talking() { return mode != EAR_IDLE && (msNow() / 1000) % 5 < 3; }
 int micLevel(int ch) { float t = msNow() / 1000.0f; int base = talking() ? 55 : 12; return base + (int)(25 * fabsf(sinf(t * (3.1f + ch)))); }
 float micDb() { return talking() ? -31 : -63; }
@@ -64,15 +67,15 @@ static void simTick() {
   lastT = msNow();
   if (mode != EAR_IDLE && msNow() >= nextAt) { addLine(SCRIPT[si % 6][1]); si++; nextAt = msNow() + 3200; }
 }
-void scribeBegin() {}
+void scribeBegin() { if (getenv("SIM_LOCK")) uiLocked = true; }
 void earWant(int m) {
   if (m == mode) return;
   if (m == EAR_IDLE) { mode = EAR_IDLE; cur[0] = 0; uiDirty(); return; }
-  mode = m; startAt = msNow(); words = 0; nextAt = msNow() + 2600;
+  mode = m; startAt = msNow(); words = 0; nextAt = msNow() + 2600; simPaused = getenv("SIM_PAUSE") != nullptr;
   if (m == EAR_REC) {
     struct tm t; sysLocalTime(t);
-    snprintf(cur, sizeof(cur), "/sd/EAR/%04d-%02d-%02d_%02d-%02d.txt", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
-    fsMkdir("/sd/EAR");
+    snprintf(cur, sizeof(cur), "/sd/ear/%04d-%02d-%02d_%02d-%02d.txt", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+    fsMkdir("/sd/ear");
     FILE* f = fopen(real(cur).c_str(), "wb");
     if (f) { fprintf(f, "EAR-CUBE transcript\nStarted: %04d-%02d-%02d %02d:%02d\nLanguage: auto\n\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min); fclose(f); }
     snprintf(last, sizeof(last), "%s", cur);
@@ -93,12 +96,12 @@ int earStatus() {
   simTick();
   if (!micOk()) return ST_NOMIC;
   if (getenv("SIM_OFFLINE")) return ST_OFFLINE;
-  if (mode != EAR_IDLE) return micSpeech() ? ST_HEAR : earSending() ? ST_SEND : ST_LISTEN;
+  if (mode != EAR_IDLE) return simPaused ? ST_PAUSED : micSpeech() ? ST_HEAR : earSending() ? ST_SEND : ST_LISTEN;
   return ST_READY;
 }
 const char* earStatusText(int st) {
-  static const char* T[8] = {"READY", "LISTENING", "HEARING SPEECH", "WRITING", "NO INTERNET", "DAILY LIMIT", "ERROR", "NO MICROPHONE"};
-  return T[st & 7];
+  static const char* T[9] = {"READY", "LISTENING", "HEARING SPEECH", "WRITING", "NO INTERNET", "DAILY LIMIT", "ERROR", "NO MICROPHONE", "PAUSED"};
+  return T[st >= 0 && st < 9 ? st : 6];
 }
 uint32_t earLineSeq() { simTick(); return seq; }
 int earLines(EarLine* out, int max, uint32_t after) {
@@ -109,16 +112,16 @@ int earLines(EarLine* out, int max, uint32_t after) {
   return k;
 }
 void earClearLines() { cleared = seq; uiDirty(); }
-bool earSaveLive(char* path, size_t n) { snprintf(path, n, "/sd/EAR/LIVE-2026-11-26_23-41.txt"); return seq > cleared; }
-const char* earDir() { return "/sd/EAR"; }
+bool earSaveLive(char* path, size_t n) { snprintf(path, n, "/sd/ear/LIVE-2026-11-26_23-41.txt"); return seq > cleared; }
+const char* earDir() { return "/sd/ear"; }
 int earFiles(EarFile* out, int max) {
   static FileEnt e[100];
-  int n = fsList("/sd/EAR", e, 100), k = 0;
+  int n = fsList("/sd/ear", e, 100), k = 0;
   std::vector<EarFile> all;
   for (int i = 0; i < n; i++) {
     size_t l = strlen(e[i].name);
     if (e[i].dir || l < 5 || strcmp(e[i].name + l - 4, ".txt")) continue;
-    EarFile f; snprintf(f.path, sizeof(f.path), "/sd/EAR/%s", e[i].name); earNiceName(e[i].name, f.name, sizeof(f.name));
+    EarFile f; snprintf(f.path, sizeof(f.path), "/sd/ear/%s", e[i].name); earNiceName(e[i].name, f.name, sizeof(f.name));
     f.size = e[i].size; f.live = !strncmp(e[i].name, "LIVE", 4);
     std::string w = f.path; w.replace(w.size() - 4, 4, ".wav"); f.hasWav = fsSize(w.c_str()) > 0;
     all.push_back(f);
@@ -131,6 +134,16 @@ int earFiles(EarFile* out, int max) {
   for (auto& f : all) { if (k >= max) break; out[k++] = f; }
   return k;
 }
+void earPauseWant(bool p) { simPaused = p; uiDirty(); }
+bool earPaused() { return mode != EAR_IDLE && simPaused; }
+bool chatNext(ChatLine&) { return false; }
+void chatDone() {}
+int chatWaiting() { return 0; }
+bool upNext(char*, size_t) { return false; }
+void upDone(const char*) {}
+void earRemote(const char* cmd, const char* arg) { if (!strcmp(cmd, "lock")) uiLocked = !strcmp(arg, "on"); }
+void earChatNote(const char*) {}
+const char* earChatErr() { return ""; }
 bool scribeNext(SttJob&) { return false; }
 void scribeDone(uint32_t, int, const char*, const char*) {}
 bool scribeWants() { return false; }

@@ -4,8 +4,10 @@
 //    and the web page; SAVE LIVE TEXT also writes it to LIVE-date.txt.
 //  - RECORD: every piece goes to the TF card first (A:\EAR\WAIT\n.wav + n.inf), so nothing is lost without
 //    internet or when the power goes: they're sent in order when it's back, even after a restart. The text goes
-//    into A:\EAR\<date>_<time>.txt with the time it was said. KEEP AUDIO also writes all the sound to a WAV.
+//    into A:\ear\<date>_<time>.txt with the time it was said. KEEP AUDIO also writes all the sound to a WAV.
 //    No TF card: C:\ear (the cube's own 9 MB drive), pieces in memory first.
+//  - ERROR-CHAT (1.1): every line also goes to a channel on error.blue (ecfg.chatChan, "EAR1"), a finished
+//    transcript is sent there whole, and the channel's buttons come back here (earRemote).
 // One task (core 0) takes the pieces and the start / stop wishes; the HTTPS worker (enet.cpp) asks for the
 // next piece (scribeNext) and hands back the text (scribeDone).
 #include <Arduino.h>
@@ -25,6 +27,12 @@ static SemaphoreHandle_t qmx, lmx;
 #define QUNLOCK() xSemaphoreGive(qmx)
 #define LLOCK() xSemaphoreTake(lmx, portMAX_DELAY)
 #define LUNLOCK() xSemaphoreGive(lmx)
+
+// ERROR-CHAT (further down): a ring of lines for the channel, oldest first; transcripts to send whole
+#define NCHAT 96
+#define NUP 64
+static ChatLine* chat = nullptr;
+static char (*ups)[96] = nullptr;
 
 // ------------------------------------------------------------------ settings
 void earCfgLoad() {
@@ -103,7 +111,7 @@ static void freeItem(Item* it, bool delFiles) {
   }
   delete it;
 }
-static const char* waitDir() { return S.sd ? "/sd/EAR/WAIT" : "/c/ear/WAIT"; }
+static const char* waitDir() { return S.sd ? "/sd/ear/wait" : "/c/ear/wait"; }
 // to the card: n.wav (the sound) + n.inf (which transcript, when it was said)
 static bool toDisk(Item* it) {
   char p[72]; snprintf(p, sizeof(p), "%s/%08u.wav", waitDir(), (unsigned)it->id);
@@ -155,8 +163,11 @@ static uint32_t startMs = 0, startPos = 0;
 static volatile int doneCnt = 0;
 static volatile uint32_t words = 0;
 static FILE* wavF = nullptr; static uint32_t wavPos = 0, wavBytes = 0; static int16_t* wavBuf = nullptr;
+static volatile bool paused = false; static volatile int wantPause = -1;
+static uint32_t pausedMs = 0, pauseAt = 0;
+static void upQueue(const char* path);
 
-const char* earDir() { sdMount(); return S.sd ? "/sd/EAR" : "/c/ear"; }
+const char* earDir() { sdMount(); return S.sd ? "/sd/ear" : "/c/ear"; }
 static bool clockOk(struct tm& t, uint32_t agoSec = 0) {
   struct tm x;
   if (!sysLocalTime(x)) return false;
@@ -235,18 +246,29 @@ static void closeWav() {
   fseek(wavF, 0, SEEK_SET); fwrite(h, 1, 44, wavF); fclose(wavF); wavF = nullptr;
 }
 static void handlePiece(const Piece& p);
-static void stopNow() {
-  if (mode == EAR_IDLE) return;
+// the microphones stop: the piece so far, then the marker
+static void flushMic() {
   micFlush();
   uint32_t t0 = millis();
   Piece p;
-  while (millis() - t0 < 2000) {                // the last piece, then the marker
+  while (millis() - t0 < 2000) {
     if (!micPiece(p, 100)) continue;
     if (p.flush) break;
     handlePiece(p);
   }
+}
+static void stopNow() {
+  if (mode == EAR_IDLE) return;
+  if (!paused) flushMic();
   closeWav();
-  mode = EAR_IDLE; curFile[0] = 0;
+  if (curFile[0]) upQueue(curFile);              // the whole transcript to the channel, once its pieces are written
+  mode = EAR_IDLE; curFile[0] = 0; paused = false;
+  uiDirty();
+}
+static void pauseNow(bool p) {
+  if (mode == EAR_IDLE || p == paused) return;
+  if (p) { flushMic(); if (wavF) { drainWav(true); fflush(wavF); } paused = true; pauseAt = millis(); }
+  else { paused = false; pausedMs += millis() - pauseAt; if (wavF) wavPos = micPos(); micRun(mode == EAR_LIVE ? 1 : 2); }
   uiDirty();
 }
 static void startNow(int m) {
@@ -255,6 +277,7 @@ static void startNow(int m) {
   if (m == EAR_REC) { if (!startRec()) return; }
   else startLive();
   doneCnt = 0; words = 0; startMs = millis(); startPos = micPos();
+  paused = false; pausedMs = 0;
   mode = m;
   micRun(m == EAR_LIVE ? 1 : 2);
   uiDirty();
@@ -315,21 +338,97 @@ static void task(void*) {
       want = -1;
       if (w != mode) { stopNow(); if (w != EAR_IDLE) startNow(w); }
     }
+    int wp = wantPause;
+    if (wp >= 0) { wantPause = -1; pauseNow(wp == 1); }
     Piece p;
     if (micPiece(p, 40)) handlePiece(p);
-    if (wavF) drainWav(false);
+    if (wavF && !paused) drainWav(false);
   }
 }
 
 void scribeBegin() {
   qmx = xSemaphoreCreateMutex(); lmx = xSemaphoreCreateMutex();
   lines = (EarLine*)heap_caps_calloc(NLINES, sizeof(EarLine), MALLOC_CAP_SPIRAM);
+  chat = (ChatLine*)heap_caps_calloc(NCHAT, sizeof(ChatLine), MALLOC_CAP_SPIRAM);
+  ups = (char (*)[96])heap_caps_calloc(NUP, 96, MALLOC_CAP_SPIRAM);
   sdMount();
   QLOCK();
-  if (S.sd) loadWaiting("/sd/EAR/WAIT");
-  loadWaiting("/c/ear/WAIT");
+  if (S.sd) { fsMkdir("/sd/ear"); loadWaiting("/sd/ear/wait"); }    // the folder is there from the start
+  fsMkdir("/c/ear");
+  loadWaiting("/c/ear/wait");
   QUNLOCK();
   xTaskCreatePinnedToCore(task, "scribe", 6144, nullptr, 2, nullptr, 0);
+}
+
+// ------------------------------------------------------------------ ERROR-CHAT: lines, whole transcripts, commands
+static volatile uint32_t chatW = 0, chatR = 0;
+static char chatErr[48] = "";
+static const char* base(const char* path) { const char* b = strrchr(path, '/'); return b ? b + 1 : path; }
+static void chatAdd(const char* file, const char* at, const char* text, bool late) {
+  if (!ecfg.chatOn || !chat) return;
+  LLOCK();
+  if (chatW - chatR >= NCHAT) chatR++;    // full (no internet for long): the oldest goes
+  ChatLine& l = chat[chatW % NCHAT];
+  snprintf(l.file, sizeof(l.file), "%s", file && file[0] ? base(file) : "");
+  snprintf(l.at, sizeof(l.at), "%s", at); snprintf(l.text, sizeof(l.text), "%s", text); l.late = late;
+  chatW++;
+  LUNLOCK();
+}
+bool chatNext(ChatLine& l) { LLOCK(); bool any = chatR != chatW && chat; if (any) l = chat[chatR % NCHAT]; LUNLOCK(); return any; }
+void chatDone() { LLOCK(); if (chatR != chatW) chatR++; LUNLOCK(); }
+int chatWaiting() { return (int)(chatW - chatR); }
+void earChatNote(const char* err) { snprintf(chatErr, sizeof(chatErr), "%s", err ? err : ""); }
+const char* earChatErr() { return chatErr; }
+
+// transcripts to send whole: after a recording (its last pieces written first), or all of them (SYNC)
+static int nUp = 0;
+static void upQueue(const char* path) {
+  if (!ecfg.chatOn || !ups || !path[0]) return;
+  QLOCK();
+  bool have = false; for (int i = 0; i < nUp; i++) if (!strcmp(ups[i], path)) have = true;
+  if (!have && nUp < NUP) snprintf(ups[nUp++], 96, "%s", path);
+  QUNLOCK();
+}
+bool upNext(char* path, size_t n) {
+  QLOCK();
+  for (int i = 0; i < nUp; i++) {
+    bool busy = !strcmp(ups[i], curFile) && mode != EAR_IDLE;
+    for (Item* x : q) if (!strcmp(x->file, ups[i])) busy = true;      // pieces of it still waiting
+    if (!busy) { snprintf(path, n, "%s", ups[i]); QUNLOCK(); return true; }
+  }
+  QUNLOCK();
+  return false;
+}
+void upDone(const char* path) {
+  QLOCK();
+  for (int i = 0; i < nUp; i++) if (!strcmp(ups[i], path)) { memmove(ups[i], ups[i + 1], (nUp - i - 1) * 96); nUp--; break; }
+  QUNLOCK();
+}
+// a command from the channel (the HTTPS worker): what its buttons do
+void earRemote(const char* cmd, const char* arg) {
+  bool on = !strcmp(arg, "on");
+  if (!strcmp(cmd, "rec")) { if (mode != EAR_REC) earWant(EAR_REC); }
+  else if (!strcmp(cmd, "live")) { if (mode != EAR_LIVE) earWant(EAR_LIVE); }
+  else if (!strcmp(cmd, "pause")) earPauseWant(true);
+  else if (!strcmp(cmd, "resume")) earPauseWant(false);
+  else if (!strcmp(cmd, "stop")) earWant(EAR_IDLE);
+  else if (!strcmp(cmd, "screen")) { if (on) S.wakeAt = millis() | 1; else S.sleepAt = millis() | 1; }
+  else if (!strcmp(cmd, "lock")) { uiLocked = on; uiDirty(); }
+  else if (!strcmp(cmd, "sync")) {
+    EarFile* f = (EarFile*)heap_caps_malloc(sizeof(EarFile) * NUP, MALLOC_CAP_SPIRAM);
+    int n = f ? earFiles(f, NUP) : 0;
+    for (int i = 0; i < n; i++) upQueue(f[i].path);
+    heap_caps_free(f);
+  } else if (!strcmp(cmd, "rm")) {
+    if (!arg[0] || strchr(arg, '/') || strstr(arg, "..")) return;
+    const char* dirs[2] = {"/sd/ear", "/c/ear"};
+    for (const char* d : dirs) {
+      char p[120]; snprintf(p, sizeof(p), "%s/%s", d, arg);
+      if (!strcmp(p, curFile)) continue;            // not the one being recorded
+      if (fsRemove(p)) { std::string w = p; w.replace(w.size() - 4, 4, ".wav"); fsRemove(w.c_str()); }
+    }
+  }
+  uiDirty();
 }
 
 // ------------------------------------------------------------------ for enet.cpp (the HTTPS worker)
@@ -386,6 +485,7 @@ void scribeDone(uint32_t id, int code, const char* text, const char* err) {
       }
       lineAdd(it->at, t.c_str());
       words += countWords(t.c_str());
+      chatAdd(it->file, it->at, t.c_str(), millis() - it->made > 60000);
     }
     doneCnt++;
     drop = true;
@@ -413,7 +513,9 @@ void scribeDone(uint32_t id, int code, const char* text, const char* err) {
 void earWant(int m) { want = m; }
 int earMode() { return mode; }
 const char* earStartError() { return startErr; }
-uint32_t earSecs() { return mode == EAR_IDLE ? 0 : (millis() - startMs) / 1000; }
+uint32_t earSecs() { return mode == EAR_IDLE ? 0 : (millis() - startMs - pausedMs - (paused ? millis() - pauseAt : 0)) / 1000; }
+void earPauseWant(bool p) { wantPause = p ? 1 : 0; }
+bool earPaused() { return paused; }
 const char* earFile() { return curFile; }
 const char* earLastFile() { return lastFile; }
 int earWaiting() { return (int)q.size(); }
@@ -425,6 +527,7 @@ int earStatus() {
   if (!micOk()) return ST_NOMIC;
   if (lastCode == 429 && !q.empty()) return ST_LIMIT;
   if (mode != EAR_IDLE) {
+    if (paused) return ST_PAUSED;
     if (micSpeech()) return ST_HEAR;
     if (sendingId) return ST_SEND;
     if (S.net != NET_UP) return ST_OFFLINE;
@@ -435,8 +538,8 @@ int earStatus() {
   return ST_READY;
 }
 const char* earStatusText(int st) {
-  static const char* T[8] = {"READY", "LISTENING", "HEARING SPEECH", "WRITING", "NO INTERNET", "DAILY LIMIT", "ERROR", "NO MICROPHONE"};
-  return T[st & 7];
+  static const char* T[9] = {"READY", "LISTENING", "HEARING SPEECH", "WRITING", "NO INTERNET", "DAILY LIMIT", "ERROR", "NO MICROPHONE", "PAUSED"};
+  return T[st >= 0 && st < 9 ? st : 6];
 }
 
 bool earSaveLive(char* path, size_t n) {
@@ -465,7 +568,7 @@ int earFiles(EarFile* out, int max) {
   if (!e) return 0;
   sdMount();
   std::vector<EarFile> all;
-  const char* dirs[2] = {"/sd/EAR", "/c/ear"};
+  const char* dirs[2] = {"/sd/ear", "/c/ear"};
   for (int d = 0; d < 2; d++) {
     if (d == 0 && !S.sd) continue;
     int n = fsList(dirs[d], e, 200);

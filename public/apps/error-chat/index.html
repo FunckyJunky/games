@@ -104,6 +104,25 @@
   .tile .msg { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 70%; color: var(--fg); background: rgba(0,0,0,.55); }
   .tile .msg:empty { display: none; }
 
+  /* ---------- EAR-CUBE: the cube's transcripts and buttons (a panel over the chat) ---------- */
+  #ear { position: absolute; inset: 0; z-index: 2; background: var(--bg); overflow-y: auto; overflow-x: hidden; scrollbar-width: none;
+    white-space: normal; -webkit-user-select: text; user-select: text; padding-right: .2em; }
+  #ear::-webkit-scrollbar { display: none; }
+  #ear .hd { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px double var(--fg); margin-bottom: .3em; }
+  #ear .cube { border: 2px solid var(--fg); box-shadow: 0 0 6px var(--glow); padding: .2em .4em; margin: .3em 0 .5em; }
+  #ear .cube.off { border-color: var(--dim); box-shadow: none; }
+  #ear .dot { display: inline-block; width: .55em; height: .55em; border-radius: 50%; background: var(--dim); margin-right: .3em; vertical-align: .05em; }
+  #ear .dot.on { background: var(--fg); box-shadow: 0 0 6px var(--fg); }
+  #ear .dot.rec { background: #ff5a6a; box-shadow: 0 0 8px #ff5a6a; animation: blink 1.06s steps(1) infinite; }
+  #ear .btn { margin: .25em .4em .1em 0; padding: 0 .45em; }
+  #ear .btn.rec { border-color: #ff5a6a; color: #ff5a6a; box-shadow: 0 0 6px rgba(255,90,106,.5); }
+  #ear .btn.lit { background: var(--fg); color: var(--bg); text-shadow: none; }
+  #ear .f { padding: .15em 0 .25em; border-bottom: 1px dashed var(--dim); }
+  #ear .f .btn { font-size: 85%; margin-top: .15em; }
+  #ear pre { font: inherit; white-space: pre-wrap; word-break: break-word; margin: .3em 0; }
+  #ear .note { color: var(--dim); text-shadow: none; font-size: 85%; }
+  #ear a.btn { color: inherit; text-decoration: none; }
+
   #input { flex: none; white-space: pre-wrap; word-break: break-word; max-height: 4.6em; overflow: hidden; padding-top: .15em; border-top: 1px dashed var(--dim); }
   #input .count { color: var(--dim); float: right; text-shadow: none; }
 
@@ -160,11 +179,12 @@
 <body>
 <div id="tube">
   <div id="crt">
-    <div class="bar" id="status"><span id="stL">ERROR-CHAT 1.1</span><span class="r"><button id="bCam" hidden>CAM</button><button id="bMic" hidden>MIC</button><span id="stOn"></span><span id="stClock"></span></span></div>
+    <div class="bar" id="status"><span id="stL">ERROR-CHAT 1.1</span><span class="r"><button id="bEar" hidden>EAR</button><button id="bCam" hidden>CAM</button><button id="bMic" hidden>MIC</button><span id="stOn"></span><span id="stClock"></span></span></div>
     <div id="media"></div>
     <div id="main">
       <div id="lobby"></div>
       <div id="log" hidden></div>
+      <div id="ear" hidden></div>
     </div>
     <div id="input" hidden></div>
     <div id="kbd"></div>
@@ -352,6 +372,8 @@ function onMsg(m) {
     fresh.forEach(h => addLine(h, true));
     if (st.lastId === 0 && fresh.length) sys('--- you are in #' + m.code + ' ---');
     sys('*** ' + whoLine());
+    earEvent({ ear: m.ear });
+    if (m.ear && !EAR.helloed) { EAR.helloed = true; sys('*** EAR-CUBE writes here: press EAR (top right) or type /ear for its transcripts and buttons'); }
     SND.join();
     rtcHello(m);
   } else if (m.type === 'msg') {
@@ -376,6 +398,8 @@ function onMsg(m) {
     RTC.watchUntil = performance.now() + 6000;
   } else if (m.type === 'frame') {
     rtcFrame(m);
+  } else if (m.type === 'ear') {
+    earEvent(m);
   } else if (m.type === 'error') {
     sys('!!! ' + m.message); SND.err();
   }
@@ -422,6 +446,7 @@ function command(line) {
       break;
     case 'who': sys('*** ' + whoLine()); break;
     case 'clear': case 'cls': log.innerHTML = ''; break;
+    case 'ear': case 'texts': case 'transcripts': earOpen(); break;
     case 'link': copyLink(); break;
     case 'cam': case 'camera': case 'video': toggleCam(); break;
     case 'mic': case 'audio': toggleMic(); break;
@@ -429,7 +454,7 @@ function command(line) {
     case 'color': case 'colour': nextColor(); break;
     case 'quit': case 'exit': case 'bye': exit(); break;
     case 'help': default:
-      sys('commands: /nick NAME  /me ACTION  /who  /link  /cam  /mic  /hangup  /clear  /color  /quit');
+      sys('commands: /nick NAME  /me ACTION  /who  /link  /cam  /mic  /hangup  /clear  /color  /ear  /quit');
   }
 }
 function copyLink() {
@@ -599,7 +624,7 @@ addEventListener('keydown', e => {
   unlock();
   if (e.key === 'F1') { e.preventDefault(); kbd.classList.toggle('hidden'); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === 'Escape') { e.preventDefault(); if (st.screen === 'chat') exit(); else exit(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); if (EAR.open) { earClose(); return; } exit(); return; }
   if (e.key === 'Enter') { e.preventDefault(); enter(); flash('SEND'); return; }
   if (e.key === 'Backspace') { e.preventDefault(); backspace(); SND.key(); flash('DEL'); return; }
   if (e.key === 'Tab' && st.screen === 'lobby') { e.preventDefault(); st.focus = st.focus === 'handle' ? 'code' : 'handle'; drawLobby(); return; }
@@ -962,6 +987,125 @@ function mediaTick(now) {
 }
 $('bCam').addEventListener('pointerdown', e => { e.preventDefault(); toggleCam(); });
 $('bMic').addEventListener('pointerdown', e => { e.preventDefault(); toggleMic(); });
+
+// ---------- EAR-CUBE in this channel ----------
+// An EAR-CUBE (error.blue/ear) that writes into this channel: its lines come as chat messages; its transcripts are
+// kept with the channel. EAR (status bar, or /ear) opens the panel: the cube (start, pause, stop, screen, lock) and
+// the transcripts (read, download, delete). The cube asks for what to do every few seconds (the server tells it to
+// ask more often while this panel is open), so a button takes a moment.
+const earEl = $('ear');
+const EAR = { sum: null, open: false, files: [], cubes: [], at: 0, view: null, text: '', pend: '', pendAt: 0, err: '', timer: null, tick: null, reload: null };
+const EAR_MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function earNice(n) {
+  let live = false, d = n.replace(/\.txt$/, '');
+  if (d.startsWith('LIVE-')) { live = true; d = d.slice(5); }
+  const m = d.match(/^(\d{4})-(\d\d)-(\d\d)(?:_(\d\d)-(\d\d))?(?:-(\d))?$/);
+  if (!m) return n.replace(/\.txt$/, '').toUpperCase();
+  return (live ? 'LIVE ' : '') + (+m[3]) + ' ' + EAR_MON[+m[2] - 1] + ' ' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '') + (m[6] ? ' (' + m[6] + ')' : '');
+}
+function earKb(n) { return n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+function earHms(s) { const p = x => String(x).padStart(2, '0'); return (s >= 3600 ? (s / 3600 | 0) + ':' : '') + p(s / 60 % 60 | 0) + ':' + p(s % 60); }
+function earApi(op) { return '/api/chat/' + st.code + '/ear/' + op; }
+function earButton() { const b = $('bEar'); b.hidden = !(st.screen === 'chat' && EAR.sum); b.classList.toggle('on', EAR.open); b.textContent = EAR.open ? '[EAR]' : 'EAR'; }
+function earOpen() {
+  EAR.open = true; EAR.view = null; earEl.hidden = false; earEl.scrollTop = 0;
+  earLoad(); clearInterval(EAR.timer); EAR.timer = setInterval(earLoad, 10000);
+  clearInterval(EAR.tick); EAR.tick = setInterval(() => { if (EAR.open && !EAR.view) earDraw(); }, 1000);
+  earDraw(); earButton(); SND.key();
+}
+function earClose() { EAR.open = false; earEl.hidden = true; clearInterval(EAR.timer); clearInterval(EAR.tick); earButton(); }
+async function earLoad() {
+  const j = await fetch(earApi('files'), { cache: 'no-store' }).then(r => r.json()).catch(() => null);
+  if (!j) return;
+  const before = JSON.stringify(EAR.cubes.map(c => [c.mode, c.paused, c.scr, c.lock]));
+  EAR.files = j.files || []; EAR.cubes = j.cubes || []; EAR.at = Date.now();
+  if (EAR.pend && JSON.stringify(EAR.cubes.map(c => [c.mode, c.paused, c.scr, c.lock])) !== before) EAR.pend = '';
+  if (EAR.view) {
+    const f = EAR.files.find(x => x.name === EAR.view.name);
+    if (f && f.size !== EAR.view.size) { EAR.view = f; earRead(f, true); }
+  }
+  earDraw();
+}
+async function earCmd(cmd, arg, label) {
+  const r = await fetch(earApi('cmd'), { method: 'POST', body: JSON.stringify({ cmd, arg: arg || '' }) }).then(r => r.json()).catch(() => ({}));
+  EAR.pend = r.ok ? label : ''; EAR.pendAt = Date.now(); EAR.err = r.ok ? '' : (r.error || "couldn't send it");
+  SND.send(); earDraw();
+}
+async function earRm(f) {
+  if (!confirm('Delete ' + earNice(f.name) + '? It goes from this channel and from the cube.')) return;
+  const r = await fetch(earApi('rm'), { method: 'POST', body: JSON.stringify({ name: f.name }) }).then(r => r.json()).catch(() => ({}));
+  EAR.err = r.ok ? '' : (r.error || "couldn't delete it");
+  if (r.ok) SND.send(); else SND.err();
+  if (EAR.view && EAR.view.name === f.name) EAR.view = null;
+  earLoad();
+}
+async function earRead(f, keepScroll) {
+  const stick = keepScroll && earEl.scrollTop + earEl.clientHeight >= earEl.scrollHeight - 40;
+  EAR.view = f; if (!keepScroll) EAR.text = '...';
+  earDraw();
+  EAR.text = await fetch(earApi('get') + '?name=' + encodeURIComponent(f.name), { cache: 'no-store' }).then(r => r.ok ? r.text() : "Can't read it.").catch(() => "Can't read it.");
+  earDraw();
+  if (!keepScroll || stick) earEl.scrollTop = earEl.scrollHeight;
+}
+function earCubeHtml(c) {
+  const ago = Math.round((Date.now() - EAR.at) / 1000);
+  const run = c.online && c.mode !== 'idle' && !c.paused;
+  const secs = c.secs + (run ? ago : 0);
+  const what = !c.online ? 'OFFLINE · LAST SEEN ' + hhmm(c.seen)
+    : c.mode === 'idle' ? 'READY' : (c.paused ? 'PAUSED · ' : '') + (c.mode === 'rec' ? 'RECORDING ' : 'LIVE ') + earHms(secs) + (c.words ? ' · ' + c.words + ' WORDS' : '');
+  const dot = !c.online ? 'dot' : c.mode === 'rec' && !c.paused ? 'dot rec' : 'dot on';
+  let h = '<div class="cube' + (c.online ? '' : ' off') + '"><span class="' + dot + '"></span>' + esc(c.nick) + '  ' + esc(what) + '\n';
+  h += '<span class="note">' + [c.bat >= 0 ? 'BATTERY ' + c.bat + '%' : '', c.scr ? 'SCREEN ON' : 'SCREEN OFF', c.lock ? 'BUTTONS LOCKED' : 'BUTTONS FREE',
+    c.wait ? c.wait + ' WAITING TO BE WRITTEN' : '', c.net ? 'WIFI ' + c.net : '', c.ver ? 'EAR-CUBE ' + c.ver : ''].filter(Boolean).map(esc).join(' · ') + '</span>\n';
+  if (c.mode === 'idle') h += '<span class="btn rec" data-c="rec">&#9679; RECORD</span><span class="btn" data-c="live">LISTEN LIVE</span>';
+  else h += '<span class="btn" data-c="' + (c.paused ? 'resume' : 'pause') + '">' + (c.paused ? 'GO ON' : 'PAUSE') + '</span><span class="btn" data-c="stop">STOP</span>';
+  h += '<span class="btn' + (c.scr ? '' : ' lit') + '" data-c="screen" data-a="' + (c.scr ? 'off' : 'on') + '">' + (c.scr ? 'SCREEN OFF' : 'SCREEN ON') + '</span>';
+  h += '<span class="btn' + (c.lock ? ' lit' : '') + '" data-c="lock" data-a="' + (c.lock ? 'off' : 'on') + '">' + (c.lock ? 'UNLOCK BUTTONS' : 'LOCK BUTTONS') + '</span>';
+  return h + '</div>';
+}
+function earDraw() {
+  if (!EAR.open) return;
+  if (EAR.pend && Date.now() - EAR.pendAt > 30000) EAR.pend = '';
+  let h = '<div class="hd"><span>EAR-CUBE · #' + esc(st.code) + '</span><span class="btn" data-x="close">X CLOSE</span></div>';
+  if (EAR.view) {
+    const f = EAR.view, cur = EAR.cubes.some(c => c.online && c.mode === 'rec' && c.file === f.name);
+    h += '<span class="btn" data-x="back">&lt; BACK</span><a class="btn" href="' + earApi('get') + '?name=' + encodeURIComponent(f.name) + '&dl=1" download="' + esc(f.name) + '">DOWNLOAD</a>' +
+      (cur ? '' : '<span class="btn" data-d="view">DELETE</span>') + '\n' + esc(earNice(f.name)) + (cur ? ' <span class="dot rec"></span>RECORDING' : '') +
+      '<pre>' + esc(EAR.text) + '</pre>';
+    earEl.innerHTML = h; return;
+  }
+  if (!EAR.cubes.length) h += '<div class="note">No cube has written here yet. On the cube: SETUP &gt; ERROR-CHAT, channel ' + esc(st.code) + '.</div>';
+  h += EAR.cubes.map(earCubeHtml).join('');
+  if (EAR.pend) h += '<div class="note">SENT: ' + esc(EAR.pend) + '. THE CUBE DOES IT IN A FEW SECONDS...</div>';
+  if (EAR.err) h += '<div>!!! ' + esc(EAR.err) + '</div>';
+  h += '<div class="hd" style="margin-top:.6em"><span>TRANSCRIPTS (' + EAR.files.length + ')</span><span class="btn" data-c="sync">SEND ALL AGAIN</span></div>';
+  if (!EAR.files.length) h += '<div class="note">None yet. RECORD on the cube (or above) and they appear here.</div>';
+  h += EAR.files.map((f, i) => {
+    const cur = EAR.cubes.some(c => c.online && c.mode === 'rec' && c.file === f.name);
+    return '<div class="f">' + (cur ? '<span class="dot rec"></span>' : '') + esc(earNice(f.name)) + '  <span class="note">' + earKb(f.size) + ' · ' + f.lines + ' LINES · ' + esc(f.cube) + '</span>\n' +
+      '<span class="btn" data-r="' + i + '">READ</span><a class="btn" href="' + earApi('get') + '?name=' + encodeURIComponent(f.name) + '&dl=1" download="' + esc(f.name) + '">DOWNLOAD</a>' +
+      (cur ? '<span class="note">BEING RECORDED</span>' : '<span class="btn" data-d="' + i + '">DELETE</span>') + '</div>';
+  }).join('');
+  h += '<div class="note" style="margin-top:.6em">Everyone in #' + esc(st.code) + ' can read these and use these buttons: keep the channel code to yourself.</div>';
+  const y = earEl.scrollTop; earEl.innerHTML = h; earEl.scrollTop = y;
+}
+const EAR_LABEL = { rec: 'START RECORDING', live: 'LISTEN LIVE', pause: 'PAUSE', resume: 'GO ON', stop: 'STOP', sync: 'SEND ALL TRANSCRIPTS AGAIN' };
+earEl.addEventListener('click', e => {
+  const t = e.target.closest('[data-c],[data-r],[data-d],[data-x]');
+  if (!t) return;
+  unlock();
+  if (t.dataset.x === 'close') return earClose();
+  if (t.dataset.x === 'back') { EAR.view = null; earDraw(); return; }
+  if (t.dataset.r != null) return earRead(EAR.files[+t.dataset.r]);
+  if (t.dataset.d != null) return earRm(t.dataset.d === 'view' ? EAR.view : EAR.files[+t.dataset.d]);
+  const c = t.dataset.c, a = t.dataset.a || '';
+  earCmd(c, a, c === 'screen' ? 'SCREEN ' + a.toUpperCase() : c === 'lock' ? (a === 'on' ? 'LOCK THE BUTTONS' : 'UNLOCK THE BUTTONS') : EAR_LABEL[c]);
+});
+$('bEar').addEventListener('pointerdown', e => { e.preventDefault(); unlock(); EAR.open ? earClose() : earOpen(); });
+function earEvent(m) {
+  EAR.sum = m.ear || null; earButton();
+  if (EAR.open) { clearTimeout(EAR.reload); EAR.reload = setTimeout(earLoad, 250); }
+}
 
 // ---------- start ----------
 applyColors();

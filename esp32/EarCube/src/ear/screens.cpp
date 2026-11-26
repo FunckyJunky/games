@@ -97,7 +97,7 @@ static void waves(int cx, int cy, int lvl, uint16_t c) {
 static uint16_t stColor(int st) {
   switch (st) {
     case ST_HEAR: return mix(C_FG, C_WHITE, 40);
-    case ST_SEND: return C_WARN;
+    case ST_SEND: case ST_PAUSED: return C_WARN;
     case ST_OFFLINE: case ST_LIMIT: case ST_ERROR: case ST_NOMIC: return C_RED;
     case ST_READY: return C_DIM;
   }
@@ -160,6 +160,62 @@ static const char* offLabel(int i) {
   if (!s) return "NEVER";
   if (s < 60) snprintf(b, sizeof(b), "%d SEC", s); else snprintf(b, sizeof(b), "%d MIN", s / 60);
   return b;
+}
+
+// ------------------------------------------------------------------ SWIPE TO CONFIRM: something that can't be undone
+// Drag the knob all the way to the right (a tap or a short drag does nothing; let go early and it slides back).
+// ESC / - = cancel, hold + = confirm (the buttons are a deliberate press too).
+struct SwipeConfirm : Screen {
+  std::string title, text, label; Act act;
+  float kx = 0, vx = 0; bool drag = false; int grab = 0; uint32_t lastT = 0;
+  static const int TX = 30, TY = 280, TW = 420, TH = 76, KW = 76;
+  SwipeConfirm(const char* t, const char* x, const char* l, Act a) : title(t), text(x), label(l), act(a) {}
+  const char* name() override { return "SURE?"; }
+  bool noSwipeBack() override { return true; }
+  bool keepAwake() override { return true; }
+  float maxX() const { return TW - KW; }
+  void done() { Act a = act; snd(SND_OK); uiBack(); if (a) a(); }   // this screen is gone after uiBack: the copy runs
+  void tick() override {
+    if (!drag && kx > 0) { kx -= 18; if (kx < 0) kx = 0; uiDirty(); redrawIn(16); }   // slides back
+  }
+  void draw() override {
+    pathLine("C:\\EAR\\SURE?>");
+    drawTextC(FB, 240, 104, title.c_str(), C_FG);
+    char l[4][64]; int n = wrapText(text.c_str(), 28, l, 4);
+    for (int i = 0; i < n; i++) drawTextC(FT, 240, 160 + i * 30, l[i], C_DIM, TX_FLAT);
+    // the track, what's done so far lit up, the knob
+    rect(TX, TY, TW, TH, C_FG);
+    int k = (int)kx;
+    if (k > 0) fillRect(TX + 3, TY + 3, k, TH - 6, mix(C_BG, C_RED, 45));
+    int pct = (int)(kx * 100 / maxX());
+    drawTextC(FT, TX + KW + (TW - KW) / 2, TY + (TH - LH) / 2, label.c_str(), pct > 40 ? C_WHITE : C_DIM, TX_FLAT);
+    invBar(TX + k, TY, KW, TH);
+    drawTextC(FB, TX + k + KW / 2, TY + (TH - 42) / 2, "\xE2\x86\x92", C_BG, TX_FLAT);
+    fkeys({{"ESC", "Cancel", [] { snd(SND_OFF); uiBack(); }}});
+  }
+  bool ev(const Ev& e) override {
+    if (e.t == EV_DOWN) {
+      if (e.x >= TX + kx - 10 && e.x < TX + kx + KW + 10 && e.y >= TY - 20 && e.y < TY + TH + 20) { drag = true; grab = e.x - (TX + (int)kx); }
+      return true;
+    }
+    if (e.t == EV_MOVE && drag) {
+      kx = e.x - TX - grab; if (kx < 0) kx = 0; if (kx > maxX()) kx = maxX();
+      uiDirty(); return true;
+    }
+    if (e.t == EV_UP && drag) {
+      drag = false;
+      if (kx >= maxX() * 0.92f) { done(); return true; }
+      uiDirty(); redrawIn(16); return true;
+    }
+    if (e.t == EV_KEY && e.key == K_OK) { done(); return true; }
+    if (e.t == EV_KEY && (e.key == K_BACK || e.key == K_PREV)) { snd(SND_OFF); uiBack(); return true; }
+    return e.t == EV_SWIPE || e.t == EV_TAP || e.t == EV_LONG;
+  }
+};
+static void confirmClear() {
+  if (!earLineSeq()) { toast("NOTHING TO CLEAR"); return; }
+  uiOpen(new SwipeConfirm("CLEAR THE TEXT?", "The lines on this screen go away (saved transcripts stay). Swipe to clear.",
+                          "SWIPE TO CLEAR", [] { earClearLines(); toast("CLEARED"); }));
 }
 
 // ------------------------------------------------------------------ READ: a transcript, scrolling
@@ -541,7 +597,7 @@ struct Home : Screen {
     rows.push_back(info("SAVES TO", [](char* o) {
       uint64_t t, u;
       bool sd = S.sd; const char* d = sd ? "/sd" : "/c";
-      if (fsInfo(d, t, u)) snprintf(o, 40, "%s %uM FREE", sd ? "A:\\EAR" : "C:\\EAR", (unsigned)((t - u) >> 20)); else strcpy(o, sd ? "A:\\EAR" : "C:\\EAR");
+      if (fsInfo(d, t, u)) snprintf(o, 40, "%s %uM FREE", sd ? "A:\\ear" : "C:\\ear", (unsigned)((t - u) >> 20)); else strcpy(o, sd ? "A:\\ear" : "C:\\ear");
     }));
     rows.push_back(heading("HOTSPOT", IC_WIFI));
     rows.push_back(etoggle("CUBE'S OWN WIFI", &ecfg.hotspot, [] { hotspotApply(); }));
@@ -560,6 +616,23 @@ struct Home : Screen {
     }, [](char* o) { snprintf(o, 40, "%s", ecfg.apPass[0] ? ecfg.apPass : "NONE (OPEN)"); utf8Cut(o, 14); }));
     rows.push_back(action("PHONE: QR CODES", [] { uiOpen(new Phone()); }, [](char* o) { strcpy(o, ">"); }));
     rows.push_back(info("PAGE", [](char* o) { strcpy(o, S.portal ? "192.168.4.1" : ecfg.hotspot ? "STARTING..." : "-"); }));
+    rows.push_back(heading("ERROR-CHAT", IC_CLOUD));
+    rows.push_back(etoggle("SEND TO ERROR-CHAT", &ecfg.chatOn));
+    rows.push_back(action("CHANNEL", [] {
+      kbOpen("ERROR-CHAT CHANNEL", ecfg.chatChan, 8, [](const char* t) {
+        char c[9] = ""; int k = 0;
+        for (const char* p = t; *p && k < 8; p++) if (isalnum((unsigned char)*p)) c[k++] = toupper((unsigned char)*p);
+        if (k < 3) { toast("3-8 LETTERS OR DIGITS"); return; }
+        snprintf(ecfg.chatChan, sizeof(ecfg.chatChan), "%s", c); earCfgSave(); toast("CHANNEL CHANGED");
+      });
+    }, [](char* o) { snprintf(o, 40, "#%s", ecfg.chatChan); }));
+    rows.push_back(info("THERE", [](char* o) {
+      if (!ecfg.chatOn) strcpy(o, "OFF");
+      else if (earChatErr()[0]) { snprintf(o, 40, "%s", earChatErr()); utf8Cut(o, 16); }
+      else if (chatWaiting()) snprintf(o, 40, "%d LINES WAITING", chatWaiting());
+      else strcpy(o, S.net == NET_UP ? "OK" : "NO INTERNET");
+    }));
+    rows.push_back(info("OPEN", [](char* o) { strcpy(o, "ERROR-CHAT"); }));
     rows.push_back(heading("INTERNET", IC_CLOUD));
     rows.push_back(action("WIFI", [] { uiOpen(new Wifi()); }, [](char* o) {
       if (S.net == NET_UP) { snprintf(o, 40, "%s", S.ssid); utf8Cut(o, 12); } else strcpy(o, cfg.wifiOn ? "NOT CONNECTED" : "OFF");
@@ -620,6 +693,11 @@ struct Home : Screen {
     miniMeter(298, y + 6, "L", micLevel(1));
     miniMeter(390, y + 6, "R", micLevel(2));
   }
+  void lockedBar() {                     // the buttons do nothing: say so where the F-keys were
+    invBar(15, rowY(13), 450, LH);
+    char b[48]; snprintf(b, sizeof(b), "LOCKED FROM ERROR-CHAT #%s", ecfg.chatChan);
+    drawTextC(FT, 240, rowY(13), b, C_BG, TX_FLAT);
+  }
   void drawLive() {
     drawStatus(102);
     hline(15, 138, 450, C_DIM);
@@ -663,8 +741,10 @@ struct Home : Screen {
       sc.drawBar();
       if (!rowsN) drawTextC(FT, 240, 230, "SAY SOMETHING...", C_DIM, TX_FLAT);
     }
-    if (on) fkeys({{"\xE2\x86\xB5", "Stop", [this] { toggle(EAR_LIVE); }}, {"S", "Save", [this] { saveLive(); }}, {"C", "Clear", [this] { earClearLines(); }}});
-    else if (rowsN) fkeys({{"\xE2\x86\xB5", "Listen", [this] { toggle(EAR_LIVE); }}, {"S", "Save", [this] { saveLive(); }}, {"C", "Clear", [this] { earClearLines(); }}});
+    if (uiLocked) lockedBar();
+    else if (on) fkeys({{"\xE2\x86\xB5", "Stop", [this] { toggle(EAR_LIVE); }}, {"P", earPaused() ? "Go on" : "Pause", [] { earPauseWant(!earPaused()); }},
+                   {"S", "Save", [this] { saveLive(); }}, {"C", "Clear", [] { confirmClear(); }}});
+    else if (rowsN) fkeys({{"\xE2\x86\xB5", "Listen", [this] { toggle(EAR_LIVE); }}, {"S", "Save", [this] { saveLive(); }}, {"C", "Clear", [] { confirmClear(); }}});
     else fkeys({{"\xE2\x86\xB5", "Listen", [this] { toggle(EAR_LIVE); }}, {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(1); }}});
   }
   void saveLive() {
@@ -677,7 +757,10 @@ struct Home : Screen {
     bool rec = earMode() == EAR_REC;
     int cx = 240, cy = 214, R = 64;
     uint32_t t = msNow();
-    if (rec) {
+    if (rec && earPaused()) {                                  // paused: the ring, two bars
+      ring(cx, cy, R, 4, C_WARN);
+      fillRect(cx - 22, cy - 24, 14, 48, C_WARN); fillRect(cx + 8, cy - 24, 14, 48, C_WARN);
+    } else if (rec) {
       int pulse = (int)(6 * sinf(t / 300.0f));
       fillCircle(cx, cy, R + 4 + pulse, mix(C_BG, C_RED, 25));
       fillCircle(cx, cy, R, C_RED);
@@ -692,7 +775,8 @@ struct Home : Screen {
     char b[80], d[96];
     if (rec) {
       fmtSecs(b, sizeof(b), earSecs());
-      drawTextC(FB, 240, 290, b, C_FG);
+      drawTextC(FB, 240, 290, b, earPaused() && (msNow() / 600) % 2 ? C_DIM : C_FG);
+      if (earPaused()) redrawIn(300);
       dosPath(earFile(), d, sizeof(d));
       const char* fn = strrchr(d, '\\'); snprintf(b, sizeof(b), "%s", fn ? fn + 1 : d); utf8Cut(b, 29);
       drawTextC(FT, 240, 338, b, C_DIM, TX_FLAT);
@@ -702,7 +786,7 @@ struct Home : Screen {
       if (l && earLines(l, 1, 0) == 1) { char wl[1][64]; wrapText(l[0].text, 29, wl, 1); drawTextC(FT, 240, 398, wl[0], C_DIM, TX_FLAT); }
     } else {
       drawTextC(FT, 240, 294, "TAP TO RECORD", C_FG);
-      snprintf(b, sizeof(b), "INTO %s", S.sd ? "A:\\EAR (TF CARD)" : "C:\\EAR (NO TF CARD)");
+      snprintf(b, sizeof(b), "INTO %s", S.sd ? "A:\\ear (TF CARD)" : "C:\\ear (NO TF CARD)");
       drawTextC(FT, 240, 330, b, C_DIM, TX_FLAT);
       snprintf(b, sizeof(b), "LANGUAGE: %s%s%s", LANGS[ecfg.lang % N_LANGS].name, ecfg.task ? " > EN" : "", ecfg.keepAudio && S.sd ? " + WAV" : "");
       drawTextC(FT, 240, 362, b, C_DIM, TX_FLAT);
@@ -711,7 +795,10 @@ struct Home : Screen {
     }
     if (earStartError()[0] && !rec) drawTextC(FT, 240, 394, earStartError(), C_RED);
     const char* last = rec ? earFile() : earLastFile();
-    if (last[0]) fkeys({{"\xE2\x86\xB5", rec ? "Stop" : "Record", [this] { toggle(EAR_REC); }}, {"V", "View", [last] { uiOpen(new Reader(last)); }},
+    if (uiLocked) lockedBar();
+    else if (rec) fkeys({{"\xE2\x86\xB5", "Stop", [this] { toggle(EAR_REC); }}, {"P", earPaused() ? "Go on" : "Pause", [] { earPauseWant(!earPaused()); }},
+                        {"V", "View", [last] { uiOpen(new Reader(last)); }}, {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(2); }}});
+    else if (last[0]) fkeys({{"\xE2\x86\xB5", rec ? "Stop" : "Record", [this] { toggle(EAR_REC); }}, {"V", "View", [last] { uiOpen(new Reader(last)); }},
                         {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(2); }}});
     else fkeys({{"\xE2\x86\xB5", rec ? "Stop" : "Record", [this] { toggle(EAR_REC); }}, {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(2); }}});
   }
@@ -734,7 +821,8 @@ struct Home : Screen {
       drawTextC(FT, 240, 200, "NO TRANSCRIPTS YET", C_DIM, TX_FLAT);
       drawTextC(FT, 240, 240, "RECORD ONE: REC", C_DIM, TX_FLAT);
     }
-    fkeys({{"\xE2\x86\xB5", "Read", [this] { open(L.sel); }}, {"R", "Reload", [this] { fill(); uiDirty(); }}, {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(3); }}});
+    if (uiLocked) lockedBar();
+    else fkeys({{"\xE2\x86\xB5", "Read", [this] { open(L.sel); }}, {"R", "Reload", [this] { fill(); uiDirty(); }}, {"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(3); }}});
   }
   void open(int i) { if (i >= 0 && i < nFiles) uiOpen(new Reader(files[i].path)); }
   void more(int i) {
@@ -768,7 +856,7 @@ struct Home : Screen {
     else {
       L.n = count();
       buildSetup(); drawRows(L, rows);
-      fkeys({{"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(0); }}});
+      if (uiLocked) lockedBar(); else fkeys({{"\xE2\x86\x90\xE2\x86\x92", "Tab", [this] { setTab(0); }}});
     }
   }
   void tick() override {
@@ -849,7 +937,8 @@ struct Aod : Screen {
     uint32_t m = msNow() / 60000;
     int ox = (int)(m * 37 % 61) - 30, oy = (int)(m * 53 % 81) - 40;
     drawTextC(FH, 240 + ox, 160 + oy, c, mix(C_BLACK, C_FG, 50), TX_FLAT);
-    if (earMode() == EAR_REC) {
+    if (earMode() != EAR_IDLE && earPaused()) drawTextC(FT, 240 + ox, 280 + oy, "PAUSED", mix(C_BLACK, C_WARN, 50), TX_FLAT);
+    else if (earMode() == EAR_REC) {
       char b[24]; fmtSecs(b, sizeof(b), earSecs());
       fillCircle(196 + ox, 296 + oy, 7, mix(C_BLACK, C_RED, 60));
       drawText(FT, 212 + ox, 280 + oy, b, mix(C_BLACK, C_RED, 60), TX_FLAT);
@@ -863,8 +952,11 @@ Screen* aodScreen() { return new Aod(); }
 // ------------------------------------------------------------------ what ui.cpp and the board ask of the programs
 void appsRegister() {}
 void appsLoop() {
-  static uint32_t seenWake = 0;                // the page started or stopped something: the screen on
+  // the page or ERROR-CHAT: screen on / off
+  static uint32_t seenWake = 0, seenSleep = 0;
   if (S.wakeAt != seenWake) { seenWake = S.wakeAt; uiWake(); }
+  if (S.sleepAt != seenSleep) { seenSleep = S.sleepAt; uiSleep(); }
+  static char msg[40]; snprintf(msg, sizeof(msg), "LOCKED FROM ERROR-CHAT #%s", ecfg.chatChan); uiLockMsg = msg;
 }
 void clockTick() {}
 uint32_t tmrEnd = 0, tmrLeft = 0; bool tmrRun = false;

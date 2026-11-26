@@ -4,12 +4,37 @@ The third firmware for the ERROR-CUBE (Waveshare ESP32-S3-Touch-AMOLED-2.16): sp
 microphones (ES7210) listen to the talk around it; error.blue writes it down (Whisper large v3 turbo on Cloudflare
 Workers AI, `src/stt.js`). Page: [error.blue/ear](https://error.blue/ear/) (USB installer).
 
+## New in 1.1: ERROR-CHAT
+
+- **Every line into a channel** on error.blue's ERROR-CHAT (SETUP > ERROR-CHAT: on, channel, default **EAR1**), as chat
+  messages from `EAR-XXXX` (a line that comes late, after the internet was gone, has its time in front). The cube says
+  there what changes: "started recording (file)", "paused", "screen off", "buttons locked"...
+- **The transcripts are kept in the channel** (`ChatRoom`, tables `ear_files / ear_cmds / ear_cubes` in its SQLite):
+  each line is added to its file as it comes, and when a recording ends the cube sends the whole file (that copy wins).
+  **EAR** in the chat's top bar (or `/ear`) opens the panel: the cube (online, recording / live / paused, time, words,
+  battery, screen, buttons) with its buttons **RECORD, LISTEN LIVE, PAUSE / GO ON, STOP, SCREEN OFF / ON, LOCK /
+  UNLOCK BUTTONS**, and the transcripts: **READ** (grows while it records), **DOWNLOAD**, **DELETE** (here and on the
+  cube; not the one being recorded), **SEND ALL AGAIN** (the cube sends every transcript it has).
+- The cube asks the channel what to do every 15 s, every 3 s while someone has the panel open
+  (`GET /api/chat/<CH>/ear/cmds`, which also carries how the cube is). The last command done is kept in NVS.
+- **Lock**: the touch screen and all three buttons do nothing (a toast / the bottom bar says LOCKED FROM ERROR-CHAT).
+  Not kept over a restart; the power chip's hard off (PWR 6 s) still works; the cube's own page can unlock it too.
+- **PAUSE** (cube: P, the page, the channel): the session stays (same file), the microphones and the time stop.
+- **CLEAR asks first**: a swipe-to-confirm window (drag the knob to the right; hold + also confirms, - cancels).
+- The folder is **ear** (`A:\ear` on the TF card, made at start; `C:\ear` without a card), names start with the date.
+- Anyone who knows the channel code can read the transcripts and use the buttons: pick a code of your own.
+
+Channel API (src/index.js, ChatRoom.ear): `POST /api/chat/<CH>/ear/line {cube, nick, file, at, late, text}`,
+`POST .../ear/file?cube=&file=` (text), `GET .../ear/files`, `GET .../ear/get?name=[&dl=1]`, `POST .../ear/rm {name}`,
+`POST .../ear/cmd {cmd: rec|live|pause|resume|stop|screen|lock|sync, arg: on|off}`,
+`GET .../ear/cmds?cube=&after=&mode=&paused=&secs=&words=&wait=&file=&scr=&lock=&bat=&v=&net=` -> `{cmds, last, next}`.
+
 ## On the cube
 
 - **LIVE**: tap the microphone; the words appear a few seconds after they're said, with the time. SAVE (a file),
   CLEAR. Needs the internet (no internet: it offers RECORD). SETUP > LIVE: SAVE THE TEXT also writes LIVE-date.txt.
-- **REC**: one long session into `A:\EAR\<date>_<time>.txt` (TF card; `C:\ear` without one), `[22:55:07] text` per
-  line. Every piece is written to the card first (`A:\EAR\WAIT\n.wav + n.inf`) and sent in order, so it works without
+- **REC**: one long session into `A:\ear\<date>_<time>.txt` (TF card; `C:\ear` without one), `[22:55:07] text` per
+  line. Every piece is written to the card first (`A:\ear\wait\n.wav + n.inf`) and sent in order, so it works without
   internet and survives a restart: the text catches up when the internet is back. KEEP THE SOUND: the whole session as
   a WAV next to the text (TF card).
 - **TEXTS**: newest first, tap = read (the one being recorded grows), hold = delete.

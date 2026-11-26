@@ -66,14 +66,16 @@ void loop() {
     boardShow();
   }
   if (!good && millis() > 30000) { good = true; cloudMarkGood(); }
-  // the screen off: a slower CPU and WiFi saving power, but not while it listens, sends or keeps the hotspot
+  // the screen off: a slower CPU and WiFi saving power, but not while it listens or sends
   bool busy = earMode() != EAR_IDLE || earWaiting() > 0;
   bool low = !uiAwake() && millis() - asleepAt > 3000 && !busy;
   if (uiAwake()) asleepAt = millis();
   if (low != slow) {
     slow = low;
     boardSlow(low || cfg.saver);
-    netSleepMode(low && !ecfg.hotspot ? cfg.aodWifi : 0);
+    // the hotspot: WiFi as normal; ERROR-CHAT on: at most "saving power" (it must still hear the channel's buttons)
+    int w = !low || ecfg.hotspot ? 0 : ecfg.chatOn && cfg.aodWifi > 1 ? 1 : cfg.aodWifi;
+    netSleepMode(w);
   }
   delay(uiAwake() ? 2 : (busy ? 10 : 30));
 }

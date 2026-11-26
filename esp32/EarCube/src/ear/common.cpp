@@ -52,3 +52,13 @@ void earNiceName(const char* file, char* out, size_t n) {
   char* e = strrchr(out, '.'); if (e && !strcmp(e, ".txt")) *e = 0;
   for (char* p = out; *p; p++) *p = toupper((unsigned char)*p);
 }
+
+bool chanOk(const char* c) {
+  int n = 0;
+  for (; c[n]; n++) if (!isalnum((unsigned char)c[n])) return false;
+  return n >= 3 && n <= 8;
+}
+void earNick(char* out, size_t n) {                    // "CUBE-1A2B" -> "EAR-1A2B"
+  const char* h = strchr(S.host, '-');
+  snprintf(out, n, "EAR-%s", h ? h + 1 : S.host);
+}

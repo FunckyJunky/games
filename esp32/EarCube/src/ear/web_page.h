@@ -47,7 +47,8 @@ a{color:#b8ffd0}
 
 <section id=live>
  <div class=bar><span id=dot></span><span id=st>CONNECTING...</span><span class=lv>L<i><b id=lvL></b></i>R<i><b id=lvR></b></i></span></div>
- <div class=row><button id=bLive>LISTEN LIVE</button><button id=bRec class=rec>&#9679; RECORD</button><button id=bStop class=b2>STOP</button><span id=run class=dim></span></div>
+ <div class=row><button id=bLive>LISTEN LIVE</button><button id=bRec class=rec>&#9679; RECORD</button><button id=bPause class=b2>PAUSE</button><button id=bStop class=b2>STOP</button><span id=run class=dim></span></div>
+ <div class=row id=lockRow><button class=b2 id=bLock>LOCK THE CUBE'S BUTTONS</button><span id=chatInfo class=dim></span></div>
  <div id=txt><p class=wait>Nothing yet. Press LISTEN LIVE (or RECORD) and talk near the cube.</p></div>
  <div class=row><button class=b2 id=bCopy>COPY ALL</button><button class=b2 id=bSave>SAVE AS A FILE</button><button class=b2 id=bClear>CLEAR</button>
  <span class=chk><input type=checkbox id=big>BIG LETTERS</span></div>
@@ -71,6 +72,9 @@ a{color:#b8ffd0}
  <span class=chk><input type=checkbox name=stamps value=1>THE TIME IN FRONT OF EVERY LINE</span>
  <span class=chk><input type=checkbox name=keepAudio value=1>RECORD: KEEP THE SOUND TOO (WAV, TF CARD)</span>
  <span class=chk><input type=checkbox name=liveKeep value=1>LIVE: SAVE THE TEXT (LIVE-DATE.TXT)</span>
+ <h2>ERROR-CHAT ON ERROR.BLUE</h2>
+ <span class=chk><input type=checkbox name=chatOn value=1>EVERY LINE INTO THE CHANNEL, THE TRANSCRIPTS AND THE BUTTONS THERE TOO</span>
+ <label>CHANNEL <span class=dim>(3-8 LETTERS OR DIGITS: WHO KNOWS IT CAN READ AND USE THE BUTTONS)</span></label><input name=chatChan maxlength=8 autocomplete=off style="text-transform:uppercase">
  <h2>THE CUBE'S OWN WIFI</h2>
  <span class=chk><input type=checkbox name=hotspot value=1>ON, ALL THE TIME</span>
  <label>NAME</label><input name=apName maxlength=23 autocomplete=off>
@@ -122,18 +126,22 @@ async function poll(){
  if(j.seq<seq){seq=0;txt.innerHTML='';}   // the cube restarted
  addLines(j.lines);seq=j.seq;
  $('hst').textContent=j.host+'  '+j.v;
- const d=$('dot');d.className={1:'on',2:'hear',3:'send',4:'bad',5:'bad',6:'bad',7:'bad'}[j.st]||'';
+ const d=$('dot');d.className={1:'on',2:'hear',3:'send',4:'bad',5:'bad',6:'bad',7:'bad',8:'send'}[j.st]||'';
  let s=j.stText;if(j.waiting>0&&(j.st==3||j.st==4||j.st==5))s+=' ('+j.waiting+' WAITING)';
  if(j.err&&(j.st==4||j.st==5||j.st==6))s+=' - '+j.err;
  $('st').textContent=s;
  $('lvL').style.width=j.lvl[1]+'%';$('lvR').style.width=j.lvl[2]+'%';
  $('bLive').disabled=j.mode!='idle';$('bRec').disabled=j.mode!='idle';$('bStop').disabled=j.mode=='idle';
- $('run').textContent=j.mode=='idle'?'':(j.mode=='rec'?'RECORDING ':'LIVE ')+hms(j.secs)+(j.words?' \u00b7 '+j.words+' WORDS':'');
+ $('bPause').disabled=j.mode=='idle';$('bPause').textContent=j.paused?'GO ON':'PAUSE';
+ $('bLock').textContent=j.locked?'UNLOCK THE CUBE\'S BUTTONS':'LOCK THE CUBE\'S BUTTONS';$('bLock').className=j.locked?'':'b2';
+ $('chatInfo').textContent=j.chat?'ALSO IN ERROR-CHAT #'+j.chat:'';
+ $('run').textContent=j.mode=='idle'?'':(j.paused?'PAUSED ':'')+(j.mode=='rec'?'RECORDING ':'LIVE ')+hms(j.secs)+(j.words?' \u00b7 '+j.words+' WORDS':'');
  if(j.mode=='rec')$('run').className='red';else $('run').className='dim';
 }
 async function go(m){const r=await post('/api/ear/go',{m});if(r.err)toast(r.err);setTimeout(poll,400)}
 $('bLive').onclick=()=>go('live');$('bRec').onclick=()=>go('rec');$('bStop').onclick=()=>go('stop');
-$('bClear').onclick=async()=>{await post('/api/ear/clear');txt.innerHTML='<p class=wait>Cleared.</p>'};
+$('bPause').onclick=()=>go(S&&S.paused?'resume':'pause');$('bLock').onclick=()=>go(S&&S.locked?'unlock':'lock');
+$('bClear').onclick=async()=>{if(!confirm('Clear the text on the cube and here? (Saved transcripts stay.)'))return;await post('/api/ear/clear');txt.innerHTML='<p class=wait>Cleared.</p>'};
 $('bSave').onclick=async()=>{const r=await post('/api/ear/save');toast(r.ok?'SAVED: '+r.name:'NOTHING TO SAVE YET')};
 $('bCopy').onclick=()=>{const t=[...txt.querySelectorAll('p:not(.wait)')].map(p=>p.textContent).join('\n');
  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast('COPIED'),()=>fallback(t));else fallback(t);

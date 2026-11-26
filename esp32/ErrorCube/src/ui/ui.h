@@ -18,6 +18,10 @@ struct Ev { uint8_t t = 0; int16_t x = 0, y = 0, x0 = 0, y0 = 0; uint8_t dir = 0
 
 void uiTouch(bool down, int x, int y);   // raw touch from the board (screen coordinates after rotation)
 void uiKey(int key);                     // a button
+// locked (EAR-CUBE, from ERROR-CHAT): the touch screen and all buttons do nothing (only a toast says so).
+// The power chip's own hard off (PWR held 6+ s) still works. Always false in ERROR-CUBE and PICO-CUBE.
+extern volatile bool uiLocked;
+extern const char* uiLockMsg;
 
 // ------------------------------------------------------------------ layout: a text grid of 30 x 14 cells of 15 x 32
 #define GX 15

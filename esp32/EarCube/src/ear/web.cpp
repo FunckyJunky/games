@@ -4,7 +4,7 @@
 // /info.json + /scan + /save (WiFi), /update (firmware).
 //   GET  /                     the page (web_page.h)
 //   GET  /api/ear?since=N      status, levels and the lines after number N
-//   POST /api/ear/go  m=live|rec|stop
+//   POST /api/ear/go  m=live|rec|stop|pause|resume|lock|unlock
 //   POST /api/ear/save         LIVE: the lines so far into a transcript      POST /api/ear/clear
 //   GET  /api/ear/files        the transcripts           GET /api/ear/text?p=PATH   one of them, as text
 //   GET  /api/ear/cfg          settings (+ the lists)    POST /api/ear/cfg          change them
@@ -31,7 +31,8 @@ static void sendJson(JsonDocument& d) {
   W->send(200, "application/json", o);
 }
 static bool earPath(const String& p) {
-  return (p.startsWith("/sd/EAR/") || p.startsWith("/c/ear/")) && p.indexOf("..") < 0 && p.length() < 120;
+  String l = p; l.toLowerCase();         // FAT: the folder is the same whatever its letters
+  return (l.startsWith("/sd/ear/") || l.startsWith("/c/ear/")) && p.indexOf("..") < 0 && p.length() < 120;
 }
 static const char* modeName(int m) { return m == EAR_LIVE ? "live" : m == EAR_REC ? "rec" : "idle"; }
 
@@ -50,6 +51,7 @@ void netWebExtra(WebServer& w) {
     int st = earStatus();
     d["mode"] = modeName(earMode()); d["st"] = st; d["stText"] = earStatusText(st);
     d["secs"] = earSecs(); d["words"] = earWords(); d["waiting"] = earWaiting(); d["err"] = earErr();
+    d["paused"] = earPaused(); d["locked"] = (bool)uiLocked; d["chat"] = ecfg.chatOn ? ecfg.chatChan : "";
     d["file"] = earFile(); d["speech"] = micSpeech();
     JsonArray lv = d["lvl"].to<JsonArray>(); for (int i = 0; i < 3; i++) lv.add(micLevel(i));
     uint32_t seq = earLineSeq();
@@ -64,6 +66,8 @@ void netWebExtra(WebServer& w) {
     String m = W->arg("m");
     JsonDocument d; d["ok"] = true;
     if (m == "stop") earWant(EAR_IDLE);
+    else if (m == "pause" || m == "resume") earPauseWant(m == "pause");
+    else if (m == "lock" || m == "unlock") uiLocked = m == "lock";
     else if (!micOk()) { d["ok"] = false; d["err"] = "NO MICROPHONES FOUND"; }
     else if (earMode() != EAR_IDLE) { d["ok"] = false; d["err"] = "STOP FIRST"; }
     else if (m == "live") { if (S.net != NET_UP) { d["ok"] = false; d["err"] = "LIVE NEEDS THE INTERNET (WIFI TAB). RECORD WORKS WITHOUT."; } else earWant(EAR_LIVE); }
@@ -83,7 +87,7 @@ void netWebExtra(WebServer& w) {
     if (!f) f = (EarFile*)heap_caps_malloc(sizeof(EarFile) * 150, MALLOC_CAP_SPIRAM);
     int n = f ? earFiles(f, 150) : 0;
     JsonDocument d;
-    d["where"] = S.sd ? "A:\\EAR (TF CARD)" : "C:\\EAR (THE CUBE, NO TF CARD)";
+    d["where"] = S.sd ? "A:\\ear (TF CARD)" : "C:\\ear (THE CUBE, NO TF CARD)";
     JsonArray a = d["files"].to<JsonArray>();
     for (int i = 0; i < n; i++) {
       JsonObject o = a.add<JsonObject>();
@@ -111,6 +115,7 @@ void netWebExtra(WebServer& w) {
     c["lang"] = ecfg.lang; c["task"] = ecfg.task; c["sens"] = ecfg.sens; c["gain"] = ecfg.gain; c["mics"] = ecfg.mics;
     c["pause"] = ecfg.pause; c["stamps"] = ecfg.stamps; c["keepAudio"] = ecfg.keepAudio; c["liveKeep"] = ecfg.liveKeep;
     c["hotspot"] = ecfg.hotspot; c["apName"] = ecfg.apName; c["apPass"] = ecfg.apPass;
+    c["chatOn"] = ecfg.chatOn; c["chatChan"] = ecfg.chatChan;
     char n[33]; earApName(n, sizeof(n)); d["apName"] = n;
     JsonArray l = d["langs"].to<JsonArray>(); for (int i = 0; i < N_LANGS; i++) l.add(LANGS[i].name);
     JsonArray g = d["gains"].to<JsonArray>(); for (int i = 0; i < 15; i++) g.add(gainLabel(i));
@@ -122,7 +127,11 @@ void netWebExtra(WebServer& w) {
     uint8_t oldHs = ecfg.hotspot, oldGain = ecfg.gain;
     num("lang", ecfg.lang, N_LANGS - 1); num("task", ecfg.task, 1); num("sens", ecfg.sens, 3); num("gain", ecfg.gain, 14);
     num("mics", ecfg.mics, 2); num("pause", ecfg.pause, 2); num("stamps", ecfg.stamps, 1); num("keepAudio", ecfg.keepAudio, 1);
-    num("liveKeep", ecfg.liveKeep, 1); num("hotspot", ecfg.hotspot, 1);
+    num("liveKeep", ecfg.liveKeep, 1); num("hotspot", ecfg.hotspot, 1); num("chatOn", ecfg.chatOn, 1);
+    if (W->hasArg("chatChan")) {
+      String c = W->arg("chatChan"); c.trim(); c.toUpperCase();
+      if (chanOk(c.c_str())) snprintf(ecfg.chatChan, sizeof(ecfg.chatChan), "%s", c.c_str());
+    }
     if (W->hasArg("apName")) { String s = W->arg("apName"); s.trim(); snprintf(ecfg.apName, sizeof(ecfg.apName), "%s", s.c_str()); }
     if (W->hasArg("apPass")) { String s = W->arg("apPass"); if (!s.length() || s.length() >= 8) snprintf(ecfg.apPass, sizeof(ecfg.apPass), "%s", s.c_str()); }
     earCfgSave();

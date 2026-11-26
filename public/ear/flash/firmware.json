@@ -1,9 +1,9 @@
 {
   "name": "EAR-CUBE",
-  "ver": "1.0",
+  "ver": "1.1",
   "path": "/ear/flash/ear.bin",
-  "size": 2392768,
-  "md5": "1e66f84718e9a93fca5b61855d695edf",
-  "notes": "EAR-CUBE 1.0: speech to text on the cube. LIVE text, RECORD into text files on the TF card (works offline, catches up), its own WiFi page at 192.168.4.1",
-  "date": "2026-11-26T22:43Z"
+  "size": 2407408,
+  "md5": "0dff1e0fd982d63b33f9fb666081e4d3",
+  "notes": "1.1: ERROR-CHAT: every line into a channel (EAR1), the transcripts kept there (read, download, delete), and its buttons there: record, live, pause, stop, screen off/on, lock the buttons. PAUSE on the cube and the page. CLEAR asks first (swipe to clear). Transcripts in the ear folder on the TF card.",
+  "date": "2026-11-26T23:29Z"
 }

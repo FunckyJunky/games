@@ -122,6 +122,7 @@ static void release(int id) {
 
 bool (*btnHook)(int id, bool down) = nullptr;
 void btnRaw(int id, bool down) {
+  if (uiLocked) { if (down && uiAwake()) toast(uiLockMsg, 1500); return; }
   if (btnHook && btnHook(id, down)) return;   // a game (PICO-8) takes the buttons as they are
   if (cfg.btnSwap) id ^= 1;
   if (id < 0 || id > 1) return;
@@ -148,6 +149,7 @@ void btnRaw(int id, bool down) {
 
 void btnPwr(bool held) {
   char w[24];
+  if (uiLocked) { if (uiAwake()) toast(uiLockMsg, 1500); return; }
   if (!held && btnHook && btnHook(2, true)) return;
   // with - or + held down: a combination
   if (!held && (b[0].down || b[1].down)) {
