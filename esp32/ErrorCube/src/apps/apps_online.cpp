@@ -68,13 +68,19 @@ Screen* makeWho() { return new Who(); }
 static const char* QUICK[] = {"HI!", "OK", "BRB", "GG!", "LOL", "ПРИВІТ!", "ДЯКУЮ!", "BYE!"};
 struct Chat : Screen {
   ChatLog log; bool have = false, quick = false;
-  int scrollLines = 0, dragY = 0, scroll0 = 0;
+  Scroll sc; bool pinned = true;        // pinned: stays at the newest (bottom)
   struct L2 { std::string s; uint8_t kind; };   // 0 text, 1 name line, 2 system, 3 mine
   std::vector<L2> lines;
   const char* name() override { return "CHAT.EXE"; }
   void enter() override { netSetFocus(FOCUS_CHAT); S.chatUnread = 0; }
   void leave() override { netSetFocus(FOCUS_NONE); }
+  void layout() {
+    sc.x = 15; sc.y = 96; sc.w = 450; sc.h = 9 * LH; sc.view = sc.h; sc.total = lines.size() * LH;
+    if (pinned) sc.pos = sc.maxPos();
+    sc.clamp();
+  }
   void build() {
+    pinned = sc.pos >= sc.maxPos() - 2;
     lines.clear();
     for (int i = 0; i < log.n; i++) {
       ChatMsg& m = log.m[i];
@@ -85,6 +91,7 @@ struct Chat : Screen {
       int n = wrapText(full, 29, wl, 8);
       for (int k = 0; k < n; k++) lines.push_back({wl[k], (uint8_t)(m.sys ? 2 : m.me ? 3 : 0)});
     }
+    layout();
   }
   void tick() override {
     static uint32_t last = 0;
@@ -92,9 +99,10 @@ struct Chat : Screen {
     if (netChat(t) && t.at != last) {
       last = t.at; log = t; have = true; build(); S.chatUnread = 0; uiDirty();
     }
+    sc.tick();
     redrawIn(1000);
   }
-  void say(const char* t) { if (t && t[0]) { netChatSay(t); snd(SND_OK); scrollLines = 0; } }
+  void say(const char* t) { if (t && t[0]) { netChatSay(t); snd(SND_OK); pinned = true; sc.vel = 0; layout(); } }
   void draw() override {
     char p[40]; snprintf(p, sizeof(p), "#%s", cfg.chan);
     drawText(FT, colX(0), TOP_Y, p, C_FG);
@@ -107,17 +115,20 @@ struct Chat : Screen {
       }
     } else if (!have || !log.ok) noNet(220);
     else {
-      // newest at the bottom
-      int rows = 9, total = lines.size();
-      int end = total - scrollLines; if (end < 0) end = 0;
-      int start = end - rows; if (start < 0) start = 0;
-      for (int i = start; i < end; i++) {
+      // newest at the bottom; drag up for older ones (with the slider on the right)
+      int total = lines.size();
+      sc.view = sc.h; sc.total = total * LH; sc.clamp(); sc.tick();
+      if (!sc.drag && !sc.gliding()) pinned = sc.pos >= sc.maxPos() - 2;
+      clipSet(15, sc.y, 436, sc.h);
+      int first = (int)(sc.pos / LH);
+      for (int i = first; i < total && i <= first + 9; i++) {
         L2& l = lines[i];
         uint16_t c = l.kind == 2 ? C_DIM : l.kind == 3 ? mix(C_FG, C_WHITE, 35) : C_FG;
-        drawText(FT, 15, 96 + (i - start) * LH, l.s.c_str(), c, l.kind == 2 ? TX_FLAT : TX_GLOW);
+        drawText(FT, 15, sc.y + i * LH - (int)sc.pos, l.s.c_str(), c, l.kind == 2 ? TX_FLAT : TX_GLOW);
       }
+      clipReset();
+      sc.drawBar();
       if (!total) drawTextC(FT, 240, 200, "NO MESSAGES YET. SAY HI!", C_DIM, TX_FLAT);
-      if (scrollLines) drawTextR(FT, 465, 96, "\xE2\x96\xBC NEWER", C_DIM, TX_FLAT);
     }
     // the input line
     int y = rowY(12) - 4;
@@ -135,13 +146,9 @@ struct Chat : Screen {
   }
   bool ev(const Ev& e) override {
     if (quick) return false;
-    if (e.t == EV_DOWN && e.y > 92 && e.y < 380) { dragY = e.y; scroll0 = scrollLines; return true; }
-    if (e.t == EV_MOVE && e.y0 > 92 && e.y0 < 380) {
-      int s = scroll0 + (e.y - dragY) / LH, mx = (int)lines.size() - 9; if (mx < 0) mx = 0;
-      scrollLines = s < 0 ? 0 : s > mx ? mx : s; uiDirty(); return true;
-    }
-    if (e.t == EV_KEY && e.key == K_PREV) { int mx = (int)lines.size() - 9; if (scrollLines < mx) scrollLines += 3; uiDirty(); return true; }
-    if (e.t == EV_KEY && e.key == K_NEXT) { scrollLines = scrollLines > 3 ? scrollLines - 3 : 0; uiDirty(); return true; }
+    if (sc.ev(e)) { pinned = false; return true; }
+    if (e.t == EV_KEY && e.key == K_PREV) { sc.vel = 0; sc.pos -= 3 * LH; sc.clamp(); pinned = false; uiDirty(); return true; }
+    if (e.t == EV_KEY && e.key == K_NEXT) { sc.vel = 0; sc.pos += 3 * LH; sc.clamp(); pinned = sc.pos >= sc.maxPos() - 2; uiDirty(); return true; }
     if (e.t == EV_KEY && e.key == K_OK) { kbOpen("ERROR-CHAT", "", 200, [this](const char* t) { say(t); }); return true; }
     return false;
   }

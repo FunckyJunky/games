@@ -1,8 +1,8 @@
 {
-  "ver": "1.4.2",
+  "ver": "1.5",
   "path": "/cube/flash/cube.bin",
-  "size": 2958352,
-  "md5": "a2ee413aca7e9de8032a5efee2778052",
-  "notes": "PICO-8 fixes, crash report, settings + WiFi kept in a file, LOW GRAPHICS mode, alarm with your song at full volume, move the cube to snooze.",
-  "date": "2026-11-26T00:09Z"
+  "size": 2673056,
+  "md5": "f32d0d6219160d401754a27a373f398d",
+  "notes": "1.5: less memory (HOLO 3D, curved glass, cube turn removed; PSRAM for most allocations), PICO-8 removed for now, scrolling with inertia + a slider on the right (lists, text, chat, dialogs), MAP.EXE with the HOME map, 9 music visualizers",
+  "date": "2026-11-26T00:56Z"
 }

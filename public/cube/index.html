@@ -169,18 +169,23 @@ input[type=text].wide { width: 100%; background: #000; border: 2px solid var(--f
         <div class="dim" style="font-size:18px;margin-top:8px">Uploads here go through error.blue, so they work from anywhere (about 50 KB/s). On the same WiFi as the cube, FAST opens the cube's own page: much quicker for music and video.</div>
       </div>
 
-      <!-- PICO-8 -->
-      <div data-tab="pico8">
-        <div class="dim" style="font-size:18px">PICO-8 carts on the cube: tilt = arrows, - = O, + = X, PWR = menu. Saved on the SD card (A:\PICO8), or on the cube when there's no card.</div>
-        <div id="p8List" style="margin-top:8px"></div>
-        <input type="file" id="p8File" multiple accept=".p8,.png" class="hide">
-        <button class="btn big" id="p8Up" style="margin-top:8px">ADD CARTS (.P8 / .P8.PNG)</button>
-        <div class="meter hide" id="p8Bar" style="margin-top:8px"><i></i></div>
-        <div class="dim" id="p8Stat" style="font-size:18px;min-height:22px"></div>
-        <h2 style="margin-top:14px">NEW CART: PASTE THE CODE</h2>
-        <input type="text" id="p8Name" class="wide" maxlength="24" placeholder="NAME" autocomplete="off">
-        <textarea id="p8Code" style="min-height:180px;margin-top:8px;font-size:16px" placeholder="function _update() ... end&#10;function _draw() cls() print('hello',40,60,7) end&#10;&#10;(or a whole .p8 file)"></textarea>
-        <div class="grid2" style="margin-top:8px"><button class="btn" id="p8Save">SAVE</button><button class="btn" id="p8SavePlay">SAVE + PLAY</button></div>
+      <!-- MAP -->
+      <div data-tab="map">
+        <div class="dim" style="font-size:18px">Maps on the cube (MAP.EXE shows them in 3D: buildings, trees, water, roads). Tilt to look around, drag to move, - / + to zoom.</div>
+        <div id="mapList" style="margin-top:8px"></div>
+        <h2 style="margin-top:14px">NEW MAP</h2>
+        <div class="row" style="gap:6px"><input type="text" id="mapQ" class="wide" placeholder="SEARCH A PLACE" autocomplete="off" style="flex:1"><button class="btn" id="mapFind" style="flex:0 0 auto">FIND</button></div>
+        <div class="grid2" style="margin-top:6px"><button class="btn" id="mapMe">MY PLACE</button><button class="btn" id="mapHome">BR&Uuml;CK (HOME)</button></div>
+        <div id="mapView" style="height:330px;margin-top:8px;border:2px solid var(--fg);background:#000"></div>
+        <div class="dim" style="font-size:16px">Move the map: the square in the middle is what goes on the cube.</div>
+        <div class="grid2" style="margin-top:8px">
+          <select id="mapSize"><option value="1000">1 KM (500 M AROUND)</option><option value="2000">2 KM (1 KM AROUND)</option><option value="4000" selected>4 KM (2 KM AROUND)</option></select>
+          <input type="text" id="mapName" maxlength="20" placeholder="NAME" autocomplete="off">
+        </div>
+        <button class="btn big" id="mapMake" style="margin-top:8px">MAKE THE MAP + SEND IT TO THE CUBE</button>
+        <div class="meter hide" id="mapBar" style="margin-top:8px"><i></i></div>
+        <div class="dim" id="mapStat" style="font-size:18px;min-height:22px"></div>
+        <div class="dim" style="font-size:14px;margin-top:6px">Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" style="color:inherit">OpenStreetMap</a> contributors (ODbL).</div>
       </div>
 
       <!-- SYSTEM -->
@@ -294,9 +299,9 @@ function connect() {
     else if (x.t === 'state') { state = x; online[wsCode] = { on: true }; if (d.name !== x.name && x.name) { d.name = x.name; saveDevices(); } renderAll(); }
     else if (x.t === 'shot') drawShot(x);
     else if (x.t === 'app') appLog('APP ' + x.id + ': ' + JSON.stringify(x.data));
-    else if (x.t === 'fls') { fRender(x); p8Render(x); }
+    else if (x.t === 'fls') { fRender(x); mRender(x); }
     else if (x.t === 'fack') fAck(x);
-    else if (x.t === 'fdone') { if (!x.ok) flash(x.c === 'frm' ? 'COULD NOT DELETE (FOLDERS MUST BE EMPTY)' : 'DID NOT WORK', true); fls(); if (tab === 'pico8') p8ls(); }
+    else if (x.t === 'fdone') { if (!x.ok) flash(x.c === 'frm' ? 'COULD NOT DELETE (FOLDERS MUST BE EMPTY)' : 'DID NOT WORK', true); fls(); if (tab === 'map') mls(); }
   };
   s.onclose = () => { if (ws !== s) return; ws = null; linkMsg('CONNECTION LOST. TRYING AGAIN...', true); retry = setTimeout(connect, 3000); };
 }
@@ -336,7 +341,7 @@ let flashT = 0;
 function flash(t, bad) { linkMsg(t, bad); clearTimeout(flashT); flashT = setTimeout(() => linkMsg(''), 3500); }
 
 // ===================================================================== tabs
-const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['files', 'FILES', 'files'], ['pico8', 'PICO-8', 'pico8'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
+const TABS = [['status', 'STATUS'], ['settings', 'SETTINGS'], ['send', 'SEND', 'video'], ['files', 'FILES', 'files'], ['map', 'MAP', 'map'], ['apps', 'APPS', 'apps'], ['system', 'SYSTEM']];
 let tab = store.get('cube.tab', 'status');
 function renderTabs() {
   const caps = schema ? schema.caps || [] : ['video', 'apps'];
@@ -346,7 +351,7 @@ function renderTabs() {
   document.querySelectorAll('[data-tab]').forEach(el => el.classList.toggle('hide', el.dataset.tab !== tab));
   if (tab === 'apps') loadApps();
   if (tab === 'files') fls();
-  if (tab === 'pico8') p8ls();
+  if (tab === 'map') { mls(); mapInit(); }
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; store.set('cube.tab', tab); renderTabs(); });
 document.querySelectorAll('[data-cmd]').forEach(b => b.addEventListener('click', () => {
@@ -585,7 +590,7 @@ function fRender(x) {
     !e.length ? '<div class="empty">EMPTY</div>' :
     e.map(f => '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all;cursor:pointer" data-open="' + (f[1] ? esc(f[0]) : '') + '">' +
       (f[1] ? '&#9618; ' : '') + esc(f[0]) + '</span><span class="dim">' + (f[1] ? '&lt;DIR&gt;' : fsz(f[2])) + '</span>' +
-      (!f[1] && /\.(mp3|wav|avi|mp4|m4v|mov|mkv|webm|3gp|jpe?g|bmp|txt|md|json|csv|log|p8|p8\.png)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
+      (!f[1] && /\.(mp3|wav|avi|mp4|m4v|mov|mkv|webm|3gp|jpe?g|bmp|txt|md|json|csv|log|map)$/i.test(f[0]) ? '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-play="' + esc(f[0]) + '">&#9654;</button>' : '') +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-ren="' + esc(f[0]) + '">REN</button>' +
       '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-del="' + esc(f[0]) + '">DEL</button></div>').join('') + (x.more ? '<div class="dim">(more files: use the FAST page to see all)</div>' : '');
 }
@@ -630,64 +635,88 @@ function putFile(p, buf, prog) {
   });
 }
 function b64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 4096) s += String.fromCharCode.apply(null, u8.subarray(i, i + 4096)); return btoa(s); }
-// ===================================================================== PICO-8: the cube's carts
-let p8Carts = { '/sd/PICO8': null, '/c/pico8': null }, p8Sd = false, p8Busy = false;
-function p8ls() { p8Carts = { '/sd/PICO8': null, '/c/pico8': null }; if (!send({ t: 'fls', d: '/sd/PICO8' }) || !send({ t: 'fls', d: '/c/pico8' })) $('p8List').innerHTML = '<div class="empty">NOT CONNECTED</div>'; }
-const isCart = n => /\.p8(\.png)?$/i.test(n);
-function p8Render(x) {
-  if (!(x.d in p8Carts)) return;
-  if (x.d === '/sd/PICO8') p8Sd = !!x.sd;
-  p8Carts[x.d] = (x.e || []).filter(f => !f[1] && isCart(f[0])).map(f => ({ d: x.d, n: f[0], z: f[2] }));
-  const all = [...(p8Carts['/sd/PICO8'] || []), ...(p8Carts['/c/pico8'] || [])].sort((a, b) => a.n.localeCompare(b.n));
-  $('p8List').innerHTML = !all.length ? '<div class="empty">NO CARTS YET</div>' : all.map(c =>
-    '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all">' + esc(c.n.replace(/\.p8(\.png)?$/i, '').toUpperCase()) +
-    ' <span class="dim">' + (c.d === '/sd/PICO8' ? 'A:' : 'C:') + ' ' + fsz(c.z) + '</span></span>' +
-    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 10px" data-p8play="' + esc(c.d + '/' + c.n) + '">&#9654; PLAY</button>' +
-    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-p8del="' + esc(c.d + '/' + c.n) + '">DEL</button></div>').join('');
+// ===================================================================== MAP: maps for the cube's MAP.EXE
+let mapFiles = { '/sd/MAPS': null, '/c/maps': null }, mapSd = false, mapBusy = false, lmap = null, lbox = null;
+const HOME = [52.2115252, 12.7933625];
+function mls() { mapFiles = { '/sd/MAPS': null, '/c/maps': null }; if (!send({ t: 'fls', d: '/sd/MAPS' }) || !send({ t: 'fls', d: '/c/maps' })) $('mapList').innerHTML = '<div class="empty">NOT CONNECTED</div>'; }
+function mRender(x) {
+  if (!(x.d in mapFiles)) return;
+  if (x.d === '/sd/MAPS') mapSd = !!x.sd;
+  mapFiles[x.d] = (x.e || []).filter(f => !f[1] && /\.map$/i.test(f[0])).map(f => ({ d: x.d, n: f[0], z: f[2] }));
+  const all = [...(mapFiles['/sd/MAPS'] || []), ...(mapFiles['/c/maps'] || [])].sort((a, b) => a.n.localeCompare(b.n));
+  $('mapList').innerHTML = !all.length ? '<div class="empty">NO MAPS YET (HOME IS IN MAP.EXE: GET IT THERE)</div>' : all.map(c =>
+    '<div class="row" style="border-bottom:1px solid var(--dim);padding:4px 0"><span style="flex:1;word-break:break-all">' + esc(c.n.replace(/\.map$/i, '').toUpperCase()) +
+    ' <span class="dim">' + (c.d === '/sd/MAPS' ? 'A:' : 'C:') + ' ' + fsz(c.z) + '</span></span>' +
+    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 10px" data-mopen="' + esc(c.d + '/' + c.n) + '">&#9654; OPEN</button>' +
+    '<button class="btn" style="flex:0 0 auto;min-height:36px;padding:2px 8px" data-mdel="' + esc(c.d + '/' + c.n) + '">DEL</button></div>').join('');
 }
-$('p8List').addEventListener('click', e => {
+$('mapList').addEventListener('click', e => {
   const t = e.target;
-  if (t.dataset.p8play) { if (send({ t: 'fopen', p: t.dataset.p8play })) flash('PLAYING ON THE CUBE: ' + t.dataset.p8play.split('/').pop()); }
-  else if (t.dataset.p8del) { if (confirm('Delete ' + t.dataset.p8del.split('/').pop() + '?')) send({ t: 'frm', p: t.dataset.p8del }); }
+  if (t.dataset.mopen) { if (send({ t: 'fopen', p: t.dataset.mopen })) flash('OPENING ON THE CUBE: ' + t.dataset.mopen.split('/').pop()); }
+  else if (t.dataset.mdel) { if (confirm('Delete ' + t.dataset.mdel.split('/').pop() + '?')) send({ t: 'frm', p: t.dataset.mdel }); }
 });
-const p8Dir = () => p8Sd ? '/sd/PICO8' : '/c/pico8';
-async function p8Put(name, buf) {
-  const p = p8Dir() + '/' + name, t0 = Date.now();
-  $('p8Bar').classList.remove('hide');
-  const fail = await putFile(p, buf, (o, n) => { $('p8Bar').firstElementChild.style.width = (n ? o / n * 100 : 100) + '%'; $('p8Stat').textContent = 'SENDING ' + name + ' ' + fsz(o) + ' / ' + fsz(n); });
-  $('p8Bar').classList.add('hide');
-  return fail ? fail : '';
+// the map to choose the place on (Leaflet + OpenStreetMap tiles, loaded the first time the tab opens)
+function loadLeaflet() {
+  return new Promise((ok, bad) => {
+    if (window.L) return ok();
+    const c = document.createElement('link'); c.rel = 'stylesheet'; c.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(c);
+    const j = document.createElement('script'); j.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; j.onload = ok; j.onerror = () => bad(new Error('could not load the map')); document.head.appendChild(j);
+  });
 }
-$('p8Up').onclick = () => { if (!p8Busy) $('p8File').click(); };
-$('p8File').onchange = async () => {
-  const files = [...$('p8File').files].filter(f => isCart(f.name)); $('p8File').value = '';
-  if (!files.length) { flash('PICK .P8 OR .P8.PNG FILES', true); return; }
-  p8Busy = true; let ok = 0;
-  for (const f of files) {
-    const fail = await p8Put(f.name.replace(/[^A-Za-z0-9._ -]/g, '_'), new Uint8Array(await f.arrayBuffer()));
-    if (fail) { flash(f.name + ': ' + fail, true); break; }
-    ok++;
-  }
-  p8Busy = false; $('p8Stat').textContent = ok + ' CART(S) ON THE CUBE'; p8ls();
+function mapBox() {
+  if (!lmap) return;
+  const c = lmap.getCenter(), b = CubeMap.bbox(c.lat, c.lng, +$('mapSize').value);
+  const bounds = [[b[0], b[1]], [b[2], b[3]]];
+  if (!lbox) lbox = L.rectangle(bounds, { color: '#39ff7a', weight: 2, fill: false, interactive: false }).addTo(lmap);
+  else lbox.setBounds(bounds);
+}
+async function mapInit() {
+  if (lmap) { setTimeout(() => lmap.invalidateSize(), 50); return; }
+  try { await loadLeaflet(); } catch (e) { $('mapView').innerHTML = '<div class="empty">THE MAP COULD NOT LOAD (OFFLINE?)</div>'; return; }
+  lmap = L.map('mapView', { zoomControl: true, attributionControl: true }).setView(HOME, 14);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(lmap);
+  lmap.on('move', mapBox); mapBox();
+}
+$('mapSize').onchange = () => { mapBox(); if (lmap) lmap.fitBounds(lbox.getBounds(), { padding: [20, 20] }); };
+$('mapHome').onclick = () => { if (!lmap) return; lmap.setView(HOME, 14); if (!$('mapName').value) $('mapName').value = 'HOME'; };
+$('mapMe').onclick = () => {
+  if (!navigator.geolocation) return flash('NO LOCATION ON THIS PHONE', true);
+  navigator.geolocation.getCurrentPosition(p => { if (lmap) lmap.setView([p.coords.latitude, p.coords.longitude], 15); }, () => flash('LOCATION NOT ALLOWED', true), { enableHighAccuracy: true, timeout: 10000 });
 };
-async function p8SaveCode(play) {
-  let name = $('p8Name').value.trim().toLowerCase().replace(/[^a-z0-9_ -]/g, '').replace(/ +/g, '_').slice(0, 24);
-  let code = $('p8Code').value;
-  if (!name) { flash('GIVE IT A NAME', true); return; }
-  if (!code.trim()) { flash('PASTE THE CODE FIRST', true); return; }
-  // just Lua: make it a .p8 file
-  if (!/^pico-8 cartridge/.test(code.trim())) code = 'pico-8 cartridge // http://www.pico-8.com\nversion 41\n__lua__\n' + code.replace(/\r\n/g, '\n') + '\n';
-  if (p8Busy) return;
-  p8Busy = true;
-  const fail = await p8Put(name + '.p8', new TextEncoder().encode(code));
-  p8Busy = false;
-  if (fail) { flash(fail, true); return; }
-  $('p8Stat').textContent = 'SAVED ' + name.toUpperCase() + ' ON THE CUBE';
-  if (play) send({ t: 'fopen', p: p8Dir() + '/' + name + '.p8' });
-  p8ls();
+async function mapFind() {
+  const q = $('mapQ').value.trim(); if (!q || !lmap) return;
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q));
+    const j = await r.json();
+    if (!j.length) return flash('NOT FOUND', true);
+    lmap.setView([+j[0].lat, +j[0].lon], 15);
+    if (!$('mapName').value) $('mapName').value = q.split(',')[0].slice(0, 20).toUpperCase();
+  } catch (e) { flash('SEARCH DID NOT WORK', true); }
 }
-$('p8Save').onclick = () => p8SaveCode(false);
-$('p8SavePlay').onclick = () => p8SaveCode(true);
+$('mapFind').onclick = mapFind;
+$('mapQ').onkeydown = e => { if (e.key === 'Enter') mapFind(); };
+$('mapMake').onclick = async () => {
+  if (mapBusy || !lmap) return;
+  const name = ($('mapName').value.trim() || 'MAP').toLowerCase().replace(/[^a-z0-9_ -]/g, '').replace(/ +/g, '_').slice(0, 20) || 'map';
+  const c = lmap.getCenter(), size = +$('mapSize').value;
+  mapBusy = true; $('mapMake').disabled = true; $('mapBar').classList.remove('hide');
+  const bar = v => { $('mapBar').firstElementChild.style.width = v + '%'; };
+  try {
+    bar(5);
+    const osm = await CubeMap.fetch(c.lat, c.lng, size, t => { $('mapStat').textContent = t; });
+    bar(30); $('mapStat').textContent = 'MAKING THE 3D MAP...';
+    const r = CubeMap.pack(osm, c.lat, c.lng, size, name.toUpperCase());
+    const st = r.stats;
+    const p = (mapSd ? '/sd/MAPS' : '/c/maps') + '/' + name + '.map';
+    const fail = await putFile(p, r.bytes, (o, n) => { bar(30 + (n ? o / n * 70 : 70)); $('mapStat').textContent = 'SENDING ' + fsz(o) + ' / ' + fsz(n); });
+    if (fail) throw new Error(fail);
+    bar(100);
+    $('mapStat').textContent = 'ON THE CUBE: ' + st.buildings + ' BUILDINGS, ' + st.roads + ' ROADS, ' + st.areas + ' AREAS, ' + st.trees + ' TREES';
+    send({ t: 'fopen', p });
+    mls();
+  } catch (e) { flash(e.message || 'DID NOT WORK', true); $('mapStat').textContent = ''; }
+  mapBusy = false; $('mapMake').disabled = false; $('mapBar').classList.add('hide');
+};
 
 $('fFile').onchange = async () => {
   const files = [...$('fFile').files]; $('fFile').value = '';
@@ -721,6 +750,7 @@ $('fFile').onchange = async () => {
 })();
 </script>
 <script src="/cube/conv.js"></script>
+<script src="/cube/map.js"></script>
 <script src="/lib/online.js" defer></script>
 </body>
 </html>

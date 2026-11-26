@@ -13,7 +13,6 @@ static void* bigAlloc(size_t n) { return malloc(n); }
 #endif
 
 uint16_t* fb = nullptr;
-static uint16_t* bgImg = nullptr;               // the empty screen: colour + glass, copied in by gfxClear()
 
 const Scheme SCHEMES[] = {
   {"GREEN", 0x39ff7a, 0x1b7a3c, 0x031208},
@@ -46,8 +45,7 @@ static int curScheme = -1, curGlow = -1;
 
 bool gfxInit() {
   if (!fb) fb = (uint16_t*)bigAlloc(SCR_W * SCR_H * 2);
-  if (!bgImg) bgImg = (uint16_t*)bigAlloc(SCR_W * SCR_H * 2);
-  return fb && bgImg;
+  return fb != nullptr;
 }
 
 void gfxTheme(int scheme, int glow) {
@@ -63,32 +61,11 @@ void gfxTheme(int scheme, int glow) {
     lutGlow[v] = (uint8_t)(a * 32 + 0.5f);
     lutFlat[v] = (uint8_t)(core * 32 + 0.5f);
   }
-  if (scheme == curScheme && glow == curGlow) return;
   curScheme = scheme; curGlow = glow;
-  // the glass: a little darker toward the edges, a faint shine at the top left (like #glass on error.blue)
-  uint8_t br = (s.bg >> 16) & 255, bgc = (s.bg >> 8) & 255, bb = s.bg & 255;
-  uint8_t fr = (s.fg >> 16) & 255, fg = (s.fg >> 8) & 255, fbb = s.fg & 255;
-  for (int y = 0; y < SCR_H; y++) {
-    for (int x = 0; x < SCR_W; x++) {
-      float dx = (x - 240) / 240.0f, dy = (y - 240) / 240.0f;
-      float d = sqrtf(dx * dx + dy * dy);
-      float v = d < 0.7f ? 1.0f : 1.0f - (d - 0.7f) * 0.9f;
-      if (v < 0.35f) v = 0.35f;
-      float sx = (x - 140) / 260.0f, sy = (y - 40) / 200.0f;
-      float sh = 1.0f - sqrtf(sx * sx + sy * sy); if (sh < 0) sh = 0;
-      sh *= 0.035f;
-      // tiny bit of the letter colour in the glass, so black isn't dead black (phosphor)
-      float r = br * v + fr * (0.012f + sh), g = bgc * v + fg * (0.012f + sh), b = bb * v + fbb * (0.012f + sh);
-      // dither so the vignette has no bands
-      float dith = (((x * 7 + y * 13) & 7) - 3.5f) * 0.9f;
-      int R = (int)(r + dith), G = (int)(g + dith * 0.5f), B = (int)(b + dith);
-      if (R < 0) R = 0; if (G < 0) G = 0; if (B < 0) B = 0; if (R > 255) R = 255; if (G > 255) G = 255; if (B > 255) B = 255;
-      bgImg[y * SCR_W + x] = rgb3(R, G, B);
-    }
-  }
 }
 
-void gfxClear() { if (bgImg) memcpy(fb, bgImg, SCR_W * SCR_H * 2); }
+// the empty screen: the background colour (1.5: no glass picture behind, 460 KB less)
+void gfxClear() { uint32_t c = C_BG | (uint32_t)C_BG << 16; uint32_t* p = (uint32_t*)fb; for (int i = 0; i < SCR_W * SCR_H / 2; i++) p[i] = c; }
 void gfxClearTo(uint16_t c) { for (int i = 0; i < SCR_W * SCR_H; i++) fb[i] = c; }
 
 // HOLO: everything is drawn moved by (gOX, gOY), the depth layer's shift. Clipping is in layout
@@ -324,13 +301,11 @@ void fxInvertBand(uint32_t seed) {
 void fxShift(int dx, int dy) {
   if (dy) {
     int n = (dy % SCR_H + SCR_H) % SCR_H;
-    // roll the picture: rows move down by n (with wrap)
-    static uint16_t* tmp = nullptr;
-    if (!tmp) tmp = (uint16_t*)bigAlloc(SCR_W * SCR_H * 2);
-    if (tmp && n) {
-      memcpy(tmp, fb, SCR_W * SCR_H * 2);
-      memcpy(&fb[n * SCR_W], tmp, (SCR_H - n) * SCR_W * 2);
-      memcpy(fb, &tmp[(SCR_H - n) * SCR_W], n * SCR_W * 2);
+    // roll the picture: rows move down by n (with wrap), in place (three reversals, one row of help)
+    if (n) {
+      uint16_t row[SCR_W];
+      auto rev = [&](int a, int b) { for (b--; a < b; a++, b--) { memcpy(row, &fb[a * SCR_W], SCR_W * 2); memcpy(&fb[a * SCR_W], &fb[b * SCR_W], SCR_W * 2); memcpy(&fb[b * SCR_W], row, SCR_W * 2); } };
+      rev(0, SCR_H); rev(0, n); rev(n, SCR_H);
     }
   }
   if (dx) for (int y = 0; y < SCR_H; y++) {

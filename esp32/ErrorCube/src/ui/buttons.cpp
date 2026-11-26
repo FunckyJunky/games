@@ -70,8 +70,7 @@ void btnDo(int a) {
       int v = cfg.bright + (a == BA_LIGHTUP ? 10 : -10); cfg.bright = v < 5 ? 5 : v > 100 ? 100 : v;
       snprintf(t, sizeof(t), "LIGHT %d%%", cfg.bright); toast(t, 900); cfgChanged(); break;
     }
-    case BA_HOLO: cfg.holo = !cfg.holo; holoRecenter(); toast(cfg.holo ? "HOLO 3D ON" : "HOLO 3D OFF", 1200); cfgChanged(); break;
-    case BA_HCENTRE: holoRecenter(); toast("CENTRED", 900); break;
+    case BA_HOLO: case BA_HCENTRE: break;                     // HOLO 3D is gone (1.5)
     case BA_OFFLINE: cfg.offline = !cfg.offline; netOffline(cfg.offline); toast(cfg.offline ? "OFFLINE" : "ONLINE", 1200); cfgChanged(); break;
     case BA_SHOT: shot(); break;
     case BA_TORCH: uiWake(); uiOpen(new Torch()); break;

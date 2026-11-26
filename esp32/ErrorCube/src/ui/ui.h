@@ -95,23 +95,47 @@ enum { IC_NONE, IC_SCREEN, IC_LOOK, IC_HOLO, IC_SOUND, IC_KEY, IC_WIFI, IC_CLOUD
        IC_UPDATE, IC_SYSTEM, IC_WALL, IC_MOON, IC_HAND, IC_MOTION, IC_GLASS, IC_LIGHT, IC_DEPTH, IC_FILES, IC_INFO, IC_TURN };
 void icon(int id, int x, int y, uint16_t c);
 
+// ------------------------------------------------------------------ scrolling (1.5)
+// Drag to scroll; let go while moving and it glides on (inertia), slowing down by itself.
+// When there is more than fits, a slider on the right side: drag its handle (or tap the track) to jump.
+struct Scroll {
+  float pos = 0, vel = 0;                // px from the top; vel in px per ms (the glide)
+  float total = 0, view = 0;             // how tall the content is, how much is visible
+  int x = 0, y = 0, w = 0, h = 0;        // the visible box (the slider sits in its right edge)
+  bool drag = false, bar = false; int y0 = 0, lastY = 0; float pos0 = 0; uint32_t lastT = 0, glideT = 0;
+  static const int BAR_W = 34;           // the slider's touch strip (drawn 8 px wide)
+  float maxPos() const { float m = total - view; return m > 0 ? m : 0; }
+  bool hasBar() const { return total > view + 1; }
+  void clamp() { float m = maxPos(); if (pos < 0) { pos = 0; vel = 0; } if (pos > m) { pos = m; vel = 0; } }
+  bool onBar(int px, int py) const { return hasBar() && px >= x + w - BAR_W && px < x + w + 12 && py >= y && py < y + h; }
+  void stop() { vel = 0; }
+  bool gliding() const { return !drag && vel != 0; }
+  void tick();                           // the glide (time based, call as often as you like)
+  void drawBar();                        // the slider (only when the content doesn't fit)
+  bool ev(const Ev& e);                  // drags and the slider; true = taken (taps are left to the caller)
+};
+
 // ------------------------------------------------------------------ list (menus, settings, files...)
-// Rows of 56 px; drag to scroll, tap to pick, - / + buttons move, hold + = OK.
+// Rows of 56 px; drag to scroll (with inertia), the slider on the right, tap to pick, - / + buttons move, hold + = OK.
 struct ListView {
   int sel = 0, n = 0;
   float barY = -1;                       // the selection bar slides to the selected row
-  float scroll = 0, vel = 0;
+  float scroll = 0, vel = 0;             // vel: px per ms
   int x = 15, y = 96, w = 450, h = 330, rowH = 56;
-  bool dragging = false; int dragY0 = 0; float scroll0 = 0; uint32_t lastMove = 0; int lastY = 0;
+  bool plain = false;                    // just lines (no selection bar, no typing-in): dialogs, text
+  bool dragging = false, barDrag = false; int dragY0 = 0; float scroll0 = 0; uint32_t lastMove = 0, glideAt = 0; int lastY = 0;
   void setBox(int X, int Y, int W, int H) { x = X; y = Y; w = W; h = H; }
   void clampScroll();
   void showSel();
+  bool hasBar() const { return n * rowH > h + 1; }
+  int rowW() const { return hasBar() ? w - 14 : w; }   // the rows leave room for the slider
   // draw the rows: row(i, x, y, w, h, selected)
   void draw(std::function<void(int i, int x, int y, int w, int h, bool sel)> row, std::function<void(int i)> pick,
             std::function<void(int i, int dx)> side = nullptr);
   bool ev(const Ev& e, std::function<void(int i)> pick);
   void tick();
 };
+void scrollBarDraw(int x, int y, int h, float pos, float view, float total);   // the slider: track + handle at the right of a box x..x+w (x = its right edge)
 
 // a settings row: name and value, < > to change
 struct Row {
@@ -155,9 +179,7 @@ void musicPlayFolder(const char* dir, const char* file);
 void musicTick();
 void videoOpen(const char* path);
 void videoOrConvert(const char* path);
-void p8Open(const char* path);               // PICO-8: play a cart (.p8 / .p8.png)
-void p8Calibrate();                          // PICO-8: the way the cube is held now is straight
-Screen* makeP8Setup();       // AVI plays; MP4/MOV... plays its converted twin, or the phone converts it
+void mapOpen(const char* path);              // MAP: show a .map in 3D
 bool isPhoneVideo(const char* name);
 Screen* makeNowPlaying();
 bool openFile(const char* path);         // a file in the program made for it (music, video, picture, text...); false = none

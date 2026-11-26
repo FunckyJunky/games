@@ -11,6 +11,7 @@
 #include "src/ui/ui.h"
 #include "src/board/board.h"
 #include "src/net/net.h"
+#include <esp_heap_caps.h>
 
 // new firmware has to prove it works: if it crashes before cloudMarkGood(), the cube goes back to the old one
 bool verifyRollbackLater() { return true; }
@@ -27,6 +28,9 @@ static void netTask(void*) {
 }
 
 void setup() {
+  // 1.5: allocations of 512 bytes and more go to the 8 MB PSRAM first (it was 4 KB): the interface's lists,
+  // strings and screens stop eating the fast internal RAM that WiFi and TLS (the phone link) need
+  heap_caps_malloc_extmem_enable(512);
   Serial.begin(115200);
   boardBegin();
   appsRegister();

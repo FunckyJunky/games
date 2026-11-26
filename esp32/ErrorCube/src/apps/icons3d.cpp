@@ -47,14 +47,13 @@ void icon3d(const char* id, float t, uint16_t col, int a32) {
     float c = cosf(t), s = sinf(t);
     float P[3][2] = {{-0.25f, -0.35f}, {-0.25f, 0.35f}, {0.38f, 0}};
     for (int i = 0; i < 3; i++) { int j = (i + 1) % 3; L(P[i][0] * c, P[i][1], P[i][0] * s - 0.2f, P[j][0] * c, P[j][1], P[j][0] * s - 0.2f); }
-  } else if (!strcmp(id, "PICO8")) {
-    // a game cartridge with a label, and a d-pad on it that rocks
-    B(0, 0.05f, 0, 0.78f, 0.95f, 0.12f);
-    B(0, -0.92f, 0, 0.5f, 0.06f, 0.1f);
-    B(0, -0.35f, -0.12f, 0.6f, 0.35f, 0.02f);
-    float r = sinf(t * 2) * 0.08f;
-    B(-0.28f, 0.5f + r, -0.14f, 0.24f, 0.07f, 0.03f); B(-0.28f, 0.5f + r, -0.14f, 0.07f, 0.24f, 0.03f);
-    R(0.3f, 0.42f - r, -0.14f, 0.09f, 2, 10); R(0.48f, 0.6f + r, -0.14f, 0.09f, 2, 10);
+  } else if (!strcmp(id, "MAP")) {
+    // a folded map with a pin that bobs
+    float f[5] = {-0.9f, -0.3f, 0.3f, 0.9f};
+    for (int i = 0; i < 3; i++) { float z0 = (i % 2) ? 0.12f : -0.12f, z1 = (i % 2) ? -0.12f : 0.12f; L(f[i], -0.7f, z0, f[i + 1], -0.7f, z1); L(f[i], 0.7f, z0, f[i + 1], 0.7f, z1); L(f[i], -0.7f, z0, f[i], 0.7f, z0); }
+    L(0.9f, -0.7f, 0.12f, 0.9f, 0.7f, 0.12f);
+    float b = sinf(t * 3) * 0.1f;
+    R(0.1f, -0.55f + b, 0, 0.22f, 1, 12); L(0.1f, -0.33f + b, 0, 0.1f, 0.1f, 0);
   } else if (!strcmp(id, "CALC")) {
     B(0, 0, 0, 0.72f, 1, 0.18f);
     B(0, -0.62f, -0.18f, 0.55f, 0.22f, 0.02f);

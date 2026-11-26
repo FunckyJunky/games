@@ -146,12 +146,148 @@ void musicTick() {
 }
 
 // ------------------------------------------------------------------ NOW PLAYING
+// the pictures of the sound (1.5): tap the picture for the next one
+static const char* VIS_NAMES[] = {"BARS", "SCOPE", "MIRROR", "CIRCLE", "PEAKS", "WATERFALL", "PULSE", "VU METER", "DOTS"};
+static const int N_VIS = sizeof(VIS_NAMES) / sizeof(VIS_NAMES[0]);
 struct NowPlaying : Screen {
   int16_t wave[256];
-  float bars[24] = {0};
+  float bands[24] = {0}, peaks[24] = {0}, coef[24], win[256]; bool ready = false;
+  uint8_t fall[13][24] = {{0}}; uint32_t fallAt = 0;
+  uint32_t rings[6] = {0}; float bassAvg = 0, vu = 0; uint32_t lastBeat = 0;
   bool dragSeek = false; uint32_t seekTo = 0;
+  static const int VX = 40, VW = 400, VY = 166, VH = 102, VC = 217;    // the picture's box and its middle line
   const char* name() override { return "MUSIC.EXE"; }
   void tick() override { if (musState() == MED_PLAY) redrawIn(33); }
+  // 24 bands from low to high (Goertzel at log-spaced frequencies, a Hann window), 0..1 on a 54 dB scale
+  void spectrum(bool play) {
+    if (!ready) {
+      for (int b = 0; b < 24; b++) { float k = 1.4f * powf(64.0f, b / 23.0f); coef[b] = 2 * cosf(6.2831853f * k / 256); }
+      for (int n = 0; n < 256; n++) win[n] = 0.5f - 0.5f * cosf(6.2831853f * n / 255);
+      ready = true;
+    }
+    float sum = 0;
+    for (int n = 0; n < 256; n++) sum += (float)wave[n] * wave[n];
+    float rms = sqrtf(sum / 256) / 32767.0f, db = 20 * log10f(rms + 1e-6f);
+    float v = (db + 40) / 40; v = v < 0 ? 0 : v > 1 ? 1 : v;
+    vu = play ? (v > vu ? vu + (v - vu) * 0.6f : vu * 0.9f + v * 0.1f) : vu * 0.85f;
+    for (int b = 0; b < 24; b++) {
+      float s1 = 0, s2 = 0, c = coef[b];
+      for (int n = 0; n < 256; n++) { float s0 = wave[n] * win[n] + c * s1 - s2; s2 = s1; s1 = s0; }
+      float pw = s1 * s1 + s2 * s2 - c * s1 * s2;
+      float mag = sqrtf(pw > 0 ? pw : 0), d = 20 * log10f(mag / (64 * 32767.0f) + 1e-9f) + b * (18.0f / 23);   // +3 dB an octave: the highs show too
+      float e = (d + 54) / 54; e = e < 0 ? 0 : e > 1 ? 1 : e;
+      bands[b] = play ? fmaxf(e, bands[b] * 0.8f) : bands[b] * 0.8f;
+      peaks[b] = fmaxf(bands[b], peaks[b] - 0.018f);
+    }
+  }
+  void ring(int cx, int cy, float r, uint16_t c, int a) {
+    int n = r < 20 ? 24 : 48;
+    for (int i = 0; i < n; i++) {
+      float a0 = i * 6.2832f / n, a1 = (i + 1) * 6.2832f / n;
+      glowLine(cx + cosf(a0) * r, cy + sinf(a0) * r, cx + cosf(a1) * r, cy + sinf(a1) * r, c, a);
+    }
+  }
+  void drawVis(bool play) {
+    uint32_t now = msNow();
+    int mode = cfg.musVis % N_VIS, n = 24, bw = VW / n;
+    clipSet(VX - 6, VY, VW + 12, VH);
+    switch (mode) {
+      case 0:   // BARS: the spectrum in segments, the wave behind it
+        if (play) for (int i = 0; i + 2 < 256; i += 2) glowLine(VX + i * VW / 256, VC + wave[i] / 900, VX + (i + 2) * VW / 256, VC + wave[i + 2] / 900, C_DIM, 10);
+        for (int i = 0; i < n; i++) {
+          int h = 4 + (int)(bands[i] * 96);
+          for (int y = 0; y < h; y += 5) fillRect(VX + i * bw + 2, VY + VH - y - 4, bw - 5, 3, y > 70 ? C_WARN : C_FG);
+        }
+        break;
+      case 1: {  // SCOPE: the wave itself, like an oscilloscope
+        for (int x = VX; x < VX + VW; x += 25) for (int y = VY + 6; y < VY + VH; y += 6) fillRect(x, y, 1, 2, C_DIM);
+        hline(VX, VC, VW, C_DIM);
+        for (int i = 0; i + 1 < 256; i++) {
+          int y0 = VC + wave[i] / 640, y1 = VC + wave[i + 1] / 640;
+          glowLine(VX + i * VW / 255, y0, VX + (i + 1) * VW / 255, y1, C_FG, 26);
+        }
+        break;
+      }
+      case 2:   // MIRROR: bars up from the middle line, their reflection under it
+        for (int i = 0; i < n; i++) {
+          int h = 2 + (int)(bands[i] * 46), x = VX + i * bw + 2;
+          fillRect(x, VC - h, bw - 5, h, C_FG);
+          blendRect(x, VC + 2, bw - 5, h * 3 / 4, C_FG, 9);
+        }
+        break;
+      case 3: {  // CIRCLE: spokes round a ring that breathes with the bass
+        float bass = (bands[0] + bands[1] + bands[2] + bands[3]) / 4;
+        float r0 = 16 + bass * 8;
+        ring(240, VC, r0, C_FG, 22);
+        for (int i = 0; i < 48; i++) {
+          int b = i < 24 ? i : 47 - i;
+          float a = i * 6.2832f / 48 - 1.5708f, l = 3 + bands[b] * 30;
+          glowLine(240 + cosf(a) * (r0 + 3), VC + sinf(a) * (r0 + 3), 240 + cosf(a) * (r0 + 3 + l), VC + sinf(a) * (r0 + 3 + l), b > 16 ? C_WARN : C_FG, 26);
+        }
+        break;
+      }
+      case 4:   // PEAKS: thin bars, the peak of each falls slowly
+        for (int i = 0; i < n; i++) {
+          int x = VX + i * bw + 4, h = (int)(bands[i] * 92), ph = (int)(peaks[i] * 92);
+          fillRect(x, VY + VH - h, bw - 9, h, C_DIM);
+          fillRect(x - 1, VY + VH - ph - 4, bw - 7, 3, C_FG);
+        }
+        break;
+      case 5: {  // WATERFALL: each row is a moment, the newest on top, it runs down
+        if (play && now - fallAt > 60) {
+          fallAt = now;
+          memmove(fall[1], fall[0], sizeof(fall) - sizeof(fall[0]));
+          for (int i = 0; i < n; i++) fall[0][i] = (uint8_t)(bands[i] * 255);
+        }
+        for (int r = 0; r < 13; r++)
+          for (int i = 0; i < n; i++) {
+            int v = fall[r][i]; if (v < 20) continue;
+            fillRect(VX + i * bw + 1, VY + 2 + r * 8, bw - 2, 7, mix(C_BG, v > 200 ? C_WARN : C_FG, v * 100 / 255));
+          }
+        break;
+      }
+      case 6: {  // PULSE: a ring goes out on every beat (the bass jumps)
+        float bass = (bands[0] + bands[1] + bands[2]) / 3;
+        if (play && bass > bassAvg * 1.18f + 0.04f && now - lastBeat > 200) {
+          lastBeat = now;
+          for (int k = 0; k < 6; k++) if (!rings[k] || now - rings[k] > 1200) { rings[k] = now | 1; break; }
+        }
+        bassAvg = bassAvg * 0.94f + bass * 0.06f;
+        for (int k = 0; k < 6; k++) {
+          if (!rings[k]) continue;
+          uint32_t age = now - rings[k];
+          if (age > 1200) { rings[k] = 0; continue; }
+          float p = age / 1200.0f;
+          ring(240, VC, 8 + p * 190, C_FG, (int)(30 * (1 - p)));
+        }
+        fillCircle(240, VC, 4 + (int)(bass * 16), C_FG);
+        break;
+      }
+      case 7: {  // VU METER: a needle, like on an old amplifier
+        const int px = 240, py = VY + VH + 40, R = 128;
+        for (int t = 0; t <= 10; t++) {
+          float a = -2.25f + t * (1.5f / 10);
+          int l = t % 5 == 0 ? 12 : 6;
+          glowLine(px + cosf(a) * (R - l), py + sinf(a) * (R - l), px + cosf(a) * R, py + sinf(a) * R, t >= 8 ? C_RED : C_FG, 22);
+        }
+        for (int t = 0; t < 30; t++) { float a = -2.25f + t * 0.05f; fillRect(px + cosf(a) * (R + 4), py + sinf(a) * (R + 4), 2, 2, t >= 24 ? C_RED : C_DIM); }
+        float a = -2.25f + vu * 1.5f;
+        glowLine(px, py, px + cosf(a) * (R - 4), py + sinf(a) * (R - 4), C_WARN, 30);
+        drawText(FT, VX, VY + 4, "VU", C_DIM, TX_FLAT);
+        break;
+      }
+      case 8: {  // DOTS: a grid of dots that light up with the bands
+        for (int i = 0; i < n; i++)
+          for (int r = 0; r < 10; r++) {
+            bool on = bands[i] * 10 > r;
+            int x = VX + i * bw + bw / 2, y = VY + VH - 6 - r * 10;
+            if (on) fillCircle(x, y, 3, r > 7 ? C_WARN : C_FG); else fillRect(x - 1, y - 1, 2, 2, C_DIM);
+          }
+        break;
+      }
+    }
+    clipReset();
+  }
   void draw() override {
     char t[96];
     pathLine("C:\\MUSIC\\PLAYING>");
@@ -161,20 +297,10 @@ struct NowPlaying : Screen {
     drawTextC(FB, 240, 96, t, C_FG);
     snprintf(t, sizeof(t), "%s", musArtist()[0] ? musArtist() : (pidx >= 0 && !plist.empty() ? "" : "pick a song in the list")); utf8Cut(t, 28);
     drawTextC(FT, 240, 140, t, C_DIM, TX_FLAT);
-    // the picture of the sound: bars (raised a little, they move with HOLO) and a wave line
+    // the picture of the sound (tap it: the next one)
     sndMediaWave(wave, 256);
-    {
-      HoloZ z(H_RAISE);
-      int x0 = 40, w = 400, y0 = 270, n = 24, bw = w / n;
-      for (int i = 0; i < n; i++) {
-        float e = 0; for (int k = 0; k < 10; k++) e += fabsf((float)wave[(i * 10 + k) % 256]);
-        e = e / 10 / 12000.0f; if (e > 1) e = 1;
-        bars[i] = st == MED_PLAY ? fmaxf(e, bars[i] * 0.82f) : bars[i] * 0.8f;
-        int h = 4 + (int)(bars[i] * 96);
-        for (int y = 0; y < h; y += 5) fillRect(x0 + i * bw + 2, y0 - y - 4, bw - 5, 3, y > 70 ? C_WARN : C_FG);
-      }
-    }
-    if (st == MED_PLAY) for (int i = 0; i + 2 < 256; i += 2) glowLine(40 + i * 400 / 256, 220 + wave[i] / 900, 40 + (i + 2) * 400 / 256, 220 + wave[i + 2] / 900, C_DIM, 10);
+    spectrum(st == MED_PLAY);
+    drawVis(st == MED_PLAY);
     // where in the song: drag on the bar to jump
     uint32_t len = musLenMs(), pos = dragSeek ? seekTo : musPosMs();
     meter(40, 284, 400, 20, len ? (int)((uint64_t)pos * 100 / len) : 0, true);
@@ -191,7 +317,7 @@ struct NowPlaying : Screen {
     dosButton(370, by, 70, 46, RP[repeatMode % 3], [] { repeatMode = (repeatMode + 1) % 3; toast(repeatMode == 0 ? "REPEAT OFF" : repeatMode == 1 ? "REPEAT ALL" : "REPEAT ONE", 900); }, repeatMode != 0);
     volSlider(40, 394, 400);
     fkeys({{"ESC", "Back", [] { uiBack(); }}, {"S", shuffle ? "Shuffle*" : "Shuffle", [] { shuffle = !shuffle; makeOrder(); toast(shuffle ? "SHUFFLE ON" : "SHUFFLE OFF", 900); }},
-           {"X", "Stop", [] { musStop(); }}});
+           {"X", "Stop", [] { musStop(); }}, {"V", "Look", [] { cfg.musVis = (cfg.musVis + 1) % N_VIS; cfgChanged(); }}});
   }
   bool ev(const Ev& e) override {
     if (e.t == EV_KEY) {
@@ -206,6 +332,9 @@ struct NowPlaying : Screen {
       dragSeek = true; seekTo = (uint32_t)((uint64_t)(x - 40) * musLenMs() / 400); uiDirty(); return true;
     }
     if (dragSeek && (e.t == EV_UP || e.t == EV_TAP)) { dragSeek = false; musSeek(seekTo); uiDirty(); return true; }
+    if (e.t == EV_TAP && e.y0 >= VY - 6 && e.y0 < VY + VH) {     // the picture: the next one
+      cfg.musVis = (cfg.musVis + 1) % N_VIS; cfgChanged(); toast(VIS_NAMES[cfg.musVis], 900); uiDirty(); return true;
+    }
     if (volEv(e, 40, 394, 400)) return true;
     if (e.t == EV_SWIPE && e.dir == SW_LEFT) { musicNext(1); return true; }
     return false;

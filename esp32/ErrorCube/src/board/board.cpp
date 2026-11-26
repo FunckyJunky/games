@@ -282,10 +282,8 @@ void boardShow() {
 void boardCrt(int dir) {
   if (!gfx || !shadow || !phys) return;
   const uint16_t* src = dir > 0 ? physical() : shadow;
-  static uint16_t* tmp = nullptr;
-  if (!tmp) tmp = (uint16_t*)heap_caps_malloc(SCR_W * SCR_H * 2, MALLOC_CAP_SPIRAM);
-  if (!tmp) return;
-  if (src == phys) { memcpy(tmp, phys, SCR_W * SCR_H * 2); src = tmp; }   // phys gets reused below
+  // phys gets drawn into below: the picture goes to shadow first (shadow is sent whole again afterwards anyway)
+  if (src == phys) { memcpy(shadow, phys, SCR_W * SCR_H * 2); src = shadow; }
   uint16_t* out = phys;
   const int N = 9;
   for (int k = 0; k <= N; k++) {

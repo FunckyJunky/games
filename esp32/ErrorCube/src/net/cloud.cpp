@@ -5,6 +5,7 @@
 //  - updates over WiFi (OTA) with rollback: a new firmware that doesn't come up is replaced by the old one
 // The link protocol is in public/cube/README.md.
 #include <Arduino.h>
+#include <string>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -43,7 +44,7 @@ static String urlEnc(const char* s) {
 }
 
 // ================================================================== the HTTPS worker
-enum { J_ONLINE, J_WHO, J_CHAT, J_SAY, J_FW, J_APPS, J_APPGET, J_FETCH, J_OTA, J_OTAFILE, J_N };
+enum { J_ONLINE, J_WHO, J_CHAT, J_SAY, J_FW, J_APPS, J_APPGET, J_FETCH, J_OTA, J_OTAFILE, J_DL, J_N };
 struct Job { uint8_t kind; int id; char* a; char* b; };
 static QueueHandle_t jobs;
 static volatile uint32_t busy = 0;
@@ -215,6 +216,55 @@ static bool appInfo(const char* id, AppInfo& out) {
 }
 
 // ---------------- OTA
+// a download into a file (maps from error.blue...): j.a = the path on error.blue, j.b = the file
+class FileSink : public Stream {
+ public:
+  FILE* f; size_t total, done = 0; bool ok = true;
+  FileSink(FILE* fp, size_t t) : f(fp), total(t) {}
+  size_t write(const uint8_t* b, size_t n) override {
+    size_t w = fwrite(b, 1, n, f); if (w != n) ok = false;
+    done += w; S.dlPct = total ? (int)(done * 100 / total) : (int)(done >> 10);
+    return w;
+  }
+  size_t write(uint8_t c) override { return write(&c, 1); }
+  int available() override { return 0; }
+  int read() override { return -1; }
+  int peek() override { return -1; }
+  void flush() override {}
+};
+static void doDownload(const char* path, const char* file) {
+  S.dlState = 1; S.dlPct = 0;
+  char tmp[120]; snprintf(tmp, sizeof(tmp), "%s.part", file);
+  if (!strncmp(file, "/sd", 3)) sdMount();
+  fsMkdir(std::string(file).substr(0, std::string(file).rfind('/')).c_str());
+  FILE* f = fopen(tmp, "wb");
+  if (!f) { S.dlState = -1; return; }
+  xSemaphoreTake(tlsMx, portMAX_DELAY);
+  if (!tls.connected() && !tlsRoom()) linkStepAside();
+  tlsSetup();
+  bool ok = false;
+  http.end();
+  if (http.begin(tls, String("https://") + CUBE_HOST + path)) {
+    http.setTimeout(20000);
+    int code = http.GET();
+    if (code == 200) {
+      int len = http.getSize();
+      FileSink sink(f, len > 0 ? len : 0);
+      int n = http.writeToStream(&sink);
+      ok = n > 0 && sink.ok && (len <= 0 || sink.done == (size_t)len);
+    }
+    http.end();
+  }
+  if (!ok) tls.stop();
+  linkYield = false;
+  xSemaphoreGive(tlsMx);
+  fclose(f);
+  if (ok) { remove(file); ok = rename(tmp, file) == 0; } else remove(tmp);
+  S.dlState = ok ? 2 : -1;
+  uiDirty();
+}
+void netDownload(const char* path, const char* file) { if (want(J_DL)) { S.dlState = 1; S.dlPct = 0; post(J_DL, 0, path, file); } }
+
 class OtaSink : public Stream {
  public:
   size_t total, done = 0;
@@ -298,6 +348,7 @@ static void worker(void*) {
   for (;;) {
     Job j;
     if (xQueueReceive(jobs, &j, portMAX_DELAY) != pdTRUE) continue;
+    if (S.net != NET_UP && j.kind == J_DL) S.dlState = -1;
     if (S.net != NET_UP && j.kind != J_OTAFILE) {
       if (j.kind == J_APPGET) { LOCK(); if (AppDl* d = dl(j.a, true)) d->st = -1; UNLOCK(); }
       if (j.kind == J_APPS && nApps == -1) nApps = -2;
@@ -362,6 +413,7 @@ static void worker(void*) {
       }
       case J_OTA: doOta(); break;
       case J_OTAFILE: doOtaFile(j.a); break;
+      case J_DL: doDownload(j.a, j.b); break;
     }
     if (body) free(body);
     busy &= ~(1u << j.kind);
@@ -493,14 +545,8 @@ static const char* lAuto(int i) { static char b[5][10]; int m = AUTO_OFF_MIN[i];
 static const char* lUpd(int i) { static char b[3][10]; snprintf(b[i], 10, "%d H", UPD_HOURS[i]); return b[i]; }
 static const char* lKbd(int i) { return i ? "UKRAINIAN" : "ENGLISH"; }
 static const char* lView(int i) { return i ? "3D" : "DOS"; }
-static const char* lLens(int i) { static const char* L[] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }
-static const char* lAnim(int i) { static const char* A[] = {"OFF", "SIMPLE", "3D"}; return A[i]; }
-static const char* lFocus(int i) { static const char* F[] = {"BACK", "PANELS", "TEXT", "BARS", "FRONT"}; return F[i]; }
-static const char* lOffSoftHard(int i) { static const char* S3[] = {"OFF", "SOFT", "HARD"}; return S3[i]; }
-static const char* lBack(int i) { static const char* B[] = {"OFF", "DOTS", "GRID", "STARS", "ROOM"}; return B[i]; }
-static const char* lGlare(int i) { static const char* G[] = {"OFF", "SOFT", "BRIGHT"}; return G[i]; }
-static const char* lCentre(int i) { static const char* C4[] = {"OFF", "SLOW", "MEDIUM", "FAST"}; return C4[i]; }
-static const char* lSensor(int i) { return i ? "GRAVITY" : "GYRO+GRAVITY"; }
+static const char* lAnim(int i) { static const char* A[] = {"OFF", "ON", "ON"}; return A[i]; }
+static const char* lBack(int i) { static const char* B[] = {"PLAIN", "DOTS", "GRID", "STARS", "ROOM"}; return B[i]; }
 static const char* lAct(int i) { return btnName(i); }
 static const char* lAodStyle(int i) { static const char* A[] = {"BIG", "SMALL", "ANALOG", "DOS"}; return A[i]; }
 static const char* lAodWifi(int i) { static const char* W[] = {"AS NORMAL", "SAVE POWER", "OFF"}; return W[i]; }
@@ -522,9 +568,7 @@ static Set SETS[] = {
   {"DISPLAY", "rot", "ROTATION", T_CHOICE, &cfg.rot, 0, 4, lRot},
   {"LOOK", "lowGfx", "LOW GRAPHICS (PLAINEST)", T_TOGGLE, &cfg.lowGfx, 0, 1, nullptr},
   {"LOOK", "view", "MENU", T_CHOICE, &cfg.view, 0, 1, lView},
-  {"LOOK", "lens", "GLASS", T_CHOICE, &cfg.lens, 0, 2, lLens},
-  {"LOOK", "fringe", "COLOUR FRINGE", T_TOGGLE, &cfg.fringe, 0, 1, nullptr},
-  {"LOOK", "anim", "ANIMATION", T_CHOICE, &cfg.anim, 0, 2, lAnim},
+  {"LOOK", "anim", "ANIMATION", T_CHOICE, &cfg.anim, 0, 1, lAnim},
   {"LOOK", "parallax", "MOVES WITH YOU", T_TOGGLE, &cfg.parallax, 0, 1, nullptr},
   {"LOOK", "color", "COLOUR", T_CHOICE, &cfg.color, 0, N_SCHEMES - 1, lScheme},
   {"LOOK", "glow", "GLOW", T_CHOICE, &cfg.glow, 0, 2, lGlow},
@@ -533,25 +577,7 @@ static Set SETS[] = {
   {"LOOK", "crt", "CRT ON/OFF", T_TOGGLE, &cfg.crt, 0, 1, nullptr},
   {"LOOK", "boot", "BOOT", T_CHOICE, &cfg.boot, 0, 2, lBoot},
   {"LOOK", "intro", "3D INTRO", T_TOGGLE, &cfg.intro, 0, 1, nullptr},
-  {"HOLO 3D", "holo", "HOLO 3D", T_TOGGLE, &cfg.holo, 0, 1, nullptr},
-  {"HOLO 3D", "holoLayers", "LAYERS", T_TOGGLE, &cfg.holoLayers, 0, 1, nullptr},
-  {"HOLO 3D", "holoDepth", "DEPTH (PX)", T_SLIDER, &cfg.holoDepth, 0, 20, nullptr},
-  {"HOLO 3D", "holoFocus", "STAYS STILL", T_CHOICE, &cfg.holoFocus, 0, 4, lFocus},
-  {"HOLO 3D", "holoPop", "POP-OUT", T_SLIDER, &cfg.holoPop, 0, 100, nullptr},
-  {"HOLO 3D", "holoShadow", "SHADOWS", T_CHOICE, &cfg.holoShadow, 0, 2, lOffSoftHard},
-  {"HOLO 3D", "holoWalls", "SIDES", T_SLIDER, &cfg.holoWalls, 0, 5, nullptr},
-  {"HOLO 3D", "holoBack", "BACKDROP", T_CHOICE, &cfg.holoBack, 0, 4, lBack},
-  {"HOLO 3D", "holoLens", "GLASS MOVES (PX)", T_SLIDER, &cfg.holoLens, 0, 60, nullptr},
-  {"HOLO 3D", "holoPersp", "PERSPECTIVE", T_SLIDER, &cfg.holoPersp, 0, 100, nullptr},
-  {"HOLO 3D", "holoGlare", "REFLECTION", T_CHOICE, &cfg.holoGlare, 0, 2, lGlare},
-  {"HOLO 3D", "holoRainbow", "RAINBOW (PX)", T_SLIDER, &cfg.holoRainbow, 0, 4, nullptr},
-  {"HOLO 3D", "holoRange", "FULL TILT AT (DEG)", T_SLIDER, &cfg.holoRange, 10, 60, nullptr},
-  {"HOLO 3D", "holoDead", "DEAD ZONE (DEG)", T_SLIDER, &cfg.holoDead, 0, 10, nullptr},
-  {"HOLO 3D", "holoSmooth", "SMOOTHING", T_SLIDER, &cfg.holoSmooth, 0, 100, nullptr},
-  {"HOLO 3D", "holoCentre", "AUTO CENTRE", T_CHOICE, &cfg.holoCentre, 0, 3, lCentre},
-  {"HOLO 3D", "holoSensor", "SENSOR", T_CHOICE, &cfg.holoSensor, 0, 1, lSensor},
-  {"HOLO 3D", "holoInvX", "INVERT LEFT/RIGHT", T_TOGGLE, &cfg.holoInvX, 0, 1, nullptr},
-  {"HOLO 3D", "holoInvY", "INVERT UP/DOWN", T_TOGGLE, &cfg.holoInvY, 0, 1, nullptr},
+  {"DISPLAY", "holoBack", "WALLPAPER", T_CHOICE, &cfg.holoBack, 0, 4, lBack},
   {"SOUND", "vol", "VOLUME", T_SLIDER, &cfg.vol, 0, 100, nullptr},
   {"SOUND", "clicks", "KEY CLICKS", T_TOGGLE, &cfg.clicks, 0, 1, nullptr},
   {"SOUND", "sounds", "SOUNDS", T_TOGGLE, &cfg.sounds, 0, 1, nullptr},
@@ -603,7 +629,7 @@ static void sendSchema() {
   JsonDocument d;
   d["t"] = "schema"; d["dev"] = "error-cube"; d["v"] = CUBE_VERSION;
   JsonArray caps = d["caps"].to<JsonArray>();
-  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power", "files", "pico8"}) caps.add(c);
+  for (const char* c : {"say", "video", "audio", "apps", "shot", "update", "power", "files", "map"}) caps.add(c);
   JsonArray g = d["sets"].to<JsonArray>();
   static const char* TY[] = {"toggle", "choice", "slider", "text"};
   for (int i = 0; i < N_SETS; i++) {

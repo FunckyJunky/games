@@ -122,6 +122,8 @@ struct Cfg {
   uint8_t alarmLoud = 1;    // full volume while it rings (whatever VOLUME is)
   uint8_t alarmMove = 1;    // moving / picking up the cube = snooze
   uint8_t alarmSnooze = 5;  // minutes
+  // MUSIC (1.5): which picture of the sound (tap it to change)
+  uint8_t musVis = 0;
   // new settings go here, at the end
 };
 extern Cfg cfg;
@@ -160,7 +162,8 @@ struct SysState {
   char netErr[48] = "";
   char linkErr[64] = "";                         // why the live link to error.blue/cube failed last
   char crash[240] = ""; uint8_t crashAt = 0;     // the last start was a crash: what (and the core dump's PC + backtrace)
-  uint8_t cfgRestored = 0;                       // the settings came back from C:\cube.cfg / A:\ERRORCUBE\cube.cfg
+  uint8_t cfgRestored = 0;
+  volatile int8_t dlState = 0; volatile int dlPct = 0;   // netDownload                       // the settings came back from C:\cube.cfg / A:\ERRORCUBE\cube.cfg
   // updates
   uint8_t upd = UPD_IDLE;
   char updVer[16] = "", updNotes[120] = "", updMsg[48] = "";
@@ -315,5 +318,6 @@ char* netAppSource(const char* id, size_t* n);   // the downloaded JavaScript (m
 void netAppSend(const char* id, const char* json);   // an app talks to the control page
 bool netAppMsg(char* out, size_t n);          // a message for the running app from the control page
 void netFetch(int id, const char* path);      // an app asks error.blue for something (GET)
+void netDownload(const char* path, const char* file);   // error.blue path -> a file (S.dlState: 1 loading, 2 done, -1 failed)
 bool netFetchDone(int& id, int& status, char*& body);   // body malloc'd (free it)
 void netReportProg(const char* name);         // tell the control page what's open

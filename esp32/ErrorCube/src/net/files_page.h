@@ -35,7 +35,7 @@ async function ls(){
   const e=(j.e||[]).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
   $('list').innerHTML=e.length?e.map(f=>{const p=cur+'/'+f[0];
     return '<div><span class=n data-d="'+(f[1]?esc(p):'')+'">'+(f[1]?'&#9618; ':'')+esc(f[0])+'</span><span class=s>'+(f[1]?'&lt;DIR&gt;':sz(f[2]))+'</span>'+
-    (f[1]?'':isV(f[0])?'<span class=x data-c="'+esc(p)+'">CONVERT</span>':!/\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|p8|p8\.png|bin)$/i.test(f[0])?'':'<span class=x data-o="'+esc(p)+'">&#9654;</span>')+
+    (f[1]?'':isV(f[0])?'<span class=x data-c="'+esc(p)+'">CONVERT</span>':!/\.(mp3|wav|avi|jpe?g|bmp|txt|md|json|csv|log|map|bin)$/i.test(f[0])?'':'<span class=x data-o="'+esc(p)+'">&#9654;</span>')+
     (f[1]?'':'<a href="/dl?p='+encodeURIComponent(p)+'">&#8595;</a>')+'<span class=x data-r="'+esc(p)+'">REN</span><span class=x data-x="'+esc(p)+'">DEL</span></div>'}).join(''):
     '<div class=dim>'+(j.ok?'Empty':(cur.startsWith('/sd')?'No SD card in the cube':'Can\'t read this folder'))+'</div>';
 }

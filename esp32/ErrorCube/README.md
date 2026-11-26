@@ -25,17 +25,35 @@ battery, PCF85063 clock, QMI8658 motion sensor, ES8311 speaker, TF card, buttons
 
 **Look (SETUP > LOOK):** MENU 3D (the programs as glass cards on a turning carousel over a synthwave floor, each
 with its own turning wireframe icon; the camera leans with how you hold the cube) or DOS (the list).
-GLASS: CURVED (a CRT tube: the edges bend, the middle stays sharp), FISHEYE or FLAT, with COLOUR FRINGE (red and
-blue drift apart toward the edges). ANIMATION 3D: the cube turns between screens (up = open, down = back, the
-3D menu's folders turn up/down); SIMPLE: a glitch instead. Glitches: tears, roll, jitter, blocks, static, inverse
-bands, garbled letters, colour split, VHS tracking band, interlace, datamosh, smear, signal loss. Also: the list's
-selection bar slides, rows type themselves in, dialogs open like DOS windows, QUICK slides down, a ring where you
-tap, and the 3D INTRO at start (starfield warp, ERROR in solid block letters, lens flare). BATTERY SAVER turns the
-effects off.
+Glitches: tears, roll, jitter, blocks, static, inverse bands, garbled letters, colour split, VHS tracking band,
+interlace, smear, signal loss. Also: the list's selection bar slides, rows type themselves in, dialogs open like DOS
+windows, QUICK slides down, a ring where you tap, and the 3D INTRO at start (starfield warp, ERROR in solid block
+letters, lens flare). Wallpapers (SETUP > SCREEN): plain, dots, grid, stars, room, a picture. BATTERY SAVER and LOW
+GRAPHICS turn the effects off. (HOLO 3D, the curved glass and the cube turn between screens were removed in 1.5.)
 
 Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sound, offline, sleep, setup, power).
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
+
+## New in 1.5
+
+- **Less memory:** the graphics that needed big buffers are gone: HOLO 3D (tilt depth layers, shadows, sides, the
+  moving glass), the CURVED / FISHEYE glass (a 1.5 MB table) and its colour fringe, the cube turn between screens
+  (two extra full-screen pictures; a short glitch now), the glass picture behind everything (plain colour), the
+  roll glitch's and the CRT animation's copies and datamosh. About 4 MB of PSRAM and 10 KB of internal RAM free.
+  malloc puts 512 bytes and more in PSRAM first (was 4 KB), so lists, strings and screens leave the internal RAM
+  to WiFi and TLS (the phone link). The firmware is 10% smaller.
+- **PICO-8 removed for now** (kept in esp32/ErrorCube/attic, not built).
+- **Scrolling:** lists, text (TYPE), CHAT and dialogs glide on after a flick (inertia) and stop when touched; a
+  slider on the right side when there's more than fits: drag its handle. Dialogs scroll their text (the crash
+  report shows the whole backtrace; - / + scroll it when there's one button).
+- **MAP.EXE:** .map files (/sd/MAPS, C:\maps) in 3D: buildings with heights, forests and parks with trees, water,
+  fields, roads and railways, from OpenStreetMap. Drag = move, tilt = turn / look, - / + = zoom (down to about
+  20 m across), hold = menu (3D / from above, back to the middle, tilt on/off). HOME (Brück, 4 x 4 km) comes from
+  error.blue (public/cube/maps/home.map: GET in the list). The phone's MAP tab makes new maps: search a place or
+  MY PLACE, pick 1, 2 or 4 km, MAKE THE MAP sends it to the cube (public/cube/map.js packs it in the browser).
+- **MUSIC:** 9 pictures of the sound, tap it (or V) for the next: BARS, SCOPE, MIRROR, CIRCLE, PEAKS, WATERFALL,
+  PULSE (a ring on every beat), VU METER, DOTS. The bars are a real spectrum now (24 bands, Goertzel, log spaced).
 
 ## New in 1.4.1 (and 1.4.2: a core dump left by an earlier firmware is reported too, with its ELF SHA)
 

@@ -476,39 +476,41 @@ Screen* makeSound() { return new Sound(); }
 
 // ================================================================== FILES
 struct TextView : Screen {
-  char title[40]; std::vector<std::string> lines; float scroll = 0; int dragY = 0; float s0 = 0;
+  char title[40]; std::vector<std::string> lines; Scroll sc;
   const char* name() override { return "TYPE"; }
   TextView(const char* t, const char* text) {
     snprintf(title, sizeof(title), "%s", t);
     const char* p = text;
     while (*p) {
       const char* e = p; int k = 0;
-      while (*e && *e != '\n' && k < 29) { utf8Next(e); k++; }
+      while (*e && *e != '\n' && k < 28) { utf8Next(e); k++; }
       lines.push_back(std::string(p, e - p));
       p = e; if (*p == '\n') p++;
       if (lines.size() > 4000) break;
     }
   }
+  void tick() override { sc.tick(); }
   void draw() override {
     pathLine(title);
-    clipSet(15, 92, 450, 330);
-    int first = (int)(scroll / LH);
+    sc.x = 15; sc.y = 92; sc.w = 450; sc.h = 330; sc.view = 330; sc.total = lines.size() * LH; sc.clamp();
+    sc.tick();
+    clipSet(15, 92, 436, 330);
+    int first = (int)(sc.pos / LH);
     for (int i = first; i < (int)lines.size() && i < first + 12; i++) {
       std::string l = lines[i];
       for (auto& ch : l) if (ch == '\r' || ch == '\t') ch = ' ';
-      drawText(FT, 15, 92 + i * LH - (int)scroll, l.c_str(), C_FG);
+      drawText(FT, 15, 92 + i * LH - (int)sc.pos, l.c_str(), C_FG);
     }
     clipReset();
+    sc.drawBar();
     char b[24]; snprintf(b, sizeof(b), "%d LINES", (int)lines.size());
     drawTextR(FT, 465, rowY(12) + 6, b, C_DIM, TX_FLAT);
     fkeys({{"ESC", "Back", [] { uiBack(); }}});
   }
-  void clamp() { float mx = lines.size() * LH - 320.0f; if (mx < 0) mx = 0; if (scroll > mx) scroll = mx; if (scroll < 0) scroll = 0; }
   bool ev(const Ev& e) override {
-    if (e.t == EV_DOWN) { dragY = e.y; s0 = scroll; return true; }
-    if (e.t == EV_MOVE) { scroll = s0 + dragY - e.y; clamp(); uiDirty(); return true; }
-    if (e.t == EV_KEY && e.key == K_NEXT) { scroll += LH * 8; clamp(); uiDirty(); return true; }
-    if (e.t == EV_KEY && e.key == K_PREV) { scroll -= LH * 8; clamp(); uiDirty(); return true; }
+    if (sc.ev(e)) return true;
+    if (e.t == EV_KEY && e.key == K_NEXT) { sc.vel = 0; sc.pos += LH * 8; sc.clamp(); uiDirty(); return true; }
+    if (e.t == EV_KEY && e.key == K_PREV) { sc.vel = 0; sc.pos -= LH * 8; sc.clamp(); uiDirty(); return true; }
     return false;
   }
 };
@@ -590,7 +592,7 @@ bool openFile(const char* path) {
   std::string p = path, dir = p.substr(0, p.rfind('/'));
   if (!strcasecmp(ex, ".mp3") || !strcasecmp(ex, ".wav")) { musicPlayFolder(dir.c_str(), nm); uiOpen(makeNowPlaying()); return true; }
   if (!strcasecmp(ex, ".avi") || isPhoneVideo(nm)) { videoOrConvert(path); return true; }
-  { size_t l = strlen(nm); if ((l > 3 && !strcasecmp(nm + l - 3, ".p8")) || (l > 7 && !strcasecmp(nm + l - 7, ".p8.png"))) { p8Open(path); return true; } }
+  { size_t l = strlen(nm); if (l > 4 && !strcasecmp(nm + l - 4, ".map")) { mapOpen(path); return true; } }
   if (imgIsPicture(nm)) { std::vector<std::string> pics; int at; listPics(path, pics, at); uiOpen(new ImageView(pics, at)); return true; }
   if (isText(nm)) {
     size_t max = 96000, got = 0;

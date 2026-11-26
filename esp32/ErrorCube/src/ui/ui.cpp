@@ -21,8 +21,6 @@ static int lastTapX = 0, lastTapY = 0;
 static int ripX = 0, ripY = 0; static uint32_t ripAt = 0;    // the ring where you tapped
 extern float holoBarUp;
 static uint32_t revealAt = 0;
-static int transDir = -1; static uint32_t transAt = 0; static bool transTo = false;
-static const uint16_t* lastPre = nullptr;                    // the last frame, before the lens + scanlines
 void uiReveal() { revealAt = msNow(); }
 uint32_t uiRevealAt() { return revealAt; }
 
@@ -39,14 +37,8 @@ void uiDirty() { dirty = true; }
 void redrawIn(uint32_t ms) { uint32_t t = msNow() + ms; if (!nextDraw || (int32_t)(t - nextDraw) < 0) nextDraw = t; }
 Screen* uiCurrent() { return stack.empty() ? nullptr : stack.back(); }
 
-void uiTransition(int dir) {
-  if (cfg.anim < 2 || lowFx() || !uiAwake() || !lastPre) { if (cfg.anim) uiGlitch(1, 120); return; }
-  uint16_t* a = fxBuf(0);
-  if (!a || !fxBuf(1)) return;
-  memcpy(a, lastPre, SCR_W * SCR_H * 2);
-  transDir = dir; transAt = msNow(); transTo = false;
-  dirty = true;
-}
+// 1.5: no cube turn any more (it needed two extra full-screen pictures): a short glitch, the rows type in
+void uiTransition(int) { if (cfg.anim) uiGlitch(1, 120); }
 void uiReplaceRoot(Screen* s) {
   if (!s) return;
   if (stack.empty()) { uiOpen(s); return; }
@@ -137,7 +129,6 @@ static bool deliver(const Ev& e) {
 
 void uiTouch(bool down, int x, int y) {
   uint32_t now = msNow();
-  if (down) { fxLensTouch(x, y); holoUnmap(x, y); }   // the picture is curved (and HOLO moves it): where the finger really is
   if (down && !tDown) {
     tDown = true; tDrag = false; tLongDone = false;
     tx0 = tx = x; ty0 = ty = y; tAt = now;
@@ -424,6 +415,85 @@ void dosButton(int x, int y, int w, int h, const char* label, Act a, bool on, in
   hit(x, y, w, h, [a] { sndKey(); if (a) a(); });
 }
 
+// ------------------------------------------------------------------ scrolling: inertia + the slider (1.5)
+// the glide: px per ms, slowing down like a flick on a phone (it loses 2/3 of its speed in about 1/3 s)
+static bool glideStep(float& pos, float& vel, uint32_t& t, float maxPos) {
+  uint32_t now = msNow();
+  if (vel == 0) { t = now; return false; }
+  int dt = (int)(now - t); if (dt > 50) dt = 50; if (dt < 0) dt = 0;
+  t = now;
+  pos += vel * dt;
+  vel *= powf(0.997f, (float)dt);
+  if (fabsf(vel) < 0.02f) vel = 0;
+  if (pos < 0) { pos = 0; vel = 0; }
+  if (pos > maxPos) { pos = maxPos; vel = 0; }
+  return true;
+}
+// how fast the finger moves (px per ms), smoothed over the last moves
+static void velTrack(float& vel, int& lastY, uint32_t& lastT, int ny) {
+  uint32_t now = msNow();
+  int dt = (int)(now - lastT);
+  if (dt > 0) { float v = (float)(lastY - ny) / dt; vel = dt > 60 ? v : vel * 0.35f + v * 0.65f; }
+  lastY = ny; lastT = now;
+}
+// let go: glide on if the finger was still moving, at most 6 px per ms
+static void velRelease(float& vel, uint32_t lastT, uint32_t& glideT) {
+  if (msNow() - lastT > 90) { vel = 0; return; }
+  if (vel > 6) vel = 6; if (vel < -6) vel = -6;
+  if (fabsf(vel) < 0.08f) vel = 0;
+  glideT = msNow();
+}
+// the slider's handle: how tall, where
+static void barGeom(int h, float pos, float view, float total, int& th, int& ty) {
+  th = total > 0 ? (int)(h * view / total) : h; if (th < 34) th = 34; if (th > h) th = h;
+  float m = total - view;
+  ty = m > 0 ? (int)((h - th) * pos / m) : 0;
+}
+// the finger at fy on the slider: the handle's middle goes there
+static float barPosAt(int y, int h, float view, float total, int fy) {
+  int th, ty; barGeom(h, 0, view, total, th, ty);
+  float m = total - view; if (m <= 0 || h <= th) return 0;
+  float p = (float)(fy - y - th / 2) / (h - th) * m;
+  return p < 0 ? 0 : p > m ? m : p;
+}
+static bool barHeld = false;          // a slider is being dragged now: its handle is drawn bigger
+void scrollBarDraw(int right, int y, int h, float pos, float view, float total) {
+  if (total <= view + 1) return;
+  int x = right - 8;
+  for (int yy = y + 2; yy < y + h - 2; yy += 5) fillRect(x + 2, yy, 2, 2, C_DIM);     // the track: a dotted line
+  int th, ty; barGeom(h, pos, view, total, th, ty);
+  if (barHeld) { fillRect(x - 3, y + ty, 12, th, C_FG); if (cfg.glow && !lowFx()) glowRect(x - 3, y + ty, 12, th, C_FG, 3); }
+  else { fillRect(x, y + ty, 6, th, C_FG); rect(x - 1, y + ty - 1, 8, th + 2, C_BG); }
+}
+
+void Scroll::tick() {
+  if (drag) return;
+  if (glideStep(pos, vel, glideT, maxPos())) { uiDirty(); redrawIn(16); }
+}
+void Scroll::drawBar() { tick(); scrollBarDraw(x + w, y, h, pos, view, total); }
+bool Scroll::ev(const Ev& e) {
+  bool inside = e.x0 >= x && e.x0 < x + w + 12 && e.y0 >= y && e.y0 < y + h;
+  if (e.t == EV_DOWN && inside) {
+    vel = 0; drag = false; bar = onBar(e.x, e.y); pos0 = pos; y0 = e.y; lastY = e.y; lastT = msNow();
+    return true;
+  }
+  if (e.t == EV_MOVE && inside) {
+    if (bar && abs(e.y - e.y0) >= abs(e.x - e.x0)) { drag = true; barHeld = true; pos = barPosAt(y, h, view, total, e.y); uiDirty(); return true; }
+    if (!drag && abs(e.y - e.y0) < abs(e.x - e.x0)) return false;
+    drag = true;
+    velTrack(vel, lastY, lastT, e.y);
+    pos = pos0 + (y0 - e.y); clamp(); uiDirty();
+    return true;
+  }
+  if (e.t == EV_UP && drag) {
+    drag = false;
+    if (bar) { bar = false; barHeld = false; vel = 0; uiDirty(); return true; }
+    velRelease(vel, lastT, glideT); redrawIn(16); return true;
+  }
+  if (e.t == EV_SWIPE && (e.dir == SW_UP || e.dir == SW_DOWN) && inside && hasBar()) return true;
+  return false;
+}
+
 // ------------------------------------------------------------------ list
 void ListView::clampScroll() {
   float mx = n * rowH - h; if (mx < 0) mx = 0;
@@ -433,31 +503,34 @@ void ListView::clampScroll() {
 void ListView::showSel() {
   if (sel < 0) sel = 0; if (sel >= n) sel = n - 1;
   if (sel < 0) return;
+  vel = 0;
   if (sel * rowH < scroll) scroll = sel * rowH;
   if ((sel + 1) * rowH > scroll + h) scroll = (sel + 1) * rowH - h;
   clampScroll();
 }
 void ListView::tick() {
-  if (!dragging && fabsf(vel) > 0.3f) {
-    scroll += vel; vel *= 0.9f; clampScroll(); uiDirty(); redrawIn(30);
-  }
+  if (dragging) return;
+  float mx = n * rowH - h; if (mx < 0) mx = 0;
+  if (glideStep(scroll, vel, glideAt, mx)) { uiDirty(); redrawIn(16); }
 }
 void ListView::draw(std::function<void(int, int, int, int, int, bool)> row, std::function<void(int)> pick,
                     std::function<void(int, int)>) {
+  tick();
   clampScroll();
   uint32_t now = msNow();
-  bool anim = cfg.anim && !lowFx();
+  bool anim = cfg.anim && !lowFx() && !plain;
+  int W = rowW();
   // the selection bar slides from row to row
   float target = sel * rowH;
   if (barY < 0 || !anim) barY = target;
   barY += (target - barY) * 0.38f;
   if (fabsf(target - barY) < 1.5f) barY = target;
   bool moving = barY != target;
-  clipSet(x, y, w, h);
-  if (moving) {
+  clipSet(x, y, W, h);
+  if (moving && !plain) {
     int by = y + (int)(barY - scroll);
-    glowRect(x + 2, by + 3, w - 4, rowH - 6, C_FG, 4);
-    blendRect(x + 2, by + 3, w - 4, rowH - 6, C_FG, 20);
+    glowRect(x + 2, by + 3, W - 4, rowH - 6, C_FG, 4);
+    blendRect(x + 2, by + 3, W - 4, rowH - 6, C_FG, 20);
     redrawIn(16);
   }
   int first = (int)(scroll / rowH);
@@ -468,55 +541,67 @@ void ListView::draw(std::function<void(int, int, int, int, int, bool)> row, std:
     float p = anim ? ((int32_t)(now - revealAt) - (i - first) * 32) / 120.0f : 1;
     if (p <= 0) { redrawIn(16); continue; }
     if (p < 1) {
-      int cw = (int)(w * p);
+      int cw = (int)(W * p);
       int top = ry > y ? ry : y, bot = ry + rowH < y + h ? ry + rowH : y + h;
       clipSet(x, top, cw, bot - top);
-      row(i, x, ry, w, rowH, i == sel && !moving);
-      clipSet(x, y, w, h);
+      row(i, x, ry, W, rowH, i == sel && !moving);
+      clipSet(x, y, W, h);
       fillRect(x + cw, ry + (rowH - LH) / 2 + 4, CW, LH - 8, C_FG);
       redrawIn(16);
       continue;
     }
-    if (i == sel && !moving && holoLayersOn()) {
-      // HOLO: the chosen row floats above the list
-      HoloZ z(holoAt() + H_RAISE);
-      holoBarUp = H_RAISE;                 // the row's bar (if it draws one) gets a shadow and sides
-      row(i, x, ry, w, rowH, true);
-      holoBarUp = 0;
-      continue;
-    }
-    row(i, x, ry, w, rowH, i == sel && !moving);
+    row(i, x, ry, W, rowH, !plain && i == sel && !moving);
   }
   clipReset();
-  // scroll marks, like ^ and v on error.blue
-  if (scroll > 0) drawText(FT, x + w - CW, y - 4, "\xE2\x96\xB2", C_DIM, TX_FLAT);
-  if (scroll + h < n * rowH) drawText(FT, x + w - CW, y + h - LH + 4, "\xE2\x96\xBC", C_DIM, TX_FLAT);
+  // the slider on the right (more than fits)
+  scrollBarDraw(x + w, y, h, scroll, h, n * rowH);
   // rows are reached by tapping (handled in ev), not as focus hits
   (void)pick;
 }
 bool ListView::ev(const Ev& e, std::function<void(int)> pick) {
   if (e.t == EV_KEY) {
+    if (plain) {
+      if (e.key == K_NEXT) { scroll += rowH * 3; clampScroll(); uiDirty(); return true; }
+      if (e.key == K_PREV) { scroll -= rowH * 3; clampScroll(); uiDirty(); return true; }
+      return false;
+    }
     if (e.key == K_NEXT) { if (sel < n - 1) sel++; showSel(); sndKey(); return true; }
     if (e.key == K_PREV) { if (sel > 0) sel--; showSel(); sndKey(); return true; }
     if (e.key == K_OK && sel >= 0 && sel < n) { sndKey(); pick(sel); return true; }
     return false;
   }
-  bool inside = e.x0 >= x && e.x0 < x + w && e.y0 >= y && e.y0 < y + h;
-  if (e.t == EV_DOWN && inside) { dragging = false; vel = 0; scroll0 = scroll; dragY0 = e.y; lastY = e.y; lastMove = msNow(); return true; }
+  bool inside = e.x0 >= x && e.x0 < x + w + 12 && e.y0 >= y && e.y0 < y + h;
+  static bool caught = false;          // a touch that stopped a glide doesn't pick the row under it
+  if (e.t == EV_DOWN && inside) {
+    caught = fabsf(vel) > 0.15f;
+    dragging = false; barDrag = false; vel = 0; scroll0 = scroll; dragY0 = e.y; lastY = e.y; lastMove = msNow();
+    return true;
+  }
   if (e.t == EV_MOVE && inside) {
+    bool onBar = hasBar() && e.x0 >= x + w - 34;
+    if (onBar && (barDrag || abs(e.y - e.y0) >= abs(e.x - e.x0))) {     // the slider: the handle follows the finger
+      dragging = barDrag = barHeld = true; caught = false;
+      scroll = barPosAt(y, h, h, n * rowH, e.y); vel = 0;
+      uiDirty();
+      return true;
+    }
     if (!dragging && abs(e.y - e.y0) < abs(e.x - e.x0)) return false;   // sideways: not mine
-    dragging = true;
-    uint32_t now = msNow();
-    float d = (float)(lastY - e.y);
-    if (now != lastMove) vel = vel * 0.5f + d * 0.5f * (16.0f / (now - lastMove + 1));
-    lastY = e.y; lastMove = now;
+    dragging = true; caught = false;
+    velTrack(vel, lastY, lastMove, e.y);
     scroll = scroll0 + (dragY0 - e.y);
     clampScroll();
     uiDirty();
     return true;
   }
-  if (e.t == EV_UP && dragging) { dragging = false; if (msNow() - lastMove > 80) vel = 0; redrawIn(20); return true; }
+  if (e.t == EV_UP) caught = false;
+  if (e.t == EV_UP && dragging) {
+    dragging = false;
+    if (barDrag) { barDrag = barHeld = false; vel = 0; uiDirty(); return true; }
+    velRelease(vel, lastMove, glideAt); redrawIn(16); return true;
+  }
   if (e.t == EV_TAP && inside) {
+    if (caught) { caught = false; return true; }
+    if (plain) return false;
     int i = (int)((e.y - y + scroll) / rowH);
     if (i >= 0 && i < n) { sel = i; sndKey(); pick(i); return true; }
   }
@@ -769,14 +854,28 @@ void kbOpen(const char* title, const char* init, int maxLen, std::function<void(
 
 // ------------------------------------------------------------------ dialog
 struct Dialog : Overlay {
-  char title[32]; char text[300];
+  char title[32];
+  std::vector<std::string> lines;           // the text, wrapped (any length: more than fits scrolls, slider on the right)
   std::vector<std::string> btn;
   std::function<void(int)> cb;
   int sel = 0;
   uint32_t born = msNow();
+  Scroll sc;
   Dialog(const char* t, const char* x, std::vector<const char*> b, std::function<void(int)> c) : cb(c) {
-    snprintf(title, sizeof(title), "%s", t); snprintf(text, sizeof(text), "%s", x ? x : "");
+    snprintf(title, sizeof(title), "%s", t);
     for (auto s : b) btn.push_back(s);
+    // wrap 24 letters a line, a part at a time (no limit on the number of lines)
+    const char* p = x ? x : "";
+    char part[404], L[24][64];
+    while (*p) {
+      int n = 0; while (p[n] && n < 400) n++;
+      // cut at a space (or a line break) so a word isn't split between two parts
+      if (p[n]) { int k = n; while (k > 40 && p[k] != ' ' && p[k] != '\n') k--; if (k > 40) n = k; }
+      memcpy(part, p, n); part[n] = 0; p += n;
+      if (*p == ' ' || *p == '\n') p++;
+      int nl = wrapText(part, 24, L, 24);
+      for (int i = 0; i < nl; i++) lines.push_back(L[i]);
+    }
   }
   void pick(int i) {
     std::function<void(int)> c = cb;
@@ -784,11 +883,13 @@ struct Dialog : Overlay {
     if (c) c(i);
   }
   void draw() override {
-    char lines[8][64];
-    int nl = wrapText(text, 24, lines, 8);
     bool vert = btn.size() > 2;
     int bh = 50, bw = 380;
-    int h = 72 + nl * LH + (vert ? (int)btn.size() * (bh + 8) : bh + 8) + 10;
+    int btnH = vert ? (int)btn.size() * (bh + 8) : bh + 8;
+    int nl = lines.size();
+    int maxVis = (SCR_H - 56 - 16 - 82 - btnH) / LH; if (maxVis < 3) maxVis = 3;
+    int vis = nl < maxVis ? nl : maxVis;
+    int h = 72 + vis * LH + btnH + 10;
     int w = 420, x = (SCR_W - w) / 2, y = (SCR_H - h) / 2;
     if (y < 56) y = 56;
     // a DOS window opening: the box grows out of the middle, with a little static
@@ -803,19 +904,24 @@ struct Dialog : Overlay {
       redrawIn(16);
       return;
     }
-    if (holoLayersOn()) { holoShadow(x, y, w, h, holoAt() - H_TEXT); holoWalls(x, y, w, h, C_FG, 0.6f, true); }
-    else {
-      fillRect(x + 12, y + h, w, 10, C_BLACK);          // the DOS shadow
-      fillRect(x + w, y + 12, 12, h, C_BLACK);
-    }
+    fillRect(x + 12, y + h, w, 10, C_BLACK);          // the DOS shadow
+    fillRect(x + w, y + 12, 12, h, C_BLACK);
     fillRect(x, y, w, h, C_BG);
     dosBox(x, y, w, h, C_FG);
     char t[40]; snprintf(t, sizeof(t), " %s ", title);
     int tw = textW(FT, t);
     fillRect(x + (w - tw) / 2, y, tw, 10, C_BG);
     drawTextC(FT, x + w / 2, y - 10, t, C_FG);
-    for (int i = 0; i < nl; i++) drawTextC(FT, SCR_W / 2, y + 30 + i * LH, lines[i], C_FG);
-    int by = y + 40 + nl * LH;
+    // the text: scrolls when it's longer than the box (drag it, or the slider on the right)
+    sc.x = x + 8; sc.y = y + 28; sc.w = w - 16; sc.h = vis * LH; sc.view = vis * LH; sc.total = nl * LH; sc.clamp();
+    sc.tick();
+    clipSet(sc.x, sc.y, sc.w, sc.h);
+    int first = (int)(sc.pos / LH);
+    for (int i = first; i < nl && i <= first + vis; i++)
+      drawTextC(FT, sc.hasBar() ? SCR_W / 2 - 8 : SCR_W / 2, sc.y + 2 + i * LH - (int)sc.pos, lines[i].c_str(), C_FG);
+    clipReset();
+    scrollBarDraw(sc.x + sc.w, sc.y, sc.h, sc.pos, sc.view, sc.total);
+    int by = y + 40 + vis * LH;
     if (vert) {
       for (size_t i = 0; i < btn.size(); i++) {
         int yy = by + i * (bh + 8);
@@ -830,12 +936,17 @@ struct Dialog : Overlay {
   bool ev(const Ev& e) override {
     if (e.t == EV_KEY) {
       int n = btn.size();
+      if (n <= 1 && sc.hasBar() && (e.key == K_NEXT || e.key == K_PREV)) {   // one button: - / + scroll the text
+        sc.vel = 0; sc.pos += (e.key == K_NEXT ? 3 : -3) * LH; sc.clamp(); uiDirty(); return true;
+      }
       if (e.key == K_NEXT) sel = (sel + 1) % n;
       else if (e.key == K_PREV) sel = (sel + n - 1) % n;
       else if (e.key == K_OK) pick(sel);
       else if (e.key == K_BACK) pick(-1);
       sndKey();
+      return true;
     }
+    if (sc.hasBar()) sc.ev(e);
     return true;
   }
 };
@@ -1100,8 +1211,7 @@ bool uiFrame() {
   if (!fx && fxKind >= 0) { fxKind = -1; dirty = true; }
   if (nextDraw && (int32_t)(now - nextDraw) >= 0) { nextDraw = 0; dirty = true; }
   if (toastUntil && (int32_t)(now - toastUntil) >= 0) { toastUntil = 0; dirty = true; }
-  bool inTrans = transDir >= 0;
-  if (!dirty && !fx && !inTrans) return false;
+  if (!dirty && !fx) return false;
   dirty = false;
   if (!awake) {
     if (!aodOn) return false;
@@ -1114,12 +1224,8 @@ bool uiFrame() {
   bool calm = lowFx();
   { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) calm = true; }
   gfxTheme(cfg.color, calm ? 0 : cfg.glow);
-  fxLensSetup(calm ? 0 : cfg.lens);
   { Screen* s0 = uiCurrent(); holoFrameStart(s0 && s0->fullScreen()); }
-  // a transition: the cube turns from the last picture to the new one
-  float tt = inTrans ? (now - transAt) / 440.0f : 0;
-  if (inTrans && tt >= 1) { transDir = -1; inTrans = false; }
-  if (!inTrans || !transTo) {
+  {
     hits.clear();
     gfxClear();
     Screen* s = uiCurrent();
@@ -1174,14 +1280,9 @@ bool uiFrame() {
       }
       redrawIn(16);
     }
-    if (inTrans) { memcpy(fxBuf(1), fb, SCR_W * SCR_H * 2); transTo = true; }
   }
   gfxOffset(0, 0);
-  if (inTrans) {
-    float e = tt < 0.5f ? 4 * tt * tt * tt : 1 - powf(-2 * tt + 2, 3) / 2;    // ease in and out
-    fxCube(fxBuf(0), fxBuf(1), e, transDir, fb);
-    redrawIn(1);
-  } else if (fx) {
+  if (fx) {
     uint32_t t = now - (fxUntil - 400);
     switch (fxKind) {
       case 0: fxShift(0, (int)((now - (fxUntil - 160)) * 3) % 200 - 100); break;   // roll
@@ -1193,16 +1294,14 @@ bool uiFrame() {
       case 8: fxRgbSplit(3 + (int)(fxSeed % 5)); fxTear(1, fxSeed + now / 50); break;   // colour split
       case 9: fxVhs(fxSeed, (t % 400) / 400.0f); break;                                // VHS tracking band
       case 10: fxInterlace((now / 40) % 2 ? 4 : -4); break;
-      case 11: fxDatamosh(fxSeed + now / 70); break;
+      case 11: fxStretch(fxSeed + now / 70); break;
       case 12: fxStretch(fxSeed + (now / 90) * 7919); break;
       case 13: fxSignalLoss(fxSeed + now); break;
     }
     redrawIn(40);
     wasFx = true;
   }
-  { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) { lastPre = fxSpare(); return true; } }   // a game: as it is
-  holoGlass();                                         // HOLO: the glass moves the other way
-  fxPost(cfg.fringe && !calm, cfg.scan && !cfg.lowGfx);
-  lastPre = fxSpare();
+  { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) return true; }   // a game: as it is
+  fxPost(false, cfg.scan && !cfg.lowGfx);
   return true;
 }

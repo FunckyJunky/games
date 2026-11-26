@@ -102,6 +102,10 @@ int main(int argc, char** argv) {
       for (int i = 1; i <= 20; i++) { step(40); uiTouch(true, a + (c - a) * i / 20, b + (d - b) * i / 20); char p[32]; snprintf(p, sizeof(p), "/rec/%04d.ppm", recN++); dump(outDir + p); }
       uiTouch(false, c, d);
     }
+    else if (!strcmp(cmd, "crash")) {   // a fake crash report, like after a restart
+      strcpy(S.crash, "CRASH IN loopTask FW e847386f PC 4037ed01 C0 A0000000 BT 4037ed01 4037ecc9 40385f22 40376731 40385f55 421481ad 421473d9 42010a3c 42011b70 4201c2e4");
+      S.crashAt = 1; step(300);
+    }
     else if (!strcmp(cmd, "open")) { sscanf(line, "%*s %63s", s); openProg(s); step(200); }
     else if (!strcmp(cmd, "app")) { sscanf(line, "%*s %63s", s); strcpy(S.wantApp, s); S.wantAppAt = simNow + 1; step(300); }
     else if (!strcmp(cmd, "vid")) {

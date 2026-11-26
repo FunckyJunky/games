@@ -92,7 +92,7 @@ static Screen* pageDisplay() {
     r.push_back(slider("BRIGHTNESS", &cfg.bright, 5, [] { sysBrightness(uiBrightNow()); }));
     r.push_back(choice("ROTATION", &cfg.rot, 5, [](int i) { static const char* R[5] = {"0", "90", "180", "270", "AUTO"}; return R[i]; }));
     r.push_back(heading("WALLPAPER", IC_WALL));
-    r.push_back(choice("WALLPAPER", &cfg.holoBack, 6, [](int i) { static const char* B[6] = {"GLASS", "DOTS", "GRID", "STARS", "ROOM", "PICTURE"}; return B[i]; }));
+    r.push_back(choice("WALLPAPER", &cfg.holoBack, 6, [](int i) { static const char* B[6] = {"PLAIN", "DOTS", "GRID", "STARS", "ROOM", "PICTURE"}; return B[i]; }));
     r.push_back(action("PICTURE", [] { uiOpen(makeFilePicker()); }, [](char* o) {
       const char* n = strrchr(cfg.wallPic, '/');
       if (!cfg.wallPic[0]) strcpy(o, "CHOOSE...");
@@ -121,12 +121,9 @@ static Screen* pageDisplay() {
 static Screen* pageLook() {
   return page("LOOK", "C:\\SETUP\\LOOK>", [](std::vector<Row>& r) {
     r.push_back(toggle("LOW GRAPHICS", &cfg.lowGfx));
-    if (cfg.lowGfx) r.push_back(info("ON =", [](char* o) { strcpy(o, "NO 3D, GLASS, GLOW, GLITCH"); }));
+    if (cfg.lowGfx) r.push_back(info("ON =", [](char* o) { strcpy(o, "NO 3D, GLOW, GLITCH"); }));
     r.push_back(choice("MENU", &cfg.view, 2, [](int i) { return i ? "3D" : "DOS"; }));
-    r.push_back(toggle("HOLO 3D", &cfg.holo, [] { holoRecenter(); }));
-    r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
-    r.push_back(toggle("COLOUR FRINGE", &cfg.fringe));
-    r.push_back(choice("ANIMATION", &cfg.anim, 3, [](int i) { static const char* A[3] = {"OFF", "SIMPLE", "3D"}; return A[i]; }));
+    r.push_back(choice("ANIMATION", &cfg.anim, 2, [](int i) { static const char* A[3] = {"OFF", "ON", "ON"}; return A[i]; }));
     r.push_back(toggle("MOVES WITH YOU", &cfg.parallax));
     r.push_back(choice("COLOUR", &cfg.color, N_SCHEMES, [](int i) { return SCHEMES[i].name; }, [] { garbleUntil = msNow() + 160; }));
     r.push_back(choice("GLOW", &cfg.glow, 3, [](int i) { static const char* G[3] = {"OFF", "LOW", "HIGH"}; return G[i]; }));
@@ -222,100 +219,6 @@ static Screen* pageSystem() {
   });
 }
 
-// ------------------------------------------------------------------ HOLO 3D: the tilt effect
-// HOLO TEST: a tunnel of frames from far behind to in front of the glass, a level bubble and the numbers
-struct HoloTest : Screen {
-  const char* name() override { return "HOLO TEST"; }
-  void draw() override {
-    pathLine("C:\\SETUP\\HOLO\\TEST>");
-    // the tunnel: frames on every depth, far ones dim
-    static const float HS[] = {-3.0f, -2.2f, -1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.6f};
-    for (int i = 0; i < 9; i++) {
-      HoloZ z(HS[i]);
-      int m = 40 + i * 12;
-      uint16_t c = mix(C_BG, C_FG, 20 + i * 10);
-      rect(m - 25, 96 + m / 3 - 10, 480 - 2 * (m - 25), 300 - 2 * (m / 3) + 20, c);
-    }
-    {
-      HoloZ z(1.2f);
-      dosButton(150, 190, 180, 60, "HOLO", [] { holoRecenter(); toast("CENTRED"); });
-    }
-    // the bubble: where the tilt is
-    {
-      HoloZ z(H_TEXT);
-      int bx = 240 + (int)(holoTX() * 120), by = 330 + (int)(holoTY() * 40);
-      hline(120, 330, 240, C_DIM); vline(240, 290, 80, C_DIM);
-      fillCircle(bx, by, 9, C_FG);
-      char t[64];
-      snprintf(t, sizeof(t), "X %+4d  Y %+4d  %d FPS", (int)lroundf(holoTX() * 100), (int)lroundf(holoTY() * 100), holoFps());
-      drawTextC(FT, 240, 376, t, C_FG);
-      if (!S.imu) drawTextC(FT, 240, 260, "NO MOTION SENSOR", C_RED);
-      if (!cfg.holo) drawTextC(FT, 240, 260, "HOLO 3D IS OFF", C_WARN);
-    }
-    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"C", "Centre", [] { holoRecenter(); toast("CENTRED"); }}});
-    redrawIn(33);
-  }
-  bool ev(const Ev& e) override {
-    if (e.t == EV_KEY && e.key == K_OK) { holoRecenter(); toast("CENTRED"); return true; }
-    return false;
-  }
-};
-
-static void holoPreset(int p) {
-  // SUBTLE, NORMAL, DEEP, EXTREME
-  static const uint8_t D[4] = {4, 7, 11, 16}, POP[4] = {30, 50, 70, 100}, L[4] = {12, 26, 40, 60}, PE[4] = {15, 35, 55, 85};
-  static const uint8_t W[4] = {1, 3, 4, 5}, R[4] = {35, 25, 20, 15}, RB[4] = {1, 2, 3, 4};
-  cfg.holoDepth = D[p]; cfg.holoPop = POP[p]; cfg.holoLens = L[p]; cfg.holoPersp = PE[p];
-  cfg.holoWalls = W[p]; cfg.holoRange = R[p]; cfg.holoRainbow = RB[p];
-  cfg.holoShadow = p >= 2 ? 2 : 1; cfg.holoGlare = p >= 2 ? 2 : 1;
-  cfg.holo = 1; cfg.holoLayers = 1;
-}
-static void holoDefaults() {
-  Cfg d;
-  cfg.holoLayers = d.holoLayers; cfg.holoDepth = d.holoDepth; cfg.holoFocus = d.holoFocus; cfg.holoPop = d.holoPop;
-  cfg.holoShadow = d.holoShadow; cfg.holoWalls = d.holoWalls; cfg.holoBack = d.holoBack; cfg.holoLens = d.holoLens;
-  cfg.holoPersp = d.holoPersp; cfg.holoGlare = d.holoGlare; cfg.holoRainbow = d.holoRainbow; cfg.holoRange = d.holoRange;
-  cfg.holoDead = d.holoDead; cfg.holoSmooth = d.holoSmooth; cfg.holoCentre = d.holoCentre;
-  cfg.holoInvX = d.holoInvX; cfg.holoInvY = d.holoInvY; cfg.holoSensor = d.holoSensor;
-}
-static uint8_t presetIdx = 1;
-static Screen* pageHolo() {
-  return page("HOLO 3D", "C:\\SETUP\\HOLO>", [](std::vector<Row>& r) {
-    r.push_back(toggle("HOLO 3D", &cfg.holo, [] { holoRecenter(); }));
-    { Row p; p.name = "PRESET"; p.kind = 1;
-      p.val = [](char* o) { static const char* N[4] = {"SUBTLE", "NORMAL", "DEEP", "EXTREME"}; strcpy(o, N[presetIdx & 3]); };
-      p.act = [](int d) { presetIdx = (presetIdx + (d < 0 ? 3 : 1)) & 3; holoPreset(presetIdx); cfgChanged(); };
-      r.push_back(p); }
-    r.push_back(action("CENTRE NOW", [] { holoRecenter(); toast("CENTRED"); }));
-    r.push_back(action("TEST", [] { uiOpen(new HoloTest()); }));
-    r.push_back(heading("DEPTH", IC_DEPTH));
-    r.push_back(toggle("LAYERS", &cfg.holoLayers));
-    r.push_back(number("DEPTH", &cfg.holoDepth, 0, 20, 1, " PX", "OFF"));
-    r.push_back(choice("STAYS STILL", &cfg.holoFocus, 5, [](int i) { static const char* F[5] = {"BACK", "PANELS", "TEXT", "BARS", "FRONT"}; return F[i]; }));
-    r.push_back(slider("POP-OUT", &cfg.holoPop, 0));
-    r.push_back(choice("SHADOWS", &cfg.holoShadow, 3, [](int i) { static const char* S3[3] = {"OFF", "SOFT", "HARD"}; return S3[i]; }));
-    r.push_back(number("SIDES", &cfg.holoWalls, 0, 5, 1, "", "OFF"));
-    r.push_back(choice("WALLPAPER", &cfg.holoBack, 6, [](int i) { static const char* B[6] = {"GLASS", "DOTS", "GRID", "STARS", "ROOM", "PICTURE"}; return B[i]; }));
-    r.push_back(heading("GLASS", IC_GLASS));
-    r.push_back(choice("GLASS", &cfg.lens, 3, [](int i) { static const char* L[3] = {"FLAT", "CURVED", "FISHEYE"}; return L[i]; }));
-    r.push_back(number("GLASS MOVES", &cfg.holoLens, 0, 60, 4, " PX", "OFF"));
-    r.push_back(slider("PERSPECTIVE", &cfg.holoPersp, 0));
-    r.push_back(choice("REFLECTION", &cfg.holoGlare, 3, [](int i) { static const char* G[3] = {"OFF", "SOFT", "BRIGHT"}; return G[i]; }));
-    r.push_back(number("RAINBOW", &cfg.holoRainbow, 0, 4, 1, " PX", "OFF"));
-    r.push_back(heading("MOTION", IC_MOTION));
-    r.push_back(number("FULL TILT AT", &cfg.holoRange, 10, 60, 5, "\xC2\xB0"));
-    r.push_back(number("DEAD ZONE", &cfg.holoDead, 0, 10, 1, "\xC2\xB0", "OFF"));
-    r.push_back(slider("SMOOTHING", &cfg.holoSmooth, 0));
-    r.push_back(choice("AUTO CENTRE", &cfg.holoCentre, 4, [](int i) { static const char* C4[4] = {"OFF", "SLOW", "MEDIUM", "FAST"}; return C4[i]; }));
-    r.push_back(choice("SENSOR", &cfg.holoSensor, 2, [](int i) { return i ? "GRAVITY" : "GYRO+GRAVITY"; }));
-    r.push_back(toggle("INVERT LEFT/RIGHT", &cfg.holoInvX));
-    r.push_back(toggle("INVERT UP/DOWN", &cfg.holoInvY));
-    r.push_back(action("RESET HOLO", [] {
-      ask("RESET HOLO", "All HOLO 3D settings back to normal?", {"RESET", "CANCEL"}, [](int i) { if (i == 0) { holoDefaults(); presetIdx = 1; cfgChanged(); toast("HOLO RESET"); } });
-    }));
-  });
-}
-
 // ------------------------------------------------------------------ BUTTONS: what - + PWR do
 struct BtnTest : Screen {
   const char* name() override { return "BUTTON TEST"; }
@@ -402,22 +305,6 @@ static Screen* pageUpdates() {
     r.push_back(action("OPEN UPDATE.EXE", [] { openProg("UPDATE"); }));
   });
 }
-static Screen* pageP8() {
-  return page("PICO-8", "C:\\SETUP\\PICO-8>", [](std::vector<Row>& r) {
-    r.push_back(heading("TILT = THE ARROWS", IC_HOLO));
-    r.push_back(action("CALIBRATE", [] { ask("CALIBRATE", "Hold the cube the way you want to play, then OK.", {"OK", "CANCEL"}, [](int i) { if (!i) p8Calibrate(); }); },
-                       [](char* o) { strcpy(o, cfg.p8CalOk ? "DONE" : "NOT YET"); }));
-    r.push_back(number("TILT BEFORE IT MOVES", &cfg.p8Dead, 4, 30, 2, "\xC2\xB0"));
-    r.push_back(toggle("INVERT LEFT/RIGHT", &cfg.p8InvX));
-    r.push_back(toggle("INVERT UP/DOWN", &cfg.p8InvY));
-    r.push_back(info("NOT CALIBRATED =", [](char* o) { strcpy(o, "HOW YOU HOLD IT AT START"); }));
-    r.push_back(heading("BUTTONS", IC_KEY));
-    r.push_back(choice("- AND +", &cfg.p8Swap, 2, [](int i) { return i ? "X AND O" : "O AND X"; }));
-    r.push_back(info("PWR", [](char* o) { strcpy(o, "MENU / QUIT"); }));
-    r.push_back(action("TEST IT", [] { p8Open("/c/pico8/tilttest.p8"); }));
-  });
-}
-Screen* makeP8Setup() { return pageP8(); }
 Screen* makeSongPicker();
 static Screen* pageAlarm() {
   return page("ALARM", "C:\\CLOCK\\ALARM>", [](std::vector<Row>& r) {
@@ -447,11 +334,9 @@ Screen* makeSetup() {
     { Row o = toggle("LOW GRAPHICS", &cfg.lowGfx); o.icon = IC_LOOK; r.push_back(o); }
     r.push_back(section("SCREEN", "light, wallpaper", IC_LIGHT, pageDisplay));
     r.push_back(section("LOOK", "colour, glitch", IC_LOOK, pageLook));
-    r.push_back(section("HOLO 3D", "tilt, depth", IC_HOLO, pageHolo));
     r.push_back(heading("CONTROLS", IC_KEY));
     r.push_back(section("SOUND", "volume, clicks", IC_SOUND, pageSound));
     r.push_back(section("BUTTONS", "hold, combos", IC_KEY, pageButtons));
-    r.push_back(section("PICO-8", "tilt, O / X", IC_KEY, pageP8));
     r.push_back(heading("CONNECT", IC_WIFI));
     r.push_back(section("WIFI", "networks", IC_WIFI, [] { return findProg("WIFI"); }));
     { Row o = toggle("OFFLINE", &cfg.offline, [] { netOffline(cfg.offline); }); o.icon = IC_OFFLINE; r.push_back(o); }

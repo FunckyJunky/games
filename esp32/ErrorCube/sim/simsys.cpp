@@ -18,6 +18,12 @@ uint16_t* vidBuf = nullptr;
 void cfgSave() {}
 void cfgFlushNow() {}
 void sndForceVolume(int) {}
+static std::string real(const char* p);
+void netDownload(const char* path, const char* file) {   // the site's files are in ../../public
+  std::string src = std::string("../../public") + path, dst = real(file);
+  std::string cmd = "mkdir -p \"$(dirname '" + dst + "')\" && cp '" + src + "' '" + dst + "'";
+  S.dlState = system(cmd.c_str()) == 0 ? 2 : -1;
+}
 void cfgReset() { cfg = Cfg(); }
 std::string root = "/tmp/cubesim", appsDir = "";
 
@@ -49,7 +55,6 @@ static std::string real(const char* p) {
   if (!strncmp(p, "/c", 2)) return root + "/c" + (p + 2);
   return root + p;
 }
-std::string simRealPath(const char* p) { return real(p); }   // PICO-8 opens its files itself
 int fsList(const char* dir, FileEnt* out, int max) {
   DIR* d = opendir(real(dir).c_str()); if (!d) return -1;
   int n = 0; struct dirent* e;
@@ -99,7 +104,19 @@ void sndMediaClear() { simQ = 0; simPlayed = 0; simPause = false; }
 uint32_t sndMediaPlayed() { return simPlayed; }
 int sndMediaQueued() { return simQ; }
 void sndMediaPause(bool p) { simPause = p; }
-void sndMediaWave(int16_t* o, int n) { for (int i = 0; i < n; i++) o[i] = simQ ? (int16_t)(9000 * sinf(simPh + i * 0.21f) + 5000 * sinf(simPh * 1.7f + i * 0.05f)) : 0; simPh += 0.4f; }
+void sndMediaWave(int16_t* o, int n) {   // something like music: a kick every 0.5 s, a chord, a hi-hat
+  extern uint32_t simNow;
+  for (int i = 0; i < n; i++) {
+    if (!simQ) { o[i] = 0; continue; }
+    float t = simPh + i / 44100.0f, beat = fmodf(t, 0.5f);
+    float kick = beat < 0.12f ? sinf(6.2832f * (60 + 90 * (0.12f - beat)) * beat) * (1 - beat / 0.12f) : 0;
+    float chord = 0.25f * (sinf(6.2832f * 220 * t) + sinf(6.2832f * 277 * t) + sinf(6.2832f * 330 * t));
+    float hat = fmodf(t, 0.25f) < 0.02f ? ((rand() & 1023) / 512.0f - 1) * 0.3f : 0;
+    float v = 0.5f * kick + 0.35f * chord + hat;
+    o[i] = (int16_t)(v * 26000);
+  }
+  simPh = simNow / 1000.0f;
+}
 void simAudioTick(int ms) { if (simPause) return; int k = 44100 * ms / 1000; if (k > simQ) k = simQ; simQ -= k; simPlayed += k; }
 bool simSdIn = true;
 bool sdMount() { S.sd = simSdIn; if (S.sd) strcpy(S.sdInfo, "29.7 GB SDHC"); else S.sdInfo[0] = 0; return S.sd; }
