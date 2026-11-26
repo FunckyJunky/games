@@ -4,6 +4,14 @@ The third firmware for the ERROR-CUBE (Waveshare ESP32-S3-Touch-AMOLED-2.16): sp
 microphones (ES7210) listen to the talk around it; error.blue writes it down (Whisper large v3 turbo on Cloudflare
 Workers AI, `src/stt.js`). Page: [error.blue/ear](https://error.blue/ear/) (USB installer).
 
+## New in 1.2
+
+- **Fix:** after an update from 1.0, ERROR-CHAT was off (1.0's settings ended with a padding byte, which 1.1 read as
+  "SEND TO ERROR-CHAT: OFF"). Settings now have a version (magic 0xEA700002); 1.0 / 1.1 settings are taken over with
+  ERROR-CHAT on.
+- **Updates install by themselves** (AUTO UPDATE, cfg.autoUpd as in ERROR-CUBE): when nothing is recorded or waiting
+  and the screen is off. LIVE's start screen shows the channel (`· CHAT #EAR1`).
+
 ## New in 1.1: ERROR-CHAT
 
 - **Every line into a channel** on error.blue's ERROR-CHAT (SETUP > ERROR-CHAT: on, channel, default **EAR1**), as chat

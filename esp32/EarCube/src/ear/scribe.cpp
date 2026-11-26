@@ -11,6 +11,7 @@
 // One task (core 0) takes the pieces and the start / stop wishes; the HTTPS worker (enet.cpp) asks for the
 // next piece (scribeNext) and hands back the text (scribeDone).
 #include <Arduino.h>
+#include <stddef.h>
 #include <Preferences.h>
 #include <esp_heap_caps.h>
 #include <sys/stat.h>
@@ -39,9 +40,24 @@ void earCfgLoad() {
   Preferences p; p.begin("ear", true);
   EarCfg c;
   size_t n = p.getBytesLength("cfg");
+  bool upgrade = false;
   if (n >= 8 && n <= sizeof(EarCfg) * 2) {
     uint8_t* b = (uint8_t*)malloc(n);
-    if (b && p.getBytes("cfg", b, n) == n && *(uint32_t*)b == c.magic) memcpy(&c, b, n < sizeof(c) ? n : sizeof(c));
+    uint32_t mg = 0;
+    if (b && p.getBytes("cfg", b, n) == n) memcpy(&mg, b, 4);
+    if (mg == c.magic) memcpy(&c, b, n < sizeof(c) ? n : sizeof(c));
+    else if (mg == 0xEA700001) {
+      // saved by 1.0 / 1.1: 1.0's settings end at liveLines; the byte after it was padding in 1.0, and 1.1 read it
+      // as ERROR-CHAT "off". Keep 1.0's settings, ERROR-CHAT on, the channel if 1.1 saved a good one.
+      size_t keep = offsetof(EarCfg, chatOn);
+      memcpy(&c, b, n < keep ? n : keep);
+      if (n >= offsetof(EarCfg, chatChan) + sizeof(c.chatChan)) {
+        char ch[9]; memcpy(ch, b + offsetof(EarCfg, chatChan), 9); ch[8] = 0;
+        if (chanOk(ch)) memcpy(c.chatChan, ch, 9);
+      }
+      c.magic = EarCfg().magic; c.chatOn = 1;
+      upgrade = true;
+    }
     free(b);
   }
   p.end();
@@ -53,7 +69,7 @@ void earCfgLoad() {
   if (fresh) {
     snprintf(ecfg.apPass, sizeof(ecfg.apPass), "%08u", (unsigned)(esp_random() % 100000000u));
     earCfgSave();
-  }
+  } else if (upgrade) earCfgSave();
 }
 void earCfgSave() { Preferences p; p.begin("ear", false); p.putBytes("cfg", &ecfg, sizeof(ecfg)); p.end(); }
 

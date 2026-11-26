@@ -12,7 +12,7 @@
 
 // ------------------------------------------------------------------ settings (NVS "ear"; ERROR-CUBE's cfg stays as it is)
 struct EarCfg {
-  uint32_t magic = 0xEA700001;
+  uint32_t magic = 0xEA700002;  // 1.2 (0xEA700001 = 1.0 / 1.1: see earCfgLoad)
   uint8_t lang = 0;          // LANGS[]: 0 = find out by itself
   uint8_t task = 0;          // 0 write it as spoken, 1 write it in English (Whisper translates)
   uint8_t sens = 1;          // what counts as speech: 0 LOW (loud only), 1 NORMAL, 2 HIGH, 3 EVERYTHING

@@ -458,6 +458,9 @@ void cloudStep() {
   }
   if (!upAt) { upAt = now; fwAt = now - (UPD_HOURS[cfg.updIdx % N_UPD] * 3600000u) + 30000; }   // first check 30 s after WiFi came
   uint32_t every = UPD_HOURS[cfg.updIdx % N_UPD] * 3600000u;
+  // AUTO UPDATE (cfg.autoUpd, as in ERROR-CUBE): a newer EAR-CUBE installs by itself while the cube rests
+  // (nothing recorded or waiting, the screen off)
+  if (cfg.autoUpd && S.upd == UPD_NEW && !enetSwitching && want(J_OTA) && earMode() == EAR_IDLE && !earWaiting() && !uiAwake()) post(J_OTA);
   // updates only while it isn't listening (the check closes the speech connection)
   if (now - fwAt > every && want(J_FW) && S.upd != UPD_LOADING && earMode() == EAR_IDLE && !earWaiting()) { fwAt = now; post(J_FW); }
 }

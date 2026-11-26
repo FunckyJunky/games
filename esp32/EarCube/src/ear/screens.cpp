@@ -709,7 +709,7 @@ struct Home : Screen {
       drawMic(240, 250, 1.6f, C_FG, false);
       waves(240, 230, lv, C_DIM);
       drawTextC(FT, 240, 330, earMode() == EAR_REC ? "RECORDING (REC)" : "TAP TO LISTEN", C_FG);
-      char l[40]; snprintf(l, sizeof(l), "LANGUAGE: %s%s", LANGS[ecfg.lang % N_LANGS].name, ecfg.task ? " > EN" : "");
+      char l[48]; snprintf(l, sizeof(l), "%s%s%s%s", LANGS[ecfg.lang % N_LANGS].name, ecfg.task ? " > EN" : "", ecfg.chatOn ? " \xC2\xB7 CHAT #" : "", ecfg.chatOn ? ecfg.chatChan : "");
       if (S.net != NET_UP && earMode() == EAR_IDLE) drawTextC(FT, 240, 366, "NO INTERNET YET: SETUP > WIFI", C_WARN, TX_FLAT);
       else drawTextC(FT, 240, 366, l, C_DIM, TX_FLAT);
       hit(140, 150, 200, 210, [this] { toggle(EAR_LIVE); });

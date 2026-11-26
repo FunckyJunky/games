@@ -1,9 +1,9 @@
 {
   "name": "EAR-CUBE",
-  "ver": "1.1",
+  "ver": "1.2",
   "path": "/ear/flash/ear.bin",
-  "size": 2407408,
-  "md5": "0dff1e0fd982d63b33f9fb666081e4d3",
-  "notes": "1.1: ERROR-CHAT: every line into a channel (EAR1), the transcripts kept there (read, download, delete), and its buttons there: record, live, pause, stop, screen off/on, lock the buttons. PAUSE on the cube and the page. CLEAR asks first (swipe to clear). Transcripts in the ear folder on the TF card.",
-  "date": "2026-11-26T23:29Z"
+  "size": 2407616,
+  "md5": "0fc8e6c64b87ede2e40f73899e7cf32b",
+  "notes": "1.2: fix: ERROR-CHAT was off after updating from 1.0 (the lines now go to #EAR1). Updates install by themselves when the cube rests.",
+  "date": "2026-11-26T23:48Z"
 }
