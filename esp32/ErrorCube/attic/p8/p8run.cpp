@@ -20,6 +20,9 @@ std::string simRealPath(const char* p);              // the simulator: /c and /s
 #endif
 
 extern uint8_t p8InDown, p8InHeld;              // p8host.cpp
+extern volatile bool p8HookQuit;                // core/vm.cpp: stop a cart that's stuck in a loop
+extern volatile uint32_t p8HookCount, p8HookLimit;
+extern volatile bool p8HookStuck;
 static const char BIOS[] = "__FAKE08-DEFAULT.p8";
 
 static Host* host = nullptr;
@@ -56,6 +59,7 @@ static void step() {
   p8InDown |= (h & ~prevHeld) | pendDown;
   p8InHeld = h | pendDown;               // a very quick tap still counts as held once
   prevHeld = h; pendDown = 0;
+  p8HookCount = 0; p8HookLimit = 4000;
   bool okStep = vm->Step();
 #ifdef P8DEBUG
   if (stepN < 5 || !okStep) printf("step %u ok %d cart %s err %s\n", (unsigned)stepN, okStep, vm->CurrentCartFilename().c_str(), vm->GetBiosError().c_str());
@@ -74,6 +78,7 @@ static void step() {
   if (vm->CurrentCartFilename() == BIOS) {
     std::string e = vm->GetBiosError();
     snprintf(err, sizeof(err), "%s", e.c_str());
+    if (!err[0] && p8HookStuck) snprintf(err, sizeof(err), "THE CART GOT STUCK: IT WAITS FOR SOMETHING THAT NEVER COMES");
     running = false;
   }
 }
@@ -89,6 +94,7 @@ static void freeAll() {
 // the cart: loaded where the stack is big enough for Lua's parser (the task on the board)
 static std::string cartPath;
 static bool loadIt() {
+  p8HookCount = 0; p8HookLimit = 16000;  // starting may take longer than a frame (building a map...)
   host = new Host();
   host->setUpPaletteColors();
   host->setCartDirectory(cartPath.substr(0, cartPath.rfind('/')));
@@ -132,7 +138,7 @@ static void task(void*) {
 
 bool p8Start(const char* path) {
   if (running || !taskDone) p8Stop();
-  err[0] = 0; quit = false; paused = false; held = 0; prevHeld = pendDown = 0; stepN = 0; fps = 0;
+  err[0] = 0; quit = false; p8HookQuit = false; p8HookStuck = false; paused = false; held = 0; prevHeld = pendDown = 0; stepN = 0; fps = 0;
   musStop(); vidStop();
   sndMediaClear();
   if (!frames[0]) { frames[0] = (uint16_t*)big(128 * 128 * 2); frames[1] = (uint16_t*)big(128 * 128 * 2); }
@@ -166,7 +172,7 @@ bool p8Start(const char* path) {
 }
 
 void p8Stop() {
-  quit = true;
+  quit = true; p8HookQuit = true;          // a cart stuck inside one frame stops too
 #ifdef ARDUINO
   for (int i = 0; i < 300 && !taskDone; i++) delay(10);
 #else

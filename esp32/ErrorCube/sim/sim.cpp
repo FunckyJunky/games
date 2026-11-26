@@ -106,6 +106,7 @@ int main(int argc, char** argv) {
       strcpy(S.crash, "CRASH IN loopTask FW e847386f PC 4037ed01 C0 A0000000 BT 4037ed01 4037ecc9 40385f22 40376731 40385f55 421481ad 421473d9 42010a3c 42011b70 4201c2e4");
       S.crashAt = 1; step(300);
     }
+    else if (!strcmp(cmd, "file")) { sscanf(line, "%*s %190s", reqp); openFile(reqp); step(200); }   // a file in its program (a cart: PICO-CUBE plays it)
     else if (!strcmp(cmd, "open")) { sscanf(line, "%*s %63s", s); openProg(s); step(200); }
     else if (!strcmp(cmd, "app")) { sscanf(line, "%*s %63s", s); strcpy(S.wantApp, s); S.wantAppAt = simNow + 1; step(300); }
     else if (!strcmp(cmd, "vid")) {

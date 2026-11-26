@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICO-CUBE · install with USB</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  body { margin: 0; min-height: 100vh; background: #1d2b53; color: #fff1e8; font: 24px/1.25 'VT323', ui-monospace, monospace; }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+  h1 { background: #fff1e8; color: #1d2b53; font-weight: normal; font-size: 28px; margin: 0 -16px 0; padding: 6px 16px; }
+  .stripe { display: flex; height: 8px; margin: 0 -16px 16px; }
+  .stripe i { flex: 1; }
+  h2 { font-weight: normal; font-size: 24px; margin: 26px 0 6px; color: #ff77a8; border-bottom: 3px double #83769c; }
+  a { color: #29adff; }
+  .dim { color: #c2c3c7; }
+  ol li { margin: 6px 0; }
+  .btn { font: inherit; font-size: 28px; background: #ff004d; color: #fff1e8; border: 0; padding: 8px 22px; cursor: pointer; box-shadow: 0 4px 0 #7e2553; }
+  esp-web-install-button { --esp-tools-button-color: #ff004d; --esp-tools-button-text-color: #fff1e8; --esp-tools-button-border-radius: 0; }
+  .box { border: 3px double #83769c; padding: 10px 14px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PICO-CUBE · INSTALL WITH USB</h1>
+  <div class="stripe" id="stripe"></div>
+  <p>PICO-CUBE is the cube's second firmware: a PICO-8 cart player. For the Waveshare <b>ESP32-S3-Touch-AMOLED-2.16</b>.
+  Use Chrome or Edge on a computer.</p>
+  <div class="box">
+    <b>Already running ERROR-CUBE 1.5.3 or newer?</b> No cable needed: on the cube open <b>SYSTEM &gt; UPDATE</b> and press
+    <b>P8 PICO-8</b>. It downloads PICO-CUBE over WiFi and restarts in it. Your WiFi, settings and files stay.
+  </div>
+  <ol>
+    <li>Plug the cube into this computer with a USB-C cable that carries data.</li>
+    <li>Press INSTALL and pick the cube's port (<i>USB JTAG/serial debug unit</i>, or COMx).</li>
+    <li>Asked to erase? <b>No</b> keeps your WiFi, settings and files (C:\). <b>Yes</b> starts clean.</li>
+    <li>The cube restarts in PICO-CUBE. No WiFi yet: SETUP &gt; WIFI on the cube, or its PHONE SETUP.</li>
+  </ol>
+  <p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" class="btn" id="inst">INSTALL PICO-CUBE</button>
+      <span slot="unsupported">This browser can't talk to USB boards. Use Chrome or Edge on a computer.</span>
+      <span slot="not-allowed">Open this page over https.</span>
+    </esp-web-install-button>
+  </p>
+  <div class="box dim">
+    It doesn't connect? Hold BOOT (the right button, "BOOT/-"), press and let go of PWR, let go of BOOT, then try again.
+  </div>
+
+  <h2>BACK TO ERROR-CUBE</h2>
+  <p>On the cube: <b>SETUP &gt; BACK TO ERROR-CUBE</b> (over WiFi). Or with this cable: <a href="/cube/flash/">install ERROR-CUBE</a>.</p>
+
+  <h2>FOR DEVELOPERS</h2>
+  <p class="dim">Firmware <span id="ver">?</span> · <a href="firmware.json">firmware.json</a> · <a href="pico.bin">pico.bin</a> (app at 0x10000).
+  Source: esp32/PicoCube in the games repo (it shares ERROR-CUBE's board, drawing and interface). New version: tools/pico-fwpub.sh, then push.</p>
+  <p><a href="/pico8/">&lt; PICO-CUBE</a></p>
+</main>
+<script>
+var P = ['000000','1d2b53','7e2553','008751','ab5236','5f574f','c2c3c7','fff1e8','ff004d','ffa300','ffec27','00e436','29adff','83769c','ff77a8','ffccaa'];
+document.getElementById('stripe').innerHTML = P.map(function (c, i) { return '<i style="background:#' + (i ? c : '5f574f') + '"></i>'; }).join('');
+fetch('firmware.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+  document.getElementById('ver').textContent = j.ver + ' (' + (j.date || '') + ')';
+  document.getElementById('inst').textContent = 'INSTALL PICO-CUBE ' + j.ver;
+}).catch(function () {});
+</script>
+</body>
+</html>

@@ -35,6 +35,21 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.5.3: PICO-CUBE
+
+- **PICO-CUBE, the cube's second firmware** (esp32/PicoCube, error.blue/pico8): a PICO-8 cart player that starts
+  straight into its carts. UPDATE > **P8 PICO-8** downloads it over WiFi (like an update, with rollback) and restarts in
+  it; PICO-CUBE's SETUP > BACK TO ERROR-CUBE does the same the other way. Both use the same settings, WiFi and files.
+- **Builds from the same files:** core/config.h looks for `../pico/pico_config.h`; PicoCube has one (its name,
+  version, update address, colours) and symlinks board, core, ui, lib and p8 (attic/p8) from here. A new
+  SCHEMES[] colour, **PICO-8** (white, pink, dark blue), is also in SETUP > LOOK.
+- **Safer update download:** the firmware download (OTA) uses the same sleeping read loop as file downloads (1.5.1),
+  not HTTPClient's writeToStream. Firmware from the TF card was read 4 bytes at a time (a sizeof bug): 4 KB now.
+- **PICO-8 emulator** (attic/p8, used by PICO-CUBE): a cart stuck in an endless loop can't hang the cube any more
+  (a Lua count hook: QUIT stops it at once, and one frame that runs 40 million Lua steps ends with "THE CART GOT
+  STUCK").
+- Simulator: `sh sim/build-pico.sh` builds sim/picosim (PICO-CUBE's screens + the emulator); `file PATH` plays a cart.
+
 ## New in 1.5.2
 
 - **Web apps: keep() + overlay()** (for public/cube/apps/savers.js, SAVERS): `keep(true)` keeps the app's picture

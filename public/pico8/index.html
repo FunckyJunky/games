@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICO-CUBE · PICO-8 carts on the cube</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; min-height: 100vh; background: #1d2b53; color: #fff1e8; font: 22px/1.25 'VT323', ui-monospace, monospace; }
+  main { max-width: 820px; margin: 0 auto; padding: 0 16px 48px; }
+  h1 { background: #fff1e8; color: #1d2b53; font-weight: normal; font-size: 34px; margin: 0 -16px 0; padding: 8px 16px; }
+  .stripe { display: flex; height: 8px; margin: 0 -16px 18px; }
+  .stripe i { flex: 1; }
+  h2 { font-weight: normal; font-size: 26px; margin: 30px 0 8px; color: #ff77a8; border-bottom: 3px double #83769c; }
+  a { color: #29adff; }
+  .dim { color: #c2c3c7; }
+  .pink { color: #ff77a8; }
+  .btn { display: inline-block; font: inherit; font-size: 24px; background: #ff004d; color: #fff1e8; text-decoration: none; padding: 6px 18px; box-shadow: 0 4px 0 #7e2553; margin: 4px 8px 8px 0; }
+  .btn.blue { background: #29adff; box-shadow: 0 4px 0 #1d2b53; color: #1d2b53; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .cart { background: #0f1a36; border-left: 8px solid #ff004d; padding: 8px 10px; }
+  .cart b { font-weight: normal; font-size: 24px; color: #fff1e8; }
+  .cart .by { color: #ffa300; }
+  .cart .about { color: #c2c3c7; margin: 2px 0 4px; }
+  .cart .meta { font-size: 18px; color: #83769c; }
+  .tabs button { font: inherit; font-size: 22px; background: none; color: #c2c3c7; border: 2px solid #83769c; padding: 2px 14px; cursor: pointer; margin: 0 6px 10px 0; }
+  .tabs button.on { background: #fff1e8; color: #1d2b53; border-color: #fff1e8; }
+  table { border-collapse: collapse; }
+  td { padding: 2px 14px 2px 0; vertical-align: top; }
+  td:first-child { color: #ffec27; white-space: nowrap; }
+  .box { border: 3px double #83769c; padding: 10px 14px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PICO-CUBE</h1>
+  <div class="stripe" id="stripe"></div>
+  <p>The second firmware for the <a href="/cube/">ERROR-CUBE</a> (Waveshare ESP32-S3-Touch-AMOLED-2.16): it starts straight
+  into a <b>PICO-8 cart player</b>. Tilt the cube to move, press its buttons to jump and shoot. The carts come from this page,
+  over WiFi, one tap each.</p>
+  <p>
+    <a class="btn" href="flash/">INSTALL WITH USB</a>
+    <a class="btn blue" href="carts.json">carts.json</a>
+  </p>
+  <div class="box">
+    <b>From ERROR-CUBE (1.5.3+), no cable:</b> SYSTEM &gt; UPDATE &gt; <b>P8 PICO-8</b>. The cube downloads PICO-CUBE and
+    restarts in it. <b>Back:</b> on PICO-CUBE, SETUP &gt; BACK TO ERROR-CUBE. Both keep the same WiFi, settings and files.
+  </div>
+
+  <h2>ON THE CUBE</h2>
+  <table>
+    <tr><td>CARTS</td><td>The carts on the cube (C:\pico8) and on the TF card (A:\PICO8). Tap one to play; hold for DELETE. The one you played last is on top.</td></tr>
+    <tr><td>ONLINE</td><td>The carts below. Tap one: GET + PLAY. A green dot = it's on the cube, orange = a newer version is here.</td></tr>
+    <tr><td>SETUP</td><td>Tilt (how far for an arrow, turn left/right or up/down round), which button is O and X, CALIBRATE, a TILT TEST; volume, brightness; WiFi; updates; back to ERROR-CUBE.</td></tr>
+  </table>
+  <h2>PLAYING</h2>
+  <table>
+    <tr><td>TILT</td><td>The arrows. CALIBRATE once, holding the cube the way you like to play (else: the way you hold it when the cart starts).</td></tr>
+    <tr><td>&minus; (BOOT)</td><td>O &nbsp;<span class="dim">(Z on a keyboard)</span></td></tr>
+    <tr><td>+</td><td>X</td></tr>
+    <tr><td>PWR</td><td>Pause: CONTINUE, RESTART, CALIBRATE, QUIT. A long touch on the screen does the same.</td></tr>
+  </table>
+
+  <h2>THE CARTS</h2>
+  <div class="tabs" id="tabs"></div>
+  <div class="grid" id="carts"><span class="dim">Loading...</span></div>
+  <p class="dim">Every cart is its author's work, shared under an open license (MIT, GPL-3.0, Unlicense or CC0): the name of the
+  license links to its text, SOURCE to where the author keeps it. Thank you all.</p>
+
+  <h2>YOUR OWN CARTS</h2>
+  <p>Any <b>.p8</b> or <b>.p8.png</b> cart: put it in <b>PICO8</b> on the TF card, or in <b>C:\pico8</b> with the cube's own web page
+  (open the cube's address, shown in SETUP &gt; WIFI, on a phone or computer on the same WiFi, then FILES). Most carts run; very big
+  or very busy ones can be slow or not start: the cube says why.</p>
+
+  <h2>HOW IT WORKS</h2>
+  <p class="dim">The emulator is <a href="https://github.com/jtothebell/fake-08">FAKE-08</a> (MIT) on z8lua (MIT), trimmed for the
+  ESP32-S3: the cart runs in its own task, 60 steps a second, sound at 22 kHz through the cube's speaker; the 128&times;128 picture is
+  scaled to the 480&times;480 screen. The rest is ERROR-CUBE's own board code, drawing and interface, in PICO-8's colours.
+  PICO-8 is a fantasy console by Lexaloffle Games; PICO-CUBE is a fan project and is not made by or connected to Lexaloffle.
+  Get the real PICO-8 at <a href="https://www.lexaloffle.com/pico-8.php">lexaloffle.com</a> to make your own carts.</p>
+  <p><a href="/cube/">&lt; ERROR-CUBE</a> · <a href="/">error.blue</a></p>
+</main>
+<script>
+var P = ['000000','1d2b53','7e2553','008751','ab5236','5f574f','c2c3c7','fff1e8','ff004d','ffa300','ffec27','00e436','29adff','83769c','ff77a8','ffccaa'];
+document.getElementById('stripe').innerHTML = P.map(function (c, i) { return '<i style="background:#' + (i ? c : '5f574f') + '"></i>'; }).join('');
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+var all = [], kind = 'ALL';
+function show() {
+  var cols = [8, 9, 10, 11, 12, 14, 15];
+  var list = all.filter(function (c) { return kind === 'ALL' || c.kind === kind; });
+  document.getElementById('carts').innerHTML = list.map(function (c, i) {
+    return '<div class="cart" style="border-color:#' + P[cols[i % cols.length]] + '"><b>' + esc(c.name) + '</b>' +
+      '<div class="by">by ' + esc(c.author) + '</div><div class="about">' + esc(c.about) + '</div>' +
+      '<div class="meta">' + esc(c.kind) + ' · <a href="' + esc(c.licenseFile) + '">' + esc(c.license) + '</a> · ' +
+      Math.ceil(c.size / 1024) + ' KB · <a href="carts/' + esc(c.file) + '" download>.P8</a> · <a href="' + esc(c.source) + '">SOURCE</a></div></div>';
+  }).join('');
+}
+function tabs() {
+  var ks = ['ALL', 'GAME', 'TOY'];
+  document.getElementById('tabs').innerHTML = ks.map(function (k) {
+    var n = all.filter(function (c) { return k === 'ALL' || c.kind === k; }).length;
+    return '<button class="' + (k === kind ? 'on' : '') + '" data-k="' + k + '">' + (k === 'ALL' ? 'ALL' : k + 'S') + ' ' + n + '</button>';
+  }).join('');
+}
+document.getElementById('tabs').addEventListener('click', function (e) { var k = e.target.getAttribute('data-k'); if (k) { kind = k; tabs(); show(); } });
+fetch('carts.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { all = j.carts || []; tabs(); show(); })
+  .catch(function () { document.getElementById('carts').textContent = "Can't load carts.json"; });
+</script>
+</body>
+</html>

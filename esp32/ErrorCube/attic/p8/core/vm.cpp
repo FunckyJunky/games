@@ -188,6 +188,18 @@ bool _initializeLuaState(lua_State* luaState) {
     return true;
 }
 
+// ERROR-CUBE: a cart that never comes back (a loop waiting for something that never happens) can't hang the
+// cube: every 10000 Lua steps this looks whether the cube wants the cart to stop (QUIT), and whether this one
+// frame has gone on far too long. Either way: an error in the cart, which ends it (p8run.cpp).
+volatile bool p8HookQuit = false;       // p8run.cpp: stop now
+volatile uint32_t p8HookCount = 0;      // hooks since this frame (or the cart's start) began
+volatile uint32_t p8HookLimit = 4000;   // 40 million Lua steps
+volatile bool p8HookStuck = false;      // it happened: the cart was stuck
+static void p8Hook(lua_State* L, lua_Debug*) {
+    if (p8HookQuit) luaL_error(L, "stopped");
+    if (++p8HookCount > p8HookLimit) { p8HookStuck = true; luaL_error(L, "the cart is stuck (it waits for something forever)"); }
+}
+
 int panic_hook(lua_State* l) {
     char const *message = lua_tostring(l, -1);
     printf("Lua panic: %s\n", message);
@@ -300,6 +312,7 @@ Vm::Vm(
 
     _luaState = luaL_newstate();
     lua_atpanic(_luaState, panic_hook);
+    lua_sethook(_luaState, p8Hook, LUA_MASKCOUNT, 10000);
 
     lua_setpico8memory(_luaState, (uint8_t *)&_memory->data);
     _initializeLuaState(_luaState);

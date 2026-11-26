@@ -3,10 +3,23 @@
 // QMI8658, ES8311 + ES7210, TF card). Pins from Waveshare's wiki and pin_config.h.
 #pragma once
 
-#define CUBE_VERSION "1.5.2"
+// PICO-CUBE (esp32/PicoCube) builds from these same files: it has src/pico/pico_config.h, with its own name,
+// version, update address and colours (the simulator passes it with -include)
+#if !defined(PICO_CUBE) && __has_include("../pico/pico_config.h")
+#include "../pico/pico_config.h"
+#endif
+#ifndef PICO_CUBE
+#define FW_NAME "ERROR-CUBE"
+#define CUBE_VERSION "1.5.3"
+#define FW_INFO_PATH "/cube/flash/firmware.json"     // newest firmware: {ver, path, size, md5, notes}
+#endif
+#define PICO_CUBE_INFO "/pico8/flash/firmware.json"  // the two firmwares for this cube: each can install the other
+#define ERROR_CUBE_INFO "/cube/flash/firmware.json"
+#ifndef THEME_COLOR
+#define THEME_COLOR cfg.color                        // SCHEMES[]: PICO-CUBE has its own
+#endif
 #define CUBE_HOST "error.blue"
 #define CUBE_PORT 443
-#define FW_INFO_PATH "/cube/flash/firmware.json"     // newest firmware: {ver, path, size, md5, notes}
 #define LINK_GAME "error-cube"                      // live link: /api/room/error-cube/<CODE>
 
 // display (QSPI)

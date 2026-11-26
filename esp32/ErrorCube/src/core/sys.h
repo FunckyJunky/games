@@ -292,6 +292,7 @@ void netLinkNewCode();
 void netLinkState();                          // tell the control page about a change now
 void netUpdateCheck();
 void netUpdateInstall();
+void netInstallPico();                        // 1.5.3: install PICO-CUBE (the PICO-8 firmware) from error.blue/pico8
 bool netInstallFile(const char* path);        // firmware from a file (TF card)
 void netSetFocus(int what);                   // what's on screen: polls that more often
 void netOffline(bool on);                     // OFFLINE: WiFi off and no internet jobs (cfg.offline)

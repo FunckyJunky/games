@@ -1,0 +1,9 @@
+{
+  "name": "PICO-CUBE",
+  "ver": "1.0",
+  "path": "/pico8/flash/pico.bin",
+  "size": 2600256,
+  "md5": "07f366d38016f95650c39f9dc74b8e4d",
+  "notes": "PICO-CUBE 1.0: the cube as a PICO-8 player. Carts from error.blue/pico8, tilt = arrows, back to ERROR-CUBE from SETUP",
+  "date": "2026-11-26T18:57Z"
+}

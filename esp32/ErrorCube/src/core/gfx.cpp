@@ -21,6 +21,7 @@ const Scheme SCHEMES[] = {
   {"DOS BLUE", 0xf2f2ff, 0x8d98ff, 0x0019a6},
   {"CYAN", 0x45f0ff, 0x157a85, 0x021014},
   {"RED", 0xff5a6a, 0x8a2a34, 0x140306},
+  {"PICO-8", 0xfff1e8, 0xff77a8, 0x1d2b53},       // PICO-8's own white, pink and dark blue (PICO-CUBE)
 };
 const int N_SCHEMES = sizeof(SCHEMES) / sizeof(SCHEMES[0]);
 uint16_t C_FG, C_DIM, C_BG, C_RED, C_WARN, C_BLACK = 0, C_WHITE = 0xFFFF;

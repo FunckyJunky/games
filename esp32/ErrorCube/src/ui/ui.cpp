@@ -1148,7 +1148,7 @@ void uiGlitch(int kind, uint32_t ms) {
 
 void uiInit() {
   gfxInit();
-  gfxTheme(cfg.color, lowFx() ? 0 : cfg.glow);
+  gfxTheme(THEME_COLOR, lowFx() ? 0 : cfg.glow);
   lastAct = msNow();
   scheduleGlitch(msNow());
 }
@@ -1223,7 +1223,7 @@ bool uiFrame() {
   }
   bool calm = lowFx();
   { Screen* s0 = uiCurrent(); if (s0 && s0->plain() && ovl.empty()) calm = true; }
-  gfxTheme(cfg.color, calm ? 0 : cfg.glow);
+  gfxTheme(THEME_COLOR, calm ? 0 : cfg.glow);
   { Screen* s0 = uiCurrent(); holoFrameStart(s0 && s0->fullScreen()); }
   {
     hits.clear();

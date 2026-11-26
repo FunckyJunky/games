@@ -44,7 +44,7 @@ static String urlEnc(const char* s) {
 }
 
 // ================================================================== the HTTPS worker
-enum { J_ONLINE, J_WHO, J_CHAT, J_SAY, J_FW, J_APPS, J_APPGET, J_FETCH, J_OTA, J_OTAFILE, J_DL, J_N };
+enum { J_ONLINE, J_WHO, J_CHAT, J_SAY, J_FW, J_APPS, J_APPGET, J_FETCH, J_OTA, J_OTAFILE, J_DL, J_OTHER, J_N };
 struct Job { uint8_t kind; int id; char* a; char* b; };
 static QueueHandle_t jobs;
 static volatile uint32_t busy = 0;
@@ -86,7 +86,7 @@ static int requestRaw(const char* method, const String& path, const char* body, 
   http.setReuse(true);
   http.setConnectTimeout(8000);
   http.setTimeout(timeout);
-  http.setUserAgent("ERROR-CUBE/" CUBE_VERSION);
+  http.setUserAgent(FW_NAME "/" CUBE_VERSION);
   int code;
   if (!strcmp(method, "POST")) { http.addHeader("Content-Type", "application/json"); code = http.POST((uint8_t*)body, strlen(body)); }
   else code = http.GET();
@@ -297,37 +297,54 @@ class OtaSink : public Stream {
   void flush() override {}
 };
 static void linkDrop();
-static void doOta() {
-  if (!fw.ver[0] || fw.path[0] != '/' || fw.size < 100000) return;
-  S.upd = UPD_LOADING; S.updPct = 0; snprintf(S.updMsg, sizeof(S.updMsg), "%s > %s", CUBE_VERSION, fw.ver);
+// install a firmware from error.blue: this one's update (fw), or the other firmware for the cube (PICO-CUBE)
+static void doOta(const FwInfo& f, const char* what) {
+  if (!f.ver[0] || f.path[0] != '/' || f.size < 100000) { S.upd = UPD_FAIL; snprintf(S.updMsg, sizeof(S.updMsg), "NOTHING TO INSTALL"); return; }
+  S.upd = UPD_LOADING; S.updPct = 0;
+  if (what) snprintf(S.updMsg, sizeof(S.updMsg), "%s %s", what, f.ver); else snprintf(S.updMsg, sizeof(S.updMsg), "%s > %s", CUBE_VERSION, f.ver);
   xSemaphoreTake(tlsMx, portMAX_DELAY);
   linkStepAside();                                     // all the RAM for the download
   const char* err = nullptr;
   tlsSetup();
-  String url = String("https://") + CUBE_HOST + fw.path;
+  String url = String("https://") + CUBE_HOST + f.path;
   http.end();
+  http.useHTTP10(true);                                // no chunks; our own read loop that sleeps (1.5.3, as downloads)
   if (!http.begin(tls, url)) err = "NO CONNECTION";
   else {
     http.setTimeout(20000);
     int code = http.GET();
     int len = http.getSize();
     if (code != 200) err = "THE SERVER SAID NO";
-    else if (len > 0 && (uint32_t)len != fw.size) err = "WRONG SIZE";
-    else if (!Update.begin(fw.size)) err = "NO ROOM: INSTALL WITH USB";
+    else if (len > 0 && (uint32_t)len != f.size) err = "WRONG SIZE";
+    else if (!Update.begin(f.size)) err = "NO ROOM: INSTALL WITH USB";
     else {
-      if (strlen(fw.md5) == 32) Update.setMD5(fw.md5);
-      OtaSink sink(fw.size);
-      int n = http.writeToStream(&sink);
-      if (n < 0 || sink.done != fw.size) { err = "DOWNLOAD BROKE OFF"; Update.abort(); }
+      if (strlen(f.md5) == 32) Update.setMD5(f.md5);
+      OtaSink sink(f.size);
+      WiFiClient* st = http.getStreamPtr();
+      static uint8_t* buf = nullptr;
+      if (!buf) buf = (uint8_t*)malloc(4096);
+      uint32_t last = millis();
+      bool wok = true;
+      while (st && buf && wok && sink.done < f.size) {
+        int a = st->available();
+        int n = a > 0 ? st->read(buf, a > 4096 ? 4096 : a) : 0;
+        if (n > 0) { wok = sink.write(buf, n) == (size_t)n; last = millis(); vTaskDelay(1); continue; }
+        if (!st->connected() && st->available() <= 0) break;
+        if (millis() - last > 20000) break;
+        vTaskDelay(pdMS_TO_TICKS(5));
+      }
+      if (!wok || sink.done != f.size) { err = "DOWNLOAD BROKE OFF"; Update.abort(); }
       else if (!Update.end()) err = "CHECK FAILED";
     }
     http.end();
   }
+  http.useHTTP10(false);
   if (err) { char e[64] = ""; tls.lastError(e, sizeof(e)); if (e[0]) snprintf(S.netErr, sizeof(S.netErr), "%s", e); tls.stop(); }
   linkYield = false;
   xSemaphoreGive(tlsMx);
   if (!err) {
     S.upd = UPD_DONE; S.updPct = 100; snprintf(S.updMsg, sizeof(S.updMsg), "DONE. RESTARTING...");
+    cfgFlushNow();
     delay(1500);
     sysRestart();
   }
@@ -345,9 +362,8 @@ static void doOtaFile(const char* path) {
     uint8_t* buf = (uint8_t*)psram(4096);
     long done = 0;
     if (!buf) err = "NO MEMORY";
-    while (done < n) {
-      size_t r = fread(buf, 1, sizeof(buf), f);
-      if (!buf) break;
+    while (buf && done < n) {
+      size_t r = fread(buf, 1, 4096, f);          // 1.5.3: was sizeof(buf), 4 bytes at a time
       if (!r || Update.write(buf, r) != r) { err = "COULD NOT WRITE"; break; }
       done += r; S.updPct = done * 100 / n;
     }
@@ -368,7 +384,7 @@ static void worker(void*) {
     if (S.net != NET_UP && j.kind != J_OTAFILE) {
       if (j.kind == J_APPGET) { LOCK(); if (AppDl* d = dl(j.a, true)) d->st = -1; UNLOCK(); }
       if (j.kind == J_APPS && nApps == -1) nApps = -2;
-      if (j.kind == J_FW) S.upd = UPD_FAIL, snprintf(S.updMsg, sizeof(S.updMsg), "NO WIFI");
+      if (j.kind == J_FW || j.kind == J_OTHER) S.upd = UPD_FAIL, snprintf(S.updMsg, sizeof(S.updMsg), "NO WIFI");
       if (j.kind == J_FETCH) { Fetched r = {j.id, 0, strdup("")}; xQueueSend(fetched, &r, 0); }
       busy &= ~(1u << j.kind); free(j.a); free(j.b); continue;
     }
@@ -388,6 +404,19 @@ static void worker(void*) {
         request("POST", String("/api/chat/") + cfg.chan + "/say", b.c_str(), nullptr, nullptr);
         String p = String("/api/chat/") + cfg.chan + "/log?limit=30&after=" + chatLast + "&name=" + urlEnc(cfg.name);
         if (request("GET", p, nullptr, &body, &n) == 200 && body) parseChat(body, false);
+        break;
+      }
+      case J_OTHER: {     // PICO-CUBE: look it up, install it
+        S.upd = UPD_CHECKING; snprintf(S.updMsg, sizeof(S.updMsg), "LOOKING FOR PICO-CUBE");
+        code = request("GET", PICO_CUBE_INFO, nullptr, &body, &n);
+        FwInfo o = {};
+        JsonDocument d;
+        if (code != 200 || !body) { S.upd = UPD_FAIL; snprintf(S.updMsg, sizeof(S.updMsg), "ERROR.BLUE: %d", code); break; }
+        if (deserializeJson(d, body)) { S.upd = UPD_FAIL; snprintf(S.updMsg, sizeof(S.updMsg), "BAD ANSWER"); break; }
+        snprintf(o.ver, sizeof(o.ver), "%s", d["ver"] | ""); snprintf(o.path, sizeof(o.path), "%s", d["path"] | "");
+        snprintf(o.md5, sizeof(o.md5), "%s", d["md5"] | ""); o.size = d["size"] | 0;
+        free(body); body = nullptr;
+        doOta(o, "PICO-CUBE");
         break;
       }
       case J_FW:
@@ -427,7 +456,7 @@ static void worker(void*) {
         if (xQueueSend(fetched, &r, 0) != pdTRUE) free(r.body);
         break;
       }
-      case J_OTA: doOta(); break;
+      case J_OTA: doOta(fw, nullptr); break;
       case J_OTAFILE: doOtaFile(j.a); break;
       case J_DL: doDownload(j.a, j.b); break;
     }
@@ -446,6 +475,7 @@ void netChatSay(const char* t) { post(J_SAY, 0, t); }
 void netChatReset() { LOCK(); chat = ChatLog(); chatHave = false; chatLast = 0; chatFresh = true; UNLOCK(); }
 void netUpdateCheck() { if (want(J_FW)) { S.upd = UPD_CHECKING; post(J_FW); } }
 void netUpdateInstall() { if (S.upd == UPD_NEW && want(J_OTA)) post(J_OTA); }
+void netInstallPico() { if (want(J_OTHER) && S.upd != UPD_LOADING) { S.upd = UPD_CHECKING; post(J_OTHER); } }
 bool netInstallFile(const char* path) {
   const char* e = strrchr(path, '.');
   if (!e || strcasecmp(e, ".bin")) return false;

@@ -21,6 +21,7 @@ void sndForceVolume(int) {}
 static std::string real(const char* p);
 void netDownload(const char* path, const char* file) {   // the site's files are in ../../public
   std::string src = std::string("../../public") + path, dst = real(file);
+  if (src.find('?') != std::string::npos) src = src.substr(0, src.find('?'));   // "?v=2": a version for the cache
   std::string cmd = "mkdir -p \"$(dirname '" + dst + "')\" && cp '" + src + "' '" + dst + "'";
   S.dlState = system(cmd.c_str()) == 0 ? 2 : -1;
 }
@@ -55,6 +56,7 @@ static std::string real(const char* p) {
   if (!strncmp(p, "/c", 2)) return root + "/c" + (p + 2);
   return root + p;
 }
+std::string simRealPath(const char* p) { return real(p); }   // PICO-CUBE: PICO-8 opens its files itself
 int fsList(const char* dir, FileEnt* out, int max) {
   DIR* d = opendir(real(dir).c_str()); if (!d) return -1;
   int n = 0; struct dirent* e;
@@ -158,6 +160,7 @@ void netLinkNewCode() { strcpy(cfg.code, "QX7K2M"); }
 void netLinkState() {}
 void netUpdateCheck() { S.upd = UPD_LATEST; strcpy(S.updVer, CUBE_VERSION); }
 void netUpdateInstall() {}
+void netInstallPico() { S.upd = UPD_LOADING; S.updPct = 37; snprintf(S.updMsg, sizeof(S.updMsg), "PICO-CUBE 1.0"); }
 bool netInstallFile(const char*) { return false; }
 void netSetFocus(int) {}
 bool netWho(WhoList& w) {

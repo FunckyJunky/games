@@ -419,6 +419,15 @@ struct Wifi : Screen {
 Screen* makeWifi() { return new Wifi(); }
 
 // ------------------------------------------------------------------ UPDATE.EXE
+// 1.5.3: PICO-CUBE, the cube's second firmware (a PICO-8 player): installs like an update, comes back the same way
+static void askPico() {
+  ask("PICO-CUBE", "A PICO-8 player for this cube, with carts from error.blue/pico8. The cube downloads it and restarts in it. WiFi, settings and files stay. Back: SETUP > BACK TO ERROR-CUBE.",
+      {"INSTALL", "CANCEL"}, [](int i) {
+    if (i) return;
+    if (S.net != NET_UP) { ask("NO WIFI", "Join a WiFi network first.", {"OK"}, nullptr); return; }
+    netInstallPico();
+  });
+}
 struct Update : Screen {
   const char* name() override { return "UPDATE.EXE"; }
   void enter() override { if (S.upd == UPD_IDLE || S.upd == UPD_LATEST || S.upd == UPD_FAIL) netUpdateCheck(); }
@@ -433,7 +442,7 @@ struct Update : Screen {
       case UPD_IDLE: st = "NOT CHECKED YET"; break;
       case UPD_CHECKING: st = "CHECKING..."; break;
       case UPD_NEW: st = "NEW FIRMWARE!"; break;
-      case UPD_LOADING: st = "INSTALLING..."; break;
+      case UPD_LOADING: st = S.updMsg[0] ? S.updMsg : "INSTALLING..."; break;   // "1.5.2 > 1.5.3", "PICO-CUBE 1.0"
       case UPD_DONE: st = "DONE. RESTARTING"; break;
       case UPD_FAIL: st = S.updMsg[0] ? S.updMsg : "FAILED"; break;
       case UPD_LATEST: st = "UP TO DATE"; break;
@@ -450,7 +459,7 @@ struct Update : Screen {
     char up[48];
     if (S.net == NET_UP) snprintf(up, sizeof(up), "WEB PAGE: %s", S.ip); else strcpy(up, "OR A .BIN ON THE TF CARD");
     drawTextC(FT, 240, 372, up, C_DIM, TX_FLAT);
-    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"A:", "From card", [] { openProg("FILES"); }}});
+    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"A:", "From card", [] { openProg("FILES"); }}, {"P8", "PICO-8", [] { askPico(); }}});
     if (S.upd == UPD_CHECKING) redrawIn(300);
   }
 };
