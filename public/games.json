@@ -194,5 +194,15 @@
     "folder": "apps",
     "logo": "lamp",
     "added": "2026-11-26T19:30"
+  },
+  {
+    "id": "lamp-show",
+    "title": "SHOW.EXE",
+    "dos": "SHOW",
+    "description": "Light show generator for your RGB lamp: pick how often each colour comes, the order (random, cycle, walk, rhythm), the speed with tap tempo, fades between colours, a slow brightness wave, and now and then the lamp's own effects. Presets, surprise shows, save and share.",
+    "path": "lamp/show/",
+    "folder": "apps",
+    "logo": "lamp",
+    "added": "2026-11-26T20:30"
   }
 ]

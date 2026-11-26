@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>SHOW.EXE</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Crect x=%272%27 y=%279%27 width=%272%27 height=%275%27 fill=%27%23ff2020%27/%3E%3Crect x=%275%27 y=%275%27 width=%272%27 height=%279%27 fill=%27%23ffc21c%27/%3E%3Crect x=%278%27 y=%277%27 width=%272%27 height=%277%27 fill=%27%2316ff3a%27/%3E%3Crect x=%2711%27 y=%273%27 width=%272%27 height=%2711%27 fill=%27%232a3cff%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); --red: #ff4b4b; --yel: #ffc21c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #000; }
+  body { color: var(--fg); font-family: 'VT323', ui-monospace, monospace; font-size: 22px; line-height: 1.15; text-shadow: 0 0 5px var(--glow);
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; overflow-x: hidden; }
+  #crt { min-height: 100dvh; background: var(--bg); max-width: 760px; margin: 0 auto; padding: 0 0 calc(30px + env(safe-area-inset-bottom)); position: relative; }
+  #crt::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 20; background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
+  button { all: unset; cursor: pointer; }
+  a { color: var(--fg); }
+  .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px; background: var(--fg); color: var(--bg); text-shadow: none;
+    padding: calc(4px + env(safe-area-inset-top)) 10px 4px; white-space: nowrap; overflow: hidden; box-shadow: 0 0 10px var(--glow); }
+  .bar .t { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .bar a { color: var(--bg); text-decoration: none; padding: 0 4px; }
+  .sec { padding: 8px 14px 0; }
+  .h { color: var(--dim); text-shadow: none; margin: 20px 0 6px; letter-spacing: .06em; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .h b { color: var(--fg); font-weight: normal; text-shadow: 0 0 5px var(--glow); }
+  .dim { color: var(--dim); text-shadow: none; }
+  .hint { color: #8fd3a6; text-shadow: none; font-size: 19px; margin-top: 4px; min-height: 22px; }
+  .btn { display: inline-block; border: 1px solid var(--fg); padding: 3px 12px; text-align: center; margin: 6px 6px 0 0; }
+  .btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  .mini { font-size: 19px; padding: 1px 8px; margin: 2px 0 0 4px; border: 1px solid var(--dim); color: var(--fg); text-shadow: 0 0 5px var(--glow); display: inline-block; }
+  .mini:active { background: var(--fg); color: var(--bg); }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--dim); margin: 4px 6px 0 0; vertical-align: top; }
+  .seg button { padding: 2px 9px; }
+  .seg button.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  .lbl { display: block; margin-top: 10px; color: var(--dim); text-shadow: none; font-size: 19px; letter-spacing: .05em; }
+
+  #stage { position: relative; height: 210px; overflow: hidden; background: #000; border-bottom: 1px solid var(--dim); }
+  #room { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #readout { position: absolute; left: 10px; right: 10px; bottom: 6px; display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; color: #e9fff0; text-shadow: 0 0 6px #000, 0 0 2px #000; pointer-events: none; }
+  #rName { font-size: 28px; }
+  #rSub { font-size: 18px; color: #b6e9c6; }
+  #rRight { text-align: right; }
+  #rBpm { font-size: 28px; }
+  #rKey { font-size: 18px; color: #b6e9c6; min-height: 20px; }
+  #showName { position: absolute; left: 10px; top: 6px; font-size: 20px; color: #e9fff0; text-shadow: 0 0 6px #000; pointer-events: none; }
+  #beats { position: absolute; right: 10px; top: 10px; display: flex; gap: 5px; }
+  #beats i { width: 9px; height: 9px; border: 1px solid #fff6; display: block; }
+  #beats i.on { background: #fff; box-shadow: 0 0 8px #fff; }
+  #tl { display: block; width: 100%; height: 66px; background: #000; border-bottom: 1px solid var(--dim); }
+
+  #transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px 0; }
+  #playBtn { border: 2px solid var(--fg); padding: 6px 18px; font-size: 30px; min-width: 5.5em; text-align: center; box-shadow: 0 0 10px var(--glow); }
+  #playBtn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  #transport .btn { margin: 0; }
+  #load { padding: 8px 14px 0; display: flex; align-items: center; gap: 4px 10px; font-size: 19px; flex-wrap: wrap; }
+  #loadBar { flex: none; width: 120px; height: 12px; border: 1px solid var(--dim); position: relative; }
+  #loadFill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg); }
+  #loadBar::after { content: ''; position: absolute; left: 66.6%; top: -3px; bottom: -3px; width: 1px; background: #fff8; }
+  #loadTxt { flex: 1 1 14em; color: #b6e9c6; text-shadow: none; }
+  #fitBtn { margin: 0; }
+  #linkRow { padding: 8px 14px 0; font-size: 19px; color: #b6e9c6; text-shadow: none; }
+  #codeIn { all: unset; border: 1px solid var(--fg); padding: 0 8px; width: 6.5em; letter-spacing: .25em; font-family: 'VT323', monospace; font-size: 24px; color: var(--fg); text-transform: uppercase; -webkit-user-select: text; user-select: text; }
+
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--dim); padding: 2px 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .chip.on { border-color: var(--fg); background: #0b3a1a; }
+  .chip.mine { border-style: dashed; }
+  .chip .dots { display: inline-flex; gap: 1px; }
+  .chip .dots i { width: 5px; height: 12px; display: block; }
+
+  #mix { display: flex; gap: 3px; margin-top: 8px; }
+  .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+  .track { width: 100%; height: 130px; border: 1px solid #ffffff22; position: relative; touch-action: none; cursor: ns-resize; background: repeating-linear-gradient(0deg, #ffffff10 0 1px, transparent 1px 14.444px); }
+  .fill { position: absolute; left: 0; right: 0; bottom: 0; }
+  .sw { width: 100%; aspect-ratio: 1; max-width: 26px; border-radius: 50%; border: 1px solid #fff5; }
+  .val { font-size: 18px; color: #e9fff0; text-shadow: none; }
+  .col.zero .val { color: var(--dim); }
+  #share { display: flex; height: 12px; margin-top: 8px; border: 1px solid #ffffff22; }
+  #share i { display: block; height: 100%; }
+
+  #bpmRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  #bpmBig { font-size: 52px; line-height: .9; min-width: 2.4em; text-align: right; }
+  #bpmRange { flex: 1; min-width: 150px; accent-color: #39ff7a; height: 28px; }
+  #tapBtn { border: 2px solid var(--fg); padding: 6px 16px; font-size: 26px; }
+  #tapBtn.hit { background: var(--fg); color: var(--bg); }
+  .toggles button { border: 1px solid var(--dim); padding: 2px 10px; margin: 4px 6px 0 0; display: inline-block; }
+  .toggles button.on { border-color: var(--fg); background: #0b3a1a; }
+  #nameIn { all: unset; border: 1px solid var(--fg); padding: 2px 8px; font-family: 'VT323', monospace; font-size: 24px; color: var(--fg); width: 11em; max-width: 60%; -webkit-user-select: text; user-select: text; }
+  .mineRow { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #1b7a3c66; padding: 4px 0; }
+  #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translate(-50%, 140px); background: var(--bg); border: 1px solid var(--fg); padding: 6px 14px; z-index: 30; transition: transform .25s; max-width: 90%; text-align: center; }
+  #toast:not(.show) { visibility: hidden; transition: transform .25s, visibility 0s .25s; }
+  #toast.show { transform: translate(-50%, 0); }
+  #toast.err { border-color: var(--red); color: #ffb0b0; }
+  .hide { display: none !important; }
+  p { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div id="crt">
+  <div class="bar"><span class="t">SHOW.EXE</span><span id="st">PREVIEW</span><a id="lampLink" href="/lamp/">LAMP</a><a href="/">MENU</a></div>
+
+  <div id="stage">
+    <canvas id="room"></canvas>
+    <div id="showName">CUSTOM</div>
+    <div id="beats"><i></i><i></i><i></i><i></i></div>
+    <div id="readout">
+      <div><div id="rName">&nbsp;</div><div id="rSub">&nbsp;</div></div>
+      <div id="rRight"><div id="rBpm">60 BPM</div><div id="rKey">&nbsp;</div></div>
+    </div>
+  </div>
+  <canvas id="tl"></canvas>
+
+  <div id="transport">
+    <button id="playBtn">&#9654; PLAY</button>
+    <button class="btn" id="newBtn" title="same settings, new random order (N)">NEW SHOW</button>
+    <button class="btn" id="surBtn">SURPRISE ME</button>
+  </div>
+  <div id="load"><span>IR</span><span id="loadBar"><span id="loadFill"></span></span><span id="loadTxt"></span><button class="btn mini hide" id="fitBtn">FIT</button></div>
+  <div id="linkRow"></div>
+
+  <div class="sec">
+    <div class="h"><span>SHOWS</span><span class="dim" style="font-size:18px">tap one, then change anything</span></div>
+    <div id="chips"></div>
+
+    <div class="h"><span>COLOURS <b id="mixTitle">how often each one comes</b></span>
+      <span><button class="mini" data-pal="all">ALL</button><button class="mini" data-pal="warm">WARM</button><button class="mini" data-pal="cool">COOL</button><button class="mini" data-pal="rgb">RGB</button><button class="mini" data-pal="rnd">RANDOM</button><button class="mini" data-pal="none">NONE</button></span></div>
+    <div id="mix"></div>
+    <div id="share"></div>
+    <div class="hint" id="mixHint"></div>
+
+    <div class="h"><span>ORDER</span></div>
+    <span class="seg" id="order"></span>
+    <div class="hint" id="orderHint"></div>
+
+    <div class="h"><span>SPEED</span><span class="dim" style="font-size:18px">T = tap the beat</span></div>
+    <div id="bpmRow"><span id="bpmBig">60</span><span class="dim">BPM</span><input type="range" id="bpmRange" min="0" max="1000" step="1"><button id="tapBtn">TAP</button></div>
+    <span class="lbl">NEW COLOUR EVERY</span><span class="seg" id="hold"></span>
+    <span class="lbl">LOOSE TIMING</span><span class="seg" id="loose"></span>
+
+    <div class="h"><span>FADE <b>between the colours</b></span></div>
+    <span class="seg" id="fade"></span>
+    <div class="hint" id="fadeHint"></div>
+    <div id="fadeOpts">
+      <span class="lbl">DEPTH (brightness steps; deeper than the dimmest = OFF)</span><span class="seg" id="fdepth"></span>
+      <span class="lbl" id="flenLbl">LENGTH (part of each colour's time)</span><span class="seg" id="flen"></span>
+    </div>
+
+    <div class="h"><span>MODULATION <b>a slow wave on the brightness</b></span></div>
+    <span class="seg" id="mod"></span>
+    <div class="hint" id="modHint"></div>
+    <div id="modOpts">
+      <span class="lbl" id="mdepthLbl">DEPTH (steps)</span><span class="seg" id="mdepth"></span>
+      <div id="mrateBox"><span class="lbl">ONE WAVE EVERY</span><span class="seg" id="mrate"></span></div>
+    </div>
+
+    <div class="h"><span>LAMP EFFECTS <b>the lamp's own programs, now and then</b></span></div>
+    <span class="lbl">CHANCE, EACH NEW COLOUR</span><span class="seg" id="fxp"></span>
+    <div id="fxOpts">
+      <div class="toggles" id="fxSet"></div>
+      <span class="lbl">LASTS</span><span class="seg" id="fxlen"></span>
+    </div>
+
+    <div class="h"><span>BRIGHTNESS <b>at its brightest</b></span></div>
+    <span class="seg" id="bright"></span>
+
+    <div class="h"><span>STOP AFTER</span><span class="dim" style="font-size:18px">then the lamp goes off</span></div>
+    <span class="seg" id="stop"></span>
+
+    <div class="h"><span>MY SHOWS</span></div>
+    <div><input id="nameIn" maxlength="18" placeholder="name this show" autocomplete="off" spellcheck="false"><button class="btn" id="saveBtn">SAVE</button><button class="btn" id="shareBtn">COPY LINK</button></div>
+    <div id="mine"></div>
+
+    <div class="h"><span>HOW IT WORKS</span></div>
+    <p class="dim">This page is the light show: it plays it and sends your lamp the remote's keys while it runs, so keep it open (the screen stays on while it plays). Every change is one IR key and the board sends about 3 a second, so fast shows with deep fades can't be followed step by step: watch the IR bar, or press FIT. The lamp can't dim below about 30 %, so anything darker switches it OFF. Pressing OFF on the real remote stops the show.</p>
+    <p class="dim">Without a lamp linked, the picture above shows what the lamp would do.</p>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lamp/show/engine.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const E = ShowEngine, BY = LAMP.BY_ID;
+const clock = () => performance.now() / 1000;
+const LEAD = 0.15;                       // send a little early: the key takes a moment to reach the lamp
+const BPM_MIN = 4, BPM_MAX = 240;
+
+function toast(m, err) { const t = $('toast'); t.textContent = m; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const pct = (lv) => Math.round((LAMP.MIN_LIGHT + (1 - LAMP.MIN_LIGHT) * lv / (LAMP.LEVELS - 1)) * 100);
+
+// ---------- settings ----------
+function fromHash() {
+  const h = location.hash.slice(1);
+  if (!h) return null;
+  try { return JSON.parse(decodeURIComponent(escape(atob(h.replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
+}
+function toHash(s) { return btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+let S = E.norm(fromHash() || store.get('show.last', null) || E.PRESETS[1].s);
+let showName = store.get('show.lastName', fromHash() ? 'SHARED' : 'PARTY');
+if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+let seed = (Math.random() * 4294967296) >>> 0;
+let plan = new E.Plan(S, seed, 0);
+let mine = store.get('show.mine', []);
+
+// ---------- playing ----------
+let playing = false, startAt = 0, calib = false, calibAt = 0, stopAt = 0;
+let link = null, realOut = null, sim = new E.SimOut(), sender = null, usingReal = false;
+let lastKey = '', lastKeyAt = -9, hist = [], wake = null;
+const showT = () => playing && !calib ? clock() - startAt : 0;
+
+function rebuild(keepSeed) {
+  if (!keepSeed) seed = (Math.random() * 4294967296) >>> 0;
+  plan = new E.Plan(S, seed, playing && !calib ? showT() : 0);
+  store.set('show.last', S); store.set('show.lastName', showName);
+  updLoad();
+}
+let rebuildT = 0;
+function changed(name) {           // a setting moved: rebuild soon (sliders fire a lot)
+  if (name !== undefined) showName = name;
+  else if (!/\*$/.test(showName) && showName !== 'CUSTOM') showName = showName + '*';
+  clearTimeout(rebuildT); rebuildT = setTimeout(() => rebuild(true), 120);
+  ui();
+}
+
+function pickOut() {
+  const real = !!(link && link.ready);
+  if (real === usingReal && sender) return;
+  usingReal = real;
+  if (real) {
+    sender = new E.Sender(realOut);
+    if (playing) startCalib();
+  } else {
+    Object.assign(sim.state, link && link.online ? link.state : sim.state);
+    sim.clear();
+    sender = new E.Sender(sim);
+    calib = false;
+  }
+}
+function startCalib() {             // on + all the way down: from then on we know the brightness
+  calib = true; calibAt = clock();
+  sender.calibrate(clock(), S.bright >= 4);
+}
+async function lockScreen() { try { if (navigator.wakeLock && playing && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lockScreen(); });
+
+function play() {
+  if (playing) return;
+  playing = true; hist = [];
+  sender = null; pickOut();                    // the real lamp: pickOut gets it ready first (calibrate)
+  if (!usingReal) { calib = false; startAt = clock(); }
+  stopAt = S.stop ? S.stop * 60 : 0;
+  plan = new E.Plan(S, seed, 0);
+  lockScreen();
+  ui();
+}
+function stop(why, off) {
+  if (!playing) return;
+  playing = false; calib = false;
+  if (usingReal && link && link.ready) { link.clear(); if (off) setTimeout(() => link.press('off'), 350); }
+  if (!usingReal && off) LAMP.apply(sim.state, BY.off.c);
+  if (wake) { try { wake.release(); } catch (e) {} wake = null; }
+  plan = new E.Plan(S, seed, 0);
+  if (why) toast(why);
+  ui();
+}
+
+function tick() {
+  const now = clock();
+  sim.step(now);
+  if (!playing) return;
+  pickOut();
+  if (calib) {
+    if (sender.out.inflight > 0 && now - calibAt < 5) return;
+    calib = false; startAt = now; plan = new E.Plan(S, seed, 0);
+  }
+  const t = now - startAt;
+  if (stopAt && t >= stopAt) { stop('Show over: lamp off', true); return; }
+  const id = sender.tick(now, plan.want(t + (usingReal ? LEAD : 0.05)));
+  if (id) { lastKey = id; lastKeyAt = now; }
+}
+// timers of a hidden tab slow down; a worker's don't, so it keeps the show going on a PC
+try {
+  const wk = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 40);'], { type: 'text/javascript' })));
+  wk.onmessage = tick;
+} catch (e) {}
+setInterval(tick, 40);
+
+// ---------- what the lamp looks like ----------
+function lampState() {
+  if (link && link.online && (usingReal || !playing)) return link.state;
+  return sim.state;
+}
+function lookOf(st, t) { const l = LAMP.look(st, t); return l; }
+function wantLook(w, t) {
+  if (!w.on) return { rgb: [0, 0, 0], i: 0 };
+  if (w.mode && w.mode !== 'color') return LAMP.look({ on: true, mode: w.mode, key: 'w', level: S.bright }, t);
+  return { rgb: LAMP.hexRgb(BY[w.key].rgb), i: LAMP.MIN_LIGHT + (1 - LAMP.MIN_LIGHT) * w.level / (LAMP.LEVELS - 1) };
+}
+
+function fit(cv) {
+  const W = cv.clientWidth, H = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { c, W, H };
+}
+function drawRoom(now) {
+  const { c, W, H } = fit($('room'));
+  const st = lampState(), lk = lookOf(st, now), [r, g, b] = lk.rgb, i = lk.i;
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * 0.42;
+  // the room lit by the lamp
+  const gr = c.createRadialGradient(cx, cy, 10, cx, cy, Math.max(W, H) * 0.75);
+  gr.addColorStop(0, `rgba(${r},${g},${b},${0.55 * i})`); gr.addColorStop(0.45, `rgba(${r},${g},${b},${0.18 * i})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = gr; c.fillRect(0, 0, W, H);
+  // floor
+  const fy = H * 0.74;
+  c.fillStyle = `rgba(${r},${g},${b},${0.08 * i})`; c.fillRect(0, fy, W, H - fy);
+  c.strokeStyle = 'rgba(255,255,255,.08)'; c.beginPath(); c.moveTo(0, fy); c.lineTo(W, fy); c.stroke();
+  const rf = c.createRadialGradient(cx, fy + 6, 2, cx, fy + 6, 90);
+  rf.addColorStop(0, `rgba(${r},${g},${b},${0.35 * i})`); rf.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = rf; c.beginPath(); c.ellipse(cx, fy + 6, 90, 14, 0, 0, Math.PI * 2); c.fill();
+  // stand + globe
+  c.fillStyle = '#1a1f1c'; c.fillRect(cx - 3, cy + 30, 6, fy - cy - 30); c.fillRect(cx - 22, fy - 4, 44, 5);
+  const orb = c.createRadialGradient(cx - 8, cy - 10, 3, cx, cy, 36);
+  if (i > 0) { orb.addColorStop(0, `rgba(255,255,255,${0.6 * i + 0.2})`); orb.addColorStop(0.35, `rgba(${r},${g},${b},${0.5 + 0.5 * i})`); orb.addColorStop(1, `rgba(${r * 0.6 | 0},${g * 0.6 | 0},${b * 0.6 | 0},${0.6 + 0.4 * i})`); }
+  else { orb.addColorStop(0, '#2a2f2c'); orb.addColorStop(1, '#111412'); }
+  c.fillStyle = orb; c.beginPath(); c.arc(cx, cy, 34, 0, Math.PI * 2); c.fill();
+  if (i > 0) { c.shadowColor = `rgb(${r},${g},${b})`; c.shadowBlur = 40 * i; c.beginPath(); c.arc(cx, cy, 34, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0; }
+  // the IR beam when a key just went out
+  const age = now - lastKeyAt;
+  if (age < 0.35 && usingReal) {
+    c.strokeStyle = `rgba(255,60,60,${0.6 * (1 - age / 0.35)})`; c.setLineDash([3, 5]); c.lineWidth = 2;
+    c.beginPath(); c.moveTo(W - 22, 34); c.lineTo(cx + 38, cy - 6); c.stroke(); c.setLineDash([]); c.lineWidth = 1;
+    c.fillStyle = '#300'; c.fillRect(W - 22, 29, 14, 10); c.fillStyle = '#f33'; c.fillRect(W - 22, 32, 4, 4);
+  }
+  // readout
+  $('rName').textContent = !st.on ? 'OFF' : st.mode !== 'color' ? st.mode.toUpperCase() : BY[st.key].name.toUpperCase();
+  $('rSub').textContent = calib ? 'GETTING THE LAMP READY…' : !st.on ? (playing ? 'dark' : '') : st.mode !== 'color' ? "the lamp's own effect" : pct(st.level) + ' % bright' + (playing && !usingReal ? ' · preview' : '');
+  $('rBpm').textContent = Math.round(S.bpm) + ' BPM';
+  $('rKey').textContent = age < 1.2 && lastKey ? 'IR → ' + (BY[lastKey].short || BY[lastKey].name).toUpperCase() : ' ';
+  // beat dots
+  const B = 60 / S.bpm, t = showT(), beat = Math.floor(t / B);
+  const dots = $('beats').children;
+  for (let k = 0; k < 4; k++) dots[k].classList.toggle('on', playing && !calib && beat % 4 === k && (t / B) % 1 < 0.5);
+}
+function drawTimeline(now) {
+  const { c, W, H } = fit($('tl'));
+  c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  const span = 12, past = 3, t0 = showT(), X0 = W * past / span, sec = W / span;
+  const top = 12, bh = H - top - 4;
+  // what's coming (the plan) and what the lamp did (left of the line)
+  for (let x = 0; x < W; x += 2) {
+    const t = t0 + (x - X0) / sec;
+    let lk = null;
+    if (x >= X0) { if (t >= 0) lk = wantLook(plan.want(t), now + (x - X0) / sec); }
+    else if (playing && hist.length) {
+      const tt = now + (x - X0) / sec;
+      let h = null; for (let k = hist.length - 1; k >= 0; k--) if (hist[k][0] <= tt) { h = hist[k]; break; }
+      if (h) lk = { rgb: h[1], i: h[2] };
+    }
+    if (!lk || lk.i <= 0) continue;
+    const hh = bh * lk.i;
+    c.fillStyle = `rgba(${lk.rgb.join(',')},${x >= X0 ? 0.9 : 0.55})`;
+    c.fillRect(x, top + bh - hh, 2, hh);
+  }
+  // beats
+  const B = 60 / S.bpm;
+  c.fillStyle = '#1b7a3c';
+  for (let k = Math.ceil((t0 - past) / B); k * B < t0 + span - past; k++) {
+    const x = X0 + (k * B - t0) * sec;
+    c.fillRect(x, 0, 1, k % 4 === 0 ? 8 : 4);
+  }
+  c.fillStyle = '#fff'; c.fillRect(X0, 0, 1, H);
+  c.font = '14px VT323, monospace'; c.fillStyle = '#8fd3a6';
+  c.fillText('NOW', X0 + 4, 10); if (playing) c.fillText('LAMP', 4, 10);
+  c.textAlign = 'right'; c.fillText('+9 s', W - 4, 10); c.textAlign = 'left';
+}
+function frame() {
+  const now = clock();
+  if (playing) {
+    const lk = lookOf(lampState(), now);
+    hist.push([now, lk.rgb, lk.i]);
+    while (hist.length && hist[0][0] < now - 4) hist.shift();
+  }
+  drawRoom(now); drawTimeline(now);
+  requestAnimationFrame(frame);
+}
+
+// ---------- IR load ----------
+function updLoad() {
+  const l = E.estimate(new E.Plan(S, seed, 0), 0, 40);
+  const f = $('loadFill');
+  f.style.width = Math.min(100, l / 1.5 * 100) + '%';
+  f.style.background = l < 0.8 ? 'var(--fg)' : l < 1.0 ? 'var(--yel)' : 'var(--red)';
+  $('loadTxt').textContent = Math.round(l * 100) + '% · ' + (l * E.CAP).toFixed(1) + ' keys/s · ' +
+    (l < 0.8 ? 'the lamp keeps up' : l < 1.0 ? 'busy: some steps come late' : 'too much for IR: steps get skipped');
+  $('fitBtn').classList.toggle('hide', l < 0.9);
+}
+
+// ---------- controls ----------
+function seg(el, items, get, set) {
+  el.innerHTML = '';
+  for (const [v, label] of items) {
+    const b = document.createElement('button'); b.textContent = label; b.dataset.v = JSON.stringify(v);
+    b.onclick = () => { set(v); changed(); };
+    el.append(b);
+  }
+  el._get = get;
+}
+function segUi(el) { const v = JSON.stringify(el._get()); for (const b of el.children) b.classList.toggle('on', b.dataset.v === v); }
+const SEGS = [];
+function mkSeg(id, items, key) { const el = $(id); seg(el, items, () => S[key], (v) => { S[key] = v; }); SEGS.push(el); }
+
+const ORDERS = [['random', 'RANDOM'], ['cycle', 'CYCLE'], ['bounce', 'BOUNCE'], ['walk', 'WALK'], ['rhythm', 'RHYTHM']];
+const ORDER_HINT = {
+  random: 'Any colour, any time. A slider at 6 comes twice as often as one at 3.',
+  cycle: 'Round the colour circle, one after the other. The slider is how long each one stays (1-3 short, 7-9 long).',
+  bounce: 'Up the colour circle and back down again. The slider is how long each one stays.',
+  walk: 'Wanders to neighbouring colours, so it drifts smoothly round the circle. Sliders = how much it likes each one.',
+  rhythm: 'Every colour pulses at its own speed: 9 = every beat, 5 = every 5th, 1 = every 9th. They cross like drums.',
+};
+const FADES = [['cut', 'CUT'], ['dip', 'DIP'], ['decay', 'DECAY'], ['swell', 'SWELL'], ['blink', 'BLINK']];
+const FADE_HINT = {
+  cut: 'Straight from one colour to the next.',
+  dip: 'Dims down, changes colour while dim, comes back up.',
+  decay: 'Each colour hits bright and fades away, like a drum.',
+  swell: 'Each colour comes in dim and grows.',
+  blink: 'Dark between the colours. LENGTH = how much of the time is dark.',
+};
+const MODS = [['none', 'NONE'], ['sine', 'WAVE'], ['saw', 'SAW'], ['square', 'SQUARE'], ['random', 'FLICKER'], ['gate', 'BLACKOUT']];
+const MOD_HINT = {
+  none: 'Steady brightness.',
+  sine: 'Breathes: slowly darker and back, round and round.',
+  saw: 'Gets darker step by step, then jumps back to bright.',
+  square: 'Bright for half the wave, dimmer for the other half.',
+  random: 'Random brightness on the beat, like a flame.',
+  gate: 'Random beats go dark. DEPTH = how many: 1 = 10 %, 5 = half.',
+};
+
+function buildControls() {
+  // colour sliders, in the remote's gradient order
+  const M = $('mix'); M.innerHTML = '';
+  for (const k of E.ALL) {
+    const col = document.createElement('div'); col.className = 'col'; col.dataset.k = k;
+    col.innerHTML = `<div class="sw" style="background:${BY[k].rgb}" title="${BY[k].name}"></div><div class="track"><div class="fill" style="background:${BY[k].rgb}"></div></div><div class="val"></div>`;
+    const tr = col.querySelector('.track');
+    const setFrom = (e) => { const r = tr.getBoundingClientRect(); const v = Math.max(0, Math.min(9, Math.round((1 - (e.clientY - r.top) / r.height) * 9))); if (S.w[k] !== v) { S.w[k] = v; changed(); } };
+    tr.onpointerdown = (e) => { tr.setPointerCapture(e.pointerId); setFrom(e); };
+    tr.onpointermove = (e) => { if (tr.hasPointerCapture(e.pointerId)) setFrom(e); };
+    col.querySelector('.sw').onclick = () => { S.w[k] = S.w[k] ? 0 : 5; changed(); };
+    M.append(col);
+  }
+  for (const b of document.querySelectorAll('[data-pal]')) b.onclick = () => { palette(b.dataset.pal); changed(); };
+  mkSeg('order', ORDERS, 'order');
+  mkSeg('hold', [[1, '1 BEAT'], [2, '2 BEATS'], [4, '4 BEATS'], [8, '8 BEATS']], 'hold');
+  mkSeg('loose', [[0, 'TIGHT'], [10, '10 %'], [25, '25 %'], [50, '50 %']], 'loose');
+  mkSeg('fade', FADES, 'fade');
+  mkSeg('fdepth', [1, 2, 3, 4, 5, 6, 7, 8].map((v) => [v, String(v)]), 'fdepth');
+  mkSeg('flen', [[25, '25 %'], [50, '50 %'], [75, '75 %'], [100, '100 %']], 'flen');
+  mkSeg('mod', MODS, 'mod');
+  mkSeg('mdepth', [1, 2, 3, 4, 5, 6, 7, 8].map((v) => [v, String(v)]), 'mdepth');
+  mkSeg('mrate', [[2, '2'], [4, '4'], [8, '8'], [16, '16'], [32, '32'], [64, '64 BEATS']], 'mrate');
+  mkSeg('fxp', [[0, 'NEVER'], [3, '3 %'], [10, '10 %'], [25, '25 %'], [50, '50 %']], 'fxp');
+  mkSeg('fxlen', [[2, '2 BEATS'], [4, '4'], [8, '8'], [16, '16'], [32, '32']], 'fxlen');
+  mkSeg('bright', [7, 6, 5, 4, 3, 2, 1, 0].map((v) => [v, pct(v) + '%']), 'bright');
+  mkSeg('stop', [[0, 'NEVER'], [5, '5 MIN'], [15, '15'], [30, '30'], [60, '60'], [120, '2 H']], 'stop');
+  const F = $('fxSet'); F.innerHTML = '';
+  for (const f of E.FXS) {
+    const b = document.createElement('button'); b.textContent = f.toUpperCase(); b.dataset.f = f;
+    b.onclick = () => { const i = S.fx.indexOf(f); if (i >= 0) S.fx.splice(i, 1); else S.fx.push(f); changed(); };
+    F.append(b);
+  }
+  // speed: the slider is logarithmic (slow shows need fine steps)
+  const R = $('bpmRange');
+  const toR = (bpm) => Math.round(Math.log(bpm / BPM_MIN) / Math.log(BPM_MAX / BPM_MIN) * 1000);
+  const fromR = (v) => Math.round(BPM_MIN * Math.pow(BPM_MAX / BPM_MIN, v / 1000));
+  R.oninput = () => { S.bpm = fromR(+R.value); changed(); };
+  R._sync = () => { R.value = toR(S.bpm); };
+  $('bpmBig').onclick = () => { const v = prompt('Beats a minute (' + BPM_MIN + '-' + BPM_MAX + ')', Math.round(S.bpm)); if (v && +v) { S.bpm = Math.max(BPM_MIN, Math.min(BPM_MAX, Math.round(+v))); changed(); } };
+}
+
+function palette(p) {
+  const w = {}; for (const k of E.ALL) w[k] = 0;
+  if (p === 'all') for (const k of E.WHEEL) w[k] = 5;
+  if (p === 'warm') Object.assign(w, { r: 8, r1: 7, r2: 6, r3: 5, r4: 3, b4: 3 });
+  if (p === 'cool') Object.assign(w, { g2: 5, g3: 6, g4: 7, b: 7, b1: 6, b2: 5, b3: 3 });
+  if (p === 'rgb') Object.assign(w, { r: 7, g: 7, b: 7 });
+  if (p === 'rnd') { const n = 2 + Math.floor(Math.random() * 5); for (let i = 0; i < n; i++) w[E.WHEEL[Math.floor(Math.random() * 15)]] = 2 + Math.floor(Math.random() * 8); }
+  S.w = w;
+}
+
+function ui() {
+  for (const el of SEGS) segUi(el);
+  // colour columns
+  const tot = E.ALL.reduce((a, k) => a + S.w[k], 0), cyc = S.order === 'cycle' || S.order === 'bounce';
+  for (const col of $('mix').children) {
+    const k = col.dataset.k, v = S.w[k];
+    col.classList.toggle('zero', !v);
+    col.querySelector('.fill').style.height = (v / 9 * 100) + '%';
+    col.querySelector('.fill').style.opacity = v ? 1 : 0;
+    col.querySelector('.val').textContent = !v ? '·' : S.order === 'rhythm' ? '/' + (10 - v) : cyc ? '×' + (1 + Math.floor((v - 1) / 3)) : v;
+  }
+  $('mixTitle').textContent = S.order === 'rhythm' ? 'how fast each one pulses' : cyc ? 'how long each one stays' : S.order === 'walk' ? 'how much each one is liked' : 'how often each one comes';
+  const sh = $('share'); sh.innerHTML = '';
+  for (const k of E.ALL) if (S.w[k]) { const i = document.createElement('i'); i.style.background = BY[k].rgb; i.style.flex = String(S.w[k]); sh.append(i); }
+  $('mixHint').textContent = !tot ? 'No colours: plain white. Drag the bars up.' :
+    S.order === 'rhythm' ? '/N under a colour = it pulses every N beats.' : cyc ? '×N = it stays N beats-worth before the next one.' :
+    'Drag a bar (0-9); tap a dot to switch a colour on or off. The strip shows each colour’s share.';
+  $('orderHint').textContent = ORDER_HINT[S.order];
+  $('fadeHint').textContent = FADE_HINT[S.fade];
+  $('fadeOpts').classList.toggle('hide', S.fade === 'cut');
+  $('fdepth').parentElement.querySelector('.lbl').classList.toggle('hide', S.fade === 'blink');
+  $('fdepth').classList.toggle('hide', S.fade === 'blink');
+  $('flenLbl').textContent = S.fade === 'blink' ? 'DARK PART' : 'LENGTH (part of each colour’s time)';
+  $('modHint').textContent = MOD_HINT[S.mod];
+  $('modOpts').classList.toggle('hide', S.mod === 'none');
+  $('mrateBox').classList.toggle('hide', S.mod === 'gate');
+  $('mdepthLbl').textContent = S.mod === 'gate' ? 'HOW MANY BEATS GO DARK (x 10 %)' : 'DEPTH (steps; more than the brightness = OFF)';
+  $('fxOpts').classList.toggle('hide', !S.fxp);
+  for (const b of $('fxSet').children) b.classList.toggle('on', S.fx.includes(b.dataset.f));
+  $('bpmBig').textContent = Math.round(S.bpm);
+  $('bpmRange')._sync();
+  $('playBtn').textContent = playing ? '■ STOP' : '▶ PLAY';
+  $('playBtn').classList.toggle('on', playing);
+  $('showName').textContent = showName + (playing && S.stop ? ' · stops after ' + S.stop + ' min' : '');
+  renderChips();
+}
+
+function dotsOf(s) { return E.ALL.filter((k) => s.w && s.w[k]).slice(0, 8).map((k) => `<i style="background:${BY[k].rgb}"></i>`).join(''); }
+function renderChips() {
+  const C = $('chips'); C.innerHTML = '';
+  const add = (n, s, isMine) => {
+    const b = document.createElement('button'); b.className = 'chip' + (isMine ? ' mine' : '') + (showName === n ? ' on' : '');
+    b.innerHTML = `<span class="dots">${dotsOf(E.norm(s))}</span>${esc(n)}`;
+    b.onclick = () => { S = E.norm(JSON.parse(JSON.stringify(s))); changed(n); };
+    C.append(b);
+  };
+  for (const p of E.PRESETS) add(p.n, p.s, false);
+  for (const m of mine) add(m.n, m.s, true);
+  const L = $('mine'); L.innerHTML = '';
+  if (!mine.length) L.innerHTML = '<p class="dim" style="font-size:19px">Your own shows land here (on this browser). COPY LINK gives a link with the whole show in it.</p>';
+  for (const m of mine) {
+    const r = document.createElement('div'); r.className = 'mineRow';
+    r.innerHTML = `<span><span class="chip" style="border:0;padding:0"><span class="dots">${dotsOf(E.norm(m.s))}</span></span> ${esc(m.n)}</span><span><button class="mini">LOAD</button><button class="mini">DELETE</button></span>`;
+    const [ld, del] = r.querySelectorAll('button');
+    ld.onclick = () => { S = E.norm(JSON.parse(JSON.stringify(m.s))); changed(m.n); };
+    del.onclick = () => { if (!confirm('Delete ' + m.n + '?')) return; mine = mine.filter((x) => x !== m); store.set('show.mine', mine); ui(); };
+    L.append(r);
+  }
+}
+
+$('playBtn').onclick = () => { if (playing) stop(); else play(); };
+$('newBtn').onclick = () => { rebuild(false); toast('New show, same settings'); };
+$('surBtn').onclick = () => { S = E.surprise(); changed('SURPRISE'); rebuild(false); };
+$('fitBtn').onclick = () => { S = E.fit(S, 0.8); changed(); toast('Made it fit: less fade / wave, or slower'); };
+$('saveBtn').onclick = () => {
+  const n = ($('nameIn').value || '').trim().toUpperCase().slice(0, 18) || 'MY SHOW ' + (mine.length + 1);
+  mine = mine.filter((m) => m.n !== n).concat({ n, s: JSON.parse(JSON.stringify(S)) }).slice(-30);
+  store.set('show.mine', mine); showName = n; $('nameIn').value = ''; store.set('show.lastName', n); ui(); toast('Saved: ' + n);
+};
+$('nameIn').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('saveBtn').click(); };
+$('shareBtn').onclick = async () => {
+  const url = location.origin + '/lamp/show/#' + toHash(S);
+  try { await navigator.clipboard.writeText(url); toast('Link copied: it holds the whole show'); }
+  catch (e) { prompt('Copy this link', url); }
+};
+// tap tempo
+let taps = [];
+function tap() {
+  const now = clock();
+  taps = taps.filter((t) => now - t < 3).concat(now);
+  const b = $('tapBtn'); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 90);
+  if (taps.length >= 2) {
+    const d = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+    S.bpm = Math.max(BPM_MIN, Math.min(BPM_MAX, Math.round(60 / d)));
+    changed();
+  }
+}
+$('tapBtn').onpointerdown = (e) => { e.preventDefault(); tap(); };
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT')) return;
+  if (e.code === 'Space') { e.preventDefault(); $('playBtn').click(); }
+  else if (e.key === 't' || e.key === 'T') tap();
+  else if (e.key === 'n' || e.key === 'N') $('newBtn').click();
+});
+
+// ---------- the lamp ----------
+function linkUi() {
+  const R = $('linkRow');
+  const on = !!(link && link.online);
+  $('st').textContent = !link ? 'PREVIEW' : on ? '● ' + link.codeStr : 'OFFLINE';
+  if (on) R.innerHTML = 'LAMP: ● online (' + link.codeStr + '). PLAY sends the show to it. <button class="mini" id="chg">CHANGE</button>';
+  else if (link) R.innerHTML = 'LAMP: ' + link.codeStr + ' offline, waiting for the ESP32… (the show plays as a preview) <button class="mini" id="chg">CHANGE</button>';
+  else R.innerHTML = 'LAMP: not linked, preview only. Code: <input id="codeIn" maxlength="8" autocomplete="off" spellcheck="false" placeholder="------"> <button class="mini" id="codeBtn">LINK</button>';
+  if ($('chg')) $('chg').onclick = () => { if (link) link.close(); link = null; usingReal = false; sender = null; if (playing) pickOut(); linkUi(); };
+  if ($('codeBtn')) {
+    $('codeBtn').onclick = () => { const c = LAMP.cleanCode($('codeIn').value); if (c.length >= 3) { LAMP.saveCode(c); connect(c); } };
+    $('codeIn').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('codeBtn').click(); };
+  }
+  $('lampLink').href = '/lamp/' + (link ? '?code=' + link.codeStr : '');
+}
+function connect(code) {
+  if (link) link.close();
+  link = new LampLink({ code, name: 'SHOW', onStatus: linkUi, onChange: () => {} });
+  realOut = E.linkOut(link, clock);
+  link.listen((ev) => {
+    if (ev.type === 'rx' && ev.key && ev.key.id === 'off' && playing && usingReal) stop('Stopped with the remote');
+  });
+  linkUi();
+}
+
+buildControls();
+const code0 = LAMP.savedCode();
+if (code0) connect(code0); else linkUi();
+rebuild(true);
+ui();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

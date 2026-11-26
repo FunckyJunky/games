@@ -136,6 +136,14 @@ public/                 the website
   lamp/alarm/           ALARM.EXE: sunrise alarms kept and run on the IR-LAMP board (firmware 2.1): days, sunrise length,
                         wake colour, effect, auto-off, TRY IT (30 s), FALL ASLEEP (dim then off). Sends the board its POSIX
                         time zone. Protocol in esp32/IrLamp/README.md
+  lamp/show/            SHOW.EXE: light show generator. engine.js = Plan (settings + seed -> want(t): on/colour/effect/step),
+                        estimate (IR keys a second vs ~3 the board sends), Sender (next key toward want, power > colour >
+                        brightness, max 2 waiting on the board), SimOut (pretend board for the preview), presets, surprise,
+                        fit. Colour sliders 0-9 (random: share of time; cycle/bounce: how long; walk: liking; rhythm: pulse
+                        every 10-N beats), BPM + tap, fades cut/dip/decay/swell/blink, brightness wave sine/saw/square/
+                        flicker/blackout, the lamp's own effects. Darker than the dimmest step = OFF. Plays from the page
+                        (worker timer + wake lock); OFF on the real remote stops it. Saved shows: localStorage show.mine,
+                        share link = #base64(settings). Tests: node tools/lamp-show-test.mjs
   lamp/lamp.css         the shared look of the lamp games; lamp.js also has LampDriver (sends one step at a time, waits for
                         the board's "sent") and LampKit (link + driver + the HUD lamp pill / SYNC / code box)
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
