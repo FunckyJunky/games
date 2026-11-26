@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>LAMPLIGHTER</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%2305060f%27/%3E%3Crect x=%277%27 y=%276%27 width=%272%27 height=%279%27 fill=%27%23333%27/%3E%3Crect x=%276%27 y=%272%27 width=%274%27 height=%275%27 fill=%27%23ffc21c%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { color: var(--fg); font-family: 'VT323', ui-monospace, monospace; font-size: 22px; line-height: 1.1; text-shadow: 0 0 5px var(--glow);
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  button { all: unset; cursor: pointer; }
+  #game { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); image-rendering: pixelated; image-rendering: crisp-edges; background: #05060f; }
+  #hud { position: fixed; left: 0; right: 0; top: 0; display: flex; gap: 14px; align-items: center; padding: calc(4px + env(safe-area-inset-top)) 12px 4px; z-index: 5;
+    background: linear-gradient(#000c, #0000); pointer-events: none; white-space: nowrap; }
+  #hud .sp { flex: 1; }
+  #hud a, #hud button { pointer-events: auto; color: var(--fg); text-decoration: none; border: 1px solid var(--dim); padding: 0 6px; }
+  #lampPill { display: flex; align-items: center; gap: 6px; }
+  #lampSw { width: 14px; height: 14px; border: 1px solid #fff8; display: inline-block; }
+  .pad { position: fixed; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 6; display: none; gap: 14px; }
+  .touch .pad { display: flex; }
+  #padL { left: 14px; } #padR { right: 14px; }
+  .pad button { width: 74px; height: 74px; border-radius: 50%; border: 2px solid #39ff7a88; background: #03120866; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #39ff7a; }
+  .pad button.on { background: #39ff7a55; }
+  #over { position: fixed; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; background: #000a; }
+  #box { width: min(92vw, 520px); max-height: 92vh; overflow: auto; background: var(--bg); border: 1px solid var(--fg); box-shadow: 0 0 18px var(--glow); padding: 16px 18px; }
+  #box h1 { margin: 0 0 8px; font-weight: normal; font-size: 40px; letter-spacing: .06em; }
+  #box p { margin: 6px 0; }
+  .dim { color: var(--dim); text-shadow: none; }
+  .btn { display: inline-block; border: 1px solid var(--fg); padding: 4px 14px; margin: 8px 8px 0 0; }
+  .btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+  #codeIn { all: unset; border: 1px solid var(--fg); padding: 2px 8px; width: 7.5em; letter-spacing: .25em; font-family: 'VT323', monospace; font-size: 26px; text-transform: uppercase; -webkit-user-select: text; user-select: text; }
+  .hide { display: none !important; }
+  #turn { position: fixed; left: 0; right: 0; text-align: center; color: var(--dim); text-shadow: none; display: none; z-index: 4; font-size: 19px; }
+  @media (orientation: portrait) {
+    #hud { flex-wrap: wrap; row-gap: 4px; font-size: 20px; gap: 10px; }
+    #hTitle { display: none; }
+    #hud .sp { flex-basis: 100%; height: 0; }
+    #turn { display: block; }
+  }
+  #msg { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 6; font-size: 30px; color: #fff; text-shadow: 0 0 10px #000, 0 0 3px #000; pointer-events: none; text-align: center; opacity: 0; transition: opacity .4s; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="180"></canvas>
+<div id="hud">
+  <span id="hTitle">LAMPLIGHTER</span><span id="hLan">0/8</span><span id="hTime">0:00</span><span class="sp"></span>
+  <span id="lampPill"><span id="lampSw"></span><span id="lampTxt">NO LAMP</span></span>
+  <button id="syncBtn">SYNC ON</button><a href="/lamp/" id="backLink">LAMP</a>
+</div>
+<div class="pad" id="padL"><button id="bL">&#9664;</button><button id="bR">&#9654;</button></div>
+<div class="pad" id="padR"><button id="bJ">&#9650;</button></div>
+<div id="msg"></div>
+<div id="turn">turn the phone sideways for a bigger view</div>
+<div id="over"><div id="box">
+  <h1>LAMPLIGHTER</h1>
+  <div id="boxBody">
+    <p>Night fell on the valley and the 8 lanterns went out. Walk from the meadow to the hill, light every lantern, and bring back the dawn.</p>
+    <p class="dim">Your real lamp follows the light around you: the campfire, the fireflies, the lake, the crystal cave, the lava, the neon street. Stand on the disco floor and see.</p>
+    <p class="dim">&larr; &rarr; or A D walk &middot; &uarr; W or SPACE jump &middot; touch: the round buttons &middot; gamepads too</p>
+  </div>
+  <div id="lampBox">
+    <p id="lampLine">LAMP: not linked</p>
+    <p id="codeRow"><input id="codeIn" maxlength="8" placeholder="CODE" autocomplete="off" spellcheck="false"> <button class="btn" id="codeBtn">LINK</button></p>
+  </div>
+  <p><button class="btn on" id="playBtn">&#9654; PLAY</button><a class="btn" href="/lamp/" style="color:inherit;text-decoration:none">LAMP.EXE</a></p>
+  <p class="dim" id="best"></p>
+</div></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const VW = 320, VH = 180;
+const cv = $('game'), ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const lightCv = document.createElement('canvas'); lightCv.width = VW; lightCv.height = VH;
+const lctx = lightCv.getContext('2d');
+const RGB = (id) => LAMP.hexRgb(LAMP.BY_ID[id].rgb);
+
+// ======================= the world =======================
+const WORLD_W = 4320, GROUND = 150;
+// solid blocks: top y, solid down to the bottom; thin one-way platforms
+const SOLID = [
+  [0, 200, 150], [200, 90, 140], [290, 270, 150],               // meadow (a little hill)
+  [560, 620, 150],                                             // village
+  [1230, 670, 150],                                            // forest
+  [1900, 90, 150], [2018, 26, 147], [2074, 26, 145], [2130, 26, 147], [2180, 120, 140],   // lake: shore, stones, pier
+  [2300, 600, 150],                                            // crystal cave
+  [2900, 80, 150], [3008, 28, 137], [3066, 28, 129], [3122, 28, 138], [3160, 90, 150],    // lava: pillars
+  [3250, 550, 150],                                            // neon street
+  [3800, 120, 142], [3920, 120, 134], [4040, 280, 126],         // the hill
+];
+const PLATS = [[1000, 34, 132], [1450, 44, 128], [1520, 40, 112], [2480, 50, 128], [2600, 44, 112], [3700, 40, 128]];
+const WATER = [1990, 2180], LAVA = [2980, 3160], PIT = [1180, 1230];
+const DISCO = [3410, 3500];
+const ZONES = [[0, 'MEADOW'], [560, 'VILLAGE'], [1180, 'FOREST'], [1900, 'LAKE'], [2300, 'CRYSTAL CAVE'], [2900, 'LAVA FIELDS'], [3250, 'NEON STREET'], [3800, 'THE HILL']];
+// the lanterns you light (x, post height, colour)
+const LANTERNS = [[420, 24, 'r3'], [1100, 34, 'w'], [1820, 24, 'g'], [2282, 22, 'g3'], [2820, 24, 'b2'], [3222, 24, 'r1'], [3660, 24, 'b3'], [3990, 26, 'r2']]
+  .map(([x, h, key], i) => ({ x, h, key, lit: false, i, t: 0, base: surfaceAt(x) }));
+// lights that are always there: x, y, colour, reach, strength, flicker colour
+const FIXED = [
+  { x: 640, y: 116, key: 'r2', r: 60, p: 0.45 }, { x: 790, y: 110, key: 'r2', r: 60, p: 0.45 }, { x: 960, y: 116, key: 'r2', r: 60, p: 0.45 },
+  { x: 880, y: 140, key: 'r1', r: 110, p: 0.85, alt: 'r', fire: 1 },                   // campfire
+  { x: 1380, y: 146, key: 'g2', r: 48, p: 0.55 }, { x: 1700, y: 146, key: 'g2', r: 48, p: 0.55 },   // glowing mushrooms
+  { x: 2090, y: 162, key: 'g4', r: 150, p: 0.55 },                                     // the lake
+  { x: 2400, y: 138, key: 'b1', r: 70, p: 0.7 }, { x: 2560, y: 66, key: 'b2', r: 80, p: 0.6 }, { x: 2700, y: 140, key: 'g3', r: 70, p: 0.7 },  // crystals
+  { x: 3070, y: 166, key: 'r', r: 160, p: 1.0, alt: 'r1', fire: 1 },                    // lava
+  { x: 3330, y: 92, key: 'b4', r: 95, p: 0.75 }, { x: 3560, y: 90, key: 'r', r: 85, p: 0.7 },   // neon signs
+];
+const FIREFLIES = Array.from({ length: 7 }, (_, i) => ({ bx: 1270 + i * 85, by: 118 + (i % 3) * 8, ph: i * 1.7, key: 'g1' }));
+const GATE_X = 4220;
+
+// ======================= the player =======================
+function surfaceAt(x) { let y = 999; for (const [bx, w, by] of SOLID) if (x >= bx && x < bx + w) y = Math.min(y, by); return y === 999 ? GROUND : y; }
+const P = { x: 40, y: GROUND - 14, vx: 0, vy: 0, w: 8, h: 14, ground: false, face: 1, walk: 0, spawnX: 40, dead: 0 };
+const keys = {}, touch = { l: false, r: false, j: false };
+let started = false, finished = false, t = 0, runT = 0, dawn = 0, camX = 0, flash = 0, msgT = 0;
+
+function step(dt) {
+  const L = keys.ArrowLeft || keys.a || keys.A || touch.l || padX < -0.4;
+  const R = keys.ArrowRight || keys.d || keys.D || touch.r || padX > 0.4;
+  const J = keys.ArrowUp || keys.w || keys.W || keys[' '] || touch.j || padJ;
+  if (P.dead > 0) { P.dead -= dt; if (P.dead <= 0) respawn(); return; }
+  const acc = P.ground ? 900 : 520, max = 82;
+  if (L && !R) { P.vx = Math.max(-max, P.vx - acc * dt); P.face = -1; }
+  else if (R && !L) { P.vx = Math.min(max, P.vx + acc * dt); P.face = 1; }
+  else P.vx *= P.ground ? Math.pow(0.0005, dt) : Math.pow(0.3, dt);
+  if (J && P.ground && !P.jumpHeld) { P.vy = -215; P.ground = false; sfx('jump'); }
+  P.jumpHeld = J;
+  if (!J && P.vy < -80) P.vy += 900 * dt;          // short hop when let go early
+  P.vy = Math.min(400, P.vy + 560 * dt);
+  // horizontal
+  let nx = P.x + P.vx * dt;
+  nx = Math.max(4, Math.min(WORLD_W - 12, nx));
+  for (const [x, w, y] of SOLID) {
+    if (P.y + P.h > y + 1 && nx + P.w > x && nx < x + w) { nx = P.vx > 0 ? x - P.w : x + w; P.vx = 0; }
+  }
+  P.x = nx;
+  // vertical
+  let ny = P.y + P.vy * dt;
+  P.ground = false;
+  if (P.vy >= 0) {
+    for (const b of SOLID.concat(PLATS)) {
+      const [x, w, y] = b;
+      if (P.x + P.w > x + 1 && P.x < x + w - 1 && P.y + P.h <= y + 0.5 && ny + P.h >= y) {
+        ny = y - P.h; P.vy = 0; P.ground = true;
+        // a safe spot to come back to after a fall: wide solid ground, away from its edges
+        if (w >= 60 && SOLID.includes(b)) P.safeX = Math.max(x + 14, Math.min(x + w - 22, P.x));
+      }
+    }
+  }
+  P.y = ny;
+  P.walk += Math.abs(P.vx) * dt;
+  // water, lava, the pit
+  const fx = P.x + P.w / 2;
+  if (P.y > 165) {
+    const what = fx > WATER[0] && fx < WATER[1] ? 'SPLASH!' : fx > LAVA[0] && fx < LAVA[1] ? 'TOO HOT!' : 'OOPS!';
+    P.dead = 1.0; say(what); sfx('fall');
+  }
+  // lanterns
+  for (const l of LANTERNS) if (!l.lit && Math.abs(fx - l.x) < 9 && P.y + P.h > l.base - l.h - 18) lightLantern(l);
+  if (!finished && fx > GATE_X - 30 && LANTERNS.every((l) => l.lit)) finish();
+  else if (!finished && fx > GATE_X - 40 && !LANTERNS.every((l) => l.lit) && msgT <= 0) say('THE NIGHT STAYS UNTIL ALL 8 BURN');
+}
+function respawn() {
+  const sx = P.safeX || 40;
+  P.x = sx; P.y = surfaceAt(sx + P.w / 2) - P.h - 30; P.vx = 0; P.vy = 0; P.dead = 0;
+}
+function lightLantern(l) {
+  l.lit = true; l.t = t; flash = 0.5; sfx('lit');
+  P.spawnX = l.x;
+  const n = LANTERNS.filter((x) => x.lit).length;
+  say(n === 8 ? 'ALL 8 BURN! GO UP THE HILL' : LAMP.BY_ID[l.key].name.toUpperCase() + ' LANTERN ' + n + '/8');
+  $('hLan').textContent = n + '/8';
+}
+function finish() {
+  finished = true; dawn = 0.001; sfx('dawn');
+  say('DAWN! ' + fmt(runT));
+  try {
+    const best = +localStorage.getItem('lamplighter.best') || 0;
+    if (!best || runT < best) localStorage.setItem('lamplighter.best', runT.toFixed(1));
+  } catch (e) {}
+  setTimeout(() => showOver(true), 6500);
+}
+function say(s) { const m = $('msg'); m.textContent = s; m.style.opacity = 1; msgT = 2.2; }
+const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+// ======================= light =======================
+function allLights() {
+  const L = [];
+  for (const f of FIXED) {
+    let p = f.p, key = f.key;
+    if (f.fire) { p *= 0.85 + 0.15 * Math.sin(t * 13 + f.x) * Math.sin(t * 7.3); if (Math.floor(t / 1.7 + f.x) % 2) key = f.alt; }
+    L.push({ x: f.x, y: f.y, key, r: f.r, p });
+  }
+  for (const ff of FIREFLIES) {
+    const x = ff.bx + Math.sin(t * 0.7 + ff.ph) * 26, y = ff.by + Math.sin(t * 1.3 + ff.ph * 2) * 10;
+    L.push({ x, y, key: ff.key, r: 40, p: 0.35 + 0.25 * Math.max(0, Math.sin(t * 2 + ff.ph)), ff: 1 });
+  }
+  for (const l of LANTERNS) if (l.lit) L.push({ x: l.x, y: l.base - l.h - 4, key: l.key, r: 95, p: Math.min(1, (t - l.t) * 2) });
+  return L;
+}
+// the light where the lamplighter stands: what the real lamp should show
+function lightHere(L) {
+  const px = P.x + P.w / 2, py = P.y + 4;
+  let best = null, bi = 0;
+  for (const l of L) {
+    const d = Math.hypot(l.x - px, (l.y - py) * 1.2);
+    const i = l.p * Math.pow(Math.max(0, 1 - d / l.r), 0.9);
+    if (i > bi) { bi = i; best = l; }
+  }
+  if (finished) return { key: dawn < 0.6 ? 'r2' : 'w', i: 1, mode: dawn > 0.95 ? 'smooth' : 'color' };
+  if (px > DISCO[0] && px < DISCO[1] && P.ground) return { key: 'b4', i: 0.9, mode: 'smooth' };
+  if (!best || bi < 0.12) return { key: 'b', i: 0.05, mode: 'color' };      // just the night: deep blue, dim
+  return { key: best.key, i: bi, mode: 'color' };
+}
+
+// ======================= the real lamp =======================
+let link = null, sync = true, calib = 0, wasOn = false, inflight = 0, lastTx = 0, want = null, wantSince = 0, wantKey = '', levelSince = 0, wantLevel = -1;
+function lampStart() {
+  const code = LAMP.savedCode();
+  $('backLink').href = '/lamp/' + (code ? '?code=' + code : '');
+  if (!code) { lampUi(); return; }
+  link = new LampLink({ code, name: 'LAMPLIGHTER',
+    onStatus: () => { lampUi(); if (link.online && !wasOn && started && sync && !calib) calibrate(); wasOn = link.online; },
+    onChange: () => lampUi(),
+    onEvent: (ev) => { if (ev.mine && ev.type === 'tx') { inflight = Math.max(0, inflight - 1); lastTx = performance.now(); } },
+  });
+  lampUi();
+}
+function lampUi() {
+  const on = link && link.online;
+  $('lampLine').innerHTML = !link ? 'LAMP: not linked — type the code from the ESP32 page, or play without' :
+    on ? 'LAMP: ● online (' + link.codeStr + '). It plays along.' : 'LAMP: ' + link.codeStr + ' — offline, waiting for the ESP32…';
+  $('codeRow').classList.toggle('hide', !!on);
+  const st = on ? link.state : null;
+  const lk = st ? LAMP.look(st, t) : null;
+  $('lampTxt').textContent = !link ? 'NO LAMP' : !on ? 'LAMP OFFLINE' : !sync ? 'SYNC OFF' : calib ? 'SYNCING…' : !st.on ? 'LAMP OFF' : (st.mode === 'color' ? LAMP.BY_ID[st.key].name : st.mode).toUpperCase();
+  $('lampSw').style.background = lk && lk.i > 0 ? `rgb(${lk.rgb.join(',')})` : '#000';
+  $('syncBtn').textContent = sync ? 'SYNC ON' : 'SYNC OFF';
+}
+function send(id, r) { if (!link || !link.ready) return; link.press(id, r); inflight += r || 1; lastTx = performance.now(); }
+function calibrate() {
+  // switch it on and turn it all the way down, so we know where the brightness is
+  calib = 1; inflight = 0;
+  send('on'); send('down', 8);
+  setTimeout(() => { calib = 0; lampUi(); }, 3200);
+  lampUi();
+}
+const band = (i) => i < 0.2 ? 0 : i < 0.55 ? 3 : 7;            // three brightness steps: night, near a light, at a light
+function drive() {
+  if (!link || !link.ready || !sync || !started || calib) return;
+  if (performance.now() - lastTx > 3500) inflight = 0;            // lost a confirmation
+  if (inflight > 1) return;
+  const h = lightHere(allLights()), now = performance.now(), st = link.state;
+  const key = h.mode === 'smooth' ? 'smooth' : h.key;
+  if (key !== wantKey) { wantKey = key; wantSince = now; }
+  const lv = band(h.i);
+  if (lv !== wantLevel) { wantLevel = lv; levelSince = now; }
+  if (!st.on) { send('on'); return; }
+  if (key === 'smooth') { if (st.mode !== 'smooth' && now - wantSince > 350) send('smooth'); return; }
+  if ((st.mode !== 'color' || st.key !== key) && now - wantSince > (finished ? 0 : 380)) { send(key); return; }
+  if (st.level !== lv && now - levelSince > 550) { const d = lv - st.level; send(d > 0 ? 'up' : 'down', Math.min(4, Math.abs(d))); }
+}
+setInterval(() => { drive(); lampUi(); }, 120);
+
+// ======================= sound =======================
+let ac = null;
+function sfx(k) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = { jump: [[520, 0.06]], lit: [[660, 0.1], [880, 0.1], [1320, 0.2]], fall: [[300, 0.12], [180, 0.2]], dawn: [[523, 0.3], [659, 0.3], [784, 0.3], [1046, 0.6]] }[k] || [];
+    let at = ac.currentTime;
+    for (const [f, d] of notes) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = k === 'jump' ? 'square' : 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.07, at); g.gain.exponentialRampToValueAtTime(0.001, at + d);
+      o.connect(g); g.connect(ac.destination); o.start(at); o.stop(at + d + 0.02);
+      at += d * 0.8;
+    }
+  } catch (e) {}
+}
+
+// ======================= drawing =======================
+const rnd = (n) => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+const STARS = Array.from({ length: 90 }, (_, i) => [rnd(i) * 640, rnd(i + 99) * 110, rnd(i + 7)]);
+function zoneAt(x) { let z = ZONES[0]; for (const q of ZONES) if (x >= q[0]) z = q; return z; }
+function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+
+function draw(L) {
+  const day = Math.min(1, dawn);
+  // sky
+  const sky = ctx.createLinearGradient(0, 0, 0, VH);
+  sky.addColorStop(0, mix([5, 6, 18], [90, 140, 210], day)); sky.addColorStop(1, mix([16, 24, 52], [255, 190, 120], day));
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, VW, VH);
+  for (const [x, y, s] of STARS) {
+    const sx = ((x - camX * 0.05) % 640 + 640) % 640 - 160; if (sx < -2 || sx > VW) continue;
+    ctx.fillStyle = `rgba(255,255,255,${(0.3 + 0.5 * Math.abs(Math.sin(t * (0.5 + s) + x))) * (1 - day)})`; ctx.fillRect(sx | 0, y | 0, 1, 1);
+  }
+  // moon, then the sun at dawn
+  const mx = 250 - camX * 0.02;
+  ctx.fillStyle = rgba([230, 235, 255], 1 - day); ctx.beginPath(); ctx.arc(mx, 28, 8, 0, 7); ctx.fill();
+  ctx.fillStyle = rgba([190, 200, 225], 1 - day); ctx.fillRect(mx - 3, 25, 2, 2); ctx.fillRect(mx + 2, 30, 3, 2);
+  if (day > 0) { ctx.fillStyle = rgba([255, 220, 120], day); ctx.beginPath(); ctx.arc(GATE_X - camX + 40, 150 - day * 90, 16, 0, 7); ctx.fill(); }
+  // far hills
+  for (const [par, col, amp, base] of [[0.2, [11, 14, 30], 18, 120], [0.45, [9, 11, 22], 14, 132]]) {
+    ctx.fillStyle = mix(col, [70, 60, 90], day * 0.5);
+    ctx.beginPath(); ctx.moveTo(0, VH);
+    for (let x = 0; x <= VW; x += 4) { const wx = x + camX * par; ctx.lineTo(x, base - amp * (0.5 + 0.5 * Math.sin(wx * 0.013) * Math.sin(wx * 0.0071 + 1))); }
+    ctx.lineTo(VW, VH); ctx.fill();
+  }
+  ctx.save(); ctx.translate(-Math.round(camX), 0);
+  backdrop();
+  // water and lava
+  for (let x = WATER[0]; x < WATER[1]; x += 2) { const y = 156 + Math.sin(t * 2 + x * 0.15); ctx.fillStyle = '#0a2c44'; ctx.fillRect(x, y, 2, 30); ctx.fillStyle = '#2a7fb0'; if ((x / 2 + Math.floor(t * 4)) % 9 === 0) ctx.fillRect(x, y, 2, 1); }
+  for (let x = LAVA[0]; x < LAVA[1]; x += 2) { const y = 158 + Math.sin(t * 3 + x * 0.2) * 1.2; ctx.fillStyle = '#c21e08'; ctx.fillRect(x, y, 2, 30); ctx.fillStyle = '#ff9a1a'; if ((x / 2 + Math.floor(t * 6)) % 7 === 0) ctx.fillRect(x, y, 2, 1); }
+  // ground
+  for (const [x, w, y] of SOLID) {
+    const z = zoneAt(x)[1];
+    ctx.fillStyle = z === 'CRYSTAL CAVE' ? '#151520' : z === 'LAVA FIELDS' ? '#1a0f0d' : z === 'NEON STREET' ? '#121218' : '#140f16';
+    ctx.fillRect(x, y, w, VH - y);
+    ctx.fillStyle = z === 'MEADOW' || z === 'FOREST' || z === 'THE HILL' ? '#1d3a22' : z === 'VILLAGE' ? '#3a2a1c' : z === 'LAKE' ? '#2a2418' : z === 'CRYSTAL CAVE' ? '#2c2c44' : z === 'LAVA FIELDS' ? '#3a1c14' : '#2a2a38';
+    ctx.fillRect(x, y, w, 2);
+  }
+  for (const [x, w, y] of PLATS) { ctx.fillStyle = '#3a2a1c'; ctx.fillRect(x, y, w, 3); ctx.fillStyle = '#20160e'; ctx.fillRect(x + 2, y + 3, 2, 3); ctx.fillRect(x + w - 4, y + 3, 2, 3); }
+  // disco floor
+  for (let x = DISCO[0]; x < DISCO[1]; x += 10) {
+    const k = LAMP.COLORS[(Math.floor(t * 3) + x / 10) % LAMP.COLORS.length | 0];
+    ctx.fillStyle = k.rgb; ctx.globalAlpha = 0.55; ctx.fillRect(x, GROUND, 9, 3); ctx.globalAlpha = 1;
+  }
+  // the gate on the hill
+  const lit = LANTERNS.filter((l) => l.lit).length;
+  ctx.fillStyle = '#2a2633'; ctx.fillRect(GATE_X - 18, 92, 5, 34); ctx.fillRect(GATE_X + 13, 92, 5, 34); ctx.fillRect(GATE_X - 20, 88, 40, 6);
+  for (let i = 0; i < 8; i++) { ctx.fillStyle = i < lit ? LANTERNS[i].lit ? LAMP.BY_ID[LANTERNS[i].key].rgb : '#333' : '#2b2b2b'; ctx.fillRect(GATE_X - 15 + i * 4, 90, 3, 2); }
+  // fixed light sources you can see
+  for (const f of FIXED) drawSource(f);
+  for (const ff of FIREFLIES) { const x = ff.bx + Math.sin(t * 0.7 + ff.ph) * 26, y = ff.by + Math.sin(t * 1.3 + ff.ph * 2) * 10; ctx.fillStyle = rgba(RGB('g1'), 0.5 + 0.5 * Math.max(0, Math.sin(t * 2 + ff.ph))); ctx.fillRect(x | 0, y | 0, 2, 2); }
+  for (const l of LANTERNS) drawLantern(l);
+  drawPlayer();
+  ctx.restore();
+
+  // darkness with holes where the light is, then the coloured glow on top
+  lctx.globalCompositeOperation = 'source-over';
+  lctx.clearRect(0, 0, VW, VH);
+  lctx.fillStyle = `rgba(2,3,12,${0.86 * (1 - day * 0.92)})`; lctx.fillRect(0, 0, VW, VH);
+  lctx.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r, a) => { const g = lctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)'); lctx.fillStyle = g; lctx.fillRect(x - r, y - r, r * 2, r * 2); };
+  for (const l of L) { const x = l.x - camX; if (x < -l.r || x > VW + l.r) continue; hole(x, l.y, l.r, Math.min(1, l.p)); }
+  hole(P.x + P.w / 2 - camX, P.y + 3, 26, 0.55);                                  // the lamplighter's little pole flame
+  if (!(camX + VW > 2300 && camX < 2900)) hole(250 - camX * 0.02, 28, 22, 0.9);     // the moon
+  ctx.drawImage(lightCv, 0, 0);
+  ctx.globalCompositeOperation = 'lighter';
+  for (const l of L) {
+    const x = l.x - camX; if (x < -l.r || x > VW + l.r) continue;
+    const c = RGB(l.key), g = ctx.createRadialGradient(x, l.y, 0, x, l.y, l.r * 0.9);
+    g.addColorStop(0, rgba(c, 0.38 * l.p)); g.addColorStop(1, rgba(c, 0)); ctx.fillStyle = g; ctx.fillRect(x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.5})`; ctx.fillRect(0, 0, VW, VH); }
+  // zone name
+  const z = zoneAt(P.x)[1];
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.font = '8px monospace'; ctx.fillText(z, 6, VH - 6);
+}
+function mix(a, b, f) { return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * f)).join(',')})`; }
+function backdrop() {
+  const x0 = camX - 40, x1 = camX + VW + 40;
+  // inside the cave: rock instead of sky
+  if (x1 > 2300 && x0 < 2900) {
+    ctx.fillStyle = '#09090f'; ctx.fillRect(2300, 0, 600, 150);
+    ctx.fillStyle = '#12121c'; for (let i = 0; i < 70; i++) ctx.fillRect(2300 + rnd(i * 3) * 600 | 0, rnd(i * 5 + 1) * 140 | 0, 2 + (i % 3), 1);
+  }
+  // village houses
+  for (const hx of [600, 760, 930]) if (hx > x0 - 80 && hx < x1) {
+    ctx.fillStyle = '#100c12'; ctx.fillRect(hx, 104, 70, 46); ctx.beginPath(); ctx.moveTo(hx - 6, 106); ctx.lineTo(hx + 35, 84); ctx.lineTo(hx + 76, 106); ctx.fill();
+    ctx.fillStyle = '#ff9a3c'; ctx.globalAlpha = 0.8; ctx.fillRect(hx + 36, 112, 8, 7); ctx.fillRect(hx + 12, 118, 6, 6); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#100c12'; ctx.fillRect(hx + 55, 86, 6, 14);
+  }
+  // forest trees
+  for (let x = 1240; x < 1900; x += 34) if (x > x0 - 30 && x < x1) {
+    const h = 50 + rnd(x) * 30; ctx.fillStyle = '#0b1410';
+    ctx.beginPath(); ctx.moveTo(x, 150 - h); ctx.lineTo(x - 14, 150); ctx.lineTo(x + 14, 150); ctx.fill();
+    ctx.fillRect(x - 2, 140, 4, 10);
+  }
+  // mushrooms
+  for (const mx of [1380, 1700]) { ctx.fillStyle = '#2a1a2a'; ctx.fillRect(mx - 1, 144, 2, 6); ctx.fillStyle = LAMP.BY_ID.g2.rgb; ctx.fillRect(mx - 4, 141, 8, 3); }
+  // the cave roof and crystals
+  if (x1 > 2300 && x0 < 2900) {
+    ctx.fillStyle = '#0d0d16';
+    ctx.beginPath(); ctx.moveTo(2300, 0); for (let x = 2300; x <= 2900; x += 12) ctx.lineTo(x, 30 + 14 * Math.sin(x * 0.07) + (x % 36 === 0 ? 22 : 0)); ctx.lineTo(2900, 0); ctx.fill();
+    for (const [cx, cy, k, up] of [[2400, 150, 'b1', 1], [2560, 50, 'b2', 0], [2700, 150, 'g3', 1]]) {
+      ctx.fillStyle = LAMP.BY_ID[k].rgb;
+      for (let i = -1; i <= 1; i++) { ctx.beginPath(); const s = up ? -1 : 1; ctx.moveTo(cx + i * 6 - 3, cy); ctx.lineTo(cx + i * 6, cy + s * (12 - Math.abs(i) * 4)); ctx.lineTo(cx + i * 6 + 3, cy); ctx.fill(); }
+    }
+  }
+  // the neon street
+  if (x1 > 3250 && x0 < 3800) {
+    for (let x = 3260; x < 3800; x += 46) { const h = 50 + rnd(x) * 40; ctx.fillStyle = '#0c0c14'; ctx.fillRect(x, 150 - h, 38, h);
+      for (let wy = 150 - h + 6; wy < 144; wy += 9) for (let wx = x + 5; wx < x + 34; wx += 9) if (rnd(wx * wy) > 0.6) { ctx.fillStyle = '#ffd88a33'; ctx.fillRect(wx, wy, 4, 4); } }
+    const sign = (x, y, k, txt) => { ctx.fillStyle = '#000'; ctx.fillRect(x - 22, y - 7, 44, 13); ctx.strokeStyle = LAMP.BY_ID[k].rgb; ctx.strokeRect(x - 22.5, y - 7.5, 44, 13);
+      ctx.fillStyle = LAMP.BY_ID[k].rgb; ctx.font = '8px monospace'; ctx.textAlign = 'center'; if (Math.sin(t * 5 + x) > -0.9) ctx.fillText(txt, x, y + 3); ctx.textAlign = 'left'; };
+    sign(3330, 92, 'b4', 'DISCO'); sign(3560, 90, 'r', 'HOTEL');
+  }
+  // the lake: a pier
+  ctx.fillStyle = '#2a2014'; for (let x = 2186; x < 2300; x += 14) ctx.fillRect(x, 140, 3, 20);
+}
+function drawSource(f) {
+  if (f.fire) {
+    if (f.x === 880) {                       // campfire
+      ctx.fillStyle = '#3a2414'; ctx.fillRect(f.x - 7, 147, 14, 3);
+      for (let i = 0; i < 6; i++) { const h = 4 + Math.abs(Math.sin(t * 9 + i * 1.7)) * 7; ctx.fillStyle = i % 2 ? '#ff8a1c' : '#ffd23c'; ctx.fillRect(f.x - 5 + i * 2, 147 - h, 2, h); }
+    }
+  }
+}
+function drawLantern(l) {
+  const x = l.x, top = l.base - l.h;
+  ctx.fillStyle = '#26242c'; ctx.fillRect(x - 1, top, 2, l.h);
+  ctx.fillStyle = '#3a3640'; ctx.fillRect(x - 4, top - 8, 8, 1); ctx.fillRect(x - 3, top - 1, 6, 1);
+  if (l.lit) { const c = LAMP.BY_ID[l.key].rgb; ctx.fillStyle = c; ctx.fillRect(x - 3, top - 7, 6, 6); ctx.fillStyle = '#fff'; ctx.fillRect(x - 1, top - 5, 2, 3); }
+  else { ctx.fillStyle = '#1b1a22'; ctx.fillRect(x - 3, top - 7, 6, 6); ctx.fillStyle = rgba(LAMP.hexRgb(LAMP.BY_ID[l.key].rgb), 0.25 + 0.2 * Math.sin(t * 3 + l.x)); ctx.fillRect(x - 1, top - 3, 2, 2); }
+}
+function drawPlayer() {
+  if (P.dead > 0 && Math.floor(t * 12) % 2) return;
+  const x = Math.round(P.x), y = Math.round(P.y), f = P.face, step = P.ground && Math.abs(P.vx) > 10 ? Math.floor(P.walk / 5) % 2 : 0;
+  ctx.fillStyle = '#1b1b24'; ctx.fillRect(x + 1, y - 3, 6, 1); ctx.fillRect(x + 2, y - 6, 4, 3);          // hat
+  ctx.fillStyle = '#e8c09a'; ctx.fillRect(x + 2, y - 2, 4, 3);                                          // face
+  ctx.fillStyle = '#2b3a6a'; ctx.fillRect(x + 1, y + 1, 6, 7);                                          // coat
+  ctx.fillStyle = '#ffd23c'; ctx.fillRect(x + 1, y + 4, 6, 1);                                          // belt buckle line
+  ctx.fillStyle = '#16161c'; ctx.fillRect(x + 1 + step, y + 8, 2, 6 - step); ctx.fillRect(x + 5 - step, y + 8, 2, 6 - (1 - step));   // legs
+  // the lighting pole with its little flame
+  const px = f > 0 ? x + 8 : x - 1;
+  ctx.fillStyle = '#6a4a2a'; ctx.fillRect(px, y - 7, 1, 13);
+  ctx.fillStyle = Math.sin(t * 20) > 0 ? '#ffd23c' : '#ff8a1c'; ctx.fillRect(px - 1, y - 10, 3, 3);
+}
+
+// ======================= loop =======================
+let last = performance.now(), padX = 0, padJ = false;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  t += dt;
+  const gp = navigator.getGamepads ? [...navigator.getGamepads()].find((g) => g) : null;
+  padX = gp ? (gp.axes[0] || 0) + (gp.buttons[15] && gp.buttons[15].pressed ? 1 : 0) - (gp.buttons[14] && gp.buttons[14].pressed ? 1 : 0) : 0;
+  padJ = gp ? !!(gp.buttons[0] && gp.buttons[0].pressed) : false;
+  if (started && !finished) runT += dt;
+  if (started) step(dt);
+  if (finished) dawn = Math.min(1.2, dawn + dt * 0.25);
+  flash = Math.max(0, flash - dt);
+  if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').style.opacity = 0; }
+  const targetCam = Math.max(0, Math.min(WORLD_W - VW, P.x - VW * 0.42));
+  camX += (targetCam - camX) * Math.min(1, dt * 6);
+  draw(allLights());
+  $('hTime').textContent = fmt(runT);
+  requestAnimationFrame(frame);
+}
+
+function fit() {
+  const s = Math.max(1, Math.min(window.innerWidth / VW, window.innerHeight / VH));
+  cv.style.width = Math.floor(VW * s) + 'px'; cv.style.height = Math.floor(VH * s) + 'px';
+  if (window.innerHeight > window.innerWidth) {
+    const top = Math.max(VH * s / 2 + 70, window.innerHeight * 0.36);
+    cv.style.top = top + 'px'; $('turn').style.top = (top + VH * s / 2 + 8) + 'px';
+  } else cv.style.top = '50%';
+}
+window.addEventListener('resize', fit); fit();
+
+// ======================= input =======================
+addEventListener('keydown', (e) => { keys[e.key] = true; if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault(); if (e.key === 'Enter' && !$('over').classList.contains('hide')) $('playBtn').click(); });
+addEventListener('keyup', (e) => { keys[e.key] = false; });
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+for (const [id, k] of [['bL', 'l'], ['bR', 'r'], ['bJ', 'j']]) {
+  const b = $(id);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (x) {} });
+  const up = () => { touch[k] = false; b.classList.remove('on'); };
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+}
+$('syncBtn').onclick = () => {
+  sync = !sync; lampUi();
+  if (sync && link && link.online && started) calibrate();
+};
+
+function showOver(end) {
+  $('over').classList.remove('hide');
+  if (end) {
+    $('boxBody').innerHTML = `<p>You brought back the dawn in <b>${fmt(runT)}</b>.</p><p class="dim">Your lamp keeps the colours going. Play again to beat your time.</p>`;
+    $('playBtn').innerHTML = '&#9654; AGAIN';
+  }
+  const best = +localStorage.getItem('lamplighter.best') || 0;
+  $('best').textContent = best ? 'BEST: ' + fmt(best) : '';
+}
+$('playBtn').onclick = () => {
+  if (finished) {                                   // a new night
+    for (const l of LANTERNS) l.lit = false;
+    finished = false; dawn = 0; runT = 0; P.x = 40; P.y = GROUND - 14; P.vx = P.vy = 0; $('hLan').textContent = '0/8';
+  }
+  $('over').classList.add('hide');
+  const first = !started;
+  started = true; sfx('jump');
+  say(ZONES[0][1]);
+  if (first && link && link.online && sync) calibrate();
+};
+$('codeBtn').onclick = () => {
+  const c = LAMP.cleanCode($('codeIn').value); if (c.length < 3) return;
+  LAMP.saveCode(c); if (link) link.close(); link = null; lampStart();
+};
+$('codeIn').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('codeBtn').click(); };
+
+lampStart();
+showOver(false);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

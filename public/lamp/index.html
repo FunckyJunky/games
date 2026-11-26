@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>LAMP.EXE</title>
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%23031208%27/%3E%3Ccircle cx=%278%27 cy=%277%27 r=%274%27 fill=%27%23ffc21c%27/%3E%3Crect x=%276%27 y=%2711%27 width=%274%27 height=%272%27 fill=%27%2339ff7a%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+  :root { --fg: #39ff7a; --dim: #1b7a3c; --bg: #031208; --glow: rgba(57,255,122,.55); --red: #ff4b4b; --lamp: 255,255,255; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #000; }
+  body {
+    color: var(--fg); font-family: 'VT323', ui-monospace, monospace; font-size: 22px; line-height: 1.1;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    text-shadow: 0 0 5px var(--glow); overflow-x: hidden;
+  }
+  #crt { min-height: 100dvh; background: var(--bg); max-width: 760px; margin: 0 auto; padding: 0 0 calc(22px + env(safe-area-inset-bottom)); position: relative; }
+  #crt::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 20; background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); }
+  button { all: unset; cursor: pointer; }
+  a { color: var(--fg); }
+  .bar {
+    position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px;
+    background: var(--fg); color: var(--bg); text-shadow: none; padding: calc(4px + env(safe-area-inset-top)) 10px 4px; white-space: nowrap; overflow: hidden;
+    box-shadow: 0 0 10px var(--glow);
+  }
+  .bar .t { flex: 1; overflow: hidden; text-overflow: ellipsis; letter-spacing: .04em; }
+  .bar a, .bar button { color: var(--bg); text-decoration: none; padding: 0 4px; }
+  .bar a:active, .bar button:active { background: var(--bg); color: var(--fg); }
+  .sec { padding: 10px 12px 0; }
+  .h { color: var(--dim); text-shadow: none; margin: 16px 0 6px; letter-spacing: .06em; display: flex; justify-content: space-between; gap: 8px; }
+  .h b { color: var(--fg); font-weight: normal; text-shadow: 0 0 5px var(--glow); }
+  .dim { color: var(--dim); text-shadow: none; }
+  .btn { display: inline-block; border: 1px solid var(--fg); padding: 3px 10px; text-align: center; }
+  .btn:active, .btn.on { background: var(--fg); color: var(--bg); text-shadow: none; }
+
+  /* the room with the lamp */
+  #stage { position: relative; height: min(46vh, 330px); min-height: 230px; border-bottom: 1px solid var(--dim); overflow: hidden; background: #050607; }
+  #room { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #readout { position: absolute; left: 10px; right: 10px; bottom: 8px; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; text-shadow: 0 0 6px #000, 0 0 2px #000; color: #e9fff0; }
+  #cname { font-size: 30px; line-height: 1; }
+  #cmode { color: #b9d8c4; font-size: 19px; }
+  #levels { display: flex; gap: 3px; align-items: flex-end; }
+  #levels i { display: block; width: 7px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); }
+  #levels i.lit { background: rgb(var(--lamp)); box-shadow: 0 0 6px rgb(var(--lamp)); border-color: rgb(var(--lamp)); }
+  #badge { position: absolute; top: 8px; left: 10px; font-size: 19px; color: #e9fff0; text-shadow: 0 0 6px #000; }
+  #badge.off { color: #ffb0b0; }
+
+  /* the remote */
+  #remoteWrap { display: flex; justify-content: center; padding: 14px 0 4px; }
+  #remote {
+    width: min(100%, 330px); border-radius: 26px 26px 34px 34px; padding: 16px 16px 22px;
+    background: linear-gradient(180deg, #23272d, #111317 60%, #0c0d10); border: 1px solid #3a3f47;
+    box-shadow: 0 10px 30px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12), 0 0 40px rgba(var(--lamp), .10);
+    text-shadow: none;
+  }
+  #irwin { width: 46px; height: 12px; margin: 0 auto 14px; border-radius: 6px; background: radial-gradient(ellipse at 50% 40%, #5a1520, #1a0508 70%); border: 1px solid #000; }
+  #irwin.blink { background: radial-gradient(ellipse at 50% 40%, #ff4b6a, #6b0f1f 70%); box-shadow: 0 0 12px #ff3355; }
+  #keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 12px; }
+  .k {
+    aspect-ratio: 1.25; border-radius: 40%; display: flex; align-items: center; justify-content: center; position: relative;
+    font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: #e6e6e6;
+    background: linear-gradient(180deg, #4a4f57, #2c2f35); box-shadow: 0 3px 0 #08090b, inset 0 1px 0 rgba(255,255,255,.18);
+    transition: transform .06s, box-shadow .06s, filter .2s;
+  }
+  .k.col { color: rgba(0,0,0,.55); font-size: 15px; }
+  .k:active, .k.press { transform: translateY(2px); box-shadow: 0 1px 0 #08090b, inset 0 1px 0 rgba(255,255,255,.18); }
+  .k.cur::after { content: ''; position: absolute; inset: -5px; border-radius: 44%; border: 2px solid #fff; box-shadow: 0 0 10px #fff; }
+  .k.fx { font-size: 10px; color: #cfd3da; }
+  .k.fx::before { content: ''; position: absolute; top: 5px; right: 7px; width: 4px; height: 4px; border-radius: 50%; background: #ffb84d; opacity: .7; }
+  .k.off { background: linear-gradient(180deg, #2a2a2a, #121212); color: #ff6b6b; }
+  .k.on { background: linear-gradient(180deg, #d63131, #8e1616); color: #fff; }
+  .k.dimk { font-size: 15px; background: linear-gradient(180deg, #f2f2f2, #b7b7b7); color: #222; }
+  #rlabel { text-align: center; margin-top: 14px; font: 600 10px Arial, sans-serif; letter-spacing: .3em; color: #6d737d; }
+
+  #log div { display: flex; gap: 8px; align-items: center; color: #b6e9c6; font-size: 20px; }
+  #log .sw { width: 12px; height: 12px; display: inline-block; border: 1px solid rgba(255,255,255,.4); flex: none; }
+  #log .who { color: var(--dim); text-shadow: none; min-width: 90px; }
+  #others { display: flex; flex-wrap: wrap; gap: 8px; }
+  #others .btn { font-size: 20px; }
+  #link { padding: 26px 16px; }
+  #link input {
+    all: unset; display: block; width: 100%; max-width: 300px; margin: 12px 0; border: 1px solid var(--fg); padding: 6px 10px;
+    font-family: 'VT323', monospace; font-size: 40px; letter-spacing: .35em; color: var(--fg); text-transform: uppercase; box-sizing: border-box;
+    -webkit-user-select: text; user-select: text;
+  }
+  .play { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--fg); padding: 10px 12px; margin-top: 12px; text-decoration: none; }
+  .play:active { background: var(--fg); color: var(--bg); text-shadow: none; }
+  .play b { font-weight: normal; font-size: 26px; }
+  #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translate(-50%, 140px); background: var(--bg); border: 1px solid var(--fg); padding: 6px 14px; z-index: 30; transition: transform .25s; max-width: 90%; text-align: center; }
+  #toast:not(.show) { visibility: hidden; transition: transform .25s, visibility 0s .25s; }
+  #toast.show { transform: translate(-50%, 0); }
+  #toast.err { border-color: var(--red); color: #ffb0b0; }
+  .hide { display: none !important; }
+  p { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div id="crt">
+  <div class="bar"><span class="t">LAMP.EXE</span><span id="st">OFFLINE</span><button id="codeBtn">------</button><a href="/">MENU</a></div>
+
+  <!-- link screen -->
+  <div id="link" class="hide">
+    <div>C:\&gt;LAMP /LINK</div>
+    <p class="dim">Type the LINK CODE from the IR-LAMP page<br>(open the ESP32 at http://irremote.local, card "Online &middot; error.blue").</p>
+    <input id="codeIn" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="------">
+    <button class="btn" id="linkBtn">LINK</button>
+    <p class="dim" style="margin-top:22px">No lamp? <button id="demoBtn" style="text-decoration:underline">Try the remote without one</button>.</p>
+  </div>
+
+  <div id="main" class="hide">
+    <div id="stage"><canvas id="room"></canvas>
+      <div id="badge">&nbsp;</div>
+      <div id="readout"><div><div id="cname">&nbsp;</div><div id="cmode">&nbsp;</div></div><div id="levels"></div></div>
+    </div>
+
+    <div id="remoteWrap"><div id="remote"><div id="irwin"></div><div id="keys"></div><div id="rlabel">RGB CONTROLLER</div></div></div>
+
+    <div class="sec">
+      <a class="play" id="playLink" href="/lamp/game/"><span><b>&#9654; LAMPLIGHTER</b><br><span class="dim">walk the night world, the lights you pass light your room</span></span><span>GO</span></a>
+
+      <div id="otherBox" class="hide">
+        <div class="h"><span>OTHER BUTTONS ON THE BOARD</span></div>
+        <div id="others"></div>
+      </div>
+
+      <div class="h"><span>LOG</span><span id="devInfo"></span></div>
+      <div id="log"><div class="dim">nothing yet</div></div>
+
+      <div class="h"><span>SETUP</span></div>
+      <p class="dim">Hold &#9728;+ / &#9728;&minus; to keep dimming. The orange dot marks the 4 effect keys: standard codes for this remote, not learned from yours.</p>
+      <p><button class="btn" id="relink">CHANGE CODE</button> <button class="btn" id="resync">ASK THE LAMP</button></p>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="/lamp/lamp.js"></script>
+<script src="/lib/online.js" defer></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const { KEYS, BY_ID, LEVELS, LEARNED } = LAMP;
+let link = null, demo = false, preview = LAMP.freshState(), irFlash = 0, beams = [];
+const T0 = performance.now();
+
+function toast(m, err) { const t = $('toast'); t.textContent = m; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400); }
+
+// ---------------- remote ----------------
+const keyEls = {};
+for (const k of KEYS) {
+  const b = document.createElement('button');
+  b.className = 'k' + (k.rgb ? ' col' : '') + (k.kind === 'fx' ? ' fx' : '') + (k.kind === 'dim' ? ' dimk' : '') + (k.id === 'off' ? ' off' : '') + (k.id === 'on' ? ' on' : '');
+  b.textContent = k.short || '';
+  b.title = k.name + (LEARNED.has(k.c) ? '' : ' (standard code)');
+  if (k.rgb) { b.style.background = `radial-gradient(circle at 50% 35%, #fff8, transparent 60%), ${k.rgb}`; b.style.boxShadow = `0 3px 0 #08090b, 0 0 14px ${k.rgb}66`; }
+  let hold = null;
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    press(k);
+    if (k.kind === 'dim') { clearInterval(hold); hold = setInterval(() => press(k), 380); }
+  });
+  const stop = () => { clearInterval(hold); hold = null; };
+  b.addEventListener('pointerup', stop); b.addEventListener('pointerleave', stop); b.addEventListener('pointercancel', stop);
+  $('keys').append(b);
+  keyEls[k.id] = b;
+}
+for (let i = 0; i < LEVELS; i++) { const s = document.createElement('i'); s.style.height = (8 + i * 3) + 'px'; $('levels').append(s); }
+
+function press(k) {
+  const el = keyEls[k.id];
+  el.classList.add('press'); setTimeout(() => el.classList.remove('press'), 120);
+  if (navigator.vibrate) navigator.vibrate(12);
+  if (link && link.ready) {
+    link.press(k.id);
+    blinkIr();
+  } else if (demo) {
+    LAMP.apply(preview, k.c); blinkIr(); beams.push(performance.now()); showState(); addLog('you (demo)', k);
+  } else toast('The lamp is offline', 1);
+}
+function blinkIr() { const w = $('irwin'); w.classList.add('blink'); clearTimeout(irFlash); irFlash = setTimeout(() => w.classList.remove('blink'), 140); }
+
+// ---------------- state + log ----------------
+function curState() { return link && !demo ? link.state : preview; }
+function showState() {
+  const st = curState();
+  for (const k of KEYS) keyEls[k.id].classList.toggle('cur', !!k.rgb && st.on && st.mode === 'color' && st.key === k.id);
+  for (const id of ['flash', 'strobe', 'fade', 'smooth']) keyEls[id].classList.toggle('cur', st.on && st.mode === id);
+  const name = !st.on ? 'OFF' : st.mode === 'color' ? BY_ID[st.key].name.toUpperCase() : BY_ID[st.mode].name.toUpperCase();
+  $('cname').textContent = name;
+  $('cmode').textContent = !st.known ? 'state not known yet' : !st.on ? 'switched off' : st.mode === 'color' ? 'brightness ' + (st.level + 1) + '/' + LEVELS : 'effect \u00b7 brightness ' + (st.level + 1) + '/' + LEVELS;
+  [...$('levels').children].forEach((s, i) => s.classList.toggle('lit', st.on && i <= st.level));
+}
+function addLog(who, k, extra) {
+  const L = $('log');
+  if (L.firstChild && L.firstChild.classList && L.firstChild.classList.contains('dim')) L.innerHTML = '';
+  const d = document.createElement('div');
+  const tm = new Date().toTimeString().slice(0, 8);
+  const sw = document.createElement('span'); sw.className = 'sw';
+  sw.style.background = k && k.rgb ? k.rgb : k && k.id === 'off' ? '#000' : '#888';
+  const w = document.createElement('span'); w.className = 'who'; w.textContent = tm + ' ' + who;
+  const n = document.createElement('span'); n.textContent = k ? k.name : (extra || '?');
+  d.append(sw, w, n);
+  L.prepend(d);
+  while (L.children.length > 12) L.lastChild.remove();
+}
+
+function setStatus(online, info) {
+  const s = $('st');
+  if (demo) { s.textContent = 'DEMO'; return; }
+  s.textContent = online ? '\u25cf ONLINE' : 'OFFLINE';
+  $('badge').textContent = online ? 'IR-LAMP ONLINE' + (info ? ' \u00b7 v' + info.v : '') : 'LAMP OFFLINE \u2014 waiting for the ESP32';
+  $('badge').className = online ? '' : 'off';
+  $('devInfo').textContent = online && info ? (info.rssi + ' dBm') : '';
+  const others = $('others'); others.innerHTML = '';
+  let n = 0;
+  if (online && info && info.b) info.b.forEach((b, i) => {
+    const code = (b[2] || '').replace(/^0x/, '').padStart(8, '0').toUpperCase();
+    if (b[1] === 'NEC' && LAMP.BY_CODE[code]) return;         // a lamp key: already on the remote
+    const x = document.createElement('button'); x.className = 'btn'; x.textContent = b[0];
+    x.onclick = () => { link.button(i); blinkIr(); };
+    others.append(x); n++;
+  });
+  $('otherBox').classList.toggle('hide', !n);
+}
+
+// ---------------- link ----------------
+function start(code) {
+  demo = false;
+  LAMP.saveCode(code);
+  $('codeBtn').textContent = code;
+  $('playLink').href = '/lamp/game/?code=' + encodeURIComponent(code);
+  if (!link) link = new LampLink({
+    code, name: 'LAMP',
+    onStatus: setStatus,
+    onChange: (st, why) => { showState(); },
+    onEvent: (ev) => {
+      if (ev.type === 'full') { toast('The lamp is busy, slow down', 1); return; }
+      if (ev.type === 'tx' || ev.type === 'rx') { beams.push(performance.now()); if (ev.type === 'tx') blinkIr(); }
+      if (ev.key) addLog(ev.who, ev.key);
+      else addLog(ev.who, null, (ev.proto || '') + ' ' + (ev.code || ''));
+    },
+  });
+  else link.setCode(code);
+  $('link').classList.add('hide'); $('main').classList.remove('hide');
+  setStatus(false, null); showState();
+}
+function showLink() {
+  $('main').classList.add('hide'); $('link').classList.remove('hide');
+  $('codeIn').value = LAMP.savedCode() || '';
+  setTimeout(() => $('codeIn').focus(), 50);
+}
+$('linkBtn').onclick = () => { const c = LAMP.cleanCode($('codeIn').value); if (c.length < 3) { toast('That code is too short', 1); return; } start(c); };
+$('codeIn').onkeydown = (e) => { if (e.key === 'Enter') $('linkBtn').click(); };
+$('codeBtn').onclick = $('relink').onclick = () => { if (link) link.close(); link = null; showLink(); };
+$('resync').onclick = () => { if (link && link.ready) { link._send({ t: 'hi' }); toast('Asked'); } else toast('The lamp is offline', 1); };
+$('demoBtn').onclick = () => {
+  demo = true; if (link) { link.close(); link = null; }
+  $('link').classList.add('hide'); $('main').classList.remove('hide');
+  $('st').textContent = 'DEMO'; $('codeBtn').textContent = 'LINK';
+  $('badge').textContent = 'DEMO \u2014 no lamp linked'; $('badge').className = 'off';
+  preview.known = true; showState();
+};
+
+// ---------------- the room ----------------
+const cv = $('room'), ctx = cv.getContext('2d');
+let shown = { rgb: [255, 255, 255], i: 0 };
+function frame(now) {
+  const t = (now - T0) / 1000;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const want = LAMP.look(curState(), t);
+  const fast = curState().mode === 'flash' || curState().mode === 'strobe';
+  const a = fast ? 1 : 0.12;
+  shown.rgb = shown.rgb.map((v, j) => v + (want.rgb[j] - v) * a);
+  shown.i += (want.i - shown.i) * (fast ? 1 : 0.1);
+  const [r, g, b] = shown.rgb.map(Math.round), I = shown.i;
+  document.documentElement.style.setProperty('--lamp', `${r},${g},${b}`);
+
+  // wall + floor
+  const floorY = H * 0.78;
+  ctx.fillStyle = '#07080a'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * 0.42, R = Math.min(W, H) * 0.13;
+  let gr = ctx.createRadialGradient(cx, cy, R * 0.6, cx, cy, Math.max(W, H) * (0.35 + 0.55 * I));
+  gr.addColorStop(0, `rgba(${r},${g},${b},${0.55 * I})`); gr.addColorStop(0.45, `rgba(${r},${g},${b},${0.18 * I})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, floorY, W, H - floorY);
+  gr = ctx.createRadialGradient(cx, floorY + 6, 4, cx, floorY + 6, W * (0.2 + 0.35 * I));
+  gr.addColorStop(0, `rgba(${r},${g},${b},${0.5 * I})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.save(); ctx.translate(cx, floorY + 6); ctx.scale(1, 0.22); ctx.translate(-cx, -(floorY + 6));
+  ctx.fillStyle = gr; ctx.fillRect(0, floorY - 200, W, 400); ctx.restore();
+  ctx.strokeStyle = `rgba(${r},${g},${b},${0.08 + 0.25 * I})`; ctx.beginPath(); ctx.moveTo(0, floorY); ctx.lineTo(W, floorY); ctx.stroke();
+
+  // the lamp: a globe on a little stand
+  ctx.fillStyle = '#1a1c20'; ctx.fillRect(cx - R * 0.18, cy + R * 0.9, R * 0.36, floorY - cy - R * 0.9 - 6);
+  ctx.beginPath(); ctx.ellipse(cx, floorY - 4, R * 0.75, R * 0.16, 0, 0, Math.PI * 2); ctx.fillStyle = '#202328'; ctx.fill();
+  gr = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.05, cx, cy, R);
+  if (I > 0.01) {
+    const m = (v) => Math.round(v * (0.35 + 0.65 * I));
+    gr.addColorStop(0, `rgb(255,255,255)`); gr.addColorStop(0.35, `rgb(${Math.min(255, r + 120)},${Math.min(255, g + 120)},${Math.min(255, b + 120)})`);
+    gr.addColorStop(0.75, `rgb(${m(r)},${m(g)},${m(b)})`); gr.addColorStop(1, `rgb(${m(r) >> 1},${m(g) >> 1},${m(b) >> 1})`);
+    ctx.shadowColor = `rgba(${r},${g},${b},${I})`; ctx.shadowBlur = 50 * I;
+  } else {
+    gr.addColorStop(0, '#4a4e55'); gr.addColorStop(0.4, '#26292e'); gr.addColorStop(1, '#121316');
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill(); ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(cx - R * 0.35, cy - R * 0.4, R * 0.18, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fill();
+
+  // the ESP32 with its IR LED, bottom left, and the IR waves of the last commands
+  const bx = Math.max(18, W * 0.1), by = floorY - 14;
+  ctx.fillStyle = '#0d2a14'; ctx.fillRect(bx - 16, by - 8, 32, 16);
+  ctx.strokeStyle = '#1b7a3c'; ctx.strokeRect(bx - 16, by - 8, 32, 16);
+  ctx.fillStyle = '#39ff7a'; ctx.font = '11px VT323, monospace'; ctx.fillText('ESP32', bx - 13, by + 4);
+  const nowMs = performance.now();
+  beams = beams.filter((s) => nowMs - s < 900);
+  const ang = Math.atan2(cy - by, cx - bx), dist = Math.hypot(cx - bx, cy - by) - R;
+  ctx.fillStyle = beams.length ? '#ff4060' : '#5a1520';
+  ctx.beginPath(); ctx.arc(bx + 18, by - 2, 3, 0, Math.PI * 2); ctx.fill();
+  for (const s of beams) {
+    const p = (nowMs - s) / 700;
+    for (let k = 0; k < 3; k++) {
+      const q = p - k * 0.12; if (q < 0 || q > 1) continue;
+      const d = 18 + q * dist;
+      ctx.strokeStyle = `rgba(255,64,96,${(1 - q) * 0.8})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx + 18, by - 2, d, ang - 0.22, ang + 0.22); ctx.stroke();
+    }
+  }
+  ctx.lineWidth = 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------------- start ----------------
+const c0 = LAMP.savedCode();
+if (c0) start(c0); else showLink();
+</script>
+</body>
+</html>

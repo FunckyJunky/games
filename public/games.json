@@ -134,5 +134,25 @@
     "folder": "apps",
     "logo": "pocket",
     "added": "2026-11-25T19:30"
+  },
+  {
+    "id": "lamplighter",
+    "title": "Lamplighter",
+    "dos": "LAMPLITE",
+    "description": "Night fell and the 8 lanterns went out. Walk from the meadow to the hill, light them all and bring back the dawn. Link your lamp in LAMP.EXE and it takes the colour of the light you stand in: campfire, fireflies, lake, crystal cave, lava, the neon street.",
+    "path": "lamp/game/",
+    "folder": "games",
+    "logo": "lamp",
+    "added": "2026-11-26T18:30"
+  },
+  {
+    "id": "lamp",
+    "title": "LAMP.EXE",
+    "dos": "LAMP",
+    "description": "Your RGB lamp from anywhere: the colour remote with its gradient, a live view of what the lamp shows, brightness and effects, and the presses of the real remote. Talks to the IR-LAMP board (an ESP32 with an IR LED) by its link code.",
+    "path": "lamp/",
+    "folder": "apps",
+    "logo": "lamp",
+    "added": "2026-11-26T18:30"
   }
 ]

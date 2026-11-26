@@ -818,7 +818,30 @@ function sceneZone(t, seg) {
   }
   return { yaw: t * 0.12, pitch: 0.5, dist: 11, ty: 0.9 };
 }
-const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket, home: sceneHome, zone: sceneZone };
+function sceneLamp(t, seg) {
+  // LAMP.EXE: a globe lamp on its stand with pulsing rays, and the little IR box beaming at it
+  const cx = 0.9, cy = 2.1, R = 0.85, N = 20;
+  for (let k = 0; k < N; k++) {                                                      // the globe: three rings
+    const a0 = k / N * 6.2832, a1 = (k + 1) / N * 6.2832;
+    seg.push([[cx + Math.cos(a0) * R, cy + Math.sin(a0) * R, 0], [cx + Math.cos(a1) * R, cy + Math.sin(a1) * R, 0]]);
+    seg.push([[cx + Math.cos(a0) * R, cy, Math.sin(a0) * R], [cx + Math.cos(a1) * R, cy, Math.sin(a1) * R]]);
+    seg.push([[cx, cy + Math.cos(a0) * R, Math.sin(a0) * R], [cx, cy + Math.cos(a1) * R, Math.sin(a1) * R]]);
+  }
+  seg.push([[cx, cy - R, 0], [cx, 0.16, 0]]);                                         // the stand
+  cubeEdges(cx, 0.08, 0, 1.2, 0.16, 1.2, 0, seg);                                     // its foot
+  const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+  for (let k = 0; k < 10; k++) {                                                      // light rays
+    const a = k / 10 * 6.2832 + t * 0.3, r0 = R + 0.2, r1 = R + 0.45 + pulse * 0.5;
+    seg.push([[cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, 0], [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, 0]]);
+  }
+  cubeEdges(-2.4, 0.25, 0.4, 0.9, 0.5, 0.6, 0, seg);                                  // the ESP32 with its IR LED
+  for (let k = 0; k < 3; k++) {                                                       // IR waves towards the lamp
+    const r = 0.3 + ((t * 0.8 + k / 3) % 1) * 2.2;
+    for (let a = -0.35; a < 0.35; a += 0.12) seg.push([[-1.95 + Math.cos(a + 0.55) * r, 0.35 + Math.sin(a + 0.55) * r, 0.4], [-1.95 + Math.cos(a + 0.67) * r, 0.35 + Math.sin(a + 0.67) * r, 0.4]]);
+  }
+  return { yaw: -0.35 + Math.sin(t * 0.3) * 0.3, pitch: 0.2, dist: 8.6, ty: 1.4 };
+}
+const SCENES = { hop: sceneHop, party: scenParty, wall: sceneWall, ship: sceneShip, chat: sceneChat, tusa: sceneTusa, vgadai: sceneVgadai, studio: sceneStudio, mist: sceneMist, tolk: sceneTolk, pocket: scenePocket, home: sceneHome, zone: sceneZone, lamp: sceneLamp };
 
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);

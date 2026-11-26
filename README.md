@@ -112,6 +112,17 @@ public/                 the website
                         (on by default). Pronunciation line (English- or Dutch-style), English meaning, practice mode, 60 s
                         silence timer. The sentences are in the D array at the top of the script in index.html.
                         Installable web app (manifest.webmanifest, sw.js, icons): opens offline, portrait, full screen
+  lamp/                 LAMP.EXE (error.blue/lamp): the RGB lamp from anywhere, through the IR-LAMP board (esp32/IrLamp).
+                        Link code (?code= or typed, localStorage lamp.code), a drawn room with the lamp in its colour and
+                        brightness, the 24-key remote with its colour gradient (hold ☀+/☀− to keep dimming), the board's other
+                        saved buttons, and a log of who pressed what (this page, another page, the game, the real remote).
+                        lamp.js = the link (room ir-lamp/<CODE>) + the remote's keys/colours, shared with the game
+  lamp/game/            Lamplighter (error.blue/lamp/game): a night walk in pixels, meadow -> village -> forest -> lake ->
+                        crystal cave -> lava -> neon street -> hill. Light the 8 lanterns, then the gate on the hill brings
+                        the dawn. With a lamp linked (SYNC ON) the real lamp takes the colour of the strongest light where
+                        you stand (nothing near = deep blue, dim), in 3 brightness steps; the disco floor = SMOOTH, dawn =
+                        white at full, then SMOOTH. It turns the lamp on and all the way down once at the start. Best time
+                        in localStorage lamplighter.best. ?code= like LAMP.EXE
   pocket/               pocket.DOS (error.blue/pocket): the menu.js and apps the ESP32-S3 1.47" LCD board downloads and runs
                         (Duktape), played the same way in the browser; listed in apps.json (bump v to make boards fetch again).
                         apps/walk.js = DOT WALK: a 3D night walk through a little town drawn as a dot matrix (53 x 28 dots:
@@ -131,6 +142,7 @@ lib/online.js         "I'm in this game" beacon for the who's-online list (GET /
 esp32/                  ERROR-OLED: ESP32-C3 + OLED box that shows who's online in which game and does ERROR-CHAT
                         (see esp32/README.md)
 esp32/HomeFront/        HOME FRONT firmware for the ESP32-S3 1.47" LCD board (see esp32/HomeFront/README.md)
+esp32/IrLamp/           IR-LAMP firmware: ESP32 + IR receiver + IR LED, learns remotes, links to error.blue/lamp (see its README)
 esp32/ErrorCube/        ERROR-CUBE firmware for the Waveshare ESP32-S3-Touch-AMOLED-2.16 (see esp32/ErrorCube/README.md)
 src/index.js            server: scores, saves and multiplayer rooms (/api/*)
 src/funda.js            FUNDA WATCH: reads funda.nl (app API, website as fallback) and keeps every reading in the database
@@ -157,7 +169,7 @@ wrangler.jsonc          Cloudflare settings (database, rooms)
 
    `folder` is `games`, `online` or `apps` (the three tabs in the ERROR-DOS menu).
    `logo` picks the 3D logo: `hop`, `party`, `wall`, `ship`, `chat`, `tusa`, `vgadai`,
-   `studio`, `mist`, `tolk`, `zone`, or leave it out for the name over a synthwave sun.
+   `studio`, `mist`, `tolk`, `zone`, `pocket`, `home`, `lamp`, or leave it out for the name over a synthwave sun.
 
 3. Push to `main`. The site updates within about a minute.
 
