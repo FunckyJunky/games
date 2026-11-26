@@ -249,6 +249,16 @@ String staSsid, staPass;          // home Wi-Fi
 String linkCode;                  // error.blue room code
 bool   cloudOn = true;
 
+// alarm clock types (used further down in the ALARMS section; must be above the first function)
+struct AlarmStep { int32_t off; uint32_t code; };
+struct Alarm {
+  uint16_t id = 0; bool on = true; uint8_t hh = 7, mm = 0, days = 0;
+  std::vector<AlarmStep> steps;
+  String meta;
+  time_t runE = 0, doneE = 0;      // the alarm time being run now / the last one finished
+  uint16_t next = 0;
+};
+
 static const char* DB_FILE = "/signals.txt";
 static const char* DB_TMP  = "/signals.tmp";
 
@@ -1551,14 +1561,7 @@ void handleCloud() {
 //   steps: offset:code,offset:code,...  seconds from the alarm time (negative = before it), NEC code in hex
 //   meta:  the page's own settings (URL-encoded), kept as they are
 // error.blue/lamp/alarm writes the whole list ({t:"al", a}), the board runs it with its own clock.
-struct AlarmStep { int32_t off; uint32_t code; };
-struct Alarm {
-  uint16_t id = 0; bool on = true; uint8_t hh = 7, mm = 0, days = 0;
-  std::vector<AlarmStep> steps;
-  String meta;
-  time_t runE = 0, doneE = 0;      // the alarm time being run now / the last one finished
-  uint16_t next = 0;
-};
+// (struct AlarmStep / struct Alarm are near the top, so the Arduino IDE can make prototypes)
 std::vector<Alarm> alarms;
 Alarm program;                     // a one-off from a page (try a sunrise, fall asleep), id 0
 bool programOn = false;
