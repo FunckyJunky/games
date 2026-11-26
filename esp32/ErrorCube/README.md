@@ -35,6 +35,13 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.5.1
+
+- **Fix:** GET on a map (HOME in MAP.EXE) froze the cube (task watchdog in the "https" task): HTTPClient's
+  writeToStream can loop without sleeping when the TLS client reports bytes it doesn't hand over. Downloads now use
+  their own read loop (HTTP/1.0, sleeps every round, gives up after 15 s without data). The crash report shows the
+  cause in hex.
+
 ## New in 1.5
 
 - **Less memory:** the graphics that needed big buffers are gone: HOLO 3D (tilt depth layers, shadows, sides, the

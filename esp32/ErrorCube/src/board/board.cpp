@@ -570,7 +570,7 @@ static void crashCheck() {
   int k = snprintf(S.crash, sizeof(S.crash), "%s", why ? why : "AN EARLIER CRASH");
   if (have) {
     char fw[9]; memcpy(fw, s->app_elf_sha256, 8); fw[8] = 0;
-    k += snprintf(S.crash + k, sizeof(S.crash) - k, " IN %s FW %s PC %08lx C%lu A%08lx BT", s->exc_task, fw, (unsigned long)s->exc_pc,
+    k += snprintf(S.crash + k, sizeof(S.crash) - k, " IN %s FW %s PC %08lx C%lx A%08lx BT", s->exc_task, fw, (unsigned long)s->exc_pc,
                   (unsigned long)s->ex_info.exc_cause, (unsigned long)s->ex_info.exc_vaddr);
     for (int i = 0; i < (int)s->exc_bt_info.depth && i < 10 && k < (int)sizeof(S.crash) - 10; i++)
       k += snprintf(S.crash + k, sizeof(S.crash) - k, " %08lx", (unsigned long)s->exc_bt_info.bt[i]);

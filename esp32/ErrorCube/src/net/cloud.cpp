@@ -244,17 +244,33 @@ static void doDownload(const char* path, const char* file) {
   tlsSetup();
   bool ok = false;
   http.end();
+  // HTTP/1.0: no chunks, the server closes at the end. Our own read loop (1.5.1): HTTPClient's writeToStream can
+  // spin without ever sleeping (delay(0)) when the TLS client says bytes are there but gives none: the idle task
+  // starved and the watchdog restarted the cube ("FROZE IN https" after GET on a map)
+  http.useHTTP10(true);
   if (http.begin(tls, String("https://") + CUBE_HOST + path)) {
     http.setTimeout(20000);
     int code = http.GET();
     if (code == 200) {
       int len = http.getSize();
       FileSink sink(f, len > 0 ? len : 0);
-      int n = http.writeToStream(&sink);
-      ok = n > 0 && sink.ok && (len <= 0 || sink.done == (size_t)len);
+      WiFiClient* st = http.getStreamPtr();
+      static uint8_t* buf = nullptr;
+      if (!buf) buf = (uint8_t*)malloc(4096);
+      uint32_t last = millis();
+      while (st && buf && sink.ok && (len <= 0 || sink.done < (size_t)len)) {
+        int a = st->available();
+        int n = a > 0 ? st->read(buf, a > 4096 ? 4096 : a) : 0;
+        if (n > 0) { sink.write(buf, n); last = millis(); vTaskDelay(1); continue; }
+        if (!st->connected() && st->available() <= 0) break;     // the end (or it broke off)
+        if (millis() - last > 15000) break;                        // nothing for 15 s
+        vTaskDelay(pdMS_TO_TICKS(5));
+      }
+      ok = sink.ok && sink.done > 0 && (len <= 0 || sink.done == (size_t)len);
     }
     http.end();
   }
+  http.useHTTP10(false);
   if (!ok) tls.stop();
   linkYield = false;
   xSemaphoreGive(tlsMx);

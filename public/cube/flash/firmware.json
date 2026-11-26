@@ -1,8 +1,8 @@
 {
-  "ver": "1.5",
+  "ver": "1.5.1",
   "path": "/cube/flash/cube.bin",
-  "size": 2673056,
-  "md5": "f32d0d6219160d401754a27a373f398d",
-  "notes": "1.5: less memory (HOLO 3D, curved glass, cube turn removed; PSRAM for most allocations), PICO-8 removed for now, scrolling with inertia + a slider on the right (lists, text, chat, dialogs), MAP.EXE with the HOME map, 9 music visualizers",
-  "date": "2026-11-26T00:56Z"
+  "size": 2673344,
+  "md5": "7493ef08907fe62e3180b83f0614e78d",
+  "notes": "1.5.1: fix the freeze when getting a map (HOME in MAP.EXE)",
+  "date": "2026-11-26T01:11Z"
 }
