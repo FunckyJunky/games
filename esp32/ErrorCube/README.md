@@ -35,6 +35,17 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.5.4: EAR-CUBE
+
+- **EAR-CUBE, the cube's third firmware** (esp32/EarCube, error.blue/ear): speech to text. The two microphones listen,
+  error.blue writes it down (Whisper on Cloudflare Workers AI, src/stt.js: POST /api/stt). LIVE text on the screen, long
+  RECORDINGS into text files on the TF card (offline too: it catches up), and its own WiFi (EAR-CUBE-XXXX) with a page
+  at 192.168.4.1 for the live text and the transcripts. UPDATE > **FW Other** asks which firmware: PICO-CUBE or EAR-CUBE
+  (it was P8 PICO-8). Back: EAR-CUBE's SETUP > BACK TO ERROR-CUBE.
+- Shared files: sound.cpp has `sndMicRead()` (the ES7210's data on the same I2S bus); net.cpp has two weak hooks for
+  another firmware (`netWebExtra`: its own pages; `netHotspot`: a hotspot that stays on), and its captive-portal
+  redirect only answers phones on the cube's own WiFi. config.h includes `../ear/ear_config.h` when it's there.
+
 ## New in 1.5.3: PICO-CUBE
 
 - **PICO-CUBE, the cube's second firmware** (esp32/PicoCube, error.blue/pico8): a PICO-8 cart player that starts

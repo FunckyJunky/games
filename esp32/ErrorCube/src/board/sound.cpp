@@ -116,6 +116,16 @@ void sndFeed(const int16_t* s, int n) {
   S.audAt = millis();
 }
 
+// the microphones (ES7210 on the same I2S bus, its own data line): 44.1 kHz stereo frames, L = MIC1, R = MIC2.
+// Used by EAR-CUBE (src/ear/mic.cpp), which sets up the ES7210 itself; returns bytes read (blocks up to ms).
+size_t sndMicRead(void* buf, size_t bytes, uint32_t ms) {
+  if (!ok || !i2s.rxChan()) return 0;
+  size_t n = 0;   // straight from the channel: i2s.readBytes would share the speaker's write timeout
+  i2s_channel_read(i2s.rxChan(), buf, bytes, &n, pdMS_TO_TICKS(ms));
+  return n;
+}
+int sndRate() { return RATE; }
+
 static volatile int forceVol = -1;
 void sndForceVolume(int v) { forceVol = v; }
 static void task(void*) {

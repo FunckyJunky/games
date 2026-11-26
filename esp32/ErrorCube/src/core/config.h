@@ -8,12 +8,17 @@
 #if !defined(PICO_CUBE) && __has_include("../pico/pico_config.h")
 #include "../pico/pico_config.h"
 #endif
-#ifndef PICO_CUBE
+// EAR-CUBE (esp32/EarCube) the same way: src/ear/ear_config.h
+#if !defined(EAR_CUBE) && __has_include("../ear/ear_config.h")
+#include "../ear/ear_config.h"
+#endif
+#if !defined(PICO_CUBE) && !defined(EAR_CUBE)
 #define FW_NAME "ERROR-CUBE"
-#define CUBE_VERSION "1.5.3"
+#define CUBE_VERSION "1.5.4"
 #define FW_INFO_PATH "/cube/flash/firmware.json"     // newest firmware: {ver, path, size, md5, notes}
 #endif
-#define PICO_CUBE_INFO "/pico8/flash/firmware.json"  // the two firmwares for this cube: each can install the other
+#define PICO_CUBE_INFO "/pico8/flash/firmware.json"  // the firmwares for this cube: each can install the others
+#define EAR_CUBE_INFO "/ear/flash/firmware.json"
 #define ERROR_CUBE_INFO "/cube/flash/firmware.json"
 #ifndef THEME_COLOR
 #define THEME_COLOR cfg.color                        // SCHEMES[]: PICO-CUBE has its own

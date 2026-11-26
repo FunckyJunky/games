@@ -420,12 +420,26 @@ Screen* makeWifi() { return new Wifi(); }
 
 // ------------------------------------------------------------------ UPDATE.EXE
 // 1.5.3: PICO-CUBE, the cube's second firmware (a PICO-8 player): installs like an update, comes back the same way
+// 1.5.4: EAR-CUBE, the third (speech to text: LIVE and RECORD, its own WiFi page). FW asks which one.
 static void askPico() {
   ask("PICO-CUBE", "A PICO-8 player for this cube, with carts from error.blue/pico8. The cube downloads it and restarts in it. WiFi, settings and files stay. Back: SETUP > BACK TO ERROR-CUBE.",
       {"INSTALL", "CANCEL"}, [](int i) {
     if (i) return;
     if (S.net != NET_UP) { ask("NO WIFI", "Join a WiFi network first.", {"OK"}, nullptr); return; }
     netInstallPico();
+  });
+}
+static void askEar() {
+  ask("EAR-CUBE", "Speech to text: the microphones listen, error.blue writes it down. LIVE text, RECORD into text files, its own WiFi page. It restarts in it; WiFi, settings and files stay. Back: SETUP > BACK TO ERROR-CUBE.",
+      {"INSTALL", "CANCEL"}, [](int i) {
+    if (i) return;
+    if (S.net != NET_UP) { ask("NO WIFI", "Join a WiFi network first.", {"OK"}, nullptr); return; }
+    netInstallEar();
+  });
+}
+static void askOther() {
+  ask("OTHER FIRMWARE", "The cube can also be:\nPICO-CUBE: a PICO-8 player\nEAR-CUBE: speech to text", {"PICO-CUBE", "EAR-CUBE", "CANCEL"}, [](int i) {
+    if (i == 0) askPico(); else if (i == 1) askEar();
   });
 }
 struct Update : Screen {
@@ -459,7 +473,7 @@ struct Update : Screen {
     char up[48];
     if (S.net == NET_UP) snprintf(up, sizeof(up), "WEB PAGE: %s", S.ip); else strcpy(up, "OR A .BIN ON THE TF CARD");
     drawTextC(FT, 240, 372, up, C_DIM, TX_FLAT);
-    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"A:", "From card", [] { openProg("FILES"); }}, {"P8", "PICO-8", [] { askPico(); }}});
+    fkeys({{"ESC", "Back", [] { uiBack(); }}, {"A:", "From card", [] { openProg("FILES"); }}, {"FW", "Other", [] { askOther(); }}});
     if (S.upd == UPD_CHECKING) redrawIn(300);
   }
 };

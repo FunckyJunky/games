@@ -39,6 +39,7 @@
 import { DurableObject } from "cloudflare:workers";
 export { HomeFront } from "./homefront.js";
 import { handleFunda, fundaCron } from "./funda.js";
+import { handleStt } from "./stt.js";
 
 const GAME_RE = /^[a-z0-9-]{1,40}$/;
 const PLAYER_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -1004,6 +1005,9 @@ export default {
       if (path === "/api/funda" || path.startsWith("/api/funda/")) return await handleFunda(request, env, url, fundaPush(env));
 
       if (path === "/thuisfront/dev/ws" || path.startsWith("/api/hf/")) return env.HF.get(env.HF.idFromName("main")).fetch(request);
+
+      // EAR-CUBE: a piece of speech (WAV) -> text (Whisper on Workers AI, src/stt.js)
+      if (path === "/api/stt") return await handleStt(request, env, ctx);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 

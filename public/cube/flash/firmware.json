@@ -1,8 +1,8 @@
 {
-  "ver": "1.5.3",
+  "ver": "1.5.4",
   "path": "/cube/flash/cube.bin",
-  "size": 2676464,
-  "md5": "fc56b4fb0d172a025629e3eeb52b61f5",
-  "notes": "1.5.3: UPDATE > P8 installs PICO-CUBE (the PICO-8 firmware); safer update download; PICO-8 colours",
-  "date": "2026-11-26T18:57Z"
+  "size": 2678240,
+  "md5": "19d224d6b0d3d402e32b1f73a9e8a864",
+  "notes": "1.5.4: UPDATE > FW > EAR-CUBE installs EAR-CUBE (speech to text: LIVE text, long recordings into text files, its own WiFi page)",
+  "date": "2026-11-26T22:42Z"
 }

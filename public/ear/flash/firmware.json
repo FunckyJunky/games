@@ -1,0 +1,9 @@
+{
+  "name": "EAR-CUBE",
+  "ver": "1.0",
+  "path": "/ear/flash/ear.bin",
+  "size": 2392768,
+  "md5": "1e66f84718e9a93fca5b61855d695edf",
+  "notes": "EAR-CUBE 1.0: speech to text on the cube. LIVE text, RECORD into text files on the TF card (works offline, catches up), its own WiFi page at 192.168.4.1",
+  "date": "2026-11-26T22:43Z"
+}

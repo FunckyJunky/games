@@ -167,6 +167,12 @@ static void scanCheck() {
 
 static void timeSynced(struct timeval*) { S.timeOk = true; boardSetRtcFromSystem(); }
 
+// Another firmware built from these files (EAR-CUBE) can add its own pages (before ours, so its "/" wins) and keep
+// its own WiFi hotspot on all the time. ERROR-CUBE and PICO-CUBE have neither: these are the empty defaults.
+__attribute__((weak)) void netWebExtra(WebServer&) {}
+// true = keep a hotspot on; name / pass filled in when given (pass "" = open)
+__attribute__((weak)) bool netHotspot(char*, size_t, char*, size_t) { return false; }
+
 // ------------------------------------------------------------------ the cube's own web page (also the phone setup page)
 static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1"><title>ERROR-CUBE</title><style>
@@ -306,6 +312,7 @@ static void filesApi() {
 
 static void webSetup() {
   web = new WebServer(80);
+  netWebExtra(*web);
   filesApi();
   web->on("/", [] { web->send_P(200, "text/html", PAGE); });
   web->on("/info.json", [] {
@@ -340,7 +347,8 @@ static void webSetup() {
   });
   // phone setup: every other address opens the page (captive portal)
   web->onNotFound([] {
-    if (S.portal) { web->sendHeader("Location", "http://192.168.4.1/"); web->send(302, "text/plain", ""); }
+    // only a phone on the cube's own WiFi goes to the setup page (not one on the home WiFi)
+    if (S.portal && web->client().localIP() == WiFi.softAPIP()) { web->sendHeader("Location", "http://192.168.4.1/"); web->send(302, "text/plain", ""); }
     else web->send(404, "text/plain", "Not found");
   });
   web->begin();
@@ -350,8 +358,10 @@ void netPortal(bool on) {
   if (on == (dns != nullptr)) { S.portal = on; return; }
   if (on) {
     WiFi.mode(WIFI_AP_STA);
-    snprintf(S.portalName, sizeof(S.portalName), "ERROR-%s", S.host);
-    WiFi.softAP(S.portalName);
+    char name[33] = "", pass[65] = "";
+    if (!netHotspot(name, sizeof(name), pass, sizeof(pass)) || !name[0]) snprintf(name, sizeof(name), "ERROR-%s", S.host);
+    snprintf(S.portalName, sizeof(S.portalName), "%s", name);
+    WiFi.softAP(S.portalName, strlen(pass) >= 8 ? pass : nullptr);
     delay(100);
     dns = new DNSServer();
     dns->start(53, "*", WiFi.softAPIP());
@@ -409,6 +419,10 @@ void netStep() {
   if (web) web->handleClient();
   if (dns) dns->processNextRequest();
   if (!radioWanted()) return;
+  // a hotspot that stays on (EAR-CUBE): back on when it went off, never switched off after joining
+  static uint32_t hsAt = 0;
+  bool keepHs = netHotspot(nullptr, 0, nullptr, 0);
+  if (keepHs && !S.portal && now - hsAt > 3000) { hsAt = now; netPortal(true); }
   wl_status_t st = WiFi.status();
   if (st == WL_CONNECTED) {
     if (S.net != NET_UP) {
@@ -426,10 +440,10 @@ void netStep() {
         timeStarted = true;
       }
       // connected: the phone setup WiFi can go after a minute
-      if (S.portal) retryAt = now + 60000;
+      if (S.portal && !keepHs) retryAt = now + 60000;
       uiDirty();
     }
-    if (S.portal && retryAt && now > retryAt) { netPortal(false); retryAt = 0; }
+    if (S.portal && retryAt && now > retryAt) { if (!keepHs) netPortal(false); retryAt = 0; }
     static uint32_t rs = 0;
     if (now - rs > 3000) { rs = now; S.rssi = WiFi.RSSI(); }
     return;
@@ -443,5 +457,9 @@ void netStep() {
     else { S.net = NET_FAIL; retryAt = now + 60000; tryIdx = -1; }
     uiDirty();
   }
-  if ((S.net == NET_FAIL || S.net == NET_NOSAVED) && retryAt && now > retryAt && nSaved) { retryAt = 0; tryIdx = -1; tryNext(); }
+  // (a phone on the hotspot: no new tries, they make the hotspot hop channels and drop the phone)
+  if ((S.net == NET_FAIL || S.net == NET_NOSAVED) && retryAt && now > retryAt && nSaved) {
+    if (keepHs && WiFi.softAPgetStationNum() > 0) retryAt = now + 30000;
+    else { retryAt = 0; tryIdx = -1; tryNext(); }
+  }
 }

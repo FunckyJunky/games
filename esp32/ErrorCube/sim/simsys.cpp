@@ -161,6 +161,7 @@ void netLinkState() {}
 void netUpdateCheck() { S.upd = UPD_LATEST; strcpy(S.updVer, CUBE_VERSION); }
 void netUpdateInstall() {}
 void netInstallPico() { S.upd = UPD_LOADING; S.updPct = 37; snprintf(S.updMsg, sizeof(S.updMsg), "PICO-CUBE 1.0"); }
+void netInstallEar() { S.upd = UPD_LOADING; S.updPct = 37; snprintf(S.updMsg, sizeof(S.updMsg), "EAR-CUBE 1.0"); }
 bool netInstallFile(const char*) { return false; }
 void netSetFocus(int) {}
 bool netWho(WhoList& w) {

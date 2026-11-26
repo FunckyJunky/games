@@ -18,7 +18,7 @@ It starts straight into its carts. Page: [error.blue/pico8](https://error.blue/p
 Both are built for `app3M_fat9M_16MB` (two 3 MB app slots + the 9 MB FAT drive C:), so each installs the other over
 WiFi into the free slot, with rollback (a firmware that doesn't come up for 30 s is replaced by the one before):
 
-- ERROR-CUBE 1.5.3+: SYSTEM > UPDATE > **P8 PICO-8** reads /pico8/flash/firmware.json and installs pico.bin.
+- ERROR-CUBE 1.5.3+: SYSTEM > UPDATE > **P8 PICO-8** (1.5.4+: **FW Other > PICO-CUBE**) reads /pico8/flash/firmware.json and installs pico.bin.
 - PICO-CUBE: SETUP > **BACK TO ERROR-CUBE** reads /cube/flash/firmware.json and installs cube.bin.
 
 Settings (NVS + C:\cube.cfg), saved WiFi and files are shared: the Cfg struct is the same source.

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EAR-CUBE · install with USB</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  body { margin: 0; min-height: 100vh; background: #031208; color: #39ff7a; font: 24px/1.25 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.45); }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 40px; }
+  h1 { background: #39ff7a; color: #031208; text-shadow: none; font-weight: normal; font-size: 28px; margin: 0 -16px 16px; padding: 6px 16px; }
+  h2 { font-weight: normal; font-size: 24px; margin: 26px 0 6px; border-bottom: 3px double #39ff7a; }
+  a { color: #b8ffd0; }
+  .dim { color: #1fa04c; }
+  ol li { margin: 6px 0; }
+  .btn { font: inherit; font-size: 28px; background: #39ff7a; color: #031208; border: 0; padding: 8px 22px; cursor: pointer; }
+  esp-web-install-button { --esp-tools-button-color: #39ff7a; --esp-tools-button-text-color: #031208; --esp-tools-button-border-radius: 0; }
+  .box { border: 3px double #1fa04c; padding: 10px 14px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>EAR-CUBE · INSTALL WITH USB</h1>
+  <p>EAR-CUBE is the cube's third firmware: speech to text. For the Waveshare <b>ESP32-S3-Touch-AMOLED-2.16</b>.
+  Use Chrome or Edge on a computer.</p>
+  <div class="box">
+    <b>Already running ERROR-CUBE 1.5.4 or newer?</b> No cable needed: on the cube open <b>SYSTEM &gt; UPDATE</b>, press
+    <b>FW Other</b>, then <b>EAR-CUBE</b>. It downloads EAR-CUBE over WiFi and restarts in it. Your WiFi, settings and files stay.
+  </div>
+  <ol>
+    <li>Plug the cube into this computer with a USB-C cable that carries data.</li>
+    <li>Press INSTALL and pick the cube's port (<i>USB JTAG/serial debug unit</i>, or COMx).</li>
+    <li>Asked to erase? <b>No</b> keeps your WiFi, settings and files (C:\). <b>Yes</b> starts clean.</li>
+    <li>The cube restarts in EAR-CUBE. No WiFi yet: join its own WiFi (EAR-CUBE-XXXX, the password is in SETUP &gt; HOTSPOT) and open 192.168.4.1, WIFI tab.</li>
+  </ol>
+  <p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate" class="btn" id="inst">INSTALL EAR-CUBE</button>
+      <span slot="unsupported">This browser can't talk to USB boards. Use Chrome or Edge on a computer.</span>
+      <span slot="not-allowed">Open this page over https.</span>
+    </esp-web-install-button>
+  </p>
+  <div class="box">
+    <b>Or without a browser (Windows):</b> <a href="EAR-CUBE-flash.zip" download>EAR-CUBE-flash.zip</a>: unzip it, plug the cube in,
+    double-click <b>flash.bat</b>. It finds esptool (from the Arduino IDE, or pip) and the cube's port by itself, and erases nothing.
+  </div>
+  <div class="box dim">
+    It doesn't connect? Hold BOOT (the right button, "BOOT/-"), press and let go of PWR, let go of BOOT, then try again.
+  </div>
+
+  <h2>BACK TO ERROR-CUBE</h2>
+  <p>On the cube: <b>SETUP &gt; BACK TO ERROR-CUBE</b> (over WiFi). Or with this cable: <a href="/cube/flash/">install ERROR-CUBE</a>.</p>
+
+  <h2>FOR DEVELOPERS</h2>
+  <p class="dim">Firmware <span id="ver">?</span> · <a href="firmware.json">firmware.json</a> · <a href="ear.bin">ear.bin</a> (app at 0x10000).
+  Source: esp32/EarCube in the games repo (it shares ERROR-CUBE's board, drawing and interface). New version: tools/ear-fwpub.sh, then push.</p>
+  <p><a href="/ear/">&lt; EAR-CUBE</a></p>
+</main>
+<script>
+fetch('firmware.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+  document.getElementById('ver').textContent = j.ver + ' (' + (j.date || '') + ')';
+  document.getElementById('inst').textContent = 'INSTALL EAR-CUBE ' + j.ver;
+}).catch(function () {});
+</script>
+</body>
+</html>
