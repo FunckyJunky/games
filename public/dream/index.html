@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DREAM-CUBE · control</title>
+<meta name="description" content="DREAM-CUBE: the cube listens and turns what's said into a little animated 3D world. Its scenes, buttons and settings.">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root { --fg: #39ff7a; --dim: #1fa04c; --bg: #031208; --red: #ff5a6a; --warn: #ffb43a; --hi: #d8ffe5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 22px/1.3 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.45); }
+  main { max-width: 860px; margin: 0 auto; padding: 0 16px 60px; }
+  h1 { background: var(--fg); color: var(--bg); text-shadow: none; font-weight: normal; font-size: 34px; margin: 0 -16px 14px; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+  h1 small { font-size: 22px; }
+  h2 { font-weight: normal; font-size: 26px; margin: 28px 0 10px; border-bottom: 3px double var(--fg); }
+  a { color: #b8ffd0; }
+  .dim { color: var(--dim); } .red { color: var(--red); } .warn { color: var(--warn); } .hi { color: var(--hi); }
+  button, .btn { font: inherit; font-size: 22px; background: var(--fg); color: var(--bg); text-shadow: none; border: 0; padding: 5px 16px; margin: 4px 8px 4px 0; cursor: pointer; }
+  button.b2 { background: none; color: var(--fg); border: 2px solid var(--fg); }
+  button.rm { background: none; color: var(--red); border: 2px solid var(--red); }
+  button:disabled { opacity: .35; cursor: default; }
+  input, select, textarea { font: inherit; font-size: 22px; background: #000; color: var(--fg); border: 2px solid var(--fg); padding: 4px 8px; width: 100%; }
+  textarea { height: 76px; resize: vertical; }
+  .box { border: 3px double var(--dim); padding: 10px 14px; margin: 12px 0; }
+  .bar { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  #dot { width: 16px; height: 16px; border-radius: 50%; background: var(--dim); display: inline-block; }
+  #dot.on { background: var(--fg); box-shadow: 0 0 10px var(--fg); } #dot.off { background: var(--red); }
+  #now { font-size: 40px; color: var(--hi); margin: 8px 0 0; letter-spacing: 1px; }
+  #heard { min-height: 1.3em; }
+  .scene { border-left: 5px solid var(--fg); padding: 8px 12px; margin: 10px 0; background: rgba(57,255,122,.05); }
+  .scene.cur { border-color: var(--warn); }
+  .scene .t { font-size: 28px; color: var(--hi); }
+  .scene .w { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0; }
+  .scene .things { font-size: 30px; letter-spacing: 4px; text-shadow: none; }
+  .scene button { font-size: 19px; padding: 2px 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+  label { display: block; margin: 8px 0 2px; color: var(--dim); }
+  .code { font-size: 44px; letter-spacing: 6px; }
+  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--fg); color: var(--bg); text-shadow: none; padding: 6px 16px; display: none; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } #now { font-size: 32px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1><span>C:\&gt;DREAM-CUBE</span><small id="hcode"></small></h1>
+
+  <section id="link">
+    <p>The <b>DREAM-CUBE</b> listens, and turns what's said into a little animated 3D world on its screen. This page shows
+    its scenes, has its buttons and settings, and lets you type words for it to dream.</p>
+    <div class="box">
+      <label>THE CUBE'S CODE (8 letters: on the cube, SETUP &gt; CONTROL PAGE, or scan the QR code there)</label>
+      <form id="lf" class="bar"><input id="codeIn" maxlength="8" autocomplete="off" style="max-width:260px;text-transform:uppercase"><button>LINK</button></form>
+      <div id="lmsg" class="dim"></div>
+    </div>
+    <p>No DREAM-CUBE yet? <a href="flash/">Install it with USB</a> (flash.bat) on the Waveshare ESP32-S3-Touch-AMOLED-2.16,
+    or from ERROR-CUBE: SYSTEM &gt; UPDATE &gt; FW Other &gt; DREAM-CUBE.</p>
+  </section>
+
+  <section id="app" hidden>
+    <div class="box">
+      <div class="bar"><span id="dot"></span><span id="online">...</span><span id="st" class="hi"></span><span id="meta" class="dim"></span></div>
+      <div id="now">...</div>
+      <div id="heard" class="dim"></div>
+      <div class="bar" style="margin-top:8px">
+        <button id="bListen">PAUSE</button>
+        <button class="b2" data-c="wake">SCREEN ON</button><button class="b2" data-c="sleep">SCREEN OFF</button>
+        <button class="b2" data-c="prev">&lt; OLDER</button><button class="b2" data-c="next">NEWER &gt;</button>
+      </div>
+    </div>
+
+    <h2>DREAM OF...</h2>
+    <form id="sf"><textarea id="say" placeholder="type anything: a story, a wish, what happened today. The cube shows it."></textarea>
+    <div class="bar"><button>DREAM IT</button><span id="smsg" class="dim"></span></div></form>
+
+    <h2>SCENES <span class="dim" id="count"></span></h2>
+    <div id="scenes"><p class="dim">Nothing yet: talk near the cube (it has to be on the internet), or type above.</p></div>
+    <div class="bar"><button class="rm" id="bClear">DELETE ALL</button></div>
+
+    <h2>SETTINGS</h2>
+    <form id="cf"><div class="grid">
+      <div><label>NEW SCENE</label><select name="often"><option value="0">OFTEN (every few seconds of talk)<option value="1">NORMAL<option value="2">CALM (less often)</select></div>
+      <div><label>THINKING</label><select name="mind"><option value="0">QUICK<option value="1">SMART (slower, more detail)</select></div>
+      <div><label>WORDS ON SCREEN</label><select name="words"><option value="1">ON<option value="0">OFF</select></div>
+      <div><label>TITLE ON SCREEN</label><select name="title"><option value="1">ON<option value="0">OFF</select></div>
+      <div><label>CAMERA</label><select name="cam"><option value="0">STILL<option value="1">SLOW<option value="2">NORMAL<option value="3">FAST</select></div>
+      <div><label>PIXELS</label><select name="soft"><option value="1">SMOOTH<option value="0">SHARP</select></div>
+      <div><label>DETAIL</label><select name="detail"><option value="1">FULL<option value="0">LESS (FASTER)</select></div>
+      <div><label>A NEW SCENE WAKES THE SCREEN</label><select name="wake"><option value="1">YES<option value="0">NO</select></div>
+      <div><label>LANGUAGE</label><select name="lang" id="lang"></select></div>
+      <div><label>WHAT COUNTS AS SPEECH</label><select name="sens"><option value="0">LOUD ONLY<option value="1">NORMAL<option value="2">QUIET TOO<option value="3">EVERYTHING</select></div>
+      <div><label>MICROPHONE GAIN</label><select name="gain" id="gain"></select></div>
+      <div><label>MICROPHONES</label><select name="mics"><option value="0">BOTH<option value="1">LEFT<option value="2">RIGHT</select></div>
+    </div>
+    <div class="bar"><button>SAVE TO THE CUBE</button><span id="cmsg" class="dim"></span></div></form>
+
+    <h2>THIS PAGE</h2>
+    <p>Linked to the cube with code <span class="code hi" id="code"></span>. Anyone with this code (or this page's address)
+    can see its scenes and use its buttons: give it only to people you trust. A new code: on the cube, SETUP &gt; NEW CODE.</p>
+    <div class="bar"><button class="b2" id="bUnlink">FORGET THIS CUBE HERE</button><a href="flash/">INSTALL / UPDATE WITH USB</a></div>
+    <p class="dim">The cube's own WiFi (DREAM-CUBE-XXXX, page http://192.168.4.1) sets its home WiFi and password. Scenes are made on error.blue
+    (speech to text: Whisper; the scene: an AI on Cloudflare Workers AI, or a word list when the AI isn't there). The sound isn't kept.</p>
+  </section>
+  <div id="toast"></div>
+</main>
+<script>
+const $ = (i) => document.getElementById(i);
+const LANGS = ["AUTO", "NEDERLANDS", "ENGLISH", "DEUTSCH", "FRANÇAIS", "УКРАЇНСЬКА", "РУССКИЙ", "ESPAÑOL", "ITALIANO", "POLSKI", "PORTUGUÊS", "TÜRKÇE"];
+const GAINS = ["0 dB", "3 dB", "6 dB", "9 dB", "12 dB", "15 dB", "18 dB", "21 dB", "24 dB", "27 dB", "30 dB", "33 dB", "34.5 dB", "36 dB", "37.5 dB"];
+const ICON = { person: "🧍", child: "🧒", robot: "🤖", ghost: "👻", alien: "👽", monster: "👾", dog: "🐕", cat: "🐈", bird: "🐦", fish: "🐟", whale: "🐋", horse: "🐎",
+  cow: "🐄", pig: "🐖", sheep: "🐑", rabbit: "🐇", bear: "🐻", panda: "🐼", elephant: "🐘", snake: "🐍", butterfly: "🦋", spider: "🕷️", dinosaur: "🦖", dragon: "🐉",
+  snowman: "⛄", tree: "🌳", pine: "🌲", palm: "🌴", flower: "🌷", bush: "🌿", rock: "🪨", grass: "🌱", mountain: "⛰️", cloud: "☁️", sun: "☀️", moon: "🌙",
+  planet: "🪐", star: "⭐", fire: "🔥", volcano: "🌋", rainbow: "🌈", mushroom: "🍄", cactus: "🌵", house: "🏠", tower: "🏢", castle: "🏰", tent: "⛺",
+  lighthouse: "🗼", windmill: "🌬️", factory: "🏭", bridge: "🌉", car: "🚗", bus: "🚌", truck: "🚚", bike: "🚲", train: "🚂", plane: "✈️", boat: "⛵",
+  ship: "🚢", rocket: "🚀", helicopter: "🚁", ufo: "🛸", ball: "⚽", book: "📖", phone: "📱", computer: "💻", tv: "📺", chair: "🪑", table: "🍽️", bed: "🛏️",
+  cup: "☕", bottle: "🍾", gift: "🎁", clock: "⏰", bulb: "💡", guitar: "🎸", drum: "🥁", piano: "🎹", umbrella: "☂️", key: "🔑", money: "💰", crown: "👑",
+  heart: "❤️", letter: "✉️", pencil: "✏️", camera: "📷", hat: "🎩", trophy: "🏆", flag: "🚩", bag: "👜", drink: "🥤", cake: "🎂", pizza: "🍕", apple: "🍎",
+  burger: "🍔", icecream: "🍦", bread: "🍞", banana: "🍌", carrot: "🥕", egg: "🥚", question: "❓", exclaim: "❗", note: "🎵", bolt: "⚡", check: "✅",
+  cross: "❌", smiley: "😊", sadface: "😢", speech: "💬", up: "📈", down: "📉", globe: "🌍", lock: "🔒", balloon: "🎈", drop: "💧", cube: "🧊",
+  sphere: "🔵", pyramid: "🔺", cylinder: "🥫", ring: "💍", custom: "🧩" };
+const PLACE = { grass: "🌾", forest: "🌲", jungle: "🌴", desert: "🏜️", beach: "🏖️", sea: "🌊", snow: "❄️", mountains: "🏔️", city: "🏙️", room: "🏠", space: "🌌",
+  moon: "🌑", underwater: "🐠", clouds: "☁️", lava: "🌋", stage: "🎤", void: "▦" };
+let code = "", top = 0, scenes = [], cube = null, filled = false, curTitle = "";
+
+function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(e.t); e.t = setTimeout(() => (e.style.display = "none"), 2600); }
+function esc(t) { return String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+async function api(method, body) {
+  const u = "/api/dream/app?code=" + code + (method === "GET" ? "&since=" + top : "");
+  const r = await fetch(u, method === "GET" ? { cache: "no-store" } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+function ago(ms) { if (ms < 0) return "never"; const s = Math.round(ms / 1000); return s < 60 ? s + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : Math.round(s / 3600) + " h ago"; }
+function when(at) { const d = new Date(at); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
+
+function link(c) {
+  c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(c)) { $("lmsg").textContent = "8 letters and digits (no I, O, 0 or 1)"; return; }
+  code = c; localStorage.setItem("dreamCode", c); if (location.hash.slice(1) !== c) history.replaceState(null, "", "#" + c);
+  $("link").hidden = true; $("app").hidden = false; $("code").textContent = c; $("hcode").textContent = c;
+  top = 0; scenes = []; filled = false; poll();
+}
+$("lf").onsubmit = (e) => { e.preventDefault(); link($("codeIn").value); };
+$("bUnlink").onclick = () => { localStorage.removeItem("dreamCode"); history.replaceState(null, "", location.pathname); location.reload(); };
+
+async function poll() {
+  if (!code) return;
+  let j; try { j = await api("GET"); } catch (e) { $("online").textContent = "NO CONNECTION TO ERROR.BLUE"; return; }
+  if (!j.ok) { $("online").textContent = j.error || "ERROR"; return; }
+  cube = j.cube; const st = cube.st || {};
+  $("dot").className = cube.online ? "on" : "off";
+  $("online").textContent = cube.online ? "ONLINE" : cube.seen ? "OFFLINE (seen " + ago(cube.ago) + ")" : "NOT SEEN YET";
+  $("st").textContent = cube.online ? st.st || "" : "";
+  $("meta").textContent = [st.v ? "v" + st.v : "", st.bat >= 0 && st.bat !== undefined ? st.bat + "%" + (st.chg ? "+" : "") : "", st.wifi || "", st.awake === false ? "SCREEN OFF" : ""].filter(Boolean).join(" · ");
+  curTitle = st.title || "";
+  $("now").textContent = curTitle || "...";
+  $("heard").textContent = st.heard ? "“" + st.heard + "”" : "";
+  $("bListen").textContent = st.listen ? "PAUSE" : "LISTEN";
+  $("bListen").dataset.c = st.listen ? "pause" : "listen";
+  if (!filled && st.cfg) { filled = true; for (const k in st.cfg) { const e = document.querySelector("#cf [name=" + k + "]"); if (e) e.value = st.cfg[k]; } }
+  if (j.scenes.length) {
+    const have = new Set(scenes.map((s) => s.n));
+    for (const s of j.scenes) if (!have.has(s.n)) scenes.push(s);
+    scenes.sort((a, b) => b.n - a.n); scenes = scenes.slice(0, 80);
+    top = Math.max(top, j.top || 0);
+  }
+  draw();
+}
+function draw() {
+  $("count").textContent = scenes.length ? "(" + scenes.length + ")" : "";
+  if (!scenes.length) return;
+  $("scenes").innerHTML = scenes.map((s) => {
+    const sc = s.scene || {};
+    const th = (sc.things || []).map((t) => (ICON[t.m] || "🧩").repeat(Math.min(t.n || 1, 4))).join(" ");
+    const tags = [PLACE[sc.place] ? PLACE[sc.place] + " " + sc.place : sc.place, sc.time, sc.weather !== "clear" ? sc.weather : "", sc.mood !== "neutral" ? sc.mood : "", sc.fx !== "none" ? sc.fx : ""].filter(Boolean);
+    return `<div class="scene${s.title === curTitle ? " cur" : ""}"><div class="t">${esc(s.title)}</div>
+      <div class="things">${th}</div>
+      <div class="w dim"><span>${esc(when(s.at))}</span>${tags.map((t) => "<span>" + esc(t) + "</span>").join("")}</div>
+      ${s.said ? `<div>“${esc(s.said)}”</div>` : ""}
+      <div class="bar"><button class="b2" data-show="${s.n}">SHOW ON THE CUBE</button><button class="rm" data-rm="${s.n}">DELETE</button></div></div>`;
+  }).join("");
+}
+$("scenes").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.show) { const r = await api("POST", { c: "show", a: Number(b.dataset.show) }); toast(r.ok ? "ON ITS WAY TO THE CUBE" : r.error || "DIDN'T WORK"); }
+  if (b.dataset.rm) { await api("POST", { c: "rm", a: Number(b.dataset.rm) }); scenes = scenes.filter((s) => s.n !== Number(b.dataset.rm)); draw(); if (!scenes.length) location.reload(); }
+};
+$("bClear").onclick = async () => { if (!confirm("Delete all the scenes kept here? (The cube keeps its own.)")) return; await api("POST", { c: "clear" }); scenes = []; location.reload(); };
+document.querySelectorAll("[data-c]").forEach((b) => (b.onclick = async () => {
+  const c = b.dataset.c; const r = await api("POST", { c });
+  toast(r.ok ? ({ listen: "LISTENING", pause: "PAUSED", wake: "SCREEN ON", sleep: "SCREEN OFF", prev: "OLDER", next: "NEWER" }[c] || "SENT") + " (in a few seconds)" : r.error || "DIDN'T WORK");
+  setTimeout(poll, 4500);
+}));
+$("sf").onsubmit = async (e) => {
+  e.preventDefault(); const t = $("say").value.trim(); if (!t) return;
+  $("smsg").textContent = "DREAMING...";
+  const r = await api("POST", { c: "say", a: t });
+  $("smsg").textContent = r.ok ? "“" + r.scene.title + "”: ON ITS WAY TO THE CUBE" : r.error || "DIDN'T WORK";
+  if (r.ok) { $("say").value = ""; poll(); }
+};
+$("cf").onsubmit = async (e) => {
+  e.preventDefault(); const a = {}; for (const [k, v] of new FormData($("cf"))) a[k] = Number(v);
+  const r = await api("POST", { c: "cfg", a }); $("cmsg").textContent = r.ok ? "SENT: THE CUBE TAKES IT IN A FEW SECONDS" : r.error || "DIDN'T WORK";
+};
+$("lang").innerHTML = LANGS.map((n, i) => `<option value="${i}">${n}`).join("");
+$("gain").innerHTML = GAINS.map((n, i) => `<option value="${i}">${n}`).join("");
+const start = location.hash.slice(1) || localStorage.getItem("dreamCode");
+if (start) link(start);
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

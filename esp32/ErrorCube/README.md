@@ -35,6 +35,13 @@ Swipe down from the top (or tap the status bar): QUICK (light, volume, WiFi, sou
 Swipe right: back. Buttons (default, SETUP > BUTTONS to change): - / + move, hold + = OK, hold - = BACK,
 - and + together = QUICK, PWR = screen off/on, hold PWR = power menu (6 s = hard off). LIVE opens by itself when the phone sends video or sound.
 
+## New in 1.5.5: DREAM-CUBE
+
+- **DREAM-CUBE, the cube's fourth firmware** (esp32/DreamCube, error.blue/dream): the microphones listen, error.blue
+  turns what's said into a scene (src/dream.js), and the cube draws it as a little animated 3D world. UPDATE >
+  **FW Other** now offers PICO-CUBE, EAR-CUBE and DREAM-CUBE. Back: DREAM-CUBE's SETUP > BACK TO ERROR-CUBE.
+- Shared files: config.h includes `src/dream/dream_config.h` when it's there (like EAR-CUBE's), `DREAM_CUBE_INFO`.
+
 ## New in 1.5.4: EAR-CUBE
 
 - **EAR-CUBE, the cube's third firmware** (esp32/EarCube, error.blue/ear): speech to text. The two microphones listen,

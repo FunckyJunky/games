@@ -294,6 +294,7 @@ void netUpdateCheck();
 void netUpdateInstall();
 void netInstallPico();                        // 1.5.3: install PICO-CUBE (the PICO-8 firmware) from error.blue/pico8
 void netInstallEar();                         // 1.5.4: install EAR-CUBE (speech to text) from error.blue/ear
+void netInstallDream();                       // 1.5.5: install DREAM-CUBE (speech -> 3D scenes) from error.blue/dream
 bool netInstallFile(const char* path);        // firmware from a file (TF card)
 void netSetFocus(int what);                   // what's on screen: polls that more often
 void netOffline(bool on);                     // OFFLINE: WiFi off and no internet jobs (cfg.offline)

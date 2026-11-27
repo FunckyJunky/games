@@ -406,10 +406,10 @@ static void worker(void*) {
         if (request("GET", p, nullptr, &body, &n) == 200 && body) parseChat(body, false);
         break;
       }
-      case J_OTHER: {     // another firmware for the cube (id 0 PICO-CUBE, 1 EAR-CUBE): look it up, install it
-        const char* other = j.id == 1 ? "EAR-CUBE" : "PICO-CUBE";
+      case J_OTHER: {     // another firmware for the cube (id 0 PICO-CUBE, 1 EAR-CUBE, 2 DREAM-CUBE): look it up, install it
+        const char* other = j.id == 2 ? "DREAM-CUBE" : j.id == 1 ? "EAR-CUBE" : "PICO-CUBE";
         S.upd = UPD_CHECKING; snprintf(S.updMsg, sizeof(S.updMsg), "LOOKING FOR %s", other);
-        code = request("GET", j.id == 1 ? EAR_CUBE_INFO : PICO_CUBE_INFO, nullptr, &body, &n);
+        code = request("GET", j.id == 2 ? DREAM_CUBE_INFO : j.id == 1 ? EAR_CUBE_INFO : PICO_CUBE_INFO, nullptr, &body, &n);
         FwInfo o = {};
         JsonDocument d;
         if (code != 200 || !body) { S.upd = UPD_FAIL; snprintf(S.updMsg, sizeof(S.updMsg), "ERROR.BLUE: %d", code); break; }
@@ -478,6 +478,7 @@ void netUpdateCheck() { if (want(J_FW)) { S.upd = UPD_CHECKING; post(J_FW); } }
 void netUpdateInstall() { if (S.upd == UPD_NEW && want(J_OTA)) post(J_OTA); }
 void netInstallPico() { if (want(J_OTHER) && S.upd != UPD_LOADING) { S.upd = UPD_CHECKING; post(J_OTHER); } }
 void netInstallEar() { if (want(J_OTHER) && S.upd != UPD_LOADING) { S.upd = UPD_CHECKING; post(J_OTHER, 1); } }
+void netInstallDream() { if (want(J_OTHER) && S.upd != UPD_LOADING) { S.upd = UPD_CHECKING; post(J_OTHER, 2); } }
 bool netInstallFile(const char* path) {
   const char* e = strrchr(path, '.');
   if (!e || strcasecmp(e, ".bin")) return false;

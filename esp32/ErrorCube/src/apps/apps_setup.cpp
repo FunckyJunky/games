@@ -437,9 +437,17 @@ static void askEar() {
     netInstallEar();
   });
 }
+static void askDream() {
+  ask("DREAM-CUBE", "The microphones listen, error.blue turns what's said into a little animated 3D world on the screen. Control page: error.blue/dream. It restarts in it; WiFi, settings and files stay. Back: SETUP > BACK TO ERROR-CUBE.",
+      {"INSTALL", "CANCEL"}, [](int i) {
+    if (i) return;
+    if (S.net != NET_UP) { ask("NO WIFI", "Join a WiFi network first.", {"OK"}, nullptr); return; }
+    netInstallDream();
+  });
+}
 static void askOther() {
-  ask("OTHER FIRMWARE", "The cube can also be:\nPICO-CUBE: a PICO-8 player\nEAR-CUBE: speech to text", {"PICO-CUBE", "EAR-CUBE", "CANCEL"}, [](int i) {
-    if (i == 0) askPico(); else if (i == 1) askEar();
+  ask("OTHER FIRMWARE", "The cube can also be:\nPICO-CUBE: a PICO-8 player\nEAR-CUBE: speech to text\nDREAM-CUBE: speech to 3D", {"PICO-CUBE", "EAR-CUBE", "DREAM-CUBE", "CANCEL"}, [](int i) {
+    if (i == 0) askPico(); else if (i == 1) askEar(); else if (i == 2) askDream();
   });
 }
 struct Update : Screen {

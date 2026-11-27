@@ -1,8 +1,8 @@
 {
-  "ver": "1.5.4",
+  "ver": "1.5.5",
   "path": "/cube/flash/cube.bin",
-  "size": 2678240,
-  "md5": "19d224d6b0d3d402e32b1f73a9e8a864",
-  "notes": "1.5.4: UPDATE > FW > EAR-CUBE installs EAR-CUBE (speech to text: LIVE text, long recordings into text files, its own WiFi page)",
-  "date": "2026-11-26T22:42Z"
+  "size": 2679168,
+  "md5": "2927405ced345a86205607a5014a262c",
+  "notes": "FW Other: DREAM-CUBE (speech becomes little 3D worlds)",
+  "date": "2026-11-27T18:07Z"
 }

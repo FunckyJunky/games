@@ -435,7 +435,7 @@ export async function handleDream(request, env, ctx, path) {
     }
     if (c === "say") {
       const st = JSON.parse((await cube(env, code)).st || "{}");
-      const r = await makeScene(request, env, ctx, body.a, st.lang || "", "", st.mind === 1 || st.mind === "smart");
+      const r = await makeScene(request, env, ctx, body.a, st.lang || "", "", (st.cfg && st.cfg.mind === 1));
       const n = await addScene(env, code, r.scene);
       await addCmd(env, code, "scene", JSON.stringify({ n, ...r.scene }));
       return json({ ok: true, n, scene: r.scene, via: r.via });

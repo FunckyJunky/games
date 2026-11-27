@@ -1,0 +1,1 @@
+../../../EarCube/src/ear/LICENSE-es7210-Apache-2.0.txt

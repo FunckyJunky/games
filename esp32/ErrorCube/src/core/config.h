@@ -12,13 +12,18 @@
 #if !defined(EAR_CUBE) && __has_include("../ear/ear_config.h")
 #include "../ear/ear_config.h"
 #endif
-#if !defined(PICO_CUBE) && !defined(EAR_CUBE)
+// DREAM-CUBE (esp32/DreamCube): src/dream/dream_config.h
+#if !defined(DREAM_CUBE) && __has_include("../dream/dream_config.h")
+#include "../dream/dream_config.h"
+#endif
+#if !defined(PICO_CUBE) && !defined(EAR_CUBE) && !defined(DREAM_CUBE)
 #define FW_NAME "ERROR-CUBE"
-#define CUBE_VERSION "1.5.4"
+#define CUBE_VERSION "1.5.5"
 #define FW_INFO_PATH "/cube/flash/firmware.json"     // newest firmware: {ver, path, size, md5, notes}
 #endif
 #define PICO_CUBE_INFO "/pico8/flash/firmware.json"  // the firmwares for this cube: each can install the others
 #define EAR_CUBE_INFO "/ear/flash/firmware.json"
+#define DREAM_CUBE_INFO "/dream/flash/firmware.json"
 #define ERROR_CUBE_INFO "/cube/flash/firmware.json"
 #ifndef THEME_COLOR
 #define THEME_COLOR cfg.color                        // SCHEMES[]: PICO-CUBE has its own
