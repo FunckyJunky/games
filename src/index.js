@@ -40,6 +40,7 @@ import { DurableObject } from "cloudflare:workers";
 export { HomeFront } from "./homefront.js";
 import { handleFunda, fundaCron } from "./funda.js";
 import { handleStt } from "./stt.js";
+import { handleDream } from "./dream.js";
 
 const GAME_RE = /^[a-z0-9-]{1,40}$/;
 const PLAYER_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -1017,6 +1018,8 @@ export default {
 
       // EAR-CUBE: a piece of speech (WAV) -> text (Whisper on Workers AI, src/stt.js)
       if (path === "/api/stt") return await handleStt(request, env, ctx);
+      // DREAM-CUBE: words -> a little 3D scene, and its control page (src/dream.js)
+      if (path === "/api/dream" || path.startsWith("/api/dream/")) return await handleDream(request, env, ctx, path);
 
       if (path.startsWith("/api/")) return json({ error: "not found" }, 404);
 
