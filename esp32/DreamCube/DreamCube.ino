@@ -4,14 +4,14 @@
 // it in 3D, animated: things walk, fly, dance, sleep; rain falls, hearts float up, the camera circles slowly.
 //   the DREAM view    the scene, its title, the words it heard. Drag: turn the camera. Tap: menu. - / +: older / newer
 //   error.blue/dream  the control page: the scenes, start / pause, the screen, settings, type words to dream
-//   its own WiFi      DREAM-CUBE-XXXX (always on): http://192.168.4.1 to set the home WiFi and password
+//   WiFi              no WiFi yet: the cube shows the networks it finds; pick one, type the password. Only when
+//                     it's connected does DREAM-CUBE start.
 // The fourth firmware for the cube: ERROR-CUBE installs it (UPDATE > FW Other > DREAM-CUBE) and it installs ERROR-CUBE
 // back (SETUP > BACK TO ERROR-CUBE). Same settings, WiFi and files. Or with USB: flash.bat.
 // How it's built: ERROR-CUBE's own parts, shared (symlinks to ../ErrorCube/src):
 //   src/board  the hardware      src/core  drawing, settings      src/ui  screens, lists, dialogs, keyboard
 //   src/net    WiFi + the cube's web server (net.cpp, shared), error.blue for DREAM-CUBE (enet.cpp)
-//   src/dream  DREAM-CUBE itself: the 3D (r3d, models, scene), listening (listen.cpp + EAR-CUBE's mic.cpp), screens,
-//              the hotspot page (web.cpp + web_page.h)
+//   src/dream  DREAM-CUBE itself: the 3D (r3d, models, scene), listening (listen.cpp + EAR-CUBE's mic.cpp), screens
 // Build + publish: tools/dream-fwpub.sh (see README.md).
 #include "src/core/sys.h"
 #include "src/ui/ui.h"
@@ -34,10 +34,9 @@ static void netTask(void*) {
 }
 
 void setup() {
-  heap_caps_malloc_extmem_enable(512);           // big allocations to PSRAM: internal RAM for WiFi, TLS and the 3D bands
+  heap_caps_malloc_extmem_enable(512);           // big allocations to PSRAM: internal RAM for WiFi and TLS
   Serial.begin(115200);
   dreamCfgLoad();
-  r3dInit();                                     // the 3D's fast band buffers first, while internal RAM is free
   boardBegin();                                  // also the speaker codec and the I2S bus (sound.cpp)
   appsRegister();
   uiInit();
@@ -50,6 +49,7 @@ void setup() {
   Serial.printf("DREAM-CUBE %s: microphones %s\n", CUBE_VERSION, mic ? "OK" : "NOT FOUND");
   dreamBegin();
   netBegin();
+  if (S.portal) netPortal(false);                // no phone-setup hotspot: WiFi is picked on the cube itself
   cloudBegin();
   xTaskCreatePinnedToCore(netTask, "net", 12288, nullptr, 1, nullptr, 0);
 }
@@ -68,13 +68,13 @@ void loop() {
     boardShow();
   }
   if (!good && millis() > 30000) { good = true; cloudMarkGood(); }
-  // the screen off: a slower CPU, but WiFi stays awake while it listens (the words have to get to error.blue)
+  // the screen off: a slower CPU; WiFi only dozes while it listens (the words have to get to error.blue)
   bool low = !uiAwake() && millis() - asleepAt > 3000;
   if (uiAwake()) asleepAt = millis();
   if (low != slow) {
     slow = low;
     boardSlow(low && !dreamListening() ? true : cfg.saver);
-    netSleepMode(!low || dcfg.hotspot || dreamListening() ? (low ? 1 : 0) : cfg.aodWifi);
+    netSleepMode(!low ? 0 : dreamListening() || dcfg.link ? 1 : cfg.aodWifi);
   }
   delay(uiAwake() ? 1 : 20);
 }

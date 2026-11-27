@@ -285,6 +285,9 @@ void netWifi(bool on);
 void netScan();
 int netScanResults(WifiNet* out, int max);    // -1 = still scanning
 void netJoin(const char* ssid, const char* pass);
+void netStopTrying();                         // no join going on (a network is being picked; scans work)
+extern bool netHold;                          // true: no tries by themselves, only netJoin()
+const char* netReason();                      // why the last join failed ("WRONG PASSWORD?"), "" = none
 int netSaved(char (*ssids)[33], int max);
 void netForget(const char* ssid);
 void netPortal(bool on);                      // phone setup WiFi

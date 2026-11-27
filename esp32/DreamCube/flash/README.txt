@@ -6,9 +6,8 @@ INSTALL
   Nothing is erased: your WiFi, settings and files stay.
 
 FIRST START
-  No WiFi yet? Join the cube's own WiFi (DREAM-CUBE-XXXX, the password is on the cube:
-  SETUP > THE CUBE'S OWN WIFI, or scan the QR code there), open http://192.168.4.1
-  and pick your home WiFi + password.
+  No WiFi yet? The cube shows the WiFi networks it finds: tap yours, type the
+  password on the cube. DREAM-CUBE starts as soon as it's connected.
   Control page: https://error.blue/dream (the cube's code: SETUP > CONTROL PAGE).
 
 FILES (offsets)

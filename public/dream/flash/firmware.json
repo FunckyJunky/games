@@ -1,9 +1,9 @@
 {
   "name": "DREAM-CUBE",
-  "ver": "1.0",
+  "ver": "1.1",
   "path": "/dream/flash/dream.bin",
-  "size": 2464128,
-  "md5": "6111b4dd0ec89c3f03356d2f62928b73",
-  "notes": "The first DREAM-CUBE: what's said becomes a little animated 3D world. Control page: error.blue/dream.",
-  "date": "2026-11-27T18:17Z"
+  "size": 2441376,
+  "md5": "96e7a7433bb99f0c0bd41aa093df4a32",
+  "notes": "WiFi made simple: the cube shows the networks it finds, you pick one and type the password; DREAM-CUBE starts once it's connected. No more hotspot (it made joining get stuck).",
+  "date": "2026-11-27T18:50Z"
 }

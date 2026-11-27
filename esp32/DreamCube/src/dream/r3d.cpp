@@ -7,7 +7,11 @@
 #include <string.h>
 #ifdef ARDUINO
 #include <esp_heap_caps.h>
-static void* fastMem(size_t n) { void* p = heap_caps_malloc(n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); return p ? p : malloc(n); }
+// fast internal RAM only when plenty is left for WiFi and TLS (they need ~70 KB of it); else PSRAM (a bit slower)
+static void* fastMem(size_t n) {
+  void* p = heap_caps_get_free_size(MALLOC_CAP_INTERNAL) > n + 80 * 1024 ? heap_caps_malloc(n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) : nullptr;
+  return p ? p : heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+}
 #else
 static void* fastMem(size_t n) { return malloc(n); }
 #endif
@@ -181,7 +185,7 @@ const Mesh& primMesh(int p) { return meshes[p < 0 || p >= P_N ? 0 : p]; }
 #define MAXS 700
 #define MAXL 500
 #define MAXD 360
-#define BAND 40
+#define BAND 16
 struct STri { float x[3], y[3]; float A, B, C; int16_t ymin, ymax; uint16_t c; uint8_t fl; };
 struct SSpr { float x, y, w, r; uint16_t c; uint8_t shape, a; };
 struct SLin { float x0, y0, x1, y1, w0, w1; uint16_t c; uint8_t a; };
@@ -213,9 +217,7 @@ bool r3dInit() {
   sprs = (SSpr*)malloc(sizeof(SSpr) * MAXS);
   lins = (SLin*)malloc(sizeof(SLin) * MAXL);
   dots = (SDot*)malloc(sizeof(SDot) * MAXD);
-  bandC = (uint16_t*)fastMem(RW * BAND * 2);
-  bandZ = (float*)fastMem(RW * BAND * 4);
-  if (!tris || !sprs || !lins || !dots || !bandC || !bandZ) { free(tris); tris = nullptr; return false; }
+  if (!tris || !sprs || !lins || !dots) { free(tris); tris = nullptr; return false; }
   return true;
 }
 int r3dTris() { return lastTris; }
@@ -530,6 +532,10 @@ static void outRowSoft(uint16_t* out, const uint16_t* p, const uint16_t* n, int 
 }
 void r3dRender(uint16_t* out, bool soft) {
   lastTris = nTri + nTriA;
+  // the band buffers: made at the first picture (after WiFi has taken what it needs)
+  if (!bandC) bandC = (uint16_t*)fastMem(RW * BAND * 2);
+  if (!bandZ) bandZ = (float*)fastMem(RW * BAND * 4);
+  if (!bandC || !bandZ || !tris) return;
   static uint16_t pend[RW];
   for (int b0 = 0; b0 < RH; b0 += BAND) {
     int b1 = b0 + BAND < RH ? b0 + BAND : RH;

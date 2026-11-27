@@ -2,7 +2,7 @@
 #pragma once
 #define DREAM_CUBE 1
 #define FW_NAME "DREAM-CUBE"
-#define CUBE_VERSION "1.0"
+#define CUBE_VERSION "1.1"
 #define FW_INFO_PATH "/dream/flash/firmware.json"     // newest DREAM-CUBE: {ver, path, size, md5, notes}
 #define STT_PATH "/api/stt"                           // error.blue: speech to text (src/stt.js, Whisper)
 #define DREAM_PATH "/api/dream"                       // error.blue: words -> a 3D scene (src/dream.js)

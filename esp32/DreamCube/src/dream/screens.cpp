@@ -1,11 +1,13 @@
-// screens.cpp: DREAM-CUBE's screens. The cube starts straight into the DREAM view:
+// screens.cpp: DREAM-CUBE's screens. Not connected yet: WIFI first (the networks it finds: pick one, type the password);
+// only when it's connected does the rest start, in the DREAM view:
 //   the scene, filling the screen; its title at the top, the words it heard at the bottom, a dot for how it listens.
 //   Drag: turn the camera. Tap: the menu (LISTEN / PAUSE, TYPE, SCENES, SETUP). Buttons: - older scene, + newer.
 //   SCENES  the 40 last ones (tap: show it again)      LINK  the QR code for the control page at error.blue/dream
-//   SETUP   how often, thinking, what's on screen, camera, listening, the hotspot, WiFi, sound + screen, firmware
+//   SETUP   how often, thinking, what's on screen, camera, listening, WiFi, sound + screen, firmware
 // Uses ERROR-CUBE's interface (src/ui), board and drawing as they are, in ERROR-CUBE's colours.
 #include "../ui/ui.h"
 #include "../lib/cubeqr.h"
+#include "../core/g3d.h"
 #include "dream.h"
 #include <string.h>
 #include <strings.h>
@@ -92,7 +94,6 @@ static void drawQr(const char* text, int cx, int y0, int size) {
     for (int x = 0; x < n; x++)
       if (cubeqr_getModule(qr, x, y)) fillRect(x0 + (x + 2) * sc, y0 + (y + 2) * sc, sc, sc, C_BLACK);
 }
-static void hotspotApply() { if (S.portal) netPortal(false); }   // net.cpp turns it on again with the new name / password
 
 // ------------------------------------------------------------------ MIC TEST: what the microphones hear
 struct MicTest : Screen {
@@ -128,47 +129,6 @@ struct MicTest : Screen {
   }
 };
 
-// ------------------------------------------------------------------ PHONE: join the cube's WiFi, open its page
-static std::string wifiQrText() {
-  char name[33]; dreamApName(name, sizeof(name));
-  auto esc = [](const char* s) { std::string o; for (; *s; s++) { if (strchr("\\;,:\"", *s)) o += '\\'; o += *s; } return o; };
-  if (strlen(dcfg.apPass) >= 8) return "WIFI:T:WPA;S:" + esc(name) + ";P:" + esc(dcfg.apPass) + ";;";
-  return "WIFI:T:nopass;S:" + esc(name) + ";;";
-}
-struct Phone : Screen {
-  int page = 0;
-  const char* name() override { return "PHONE"; }
-  bool keepAwake() override { return true; }
-  void draw() override {
-    char name[33]; dreamApName(name, sizeof(name));
-    if (!dcfg.hotspot && !S.portal) {
-      drawTextC(FT, 240, 160, "THE HOTSPOT IS OFF", C_WARN);
-      drawTextC(FT, 240, 200, "SETUP > CUBE'S OWN WIFI: ON", C_DIM, TX_FLAT);
-      if (S.net == NET_UP) { char b[48]; snprintf(b, sizeof(b), "OR ON YOUR WIFI: %s", S.ip); drawTextC(FT, 240, 260, b, C_FG); }
-      fkeysBack(); return;
-    }
-    if (page == 0) {
-      drawText(FT, 15, TOP_Y, "1. JOIN THE CUBE'S WIFI", C_FG);
-      drawQr(wifiQrText().c_str(), 240, 96, 230);
-      drawTextC(FT, 240, 334, name, C_FG);
-      char pw[48];
-      if (strlen(dcfg.apPass) >= 8) snprintf(pw, sizeof(pw), "PASSWORD %s", dcfg.apPass); else snprintf(pw, sizeof(pw), "NO PASSWORD (OPEN)");
-      drawTextC(FT, 240, 366, pw, C_DIM, TX_FLAT);
-    } else {
-      drawText(FT, 15, TOP_Y, "2. OPEN THE PAGE", C_FG);
-      drawQr("http://192.168.4.1/", 240, 96, 230);
-      drawTextC(FT, 240, 334, "http://192.168.4.1", C_FG);
-      drawTextC(FT, 240, 366, "YOUR HOME WIFI + PASSWORD THERE", C_DIM, TX_FLAT);
-    }
-    fkeys({{"ESC", "Back", [] { uiBack(); }}, {page ? "1" : "2", page ? "Join" : "Open", [this] { page = !page; uiDirty(); }}});
-  }
-  bool ev(const Ev& e) override {
-    if (e.t == EV_TAP && e.y < BOT_Y) { page = !page; uiDirty(); return true; }
-    if (e.t == EV_KEY && (e.key == K_NEXT || e.key == K_PREV || e.key == K_OK)) { page = !page; uiDirty(); return true; }
-    return false;
-  }
-};
-
 // ------------------------------------------------------------------ LINK: the control page at error.blue/dream
 static void askNewCode() {
   ask("NEW CODE?", "The control page link with the old code stops working. Open the new QR code on your phone.", {"NEW CODE", "CANCEL"}, [](int i) {
@@ -194,60 +154,129 @@ struct Link : Screen {
   }
 };
 
-// ------------------------------------------------------------------ WIFI (as in ERROR-CUBE), with the hotspot
-struct Wifi : Screen {
-  WifiNet nets[16]; int nn = -1; char saved[6][33]; int ns = 0;
-  std::vector<Row> rows; ListView L;
+// ------------------------------------------------------------------ WIFI: the networks it finds; pick one, type the password
+// root = the start: when it's connected, the whole interface starts (uiStart -> the DREAM view).
+// While it's open nothing else is tried by itself (netHold), apart from the saved networks at the start.
+struct WifiGate : Screen {
+  bool root, autoTry = false;
+  WifiNet nets[16]; int nn = -1;
+  ListView L;
+  int mode = 0;                           // 0 pick, 1 connecting
+  uint32_t joinAt = 0, scanAt = 0;
+  char joining[33] = "", failMsg[72] = "";
+  explicit WifiGate(bool r) : root(r) {}
   const char* name() override { return "WIFI"; }
-  void enter() override { L.setBox(15, 92, 450, 330); L.rowH = 55; if (cfg.wifiOn) netScan(); }
-  void join(const char* ssid, bool open, bool known) {
-    std::string s = ssid;
-    if (open || known) { netJoin(ssid, nullptr); toast("JOINING..."); return; }
-    kbOpen("PASSWORD", "", 63, [s](const char* p) { netJoin(s.c_str(), p); toast("JOINING..."); }, true);
+  bool keepAwake() override { return true; }
+  bool noSwipeBack() override { return root; }
+  void enter() override {
+    L.setBox(15, 134, 450, 290); L.rowH = 56;
+    if (root && S.net == NET_JOINING) { autoTry = true; mode = 1; joinAt = msNow(); snprintf(joining, sizeof(joining), "%s", S.ssid); }
+    else scan();
   }
-  void build() {
-    rows.clear();
-    rows.push_back(choice("WIFI", &cfg.wifiOn, 2, [](int i) { return i ? "ON" : "OFF"; }, [] { netWifi(cfg.wifiOn); }));
-    rows.push_back(info("STATUS", [](char* o) { static const char* N[5] = {"OFF", "JOINING", "CONNECTED", "FAILED", "NONE SAVED"}; snprintf(o, 40, "%s", N[S.net % 5]); }));
-    if (S.net == NET_UP) {
-      rows.push_back(info("NETWORK", [](char* o) { snprintf(o, 40, "%s", S.ssid); utf8Cut(o, 16); }));
-      rows.push_back(info("ADDRESS", [](char* o) { snprintf(o, 40, "%s", S.ip); }));
-    }
-    if (!cfg.wifiOn) return;
-    rows.push_back(heading("FROM A PHONE (EASIEST)"));
-    rows.push_back(action("QR CODES", [] { uiOpen(new Phone()); }, [](char* o) { strcpy(o, ">"); }));
-    rows.push_back(info("1. JOIN WIFI", [](char* o) { if (S.portal) snprintf(o, 40, "%s", S.portalName); else strcpy(o, dcfg.hotspot ? "STARTING..." : "HOTSPOT OFF"); utf8Cut(o, 18); }));
-    rows.push_back(info("   PASSWORD", [](char* o) { snprintf(o, 40, "%s", dcfg.apPass[0] ? dcfg.apPass : "NONE"); }));
-    rows.push_back(info("2. OPEN", [](char* o) { strcpy(o, "192.168.4.1"); }));
-    rows.push_back(heading("NETWORKS"));
-    if (nn < 0) rows.push_back(info("SCANNING...", nullptr));
-    for (int i = 0; i < nn; i++) {
-      WifiNet* w = &nets[i];
-      Row r; r.name = w->ssid; r.kind = 0;
-      r.val = [w](char* o) { sprintf(o, "%s%s %s", w->saved ? "*" : "", w->open ? "" : "\xE2\x96\xA0", w->rssi > -60 ? "####" : w->rssi > -70 ? "###" : w->rssi > -80 ? "##" : "#"); };
-      r.act = [this, w](int) { join(w->ssid, w->open, w->saved); };
-      rows.push_back(r);
-    }
-    rows.push_back(action("SCAN AGAIN", [this] { nn = -1; netScan(); }));
-    if (ns) rows.push_back(heading("SAVED"));
-    for (int i = 0; i < ns; i++) {
-      char* s = saved[i];
-      Row r; r.name = s; r.kind = 0; r.val = [](char* o) { strcpy(o, "..."); };
-      r.act = [s](int) {
-        std::string ss = s;
-        ask("SAVED", s, {"JOIN", "FORGET", "CANCEL"}, [ss](int k) { if (k == 0) netJoin(ss.c_str(), nullptr); else if (k == 1) { netForget(ss.c_str()); toast("FORGOTTEN"); } });
-      };
-      rows.push_back(r);
-    }
+  void leave() override { netHold = false; }
+  void scan() {
+    netHold = true; autoTry = false; mode = 0;
+    if (cfg.offline) { cfg.offline = 0; cfgSave(); netOffline(false); }
+    if (!cfg.wifiOn || S.net == NET_OFF) { cfg.wifiOn = 1; cfgSave(); netWifi(true); }
+    if (S.net != NET_UP) netStopTrying();
+    nn = -1; scanAt = msNow(); netScan();
+    uiDirty();
+  }
+  void join(const char* ssid, const char* pass) {
+    netHold = true; autoTry = false;
+    snprintf(joining, sizeof(joining), "%s", ssid); failMsg[0] = 0;
+    netJoin(ssid, pass);
+    mode = 1; joinAt = msNow(); uiDirty();
+  }
+  void pick(int i) {
+    if (i < 0 || i >= nn) return;
+    std::string ss = nets[i].ssid; bool saved = nets[i].saved;
+    if (nets[i].open) { join(ss.c_str(), ""); return; }
+    kbOpen(saved ? "PASSWORD \xC2\xB7 EMPTY = SAVED" : "PASSWORD", "", 63, [this, ss, saved](const char* p) {
+      if (!p[0] && !saved) { toast("TYPE THE PASSWORD"); return; }
+      join(ss.c_str(), p[0] ? p : nullptr);
+    }, false);
+  }
+  void failed(const char* why) {
+    snprintf(failMsg, sizeof(failMsg), "%s: %s", joining, why && why[0] ? why : "COULDN'T CONNECT");
+    utf8Cut(failMsg, 29);
+    scan();
   }
   void tick() override {
-    if (nn < 0) { int k = netScanResults(nets, 16); if (k >= 0) { nn = k; uiDirty(); } }
-    ns = netSaved(saved, 6);
+    if (S.net == NET_UP) {
+      netHold = false;
+      toast("CONNECTED");
+      if (root) uiStart(); else uiBack();   // (this screen is gone after these)
+      return;
+    }
+    uint32_t now = msNow();
+    if (mode == 0) {
+      if (nn < 0) {
+        int k = netScanResults(nets, 16);
+        if (k >= 0) {
+          nn = k;
+          // saved ones first, then the strongest
+          for (int a = 0; a < nn; a++) for (int b = a + 1; b < nn; b++)
+            if ((nets[b].saved && !nets[a].saved) || (nets[b].saved == nets[a].saved && nets[b].rssi > nets[a].rssi)) { WifiNet t = nets[a]; nets[a] = nets[b]; nets[b] = t; }
+          L.n = nn; L.sel = 0; uiDirty();
+        } else if (now - scanAt > 12000) scan();      // a scan that never ended
+      } else if (nn == 0 && now - scanAt > 6000) scan(); // nothing found: look again
+    } else if (autoTry) {
+      // the start: the cube tries its saved networks by itself
+      if (S.net == NET_JOINING) snprintf(joining, sizeof(joining), "%s", S.ssid);
+      else if (S.net == NET_FAIL || S.net == NET_NOSAVED || S.net == NET_OFF) failed(netReason());
+    } else {
+      bool bad = S.net == NET_FAIL || S.net == NET_NOSAVED || now - joinAt > 25000 || (netReason()[0] && now - joinAt > 7000);
+      if (bad) { const char* r = netReason(); char why[40]; snprintf(why, sizeof(why), "%s", r); netStopTrying(); failed(why); }
+    }
     L.tick();
-    redrawIn(1000);
+    redrawIn(150);
   }
-  void draw() override { build(); pathLine("C:\\DREAM\\WIFI>"); drawRows(L, rows); fkeysBack(); }
-  bool ev(const Ev& e) override { build(); return rowsEv(L, rows, e); }
+  void draw() override {
+    pathLine("C:\\DREAM\\WIFI>");
+    uint32_t now = msNow();
+    if (mode == 1) {
+      drawTextC(FT, 240, 130, "CONNECTING TO", C_DIM, TX_FLAT);
+      char n[40]; snprintf(n, sizeof(n), "%s", joining); utf8Cut(n, 18);
+      drawTextC(FB, 240, 170, n, C_FG);
+      int k = (now / 300) % 4; char d[8] = ""; for (int i = 0; i < k; i++) strcat(d, ".");
+      drawTextC(FT, 240, 230, d, C_FG, TX_FLAT);
+      int pct = (int)((now - joinAt) * 100 / 20000); if (pct > 100) pct = 100;
+      meter(60, 280, 360, 26, pct, true);
+      if (root) drawTextC(FT, 240, 330, "THEN DREAM-CUBE STARTS", C_DIM, TX_FLAT);
+      fkeys({{"ESC", autoTry ? "Pick a WiFi" : "Pick another", [this] { netStopTrying(); scan(); }}});
+      return;
+    }
+    drawText(FT, 15, TOP_Y + 40, root ? "PICK YOUR WIFI" : "PICK A WIFI", C_FG);
+    if (failMsg[0]) drawText(FT, 15, TOP_Y + 74, failMsg, C_RED, TX_FLAT);
+    if (nn < 0) {
+      int k = (now / 300) % 4; char b[24] = "SCANNING"; for (int i = 0; i < k; i++) strcat(b, ".");
+      drawTextC(FT, 240, 250, b, C_DIM, TX_FLAT);
+    } else if (nn == 0) {
+      drawTextC(FT, 240, 230, "NO WIFI FOUND", C_WARN);
+      drawTextC(FT, 240, 266, "LOOKING AGAIN...", C_DIM, TX_FLAT);
+    } else {
+      L.n = nn;
+      L.draw([this](int i, int x, int y, int w, int h, bool sel) {
+        const WifiNet& n = nets[i];
+        if (sel) invBar(x + 2, y + 3, w - 4, h - 6);
+        uint16_t c = sel ? C_BG : C_FG;
+        char t[40]; snprintf(t, sizeof(t), "%s", n.ssid); utf8Cut(t, 19);
+        drawText(FT, x + 10, y + 12, t, c, sel ? TX_FLAT : TX_GLOW);
+        // signal: 4 bars; a closed box = it has a password; * = saved
+        int bars = n.rssi > -55 ? 4 : n.rssi > -67 ? 3 : n.rssi > -78 ? 2 : 1;
+        for (int b = 0; b < 4; b++) fillRect(x + w - 58 + b * 11, y + 38 - b * 6 - 8, 8, b * 6 + 8, b < bars ? c : (sel ? mix(C_BG, C_FG, 60) : C_DIM));
+        if (!n.open) { rect(x + w - 86, y + 22, 16, 14, c); rect(x + w - 82, y + 15, 8, 8, c); }
+        if (n.saved) drawText(FT, x + w - 112, y + 12, "*", c, TX_FLAT);
+      }, [this](int i) { pick(i); });
+    }
+    if (root) fkeys({{"R", "Scan again", [this] { scan(); }}});
+    else fkeys({{"ESC", "Back", [] { uiBack(); }}, {"R", "Scan again", [this] { scan(); }}});
+  }
+  bool ev(const Ev& e) override {
+    if (mode == 0 && nn > 0) { L.n = nn; return L.ev(e, [this](int i) { pick(i); }); }
+    return false;
+  }
 };
 
 // ------------------------------------------------------------------ FIRMWARE: update DREAM-CUBE, or go back to ERROR-CUBE
@@ -344,25 +373,8 @@ struct Setup : Screen {
       strcpy(o, !dcfg.link ? "OFF" : S.net != NET_UP ? "NO INTERNET" : enetLinkAt() && msNow() - enetLinkAt() < 30000 ? "LINKED" : "LINKING...");
     }));
     rows.push_back(action("NEW CODE", [] { askNewCode(); }, [](char* o) { strcpy(o, ">"); }));
-    rows.push_back(heading("THE CUBE'S OWN WIFI", IC_WIFI));
-    rows.push_back(dtoggle("ALWAYS ON", &dcfg.hotspot, [] { hotspotApply(); }));
-    rows.push_back(action("NAME", [] {
-      char n[33]; dreamApName(n, sizeof(n));
-      kbOpen("HOTSPOT NAME", n, 23, [](const char* t) {
-        std::string s = t; while (s.size() && s.back() == ' ') s.pop_back();
-        snprintf(dcfg.apName, sizeof(dcfg.apName), "%s", s.c_str()); dreamCfgSave(); hotspotApply(); toast("NAME SAVED");
-      });
-    }, [](char* o) { dreamApName(o, 40); utf8Cut(o, 14); }));
-    rows.push_back(action("PASSWORD", [] {
-      kbOpen("PASSWORD (EMPTY = NONE)", dcfg.apPass, 23, [](const char* t) {
-        if (t[0] && strlen(t) < 8) { toast("8 OR MORE LETTERS, OR NONE"); return; }
-        snprintf(dcfg.apPass, sizeof(dcfg.apPass), "%s", t); dreamCfgSave(); hotspotApply(); toast(t[0] ? "PASSWORD SAVED" : "NO PASSWORD");
-      }, false);
-    }, [](char* o) { snprintf(o, 40, "%s", dcfg.apPass[0] ? dcfg.apPass : "NONE (OPEN)"); utf8Cut(o, 14); }));
-    rows.push_back(action("PHONE: QR CODES", [] { uiOpen(new Phone()); }, [](char* o) { strcpy(o, ">"); }));
-    rows.push_back(info("PAGE", [](char* o) { strcpy(o, S.portal ? "192.168.4.1" : dcfg.hotspot ? "STARTING..." : "-"); }));
     rows.push_back(heading("INTERNET", IC_CLOUD));
-    rows.push_back(action("WIFI", [] { uiOpen(new Wifi()); }, [](char* o) {
+    rows.push_back(action("WIFI", [] { uiOpen(new WifiGate(false)); }, [](char* o) {
       if (S.net == NET_UP) { snprintf(o, 40, "%s", S.ssid); utf8Cut(o, 12); } else strcpy(o, cfg.wifiOn ? "NOT CONNECTED" : "OFF");
     }));
     rows.push_back(info("LAST SCENE", [](char* o) {
@@ -405,6 +417,7 @@ struct Scenes : Screen {
     if (!L.n) { drawTextC(FT, 240, 200, "NO SCENES YET", C_DIM, TX_FLAT); drawTextC(FT, 240, 240, "TALK NEAR THE CUBE", C_DIM, TX_FLAT); fkeysBack(); return; }
     L.draw([](int i, int x, int y, int w, int h, bool sel) {
       char t[48], at[8];
+      if (sel) invBar(x + 2, y + 3, w - 4, h - 6);
       dreamTitleAt(i, t, sizeof(t), at, sizeof(at));
       utf8Cut(t, 22);
       uint16_t c = sel ? C_BG : i == dreamPos() ? C_FG : C_FG;
@@ -445,7 +458,14 @@ struct Dream : Screen {
   bool plain() override { return true; }
   bool noSwipeBack() override { return true; }
   void enter() override { last = msNow(); applyLook(); }
-  void tick() override { redrawIn(0); }
+  uint32_t lostAt = 0;
+  void tick() override {
+    // the WiFi gone for a minute: back to the WiFi screen (DREAM-CUBE starts again when it's connected)
+    if (S.net == NET_UP) lostAt = 0;
+    else if (!lostAt) lostAt = msNow() | 1;
+    else if (msNow() - lostAt > 60000 && uiCurrent() == this) { uiStart(); return; }
+    redrawIn(0);
+  }
   void menu() { menuUntil = msNow() + 6000; uiDirty(); }
   void draw() override {
     uint32_t now = msNow();
@@ -483,10 +503,7 @@ struct Dream : Screen {
     const char* why = nullptr;
     char wb[64];
     if (st == ST_NOMIC) why = "NO MICROPHONES FOUND";
-    else if (S.net != NET_UP) {
-      if (S.portal) { snprintf(wb, sizeof(wb), "WIFI: JOIN %s", S.portalName); why = wb; }
-      else why = "NO INTERNET: SETUP > WIFI";
-    }
+    else if (S.net != NET_UP) why = "WIFI LOST: RECONNECTING...";
     else if (st == ST_LIMIT || st == ST_ERROR) { snprintf(wb, sizeof(wb), "%s", dreamErr()); utf8Cut(wb, 28); why = wb; }
     if (why) { shade(by - 30, 90, false); outlined(FT, 240, by, why, st == ST_PAUSED ? C_DIM : C_WARN); }
     else if (st == ST_THINK) { shade(by - 30, 90, false); char b[24] = "DREAMING"; int k = (now / 300) % 4; for (int i = 0; i < k; i++) strcat(b, "."); outlined(FT, 240, by, b, C_WARN); }
@@ -528,30 +545,32 @@ struct Dream : Screen {
     return false;
   }
 };
-Screen* homeScreen() { return new Dream(); }
+Screen* homeScreen() { if (S.net == NET_UP) return new Dream(); return new WifiGate(true); }
 
-// ------------------------------------------------------------------ start-up: the scene engine wakes up
+// ------------------------------------------------------------------ start-up: a turning cube, the name
 struct Boot : Screen {
-  uint32_t t0 = 0, last = 0;
+  uint32_t t0 = 0;
   const char* name() override { return "BOOT"; }
   bool fullScreen() override { return true; }
   bool keepAwake() override { return true; }
-  bool plain() override { return true; }
-  void enter() override { t0 = last = msNow(); snd(SND_ON); }
+  void enter() override { t0 = msNow(); snd(SND_ON); }
   void tick() override {
-    if (msNow() - t0 > (cfg.boot == 2 ? 400u : 2600u)) { uiStart(); return; }
-    redrawIn(0);
+    if (msNow() - t0 > (cfg.boot == 2 ? 400u : 2400u)) { uiStart(); return; }
+    redrawIn(30);
   }
   void draw() override {
-    uint32_t now = msNow(); float dt = (now - last) / 1000.0f; last = now;
-    sceneDraw(fb, dt > 0.2f ? 0.2f : dt);
-    uint32_t t = now - t0;
-    shade(150, 200, false); shade(260, 120, true);
+    uint32_t t = msNow() - t0;
+    gfxClearTo(C_BG);
+    float a = t / 1000.0f;
+    g3dCam(0, 0, -6, 0, 0, 0, 420, 240, 150);
+    g3dObj(v3(0, 0, 0), a * 0.9f, a * 0.55f + 0.4f, 0, t < 600 ? t / 600.0f : 1.0f);
+    box3(v3(0, 0, 0), v3(1, 1, 1), C_FG, 32);
+    box3(v3(0, 0, 0), v3(0.45f, 0.45f, 0.45f), C_DIM, 24);
     int k = t < 900 ? (int)(10 * t / 900) : 10;
     char name[16]; snprintf(name, sizeof(name), "%.*s", k, "DREAM-CUBE");
-    outlined(FB, 240, 210, name, C_FG);
-    if (t > 1000) outlined(FT, 240, 262, "VERSION " CUBE_VERSION, C_DIM);
-    if (t > 1300) outlined(FT, 240, 298, "SPEECH TO 3D \xC2\xB7 ERROR.BLUE", C_DIM);
+    drawTextC(FB, 240, 300, name, C_FG);
+    if (t > 1000) drawTextC(FT, 240, 356, "VERSION " CUBE_VERSION, C_DIM, TX_FLAT);
+    if (t > 1300) drawTextC(FT, 240, 392, "SPEECH TO 3D \xC2\xB7 ERROR.BLUE", C_DIM, TX_FLAT);
   }
   bool ev(const Ev& e) override { if (e.t == EV_TAP || e.t == EV_KEY) t0 = msNow() - 5000; return true; }
 };
@@ -598,9 +617,8 @@ void appsLoop() {
 void clockTick() {}
 uint32_t tmrEnd = 0, tmrLeft = 0; bool tmrRun = false;
 Screen* findProg(const char* dos) {
-  if (!strcmp(dos, "WIFI")) return new Wifi();
+  if (!strcmp(dos, "WIFI")) return new WifiGate(false);
   if (!strcmp(dos, "UPDATE")) return new Firmware(false);
-  if (!strcmp(dos, "PHONE")) return new Phone();
   if (!strcmp(dos, "MICTEST")) return new MicTest();
   if (!strcmp(dos, "SETUP")) return new Setup();
   if (!strcmp(dos, "SCENES")) return new Scenes();

@@ -152,7 +152,15 @@ int netScanResults(WifiNet* out, int max) {
   for (int i = 0; i < 4 && i < max; i++) { snprintf(out[i].ssid, 33, "%s", N[i]); out[i].rssi = R[i]; out[i].open = i == 2; out[i].saved = i == 0; }
   return 4;
 }
+#ifdef DREAM_SIM
+uint32_t simJoinAt = 0;                       // simdream.cpp: connected 2.5 s later (SIM_BADPASS: it fails)
+void netJoin(const char* ssid, const char*) { S.net = NET_JOINING; snprintf(S.ssid, sizeof(S.ssid), "%s", ssid); simJoinAt = msNow() | 1; }
+#else
 void netJoin(const char*, const char*) {}
+#endif
+bool netHold = false;
+void netStopTrying() { if (S.net != NET_UP) S.net = NET_FAIL; }
+const char* netReason() { return getenv("SIM_BADPASS") && S.net == NET_FAIL ? "WRONG PASSWORD?" : ""; }
 int netSaved(char (*ssids)[33], int max) { if (max) strcpy(ssids[0], "HOME-WIFI"); return 1; }
 void netForget(const char*) {}
 void netPortal(bool on) { S.portal = on; strcpy(S.portalName, "ERROR-CUBE-4F2A"); }

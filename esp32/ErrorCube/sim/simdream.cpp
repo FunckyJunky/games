@@ -1,6 +1,7 @@
 // simdream.cpp: DREAM-CUBE's listening, error.blue and the control page faked for the simulator (sim/build-dream.sh).
 // Every 9 s (SIM_EVERY ms) someone "says" something; 2.5 s later the cube "dreams" and the scene comes in.
-// SIM_SCENE=k: scene k right away (screenshots). SIM_NONET=1: no internet (the hotspot hint). SIM_PAUSE=1: paused.
+// SIM_SCENE=k: scene k right away (screenshots). SIM_NONET=1: no WiFi (the WiFi picker first; picking one connects
+// 2.5 s later, SIM_BADPASS=1: it fails). SIM_PAUSE=1: paused.
 #include "../src/ui/ui.h"
 #include "../../DreamCube/src/dream/dream.h"
 #include <stdio.h>
@@ -66,7 +67,9 @@ void dreamBegin() {}
 static void simTick() {
   uint32_t e = getenv("SIM_EVERY") ? atoi(getenv("SIM_EVERY")) : 9000;
   static bool first = true;
-  if (first) { first = false; dreamCfgLoad(); if (getenv("SIM_NONET")) { S.net = NET_OFF; S.portal = true; strcpy(S.portalName, "DREAM-CUBE-4F2A"); }
+  extern uint32_t simJoinAt;
+  if (simJoinAt && msNow() - simJoinAt > 2500) { simJoinAt = 0; if (getenv("SIM_BADPASS")) S.net = NET_FAIL; else { S.net = NET_UP; strcpy(S.ip, "192.168.1.42"); } }
+  if (first) { first = false; dreamCfgLoad(); if (getenv("SIM_NONET")) { S.net = NET_FAIL; strcpy(S.ssid, ""); }
     if (getenv("SIM_SCENE")) { int k = atoi(getenv("SIM_SCENE")) % NS; incoming = SCENES[k]; incFresh = true; snprintf(heard, sizeof(heard), "%s", SAID[k]); heardAt = msNow(); } }
   if (!dcfg.listen || S.net != NET_UP) return;
   int s = msNow() / e; uint32_t in = msNow() % e;

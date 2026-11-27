@@ -4,7 +4,7 @@
 //                 the scenes kept (to go back), the control page's commands
 //   ../net/enet.cpp  error.blue: speech to text, scenes, the control page, updates, the way back to ERROR-CUBE
 //   r3d.cpp models.cpp scene.cpp  the 3D (world.h)
-//   screens.cpp   the cube's screens        web.cpp   the page on the cube's own WiFi
+//   screens.cpp   the cube's screens (WiFi first: pick a network, type the password; then the DREAM view)
 // Plain C++ apart from mic.cpp / listen.cpp / web.cpp / enet.cpp: the screens also run in the PC simulator.
 #pragma once
 #include <stdint.h>

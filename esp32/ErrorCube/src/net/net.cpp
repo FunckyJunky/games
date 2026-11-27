@@ -104,10 +104,25 @@ static volatile int scanN = -1;
 static bool scanning = false;
 
 bool netUp() { return S.net == NET_UP; }
+// DREAM-CUBE's WiFi screen: no tries by themselves while someone picks a network; why the last try failed
+bool netHold = false;
+static volatile int lastReason = 0;
+const char* netReason() {
+  switch (lastReason) {
+    case 0: return "";
+    case 2: case 15: case 202: case 204: return "WRONG PASSWORD?";
+    case 201: case 210: case 211: return "NOT FOUND (2.4 GHZ ONLY)";
+    case 212: return "SIGNAL TOO WEAK";
+    case 203: return "THE ROUTER SAID NO";
+    case 205: case 8: return "NO CONNECTION";
+  }
+  static char b[24]; snprintf(b, sizeof(b), "NO CONNECTION (%d)", lastReason); return b;
+}
 static bool paused = false;              // WiFi off while the screen is off (cfg.aodWifi = 2)
 static bool radioWanted() { return cfg.wifiOn && !cfg.offline && !paused; }
 
 static void beginJoin(const char* ssid, const char* pass) {
+  lastReason = 0;
   WiFi.disconnect(false, false);
   delay(20);
   WiFi.begin(ssid, pass && pass[0] ? pass : nullptr);
@@ -127,6 +142,12 @@ void netJoin(const char* ssid, const char* pass) {
   joinNew = true;
   if (!cfg.wifiOn) { cfg.wifiOn = 1; cfgSave(); }
   beginJoin(joinSsid, joinPass);
+}
+// stop trying (a network is being picked): the radio stays on, for scans
+void netStopTrying() {
+  WiFi.disconnect(false, false);
+  joinNew = false; tryIdx = -1; retryAt = 0;
+  if (S.net != NET_OFF) S.net = nSaved ? NET_FAIL : NET_NOSAVED;
 }
 void netWifi(bool on) {
   if (!on || cfg.offline) { WiFi.disconnect(true, false); S.net = NET_OFF; S.link = false; return; }
@@ -407,6 +428,7 @@ void netBegin() {
   for (char* p = host; *p; p++) *p = tolower(*p);
   WiFi.setHostname(host);
   WiFi.setAutoReconnect(true);
+  WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) { int r = info.wifi_sta_disconnected.reason; if (r != 8) lastReason = r; }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);   // 8 = we left
   webSetup();
   if (!cfg.wifiOn || cfg.offline) { S.net = NET_OFF; if (cfg.offline) WiFi.mode(WIFI_OFF); }
   else if (!nSaved) { S.net = NET_NOSAVED; netPortal(true); }     // nothing saved: phone setup straight away
@@ -453,12 +475,12 @@ void netStep() {
     if (joinNew) {                           // the typed network didn't work
       joinNew = false; S.net = NET_FAIL; snprintf(S.netErr, sizeof(S.netErr), "COULD NOT JOIN %s", joinSsid);
       retryAt = now + 5000;
-    } else if (tryIdx + 1 < nSaved) tryNext();
+    } else if (tryIdx + 1 < nSaved && !netHold) tryNext();
     else { S.net = NET_FAIL; retryAt = now + 60000; tryIdx = -1; }
     uiDirty();
   }
   // (a phone on the hotspot: no new tries, they make the hotspot hop channels and drop the phone)
-  if ((S.net == NET_FAIL || S.net == NET_NOSAVED) && retryAt && now > retryAt && nSaved) {
+  if ((S.net == NET_FAIL || S.net == NET_NOSAVED) && retryAt && now > retryAt && nSaved && !netHold) {
     if (keepHs && WiFi.softAPgetStationNum() > 0) retryAt = now + 30000;
     else { retryAt = 0; tryIdx = -1; tryNext(); }
   }

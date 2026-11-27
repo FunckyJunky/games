@@ -1,5 +1,15 @@
 # DREAM-CUBE
 
+## New in 1.1
+
+- **WiFi made simple:** no hotspot and no phone page any more. The cube scans, you pick a network and type the
+  password on the cube; DREAM-CUBE starts only once it's connected. 1.0's always-on hotspot made the WiFi hop channels
+  while joining (and took memory the join needs): joining could get stuck.
+- The 3D's fast buffers are smaller (16-row bands) and only taken when the picture starts (after WiFi), in internal
+  RAM only when 80 KB stays free for WiFi + TLS.
+- Shared net.cpp: `netHold` (no tries by themselves while a network is being picked), `netStopTrying()`,
+  `netReason()` (why the last join failed, from the WiFi driver's disconnect reason).
+
 The fourth firmware for the ERROR-CUBE (Waveshare ESP32-S3-Touch-AMOLED-2.16): the cube listens, and turns what's said
 around it into a little animated 3D world on its screen. The two microphones (ES7210, EAR-CUBE's `mic.cpp`) cut speech
 into pieces; error.blue writes them down (`/api/stt`, Whisper) and, when enough words have come, makes a scene of them
@@ -22,15 +32,15 @@ Pages: [error.blue/dream](https://error.blue/dream/) (the control page) and [err
   AI, about 1 s; SMART = the big one, 2-3 s), words and title on screen, CAMERA (still / slow / normal / fast), PIXELS
   (smooth / sharp), DETAIL (the place's own trees and houses; drops by itself when frames get slow), wake on a new
   scene, frame rate; LISTENING (language, sensitivity, gain, microphones, pause length, MIC TEST); CONTROL PAGE (the QR
-  code + code, link on / off, a new code); THE CUBE'S OWN WIFI (always on, name, password, QR codes); WIFI; sound +
-  screen; UPDATE / AUTO UPDATE; BACK TO ERROR-CUBE.
+  code + code, link on / off, a new code); THE WIFI; sound + screen; UPDATE / AUTO UPDATE; BACK TO ERROR-CUBE.
 
 ## WiFi
 
-The cube's own WiFi is always on: **DREAM-CUBE-XXXX**, with an 8-digit password made at the first start (SETUP > THE
-CUBE'S OWN WIFI; the QR code there joins it). A phone on it opens **http://192.168.4.1**: pick the home WiFi + password,
-see how the cube is, start / pause, older / newer, screen on / off, type words to dream, the settings, the hotspot's
-name and password, and the link to the control page. Also on the home WiFi at the cube's address.
+No WiFi yet (or the saved ones don't work): the cube shows the networks it finds (saved ones first, then the
+strongest). Tap one, type its password on the cube's keyboard, and it connects. Only then does DREAM-CUBE start.
+Saved networks are tried by themselves at the start ("CONNECTING TO ..."; ESC = pick another). A failed try says why
+(WRONG PASSWORD?, NOT FOUND (2.4 GHZ ONLY)...). WiFi gone for a minute: back to the WiFi screen. SETUP > WIFI picks
+another network. (1.0 had an always-on hotspot with a phone page: gone in 1.1, it made joining get stuck.)
 
 ## The control page: error.blue/dream
 
