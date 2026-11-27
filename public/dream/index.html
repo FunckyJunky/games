@@ -120,12 +120,12 @@ const ICON = { person: "🧍", child: "🧒", robot: "🤖", ghost: "👻", alie
   sphere: "🔵", pyramid: "🔺", cylinder: "🥫", ring: "💍", custom: "🧩" };
 const PLACE = { grass: "🌾", forest: "🌲", jungle: "🌴", desert: "🏜️", beach: "🏖️", sea: "🌊", snow: "❄️", mountains: "🏔️", city: "🏙️", room: "🏠", space: "🌌",
   moon: "🌑", underwater: "🐠", clouds: "☁️", lava: "🌋", stage: "🎤", void: "▦" };
-let code = "", top = 0, scenes = [], cube = null, filled = false, curTitle = "";
+let code = "", topN = 0, scenes = [], cube = null, filled = false, curTitle = "";
 
 function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(e.t); e.t = setTimeout(() => (e.style.display = "none"), 2600); }
 function esc(t) { return String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 async function api(method, body) {
-  const u = "/api/dream/app?code=" + code + (method === "GET" ? "&since=" + top : "");
+  const u = "/api/dream/app?code=" + code + (method === "GET" ? "&since=" + topN : "");
   const r = await fetch(u, method === "GET" ? { cache: "no-store" } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return r.json();
 }
@@ -137,7 +137,7 @@ function link(c) {
   if (!/^[A-HJ-NP-Z2-9]{8}$/.test(c)) { $("lmsg").textContent = "8 letters and digits (no I, O, 0 or 1)"; return; }
   code = c; localStorage.setItem("dreamCode", c); if (location.hash.slice(1) !== c) history.replaceState(null, "", "#" + c);
   $("link").hidden = true; $("app").hidden = false; $("code").textContent = c; $("hcode").textContent = c;
-  top = 0; scenes = []; filled = false; poll();
+  topN = 0; scenes = []; filled = false; poll();
 }
 $("lf").onsubmit = (e) => { e.preventDefault(); link($("codeIn").value); };
 $("bUnlink").onclick = () => { localStorage.removeItem("dreamCode"); history.replaceState(null, "", location.pathname); location.reload(); };
@@ -161,7 +161,7 @@ async function poll() {
     const have = new Set(scenes.map((s) => s.n));
     for (const s of j.scenes) if (!have.has(s.n)) scenes.push(s);
     scenes.sort((a, b) => b.n - a.n); scenes = scenes.slice(0, 80);
-    top = Math.max(top, j.top || 0);
+    topN = Math.max(topN, j.top || 0);
   }
   draw();
 }
