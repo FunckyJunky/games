@@ -758,10 +758,16 @@ static void cake() {
   }
 }
 static void pizza() {
-  S(P_DISC, CL_MAIN, 0, 0.1f, 0, 2.0f, 0.1f, 2.0f, -25);
-  S(P_TORUS, CL_WOOD, 0, 0.1f, 0, 1.0f, 0.5f, 1.0f, -25);
-  for (int i = 0; i < 6; i++) { float a = i * 1.047f + 0.3f, r = i & 1 ? 0.55f : 0.3f; S(P_DISC, CL_RED, sinf(a) * r, 0.17f + cosf(a) * r * 0.42f, cosf(a) * r * 0.9f, 0.32f, 0.04f, 0.32f, -25); }
-  S(P_BOX, CL_GREEN, 0.1f, 0.2f, 0.1f, 0.2f, 0.03f, 0.12f, -25, 30);
+  // tilted 40 degrees toward the viewer; the toppings sit on the tilted top
+  const float T = 40, c = cosf(T * D), sn = sinf(T * D);
+  S(P_DISC, CL_MAIN, 0, 0.1f, 0, 2.0f, 0.1f, 2.0f, T);
+  S(P_TORUS, CL_WOOD, 0, 0.1f, 0, 1.9f, 0.5f, 1.9f, T);
+  auto on = [&](float x, float z, float& wy, float& wz) { wy = 0.1f + 0.07f * c - sn * z; wz = 0.07f * sn + c * z; };
+  for (int i = 0; i < 6; i++) {
+    float a = i * 1.047f + 0.3f, r = i & 1 ? 0.55f : 0.3f, x = sinf(a) * r, z = cosf(a) * r, wy, wz;
+    on(x, z, wy, wz); S(P_DISC, CL_RED, x, wy, wz, 0.32f, 0.04f, 0.32f, T);
+  }
+  float wy, wz; on(0.1f, 0.1f, wy, wz); S(P_BOX, CL_GREEN, 0.1f, wy, wz, 0.2f, 0.03f, 0.12f, T, 30);
 }
 static void apple() {
   S(P_BALL, CL_MAIN, 0, 0.45f, 0, 0.9f, 0.82f, 0.9f);
@@ -955,7 +961,7 @@ void modelsInit() {
   M("bag", 0x8E5A2F, 0x5A3A1F, 0.5f, 1.2f, K_GROUND); bag();
   M("drink", 0xC8952A, 0xFFFFFF, 0.3f, 1.0f, K_GROUND); drink();
   M("cake", 0xF4A6B4, 0xFFFFFF, 0.8f, 1.6f, K_GROUND); cake();
-  M("pizza", 0xF2C14E, 0xF2C14E, 1.0f, 0.6f, K_AIR, B_SPIN); pizza();
+  M("pizza", 0xF2C14E, 0xF2C14E, 1.0f, 0.6f, K_AIR, B_FLOAT); pizza();
   M("apple", 0xD32F2F, 0xD32F2F, 0.45f, 1.0f, K_GROUND); apple();
   M("burger", 0x8A5A2B, 0x8A5A2B, 0.7f, 1.1f, K_GROUND); burger();
   M("icecream", 0xF48FB1, 0xFFF8E1, 0.35f, 1.9f, K_GROUND); icecream();
