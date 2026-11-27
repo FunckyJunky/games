@@ -192,12 +192,12 @@ const Mesh& primMesh(int p) { return meshes[p < 0 || p >= P_N ? 0 : p]; }
 // ------------------------------------------------------------------ the frame
 #define MAXT 7000
 #define MAXS 700
-#define MAXL 500
+#define MAXL 2600
 #define MAXD 360
 #define BAND 16
 struct STri { float x[3], y[3]; float A, B, C; int16_t ymin, ymax; uint16_t c; uint8_t fl; };
 struct SSpr { float x, y, w, r; uint16_t c; uint8_t shape, a; };
-struct SLin { float x0, y0, x1, y1, w0, w1; uint16_t c; uint8_t a; };
+struct SLin { float x0, y0, x1, y1, w0, w1; uint16_t c; uint8_t a, th; };
 struct SDot { int16_t x, y; uint16_t c; uint8_t a; };
 struct SDisc { float x, y, r, glow; Col c; };
 static STri* tris; static int nTri, nTriA, lastTris;   // solid from the front, see-through from the back
@@ -383,7 +383,7 @@ void r3dSprite(Vec p, float size, Col c, int shape, int a) {
   if (f > 0) c = clerp(c, fogC, f > 1 ? 1 : f);
   s.c = c565(c); s.shape = shape; s.a = a; nSpr++;
 }
-void r3dStreak(Vec a, Vec b, Col c, int al) {
+void r3dStreak(Vec a, Vec b, Col c, int al, int thick) {
   if (nLin >= MAXL) return;
   Vec va = toView(a), vb = toView(b);
   const float NZ = 0.3f;
@@ -396,7 +396,7 @@ void r3dStreak(Vec a, Vec b, Col c, int al) {
   if (fmaxf(l.x0, l.x1) < 0 || fminf(l.x0, l.x1) >= RW || fmaxf(l.y0, l.y1) < 0 || fminf(l.y0, l.y1) >= RH) return;
   float f = ((va.z + vb.z) * 0.5f - fogN) / (fogF - fogN);
   if (f > 0) c = clerp(c, fogC, f > 1 ? 1 : f);
-  l.c = c565(c); l.a = al; nLin++;
+  l.c = c565(c); l.a = al; l.th = thick; nLin++;
 }
 
 // ------------------------------------------------------------------ drawing a band
@@ -485,8 +485,13 @@ static void drawLine(const SLin& l, int b0, int b1) {
     int x = (int)(x0 + dx * t), y = (int)(y0 + dy * t);
     if (y < b0 || y >= b1 || x < 0 || x >= RW) continue;
     int o = (y - b0) * RW + x;
-    if (bandZ[o] > (w0 + dw * t) * 1.002f) continue;
+    float wz = (w0 + dw * t) * 1.002f;
+    if (bandZ[o] > wz) continue;
     bandC[o] = bl(bandC[o], l.c, l.a);
+    if (l.th) {                                  // 2 pixels wide (glowing line art)
+      if (x + 1 < RW && bandZ[o + 1] <= wz) bandC[o + 1] = bl(bandC[o + 1], l.c, l.a * 3 / 4);
+      if (y + 1 < b1 && bandZ[o + RW] <= wz) bandC[o + RW] = bl(bandC[o + RW], l.c, l.a * 3 / 4);
+    }
   }
 }
 static void drawDisc(const SDisc& d, int b0, int b1) {

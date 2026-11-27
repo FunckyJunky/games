@@ -132,6 +132,15 @@
         <div><label>WORDS ON SCREEN</label><select name="words"><option value="1">ON<option value="0">OFF</select></div>
         <div><label>FRAME RATE ON SCREEN</label><select name="fps"><option value="0">OFF<option value="1">ON</select></div>
       </div><div class="bar"><button>SAVE TO THE CUBE</button><span class="dim cmsg"></span></div></form>
+
+      <h2>MUSIC</h2>
+      <p class="dim">When the cube hears music (a steady beat, no talking pauses) the scene turns into a light show: its
+      things dance, copies of them jump in a ring with the bass and the highs, a ring of glowing bars, wireframe shapes, beams.
+      Words it hears meanwhile float in 3D, drawn in lines. No new scenes while the music plays. <span id="mstate" class="hi"></span></p>
+      <form class="cfgf"><div class="grid">
+        <div><label>MUSIC VISUALS</label><select name="music"><option value="1">AUTO (WHEN IT HEARS MUSIC)<option value="2">ALWAYS<option value="0">OFF</select></div>
+        <div><label>WORDS DURING MUSIC</label><select name="mwords"><option value="1">3D LINE ART<option value="0">AT THE BOTTOM</select></div>
+      </div><div class="bar"><button>SAVE TO THE CUBE</button><span class="dim cmsg"></span></div></form>
     </div>
 
     <div data-p="cube" hidden>
@@ -248,15 +257,16 @@ async function poll() {
   $("dot").className = cube.online ? "on" : "off";
   $("online").textContent = cube.online ? "ONLINE" : cube.seen ? "OFFLINE (seen " + ago(cube.ago) + ")" : "NOT SEEN YET";
   $("st").textContent = cube.online ? st.st || "" : "";
-  $("meta").textContent = [st.v ? "v" + st.v : "", st.bat >= 0 && st.bat !== undefined ? st.bat + "%" + (st.chg ? "+" : "") : "", st.wifi || "", st.awake === false ? "SCREEN OFF" : ""].filter(Boolean).join(" · ");
+  $("mstate").textContent = !cube.online ? "" : st.music === undefined ? "(needs DREAM-CUBE 1.4)" : st.music ? "Now: MUSIC" + (st.bpm ? ", " + st.bpm + " BPM" : "") + "." : "Now: no music (" + (st.ms || 0) + "% like music).";
+  $("meta").textContent = [st.music ? "\u266A " + (st.bpm ? st.bpm + " BPM" : "MUSIC") : "", st.v ? "v" + st.v : "", st.bat >= 0 && st.bat !== undefined ? st.bat + "%" + (st.chg ? "+" : "") : "", st.wifi || "", st.awake === false ? "SCREEN OFF" : ""].filter(Boolean).join(" · ");
   curTitle = st.title || "";
   $("now").textContent = curTitle || "...";
   $("bListen").textContent = st.listen ? "PAUSE" : "LISTEN"; $("bListen").dataset.c = st.listen ? "pause" : "listen";
   if (!filled && st.cfg) { filled = true; for (const k in st.cfg) document.querySelectorAll(".cfgf [name=" + k + "]").forEach((e) => (e.value = st.cfg[k])); showRanges(); }
   if (!interpFilled && j.interp) { interpFilled = true; for (const k in j.interp) { const e = document.querySelector("#if [name=" + k + "]"); if (e) e.value = j.interp[k]; } }
   // why words might not come: an old DREAM-CUBE, paused, or lines still waiting on the cube
-  const vOld = st.v && vNum(st.v) < vNum("1.3"), notes = [];
-  if (cube.online && vOld) notes.push("The cube runs DREAM-CUBE " + st.v + ". Update it for the full live transcript: on the cube SETUP > UPDATE DREAM-CUBE (or flash.bat).");
+  const vOld = st.v && vNum(st.v) < vNum("1.4"), notes = [];
+  if (cube.online && vOld) notes.push("The cube runs DREAM-CUBE " + st.v + ". DREAM-CUBE 1.4 is out (music visuals, the full live transcript): on the cube SETUP > UPDATE DREAM-CUBE (or flash.bat).");
   if (cube.online && st.listen === false) notes.push("The cube is paused: press LISTEN.");
   if (cube.online && st.lw > 0) notes.push(st.lw + " line" + (st.lw > 1 ? "s" : "") + " still on the cube, on the way...");
   $("lnote").hidden = !notes.length; $("lnote").textContent = notes.join("  ");

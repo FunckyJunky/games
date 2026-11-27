@@ -40,6 +40,9 @@ struct DreamCfg {
   // 1.2
   uint8_t colors = 0;        // 0 NATURAL, 1 VIVID, 2 ERROR-DOS (everything in the interface's one colour)
   uint8_t fxOn = 1;          // hearts, sparkles, notes... (rain and snow stay)
+  // 1.4
+  uint8_t music = 1;         // the music visualizer: 0 OFF, 1 AUTO (when it hears music), 2 ALWAYS
+  uint8_t mwords = 1;        // words heard during the music: 3D line art (else at the bottom, as always)
   // new settings go here, at the end
 };
 extern DreamCfg dcfg;
@@ -78,6 +81,9 @@ int dreamStatus();
 const char* dreamStatusText(int st);
 const char* dreamErr();                      // the last problem with error.blue
 void dreamSay(const char* text);             // typed words: a scene for them, now
+bool dreamMusic();                           // the music visualizer is on (music heard, or MUSIC: ALWAYS)
+void dreamMusicIn(MusicIn& m);               // what it needs: bands, beats, tempo
+float dreamMusicScore();                     // 0..1 how much it sounds like music
 const char* dreamHeard();                    // the last words heard (for the screen)
 uint32_t dreamHeardAt();                     // when (ms)
 int dreamWordsWaiting();                     // words heard since the last scene

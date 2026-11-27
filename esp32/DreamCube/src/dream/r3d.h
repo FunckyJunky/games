@@ -59,7 +59,7 @@ enum { SP_DISC, SP_SQUARE, SP_HEART, SP_SPARK, SP_NOTE, SP_Z, SP_QUEST, SP_RING,
 void r3dSprite(Vec p, float size, Col c, int shape, int alpha32 = 32);   // size in world units
 void r3dSkyDisc(Vec dir, float radiusPx, Col c, float glow);   // sun / moon: at infinity, before the world
 void r3dSkyDot(Vec dir, Col c, int alpha32);                   // a star
-void r3dStreak(Vec a, Vec b, Col c, int alpha32);              // rain, sparks: a line with depth
+void r3dStreak(Vec a, Vec b, Col c, int alpha32, int thick = 0);   // rain, sparks, line art: a line with depth
 bool r3dProject(Vec w, float& sx, float& sy, float& depth);    // world -> render pixels (RW x RH)
 // draws everything into out (480 x 480): 2x up, soft (smooth) or sharp
 void r3dRender(uint16_t* out, bool soft);

@@ -3,6 +3,7 @@
 // A new scene comes in with a transition: the old things shrink away, the sky and ground blend over, the new things
 // pop up one after another, the camera glides to its new place.
 #include "world.h"
+#include "linetext.h"
 #include "../core/gfx.h"
 #include <math.h>
 #include <string.h>
@@ -779,6 +780,221 @@ static Cam camFor(const SceneDef& d) {
   return c;
 }
 
+// ------------------------------------------------------------------ music: the visualizer over the scene
+static MusicIn mus; static bool musOn = false;
+static float mk = 0;                         // 0..1: how much of the music world is there
+static uint32_t musBeatsSeen = 0;
+static float musHue = 0;                     // moves on at each beat
+struct MRing { float born, hue; };
+static MRing mrings[8]; static int ringNext = 0;
+struct MSpark { Vec p, v; float born, hue; };
+static MSpark sparks[48]; static int sparkNext = 0;
+static float peaks[32];
+struct MWord { char t[48]; float born, yaw, hue; int lane; bool on; };
+#define NWORDS 4
+static MWord words[NWORDS];
+static char wordQ[6][48]; static int wqN = 0;
+static float nextWordAt = 0; static int wordK = 0;
+void sceneMusic(bool on, const MusicIn& m) { musOn = on; mus = m; }
+float sceneMusicK() { return mk; }
+// the words: in pieces of up to ~13 letters (a few words), queued; one comes every 0.8 s
+void sceneMusicWords(const char* text) {
+  char chunk[48] = ""; int len = 0;
+  auto flush = [&]() { if (!len) return; if (wqN == 6) { memmove(wordQ[0], wordQ[1], sizeof(wordQ[0]) * 5); wqN = 5; } snprintf(wordQ[wqN++], 48, "%s", chunk); chunk[0] = 0; len = 0; };
+  const char* p = text;
+  while (*p) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    const char* w = p; while (*p && *p != ' ') p++;
+    int wl = (int)(p - w), letters = 0;
+    for (const char* q = w; q < p; q++) if ((*q & 0xC0) != 0x80) letters++;
+    if (wl > 40) wl = 40;
+    if (len && len + 1 + letters > 13) flush();
+    if (len) { strcat(chunk, " "); len++; }
+    strncat(chunk, w, wl); len += letters;
+    if (len >= 13) flush();
+  }
+  flush();
+}
+static Col hsv(float h, float s, float v) {
+  h = fmodf(h, 1.0f); if (h < 0) h += 1;
+  float f = h * 6; int i = (int)f; f -= i;
+  float p = v * (1 - s), q = v * (1 - s * f), u = v * (1 - s * (1 - f));
+  switch (i % 6) { case 0: return col(v, u, p); case 1: return col(q, v, p); case 2: return col(p, v, u); case 3: return col(p, q, v); case 4: return col(u, p, v); }
+  return col(v, p, q);
+}
+static Col neon(float t, float off, float v = 1) { return hsv(t * 0.02f + musHue + off, 0.82f, v); }
+static void musicEnv(float t, float k) {
+  Col n1 = neon(t, 0), n2 = neon(t, 0.45f);
+  env.top = clerp(env.top, col(0.01f, 0.005f, 0.03f), k * 0.92f);
+  env.hor = clerp(env.hor, cmul(n1, 0.16f + 0.22f * mus.bass), k * 0.88f);
+  env.fog = clerp(env.fog, cmul(n1, 0.05f), k * 0.85f);
+  env.below = clerp(env.below, cmul(n2, 0.04f), k * 0.85f);
+  env.sunC = cmul(env.sunC, 1 - 0.5f * k);
+  env.ambS = clerp(env.ambS, cmul(n1, 0.5f), k * 0.7f);
+  env.ambG = clerp(env.ambG, cmul(n2, 0.35f), k * 0.7f);
+  env.sunDisc *= 1 - k; env.moonDisc *= 1 - k;
+  env.stars += (1 - env.stars) * k;
+  env.rain *= 1 - k; env.snow *= 1 - 0.8f * k; env.storm *= 1 - k; env.wind *= 1 - k;
+  env.g1 = cmul(env.g1, 1 - 0.75f * k); env.g2 = cmul(env.g2, 1 - 0.75f * k);
+  env.night += (1 - env.night) * k;
+  env.fogN *= 1 + 0.6f * k; env.fogF *= 1 + 0.6f * k;
+  env.animK *= 1 + 0.5f * k;
+}
+static float ringR() { return clampf(bounds * 1.15f + 2.6f, 3.4f, 9); }
+// how many triangles a thing has (the ring of copies stays within its budget)
+static int instTris(const Inst& in) {
+  if (in.model == X_CUSTOM) { int n = 0; for (int i = 0; i < in.ncp && in.cp0 + i < MAX_CPARTS; i++) n += primMesh(curParts[in.cp0 + i].prim).nt; return n; }
+  if (in.model < 0) return 400;
+  const Part* ps = modelParts(in.model); int n = 0;
+  for (int i = 0; i < MODELS[in.model].np; i++) n += primMesh(ps[i].prim).nt;
+  return n;
+}
+static const float GOLDEN = 1.618034f;
+static const float ICO_V[12][3] = {{0, 1, GOLDEN}, {0, -1, GOLDEN}, {0, 1, -GOLDEN}, {0, -1, -GOLDEN}, {1, GOLDEN, 0}, {-1, GOLDEN, 0}, {1, -GOLDEN, 0}, {-1, -GOLDEN, 0},
+                                 {GOLDEN, 0, 1}, {-GOLDEN, 0, 1}, {GOLDEN, 0, -1}, {-GOLDEN, 0, -1}};
+static uint8_t icoE[30][2]; static int icoN = 0;
+static void wire(const float (*v)[3], int nv, const uint8_t (*e)[2], int ne, float scale, Vec c, const Mat& rot, Col col_, int a) {
+  Vec p[12];
+  for (int i = 0; i < nv && i < 12; i++) p[i] = vadd(c, matApply(rot, vec(v[i][0] * scale, v[i][1] * scale, v[i][2] * scale)));
+  for (int i = 0; i < ne; i++) r3dStreak(p[e[i][0]], p[e[i][1]], col_, a, 1);
+}
+static void musicDraw(float t, float k, Vec target, float camA, float camR) {
+  float fdt = 1 / 30.0f;
+  { static float lastT = 0; fdt = t - lastT; if (fdt < 0 || fdt > 0.3f) fdt = 0.03f; lastT = t; }
+  // a beat: the colours move on, a ring on the floor, sparks for a strong one
+  bool beat = mus.beats != musBeatsSeen;
+  if (beat) {
+    musBeatsSeen = mus.beats;
+    musHue += 0.035f;
+    mrings[ringNext] = {t, musHue}; ringNext = (ringNext + 1) % 8;
+    if (mus.bass > 0.45f) for (int i = 0; i < 6; i++) {
+      uint32_t s = mus.beats * 31 + i;
+      float a = h01(s) * 6.283f, v = 2 + h01(s + 1) * 3;
+      sparks[sparkNext] = {vec(ctrX, ctrY + heightMax * 0.5f + 1.5f, ctrZ), vec(cosf(a) * v * 0.5f, 3 + h01(s + 2) * 4, sinf(a) * v * 0.5f), t, musHue + h01(s + 3) * 0.3f};
+      sparkNext = (sparkNext + 1) % 48;
+    }
+  }
+  int a32 = (int)(32 * k);
+  float Rr = ringR(), Re = Rr + 1.7f;
+  // the floor: a neon grid, pulsing with the bass
+  { Col g = neon(t, 0.5f); int a = (int)(k * (4 + 12 * mus.bass));
+    for (int i = -9; i <= 9; i++) { r3dStreak(vec(i * 3.0f, 0.03f, -27), vec(i * 3.0f, 0.03f, 27), g, a); r3dStreak(vec(-27, 0.03f, i * 3.0f), vec(27, 0.03f, i * 3.0f), g, a); } }
+  // rings on the floor at each beat
+  for (int r = 0; r < 8; r++) {
+    float age = t - mrings[r].born;
+    if (age < 0 || age > 1.6f || mrings[r].born <= 0) continue;
+    float rad = 0.6f + age * 8, al = k * 28 * (1 - age / 1.6f);
+    Col c = hsv(mrings[r].hue, 0.75f, 1);
+    Vec prev = vec(ctrX + rad, 0.06f, ctrZ);
+    for (int i = 1; i <= 40; i++) { float a = i * 6.2832f / 40; Vec p = vec(ctrX + cosf(a) * rad, 0.06f, ctrZ + sinf(a) * rad); r3dStreak(prev, p, c, (int)al, 1); prev = p; }
+  }
+  // the spectrum: 32 glowing bars in a ring (both halves the same, bass at the front and back)
+  for (int i = 0; i < 32; i++) {
+    float a = i * 6.2832f / 32 + t * 0.06f;
+    float b = mus.band[i < 16 ? i : 31 - i] * k;
+    peaks[i] = fmaxf(b, peaks[i] - fdt * 0.6f);
+    float h = 0.1f + b * 3.2f, x = ctrX + cosf(a) * Re, z = ctrZ + sinf(a) * Re;
+    Mat m = matMul(matT(x, h * 0.5f, z), matMul(matRy(-a), matS(0.14f, h * 0.5f, 0.14f)));
+    r3dMesh(P_BOX, m, hsv(musHue + i / 32.0f + t * 0.02f, 0.8f, 0.35f + 0.65f * b), R_EMIT);
+    r3dSprite(vec(x, 0.18f + peaks[i] * 3.2f, z), 0.07f, col(1, 1, 1), SP_SQUARE, a32);
+  }
+  // the scene's things again, in a ring: each one jumps with its frequency band
+  int src[MAXI], ns = 0, tris = 0;
+  for (int i = 0; i < nCur && ns < MAXI; i++) {
+    const Inst& in = cur[i];
+    if (in.decor || in.model < X_CUSTOM) continue;
+    if (in.model >= 0 && (MODELS[in.model].kind == K_FAR || MODELS[in.model].kind == K_SKY)) continue;
+    src[ns++] = i; tris += instTris(in);
+  }
+  if (ns) {
+    int per = tris / ns; if (per < 40) per = 40;
+    int K = 2600 / per; if (K > 12) K = 12; if (K < 5) K = 5;
+    for (int j = 0; j < K; j++) {
+      Inst c = cur[src[j % ns]];
+      float grow = clampf(k * 1.6f - j / (float)K * 0.6f, 0, 1);
+      if (grow <= 0) continue;
+      int bi = (j * 16 / K + 1) % 16;
+      float b = mus.band[bi];
+      float a = j * 6.2832f / K - t * 0.12f;
+      float size = fmaxf(c.h, c.rad * 1.3f); if (size < 0.2f) size = 0.2f;
+      float norm = 1.7f / size;
+      c.x = c.cx = ctrX + cosf(a) * Rr; c.z = c.cz = ctrZ + sinf(a) * Rr;
+      c.y = 0.05f + b * 1.1f;
+      c.s *= norm * (0.6f + 0.8f * b) * smooth(grow);
+      c.yaw = -a - KPI / 2 + sinf(t * 3 + j) * 0.3f;
+      c.beh = B_IDLE; c.sleep = 0; c.born = -1000;
+      if (c.model == X_CUSTOM) { c.rad *= norm; c.h *= norm; }
+      drawInst(c, t, 1, curParts);
+    }
+  }
+  // wireframe shapes over the middle: a big one and a small one turning the other way
+  if (!icoN) for (int i = 0; i < 12; i++) for (int j = i + 1; j < 12; j++) {
+    float dx = ICO_V[i][0] - ICO_V[j][0], dy = ICO_V[i][1] - ICO_V[j][1], dz = ICO_V[i][2] - ICO_V[j][2];
+    if (fabsf(dx * dx + dy * dy + dz * dz - 4) < 0.1f && icoN < 30) { icoE[icoN][0] = i; icoE[icoN][1] = j; icoN++; }
+  }
+  Vec top = vec(ctrX, ctrY + heightMax * 0.5f + 2.6f, ctrZ);
+  float spin = t * 0.5f + mus.beats * 0.12f;
+  float sz = (0.55f + 0.45f * mus.bass + 0.25f * mus.beat) * smooth(k);
+  wire(ICO_V, 12, icoE, icoN, sz, top, matMul(matRy(spin), matRx(t * 0.31f)), neon(t, 0.15f), a32);
+  static const float OCT_V[6][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+  static const uint8_t OCT_E[12][2] = {{0, 2}, {0, 3}, {0, 4}, {0, 5}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {2, 4}, {4, 3}, {3, 5}, {5, 2}};
+  wire(OCT_V, 6, OCT_E, 12, sz * 0.9f, top, matMul(matRy(-spin * 1.7f), matRz(t * 0.5f)), neon(t, 0.55f), a32);
+  // a ring of light around it, wobbling with the spectrum
+  { Col c = neon(t, 0.3f); Vec prev = vec(0, 0, 0);
+    for (int i = 0; i <= 64; i++) {
+      float u = i * 6.2832f / 64, b = mus.band[(i % 64) * 16 / 64];
+      float rr = (1.6f + 0.9f * b) * smooth(k) * (1 + 0.15f * mus.beat);
+      Vec p = vec(top.x + cosf(u + t * 0.3f) * rr, top.y + sinf(u * 3 + t) * 0.25f, top.z + sinf(u + t * 0.3f) * rr);
+      if (i) r3dStreak(prev, p, c, a32 * 3 / 4, 1);
+      prev = p;
+    } }
+  // light beams from the bars, sweeping (with the high notes)
+  if (mus.high > 0.12f) for (int j = 0; j < 6; j++) {
+    float a = j * 1.0472f + t * 0.1f;
+    Vec o = vec(ctrX + cosf(a) * Re, 0.2f, ctrZ + sinf(a) * Re);
+    Vec tip = vec(o.x + sinf(t * 0.7f + j) * 6, 13, o.z + cosf(t * 0.9f + j * 2) * 6);
+    r3dStreak(o, tip, neon(t, j / 6.0f), (int)(k * (4 + 22 * mus.high)), 1);
+  }
+  // sparks
+  for (int i = 0; i < 48; i++) {
+    float age = t - sparks[i].born;
+    if (sparks[i].born <= 0 || age < 0 || age > 1.8f) continue;
+    Vec p = vadd(sparks[i].p, vec(sparks[i].v.x * age, sparks[i].v.y * age - 4.5f * age * age, sparks[i].v.z * age));
+    if (p.y < 0) continue;
+    r3dSprite(p, 0.12f, hsv(sparks[i].hue, 0.6f, 1), SP_SPARK, (int)(a32 * (1 - age / 1.8f)));
+  }
+  // the words: in front, one above the other, turning slowly toward the camera (a little behind it: they look 3D)
+  if (t >= nextWordAt && wqN) {
+    int slot = -1; float oldest = 1e9f; bool used[NWORDS] = {false};
+    for (int i = 0; i < NWORDS; i++) if (words[i].on) used[words[i].lane] = true;
+    for (int i = 0; i < NWORDS; i++) { if (!words[i].on) { slot = i; break; } if (words[i].born < oldest) { oldest = words[i].born; slot = i; } }
+    MWord& w = words[slot];
+    int lane = w.on ? w.lane : -1;
+    if (lane < 0) for (int l = 0; l < NWORDS; l++) { int c = (wordK + l) % NWORDS; if (!used[c]) { lane = c; break; } }
+    if (lane < 0) lane = 0;
+    snprintf(w.t, sizeof(w.t), "%s", wordQ[0]); memmove(wordQ[0], wordQ[1], sizeof(wordQ[0]) * 5); wqN--;
+    w.born = t; w.yaw = camA + (wordK & 1 ? 0.3f : -0.3f); w.lane = lane; w.hue = musHue + 0.13f * wordK; w.on = true;
+    wordK++;
+    nextWordAt = t + 0.8f;
+  }
+  for (int i = 0; i < NWORDS; i++) {
+    MWord& w = words[i];
+    if (!w.on) continue;
+    float age = t - w.born;
+    if (age > 6.5f) { w.on = false; continue; }
+    float d = camA - w.yaw; while (d > KPI) d -= 2 * KPI; while (d < -KPI) d += 2 * KPI;
+    w.yaw += d * fminf(1, fdt * 0.6f);
+    Vec fwd = vec(sinf(w.yaw), 0, cosf(w.yaw)), rgt = vec(cosf(w.yaw), 0, -sinf(w.yaw));
+    float u = 0.1f * (1 + 0.07f * mus.beat);
+    Vec o = vadd(vec(target.x, ctrY + 0.1f + w.lane * 0.95f + age * 0.04f, target.z), vmul(fwd, camR * 0.36f));
+    float fade = clampf((6.5f - age) / 1.2f, 0, 1) * k;
+    Col c = hsv(w.hue, 0.55f, 1), back = hsv(w.hue + 0.08f, 0.8f, 0.8f);
+    ltDraw(w.t, o, vmul(rgt, u), vec(0, u, 0), vmul(fwd, 0.22f), c, back, age / 0.9f, (int)(32 * fade));
+  }
+  r3dFlash = fmaxf(r3dFlash, k * (mus.beat > 0.9f && mus.bass > 0.7f ? 0.12f : 0));
+}
+
 // ------------------------------------------------------------------ showing one
 static bool inited = false;
 static void initOnce() {
@@ -810,10 +1026,22 @@ void sceneDraw(uint16_t* out, float dt) {
   float t = now();
   float tr = sceneTransition(), e = smooth(tr);
   env = mixEnv(envA, envB, e);
+  // music: the world comes in (~1.5 s) and goes (~2.5 s)
+  { float fdt = dt > 0.25f ? 0.25f : dt; mk += ((musOn ? 1.0f : 0.0f) - mk) * clampf(fdt * (musOn ? 0.8f : 0.5f), 0, 1); if (!musOn && mk < 0.003f) mk = 0; }
+  float mks = smooth(mk);
+  if (mk > 0) musicEnv(t, mks);
   // the camera
   float ce = smooth((t - tShow) / 2.6f);
   float R = camA.R + (camB.R - camA.R) * ce, H = camA.H + (camB.H - camA.H) * ce, ty = camA.ty + (camB.ty - camA.ty) * ce;
   float sp = (camA.speed + (camB.speed - camA.speed) * ce) * camSpeedK, arc = camA.arc + (camB.arc - camA.arc) * ce;
+  if (mk > 0) {                                  // music: further out (the rings), a bit higher, faster with the tempo
+    float Rm = fmaxf(R * 1.1f, (ringR() + 1.7f) * 1.55f + 1.5f);
+    R += (Rm - R) * mks; H += (ty + Rm * 0.34f - H) * mks;
+    sp *= 1 + mks * (mus.bpm > 0 ? mus.bpm / 110.0f : 0.8f);
+    if (camSpeedK <= 0) sp += 0.08f * mks;
+    R *= 1 - 0.035f * mks * mus.beat;
+    arc *= 1 - mks;
+  }
   static float ang = 0.4f; static float lastT = 0;
   float step = t - lastT; if (step < 0 || step > 0.3f) step = 0.03f; lastT = t;
   ang += step * sp;
@@ -839,9 +1067,21 @@ void sceneDraw(uint16_t* out, float dt) {
     if (!decorOn && cur[i].decor && cur[i].model >= 0) continue;
     float life = (t - cur[i].born) / (cur[i].decor ? 0.9f : 0.6f);
     if (life <= 0) continue;
+    if (mk > 0) {                                // music: the place's own things sink away, the scene's dance
+      Inst m = cur[i];
+      if (m.decor) { if (mks > 0.97f) continue; m.y -= mks * (m.model < 0 ? 7 : m.h + 0.5f); m.s *= 1 - 0.5f * mks; }
+      else {
+        m.y += mks * mus.beat * (0.15f + 0.25f * fminf(m.h, 2.5f));
+        m.s *= 1 + 0.12f * mks * mus.bass;
+        m.yaw += mks * sinf(t * (mus.bpm > 0 ? mus.bpm / 60.0f : 2) * KPI) * 0.35f;
+      }
+      drawInst(m, t, life > 1 ? 1 : life, curParts);
+      continue;
+    }
     drawInst(cur[i], t, life > 1 ? 1 : life, curParts);
   }
   drawWeather(t, target);
+  if (mk > 0) musicDraw(t, mks, target, a, R);
   if (fxOn) for (int i = 0; i < nEmit; i++) if (t - tShow > 1.2f) fxAt(emits[i].fx, t, emits[i].p, emits[i].spread, emits[i].n, i * 0.37f);
   r3dRender(out, softUp);
   lastTris = r3dTris();

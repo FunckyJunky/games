@@ -7,4 +7,4 @@ D=../DreamCube/src/dream
 g++ -O2 -std=c++17 -Wno-unused-result -DDREAM_SIM -include $D/dream_config.h -I$HOME/Arduino/libraries/ArduinoJson/src -o sim/dreamsim \
   sim/sim.cpp sim/simsys.cpp sim/simdream.cpp \
   src/core/gfx.cpp src/core/g3d.cpp src/core/fx.cpp src/core/holo.cpp src/core/img.cpp src/core/media.cpp src/ui/ui.cpp src/ui/buttons.cpp \
-  $D/screens.cpp $D/r3d.cpp $D/models.cpp $D/scene.cpp -x c src/lib/cubeqr.c -x none -lm -lz
+  $D/screens.cpp $D/r3d.cpp $D/models.cpp $D/scene.cpp $D/musicdet.cpp $D/linetext.cpp -x c src/lib/cubeqr.c -x none -lm -lz

@@ -13,6 +13,7 @@
 #include "../core/sys.h"
 #include "../ui/ui.h"
 #include "dream.h"
+#include "musicdet.h"
 
 DreamCfg dcfg;
 const Lang LANGS[] = {
@@ -187,24 +188,65 @@ int dreamPairJson(char* out, size_t n) {
 }
 void dreamPairDone(int k) { if (k >= nAck) nAck = 0; else { memmove(acks, acks + k, sizeof(PairAck) * (nAck - k)); nAck -= k; } }
 static int countWords(const char* s) { int n = 0; bool in = false; for (; *s; s++) { bool w = !isspace((unsigned char)*s); if (w && !in) n++; in = w; } return n; }
-static void addWords(const char* t) {
+static void addWords(const char* t, bool keep = true) {   // keep: towards the next scene (else only shown)
   while (*t == ' ') t++;
   if (!*t) return;
-  LOCK();
-  size_t a = strlen(pend), b = strlen(t);
-  if (a + b + 2 >= sizeof(pend)) {                  // too much waiting: the oldest words go
-    size_t cut = a + b + 2 - sizeof(pend) + 1;
-    if (cut > a) { a = 0; pend[0] = 0; } else { memmove(pend, pend + cut, a - cut + 1); a -= cut; }
+  if (keep) {
+    LOCK();
+    size_t a = strlen(pend), b = strlen(t);
+    if (a + b + 2 >= sizeof(pend)) {                  // too much waiting: the oldest words go
+      size_t cut = a + b + 2 - sizeof(pend) + 1;
+      if (cut > a) { a = 0; pend[0] = 0; } else { memmove(pend, pend + cut, a - cut + 1); a -= cut; }
+    }
+    if (a) pend[a++] = ' ';
+    snprintf(pend + a, sizeof(pend) - a, "%s", t);
+    pendWords += countWords(t);
+    lastWordsAt = millis();
+    UNLOCK();
   }
-  if (a) pend[a++] = ' ';
-  snprintf(pend + a, sizeof(pend) - a, "%s", t);
-  pendWords += countWords(t);
-  lastWordsAt = millis();
-  UNLOCK();
   size_t l = strlen(t);
   snprintf(heard, sizeof(heard), "%s", l > sizeof(heard) - 1 ? t + l - (sizeof(heard) - 1) : t);
   heardAt = millis();
   uiDirty();
+}
+// speech to text on music: "♪ la la ♪", "[Music]", "(muziek)", "*music*" -> a hint for the music side, and
+// those marks out of the words ([...] tags always: [Applause], [Laughter])
+static bool musicMarks(const char* in, char* out, size_t n) {
+  bool found = false; size_t o = 0;
+  for (const char* p = in; *p && o + 1 < n; ) {
+    const uint8_t* u = (const uint8_t*)p;
+    if (u[0] == 0xE2 && u[1] == 0x99 && (u[2] == 0xAA || u[2] == 0xAB)) { found = true; p += 3; continue; }   // ♪ ♫
+    if (*p == '[' || *p == '(' || *p == '*') {
+      char close = *p == '[' ? ']' : *p == '(' ? ')' : '*';
+      const char* e = strchr(p + 1, close);
+      if (e && e - p < 48) {
+        bool m = false;
+        for (const char* q = p + 1; q + 2 < e; q++)
+          if (tolower((uint8_t)q[0]) == 'm' && tolower((uint8_t)q[1]) == 'u' && (tolower((uint8_t)q[2]) == 's' || tolower((uint8_t)q[2]) == 'z')) m = true;
+        if (m) found = true;
+        if (m || *p == '[') { p = e + 1; continue; }
+      }
+    }
+    out[o++] = *p++;
+  }
+  out[o] = 0;
+  // spaces tidied
+  char* w = out; bool sp = true;
+  for (char* r = out; *r; r++) { if (*r == ' ') { if (!sp) *w++ = ' '; sp = true; } else { *w++ = *r; sp = false; } }
+  if (w > out && w[-1] == ' ') w--;
+  *w = 0;
+  return found;
+}
+void micFrameHook(const int16_t* last512, float gateDb) { mdFrame(last512, gateDb); }   // mic.cpp, every 20 ms
+bool dreamMusic() {
+  if (!dcfg.listen || !dcfg.music || !micOk()) return false;
+  return dcfg.music == 2 || mdState().music;
+}
+float dreamMusicScore() { return mdState().score; }
+void dreamMusicIn(MusicIn& m) {
+  const MusicState& s = mdState();
+  for (int i = 0; i < 16; i++) m.band[i] = s.band[i];
+  m.bass = s.bass; m.mid = s.mid; m.high = s.high; m.level = s.level; m.beat = s.beat; m.beats = s.beats; m.bpm = s.bpm;
 }
 void scribeDone(uint32_t id, int code, const char* text, const char* lang, const char* e) {
   uint8_t* drop = nullptr;
@@ -218,7 +260,12 @@ void scribeDone(uint32_t id, int code, const char* text, const char* lang, const
   if (code == 200) {
     err[0] = 0;
     if (lang && strlen(lang) == 2) snprintf(detLang, sizeof(detLang), "%s", lang);
-    if (text && *text) { addWords(text); lineAdd(text); heardN++; }
+    if (text && *text) {
+      static char clean[400];
+      if (musicMarks(text, clean, sizeof(clean))) mdHint(1);
+      // during the music the words are only shown (3D line art) and kept on the page, no scenes from song lyrics
+      if (clean[0]) { addWords(clean, !dreamMusic()); lineAdd(clean); heardN++; }
+    }
     status = ST_LISTEN;
   } else {
     snprintf(err, sizeof(err), "%s", e && *e ? e : "ERROR");
@@ -240,6 +287,7 @@ void dreamSay(const char* text) {
 bool dreamWants() {
   if (inFlight) return false;
   if (forced) return pendWords > 0;
+  if (dreamMusic()) return false;                // music: the visualizer, no new scenes
   if (!dcfg.listen || !pendWords) return false;
   static const uint8_t MINW[3] = {6, 12, 22}, MINS[3] = {8, 15, 30}, QW[3] = {3, 5, 8}, QS[3] = {4, 6, 10};
   int o = dcfg.often % 3;
@@ -397,6 +445,7 @@ static void setCfg(const char* json) {
   u8("lang", dcfg.lang, N_LANGS - 1); u8("sens", dcfg.sens, 3); u8("mics", dcfg.mics, 2);
   uint8_t g = dcfg.gain; u8("gain", g, 14); if (g != dcfg.gain) { dcfg.gain = g; micGain(g); }
   u8("pause", dcfg.pause, 2); u8("colors", dcfg.colors, 2); u8("fx", dcfg.fxOn, 1); u8("fps", dcfg.fps, 1);
+  u8("music", dcfg.music, 2); u8("mwords", dcfg.mwords, 1);
   if (d["listen"].is<int>()) dreamListen((int)d["listen"] != 0);
   dreamCfgSave();
   // ERROR-CUBE's own: screen and sound
@@ -437,13 +486,15 @@ void dreamLoop() {
 }
 void dreamState(char* out, size_t n) {
   JsonDocument d;
-  d["v"] = CUBE_VERSION; d["listen"] = dcfg.listen; d["st"] = dreamStatusText(dreamStatus());
+  d["v"] = CUBE_VERSION; d["listen"] = dcfg.listen; d["st"] = dreamMusic() && dreamStatus() <= ST_HEAR ? "MUSIC" : dreamStatusText(dreamStatus());
+  d["music"] = dreamMusic() ? 1 : 0; d["bpm"] = (int)(mdState().bpm + 0.5f); d["ms"] = (int)(mdState().score * 100);
   d["title"] = shownTitle; d["heard"] = heard; d["hn"] = heardN; d["lw"] = lN; d["pos"] = pos; d["kept"] = nHist; d["made"] = scenesMade;
   d["lang"] = dcfg.lang ? LANGS[dcfg.lang % N_LANGS].code : detLang;
   JsonObject c = d["cfg"].to<JsonObject>();
   c["often"] = dcfg.often; c["mind"] = dcfg.mind; c["words"] = dcfg.words; c["title"] = dcfg.title; c["cam"] = dcfg.cam;
   c["soft"] = dcfg.soft; c["detail"] = dcfg.detail; c["wake"] = dcfg.wake; c["lang"] = dcfg.lang; c["sens"] = dcfg.sens;
   c["gain"] = dcfg.gain; c["mics"] = dcfg.mics; c["pause"] = dcfg.pause; c["colors"] = dcfg.colors; c["fx"] = dcfg.fxOn; c["fps"] = dcfg.fps;
+  c["music"] = dcfg.music; c["mwords"] = dcfg.mwords;
   c["bright"] = cfg.bright; c["off"] = cfg.offIdx; c["color"] = cfg.color; c["vol"] = cfg.vol; c["autoUpd"] = cfg.autoUpd;
   d["awake"] = uiAwake(); d["bat"] = S.battery ? S.batPct : -1; d["chg"] = S.charging; d["wifi"] = S.ssid;
   serializeJson(d, out, n);
@@ -451,6 +502,7 @@ void dreamState(char* out, size_t n) {
 
 // ------------------------------------------------------------------ start
 void dreamBegin() {
+  mdInit();
   xTaskCreatePinnedToCore(pieceTask, "pieces", 6144, nullptr, 3, nullptr, 1);
   micRun(dcfg.listen ? 1 : 0);
   status = dcfg.listen ? ST_LISTEN : ST_PAUSED;

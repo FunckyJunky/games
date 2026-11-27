@@ -2,8 +2,12 @@
 // Every 9 s (SIM_EVERY ms) someone "says" something; 2.5 s later the cube "dreams" and the scene comes in.
 // SIM_SCENE=k: scene k right away (screenshots). SIM_NONET=1: no WiFi (the WiFi picker first; picking one connects
 // 2.5 s later, SIM_BADPASS=1: it fails). SIM_PAUSE=1: paused.
+// SIM_WAV=file.wav (16 kHz mono): what the microphones hear, through the real music detector (musicdet.cpp), in
+// sim time; SIM_MUSIC=2: MUSIC ALWAYS, 0: OFF. SIM_LYRICS="line|line|...": words heard every 2.5 s during music.
 #include "../src/ui/ui.h"
 #include "../../DreamCube/src/dream/dream.h"
+#include "../../DreamCube/src/dream/musicdet.h"
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,7 +20,7 @@ const int N_LANGS = 4;
 const char* gainLabel(int s) { static char b[12]; snprintf(b, sizeof(b), "%d dB", s * 3); return b; }
 void dreamApName(char* o, size_t n) { snprintf(o, n, "%s", dcfg.apName[0] ? dcfg.apName : "DREAM-CUBE-4F2A"); }
 void dreamNewCode() { strcpy(dcfg.code, "K7M2QX9D"); }
-void dreamCfgLoad() { strcpy(dcfg.apPass, "48151623"); strcpy(dcfg.code, "Q7DRMX4K"); if (getenv("SIM_PAUSE")) dcfg.listen = 0; if (getenv("SIM_FPS")) dcfg.fps = 1; if (getenv("SIM_COLORS")) dcfg.colors = atoi(getenv("SIM_COLORS")); }
+void dreamCfgLoad() { if (getenv("SIM_MUSIC")) dcfg.music = atoi(getenv("SIM_MUSIC")); strcpy(dcfg.apPass, "48151623"); strcpy(dcfg.code, "Q7DRMX4K"); if (getenv("SIM_PAUSE")) dcfg.listen = 0; if (getenv("SIM_FPS")) dcfg.fps = 1; if (getenv("SIM_COLORS")) dcfg.colors = atoi(getenv("SIM_COLORS")); }
 void dreamCfgSave() {}
 volatile bool enetSwitching = false;
 void enetSwitch() { enetSwitching = true; S.upd = UPD_LOADING; S.updPct = 37; snprintf(S.updMsg, sizeof(S.updMsg), "ERROR-CUBE 1.5.5"); }
@@ -64,6 +68,36 @@ static std::string incoming; static bool incFresh = false;
 static char heard[200] = ""; static uint32_t heardAt = 0; static bool thinking = false;
 static std::string said;
 void dreamBegin() {}
+// ---- the music side: a WAV through the real detector
+static std::vector<int16_t> wav; static size_t wavPos = 512; static uint32_t wavT0 = 0; static float wFloor = -60;
+static void wavTick() {
+  static bool loaded = false;
+  if (!loaded) {
+    loaded = true; mdInit();
+    const char* fn = getenv("SIM_WAV");
+    FILE* f = fn ? fopen(fn, "rb") : nullptr;
+    if (f) { fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 44, SEEK_SET); wav.resize((n - 44) / 2); if (fread(wav.data(), 2, wav.size(), f) != wav.size()) wav.clear(); fclose(f); }
+    wavT0 = msNow();
+  }
+  if (wav.size() < 1024) return;
+  size_t want = (size_t)(msNow() - wavT0) * 16;
+  while (wavPos + 320 <= want) {
+    size_t p = wavPos % (wav.size() - 512) + 512;
+    double ss = 0; for (int i = 0; i < 320; i++) { double v = wav[p - 320 + i]; ss += v * v; }
+    float db = 10 * log10f((float)(ss / 320) / (32768.f * 32768.f) + 1e-12f);
+    if (db < wFloor) wFloor += (db - wFloor) * 0.1f; else wFloor += (db - wFloor) * 0.003f;
+    float gate = wFloor + 9; if (gate < -55) gate = -55;
+    mdFrame(&wav[p - 512], gate);
+    wavPos += 320;
+  }
+}
+bool dreamMusic() { if (!dcfg.listen || !dcfg.music) return false; return dcfg.music == 2 || mdState().music; }
+float dreamMusicScore() { return mdState().score; }
+void dreamMusicIn(MusicIn& m) {
+  const MusicState& s = mdState();
+  for (int i = 0; i < 16; i++) m.band[i] = s.band[i];
+  m.bass = s.bass; m.mid = s.mid; m.high = s.high; m.level = s.level; m.beat = s.beat; m.beats = s.beats; m.bpm = s.bpm;
+}
 static void simTick() {
   uint32_t e = getenv("SIM_EVERY") ? atoi(getenv("SIM_EVERY")) : 9000;
   static bool first = true;
@@ -71,7 +105,20 @@ static void simTick() {
   if (simJoinAt && msNow() - simJoinAt > 2500) { simJoinAt = 0; if (getenv("SIM_BADPASS")) S.net = NET_FAIL; else { S.net = NET_UP; strcpy(S.ip, "192.168.1.42"); } }
   if (first) { first = false; dreamCfgLoad(); if (getenv("SIM_NONET")) { S.net = NET_FAIL; strcpy(S.ssid, ""); }
     if (getenv("SIM_SCENE")) { int k = atoi(getenv("SIM_SCENE")) % NS; incoming = SCENES[k]; incFresh = true; snprintf(heard, sizeof(heard), "%s", SAID[k]); heardAt = msNow(); } }
+  wavTick();
   if (!dcfg.listen || S.net != NET_UP) return;
+  if (dreamMusic()) {                          // music: lyrics now and then, no scenes
+    static uint32_t lastLyric = 0; static int li = 0;
+    const char* ly = getenv("SIM_LYRICS");
+    if (ly && msNow() - lastLyric > 2500) {
+      lastLyric = msNow();
+      std::string all = ly; std::vector<std::string> ls; size_t a = 0, b;
+      while ((b = all.find('|', a)) != std::string::npos) { ls.push_back(all.substr(a, b - a)); a = b + 1; }
+      ls.push_back(all.substr(a));
+      snprintf(heard, sizeof(heard), "%s", ls[li++ % ls.size()].c_str()); heardAt = msNow();
+    }
+    return;
+  }
   int s = msNow() / e; uint32_t in = msNow() % e;
   if (s != slot && in > 2400) { slot = s; snprintf(heard, sizeof(heard), "%s", SAID[s % NS]); heardAt = msNow(); thinking = true; }
   if (thinking && in > 4600 && slot == s) { thinking = false; incoming = SCENES[s % NS]; incFresh = true; }

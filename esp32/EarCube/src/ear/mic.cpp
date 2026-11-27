@@ -4,6 +4,7 @@
 //  - every 20 ms: how loud it is against the background noise it learnt -> speech or not
 //  - speech from its start (+ 0.3 s before) to a pause (+ 0.25 s after) = a piece; a long one is cut at its
 //    quietest moment (LIVE after 7 s, RECORD after 25 s). Pieces with under 0.3 s of speech are dropped.
+//  - every 20 ms also the last 32 ms to micFrameHook, if the app has one (DREAM-CUBE: bands, beats, music or not)
 // Runs in its own task (core 1, above the interface and the speaker mixer, below WiFi).
 #include <Arduino.h>
 #include <esp_heap_caps.h>
@@ -67,6 +68,8 @@ static double sumSq = 0;
 static float hp = 0, hpPrev = 0;          // a 70 Hz high-pass (handling noise, rumble)
 static int16_t framePeak = 0;
 
+// what else wants the sound: every 20 ms the last 512 samples (an app may define it; EAR-CUBE doesn't)
+void micFrameHook(const int16_t* last512, float gateDb) __attribute__((weak));
 static void closePiece(uint32_t from, uint32_t to, uint32_t ms) {
   if (to <= from || ms < 300) return;
   Piece p = {from, to, ms, 0};
@@ -136,6 +139,12 @@ static void push(float x) {
     float o = peak[0]; peak[0] = pd > o ? pd : o - 1.5f;       // the meter falls 1.5 dB a frame
     framePeak = 0;
     frameDone();
+    if (micFrameHook && wpos >= 512) {
+      static int16_t last[512];
+      uint32_t from = wpos - 512;
+      for (int i = 0; i < 512; i++) last[i] = ring[(from + i) % RING];
+      micFrameHook(last, gateDb);
+    }
     if (flushReq) {                                            // stop: the piece so far, then the marker
       if (inSeg) { closePiece(segFrom, wpos, segSpeechMs); inSeg = false; }
       Piece m = {wpos, wpos, 0, 1};

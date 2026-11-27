@@ -1,9 +1,9 @@
 {
   "name": "DREAM-CUBE",
-  "ver": "1.3",
+  "ver": "1.4",
   "path": "/dream/flash/dream.bin",
-  "size": 2447056,
-  "md5": "86ca2544e8ac540de41019db845b0e66",
-  "notes": "The live transcript streams to error.blue/dream (lines made safely, a refused line no longer blocks the rest)",
-  "date": "2026-11-27T20:57Z"
+  "size": 2464512,
+  "md5": "d731dcffa8dc11b77058acdb9e664eec",
+  "notes": "Music visuals: the scene becomes a 3D light show when the cube hears music; words heard meanwhile float as 3D line art",
+  "date": "2026-11-27T22:00Z"
 }

@@ -1,5 +1,21 @@
 # DREAM-CUBE
 
+## New in 1.4
+
+- **Music visuals:** the cube hears when music plays (a steady sound with a beat, without the little pauses of
+  talking; tried on speech and on pop, hip-hop, jazz, ragtime, waltz and strings, clean and through a room) and the
+  scene becomes a light show: everything goes dark and neon, the scene's things dance on the beat, copies of them
+  stand in a ring and each jumps with its own frequency band, a ring of 32 glowing bars shows the spectrum (with
+  falling peaks), wireframe shapes turn above it, a ring of light wobbles with the sound, rings run over the floor
+  at each beat, beams sweep with the high notes, sparks fly on strong beats. The camera goes round faster with the
+  tempo. The place's own trees and houses sink away; when the music stops, the scene comes back.
+- **Words in 3D line art:** what it hears during the music (the lyrics, people singing along) floats in front as
+  glowing 3D wireframe letters that draw themselves, one line above the other. No new scenes from song lyrics.
+  Speech to text's music marks (♪, [Music], (muziek)) help it know it's music and don't show up as words.
+- SETUP > MUSIC: MUSIC VISUALS (AUTO / ALWAYS / OFF), WORDS AS 3D LINES, and what it hears now (music or not, how
+  much). Also on error.blue/dream (3D tab > MUSIC). Music starts: the screen comes on (if NEW SCENE WAKES SCREEN).
+- The top shows MUSIC · its tempo in BPM. The page shows ♪ and the tempo.
+
 ## New in 1.3
 
 - **The live transcript streams:** every line the cube hears goes to error.blue/dream with its next link (at once).

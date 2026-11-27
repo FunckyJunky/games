@@ -111,3 +111,12 @@ void sceneDecor(bool on);                  // the place's own trees, houses... (
 void sceneFx(bool on);                     // hearts, sparkles, notes, smoke... (rain and snow stay)
 float sceneTransition();                   // 0..1 while a new scene comes in, 1 = done
 int sceneTris();
+
+// ------------------------------------------------------------------ music: the visualizer over the scene
+// The world goes dark and neon; the scene's things dance; copies of them stand in a ring and jump with their
+// frequency band; a ring of glowing bars (the spectrum), wireframe shapes, rings on the floor at each beat,
+// light beams, sparks. Words heard during the music float as 3D line art.
+struct MusicIn { float band[16]; float bass, mid, high, level, beat; uint32_t beats; float bpm; };
+void sceneMusic(bool on, const MusicIn& m);   // every frame, before sceneDraw (on: music playing)
+float sceneMusicK();                          // 0..1: how far the music world has come in
+void sceneMusicWords(const char* text);       // words heard during the music (shown a few at a time)

@@ -364,6 +364,12 @@ struct Setup : Screen {
     rows.push_back(dchoice("DETAIL", &dcfg.detail, 2, [](int i) { return i ? "FULL" : "LESS (FASTER)"; }));
     rows.push_back(dchoice("NEW SCENE WAKES SCREEN", &dcfg.wake, 2, [](int i) { return i ? "YES" : "NO"; }));
     rows.push_back(dtoggle("FRAME RATE", &dcfg.fps));
+    rows.push_back(heading("MUSIC", IC_SOUND));
+    rows.push_back(dchoice("MUSIC VISUALS", &dcfg.music, 3, [](int i) { static const char* M3[3] = {"OFF", "AUTO", "ALWAYS"}; return M3[i]; }));
+    rows.push_back(dtoggle("WORDS AS 3D LINES", &dcfg.mwords));
+    rows.push_back(info("HEARING", [](char* o) {
+      if (!dcfg.listen) strcpy(o, "PAUSED"); else snprintf(o, 40, "%s %d%%", dreamMusic() ? "MUSIC" : "NO MUSIC", (int)(dreamMusicScore() * 100));
+    }));
     rows.push_back(heading("LISTENING", IC_SOUND));
     rows.push_back(action("LISTENING", [] { dreamListen(!dcfg.listen); }, [](char* o) { strcpy(o, dcfg.listen ? "ON" : "PAUSED"); }));
     rows.push_back(dchoice("LANGUAGE", &dcfg.lang, N_LANGS, [](int i) { return LANGS[i].name; }));
@@ -463,6 +469,7 @@ struct Dream : Screen {
   bool fullScreen() override { return true; }
   bool plain() override { return true; }
   bool noSwipeBack() override { return true; }
+  bool keepAwake() override { return dreamMusic(); }   // music: the light show stays on
   void enter() override {
     last = msNow(); applyLook();
     static bool hinted = false;
@@ -485,12 +492,20 @@ struct Dream : Screen {
     avg = avg * 0.95f + dt * 0.05f;
     if (sceneTransition() >= 1 && avg > 0.09f) { if (!slowSince) slowSince = now; else if (now - slowSince > 3000) autoLess = true; } else slowSince = 0;
     applyLook();
+    // music: the visualizer (and the words heard during it, as 3D line art)
+    MusicIn mi; bool mon = dreamMusic(); dreamMusicIn(mi); sceneMusic(mon, mi);
+    static uint32_t seenHeard = 0;
+    if (dreamHeardAt() != seenHeard) { seenHeard = dreamHeardAt(); if (mon && dcfg.mwords && dreamHeard()[0]) sceneMusicWords(dreamHeard()); }
+    float mk = sceneMusicK();
     sceneDraw(fb, dt);
     // a short glitch when a new scene comes (ERROR-DOS)
     if (sceneTransition() < 0.08f) { fxTear(3, now); fxStatic(6, now * 7); }
     const SceneDef& d = sceneNow();
-    // the title
-    if (dcfg.title && d.title[0]) {
+    // the title (with music: the tempo)
+    if (mk > 0.5f) {
+      char b[32]; if (mi.bpm > 0) snprintf(b, sizeof(b), "MUSIC \xC2\xB7 %d BPM", (int)(mi.bpm + 0.5f)); else strcpy(b, "MUSIC");
+      outlined(FT, 240, 16, b, mi.beat > 0.7f ? C_WHITE : C_FG);
+    } else if (dcfg.title && d.title[0]) {
       shade(0, 70, true);
       char t[48]; snprintf(t, sizeof(t), "%s", d.title);
       for (char* p = t; *p; p++) if ((unsigned char)*p < 128) *p = toupper((unsigned char)*p);
@@ -517,7 +532,7 @@ struct Dream : Screen {
     else if (st == ST_LIMIT || st == ST_ERROR) { snprintf(wb, sizeof(wb), "%s", dreamErr()); utf8Cut(wb, 28); why = wb; }
     if (why) { shade(by - 30, 90, false); outlined(FT, 240, by, why, st == ST_PAUSED ? C_DIM : C_WARN); }
     else if (st == ST_THINK) { shade(by - 30, 90, false); char b[24] = "DREAMING"; int k = (now / 300) % 4; for (int i = 0; i < k; i++) strcat(b, "."); outlined(FT, 240, by, b, C_WARN); }
-    else if (dcfg.words && dreamHeard()[0] && now - dreamHeardAt() < 9000) {
+    else if (dcfg.words && dreamHeard()[0] && now - dreamHeardAt() < 9000 && !(mk > 0.5f && dcfg.mwords)) {
       char lines[6][64];
       int all = wrapText(dreamHeard(), 29, lines, 6), n = all > 2 ? 2 : all;   // the newest two lines
       shade(by - 30 - (n - 1) * 30, 90 + (n - 1) * 30, false);
@@ -613,6 +628,11 @@ void appsLoop() {
   if (S.wakeAt != seenWake) { seenWake = S.wakeAt; uiWake(); }
   if (S.sleepAt != seenSleep) { seenSleep = S.sleepAt; uiSleep(); }
   dreamLoop();
+  // music starts: the screen comes on (as for a new scene)
+  static bool musicWas = false;
+  bool mus = dreamMusic();
+  if (mus && !musicWas && dcfg.wake && !uiAwake()) uiWake();
+  musicWas = mus;
   // a scene to show: new from error.blue, from the control page, or an older one
   static bool first = true;
   if (first) { first = false; SceneDef d; sceneDefault(d); sceneShow(d, true); applyLook(); }
