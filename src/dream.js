@@ -374,7 +374,8 @@ function tables(env) {
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_pair (id TEXT NOT NULL, code TEXT NOT NULL, at INTEGER NOT NULL, num TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, code))`),
       ]);
       // 1.2: new columns (an error = already there)
-      for (const col of ["ipk TEXT NOT NULL DEFAULT ''", "interp TEXT NOT NULL DEFAULT '{}'", "linen INTEGER NOT NULL DEFAULT 0", "mark INTEGER NOT NULL DEFAULT 0"])
+      for (const col of ["ipk TEXT NOT NULL DEFAULT ''", "interp TEXT NOT NULL DEFAULT '{}'", "linen INTEGER NOT NULL DEFAULT 0", "mark INTEGER NOT NULL DEFAULT 0",
+                         "heard TEXT NOT NULL DEFAULT ''", "hn INTEGER NOT NULL DEFAULT -1"])
         try { await env.DB.prepare(`ALTER TABLE dream_cube ADD COLUMN ${col}`).run(); } catch (e) {}
     })().catch((e) => { ready = null; throw e; });
   }
@@ -395,7 +396,7 @@ async function cube(env, code) {
   let row = await env.DB.prepare(`SELECT * FROM dream_cube WHERE code = ?`).bind(code).first();
   if (!row) {
     await env.DB.prepare(`INSERT OR IGNORE INTO dream_cube (code, at) VALUES (?, 0)`).bind(code).run();
-    row = { code, at: 0, st: "{}", cmdn: 0, scenen: 0, ipk: "", interp: "{}", linen: 0, mark: 0 };
+    row = { code, at: 0, st: "{}", cmdn: 0, scenen: 0, ipk: "", interp: "{}", linen: 0, mark: 0, heard: "", hn: -1 };
   }
   return row;
 }
@@ -492,14 +493,21 @@ export async function handleDream(request, env, ctx, path) {
     const code = String(body.code || "");
     if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
     const row = await cube(env, code);
-    const st = body.st && typeof body.st === "object" ? JSON.stringify(body.st).slice(0, 2400) : row.st;
+    const so = body.st && typeof body.st === "object" ? body.st : null;
+    const st = so ? JSON.stringify(so).slice(0, 2400) : row.st;
     const ipk = await ipKey(request.headers.get("CF-Connecting-IP") || "");
+    // what it heard: the live transcript. A cube that sends no line for what it just heard
+    // (firmware before 1.2, or a line that got lost) still streams: its "heard" becomes the line
+    let lines = Array.isArray(body.lines) ? body.lines.slice(0, 20) : [];
+    const heard = so ? clean(so.heard, 500) : row.heard || "";
+    const hn = so && Number.isInteger(so.hn) ? so.hn : -1;
+    const fresh = so && heard && (hn >= 0 ? hn !== row.hn : heard !== (row.heard || ""));
+    if (fresh && !lines.length) lines = [{ t: heard, ago: 0 }];
     // written only when it changed, or once a minute (the page sees "online" from it)
-    if (st !== row.st || ipk !== row.ipk || now - row.at > 60000)
-      await env.DB.prepare(`UPDATE dream_cube SET at = ?, st = ?, ipk = ? WHERE code = ?`).bind(now, st, ipk, code).run();
-    // what it heard: the live transcript
-    const lines = Array.isArray(body.lines) ? body.lines.slice(0, 20) : [];
-    if (lines.length) {
+    if (st !== row.st || ipk !== row.ipk || heard !== row.heard || hn !== row.hn || now - row.at > 60000)
+      try { await env.DB.prepare(`UPDATE dream_cube SET at = ?, st = ?, ipk = ?, heard = ?, hn = ? WHERE code = ?`).bind(now, st, ipk, heard, hn, code).run(); }
+      catch (e) { await env.DB.prepare(`UPDATE dream_cube SET at = ?, st = ?, ipk = ? WHERE code = ?`).bind(now, st, ipk, code).run(); }
+    if (lines.length) try {
       let n = row.linen;
       const ins = env.DB.prepare(`INSERT OR REPLACE INTO dream_line (code, n, at, text) VALUES (?, ?, ?, ?)`);
       const batch = [];
@@ -511,10 +519,10 @@ export async function handleDream(request, env, ctx, path) {
       }
       if (batch.length) {
         batch.push(env.DB.prepare(`UPDATE dream_cube SET linen = ? WHERE code = ?`).bind(n, code));
-        if (n % 50 === 0) batch.push(env.DB.prepare(`DELETE FROM dream_line WHERE code = ? AND n <= ?`).bind(code, n - 3000));
+        if (Math.floor(n / 50) !== Math.floor(row.linen / 50)) batch.push(env.DB.prepare(`DELETE FROM dream_line WHERE code = ? AND n <= ?`).bind(code, n - 3000));
         await env.DB.batch(batch);
       }
-    }
+    } catch (e) { console.log("dream lines", code, String(e?.message || e)); }   // the commands still go back
     // its answers to "link a phone?"
     for (const p of Array.isArray(body.pair) ? body.pair.slice(0, 4) : [])
       if (p && typeof p.id === "string") await env.DB.prepare(`UPDATE dream_pair SET ok = ? WHERE id = ? AND code = ?`).bind(p.ok ? 1 : -1, p.id.slice(0, 16), code).run();

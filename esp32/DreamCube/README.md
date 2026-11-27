@@ -1,5 +1,12 @@
 # DREAM-CUBE
 
+## New in 1.3
+
+- **The live transcript streams:** every line the cube hears goes to error.blue/dream with its next link (at once).
+  The lines are put together more safely on the cube, and when error.blue keeps saying no to a line it's dropped
+  instead of blocking the ones after it. error.blue also takes what the cube says it just heard when no line came
+  with it, so cubes on 1.1 / 1.2 stream too. The page says when the cube is old, paused, or still has lines waiting.
+
 ## New in 1.2
 
 - **Linking by itself:** open error.blue/dream on a phone or computer on the same network; the cube asks on its

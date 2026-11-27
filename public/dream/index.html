@@ -87,6 +87,7 @@
       </div>
       <h2>LIVE TRANSCRIPT <span class="dim" id="lcount"></span></h2>
       <div id="live"><p class="dim">Waiting for words... (the cube has to be listening, and on the internet)</p></div>
+      <p id="lnote" class="warn" hidden></p>
       <div class="bar"><button id="bSave">SAVE</button><button class="rm" id="bClearLive">CLEAR</button><span class="dim">SAVE keeps it below and starts a new one.</span></div>
       <h2>SAVED TRANSCRIPTS <span class="dim" id="tcount"></span></h2>
       <div id="txs"><p class="dim">None yet.</p></div>
@@ -195,6 +196,7 @@ async function api(method, body, extra = "") {
   const r = await fetch(u, method === "GET" ? { cache: "no-store" } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return r.json();
 }
+const vNum = (v) => String(v).split(".").reduce((a, x, i) => a + (parseInt(x) || 0) * [1e6, 1e3, 1][i] || a, 0);
 function ago(ms) { if (ms < 0) return "never"; const s = Math.round(ms / 1000); return s < 60 ? s + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : Math.round(s / 3600) + " h ago"; }
 const hms = (at) => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 const when = (at) => { const d = new Date(at); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
@@ -252,6 +254,12 @@ async function poll() {
   $("bListen").textContent = st.listen ? "PAUSE" : "LISTEN"; $("bListen").dataset.c = st.listen ? "pause" : "listen";
   if (!filled && st.cfg) { filled = true; for (const k in st.cfg) document.querySelectorAll(".cfgf [name=" + k + "]").forEach((e) => (e.value = st.cfg[k])); showRanges(); }
   if (!interpFilled && j.interp) { interpFilled = true; for (const k in j.interp) { const e = document.querySelector("#if [name=" + k + "]"); if (e) e.value = j.interp[k]; } }
+  // why words might not come: an old DREAM-CUBE, paused, or lines still waiting on the cube
+  const vOld = st.v && vNum(st.v) < vNum("1.3"), notes = [];
+  if (cube.online && vOld) notes.push("The cube runs DREAM-CUBE " + st.v + ". Update it for the full live transcript: on the cube SETUP > UPDATE DREAM-CUBE (or flash.bat).");
+  if (cube.online && st.listen === false) notes.push("The cube is paused: press LISTEN.");
+  if (cube.online && st.lw > 0) notes.push(st.lw + " line" + (st.lw > 1 ? "s" : "") + " still on the cube, on the way...");
+  $("lnote").hidden = !notes.length; $("lnote").textContent = notes.join("  ");
   // the live transcript (CLEAR or SAVE elsewhere moved its start: drop what's before it)
   if (lines.length && lines[0].n <= j.mark) { lines = lines.filter((l) => l.n > j.mark); drawLive(); }
   if (j.lines.length) { const fresh = j.lines.filter((l) => l.n > lastLine); lines.push(...fresh); lines = lines.slice(-600); lastLine = Math.max(lastLine, ...j.lines.map((l) => l.n)); drawLive(fresh.length); }

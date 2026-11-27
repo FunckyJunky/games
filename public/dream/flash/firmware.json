@@ -1,9 +1,9 @@
 {
   "name": "DREAM-CUBE",
-  "ver": "1.2",
+  "ver": "1.3",
   "path": "/dream/flash/dream.bin",
-  "size": 2445616,
-  "md5": "9f5e72c81e38dd72b9fb3af20f017b4a",
-  "notes": "Linking by itself (the cube asks LINK A PHONE?), live transcript on error.blue/dream (save, read, download, delete), all settings there, and how speech becomes 3D: style, place, time, mood, your wish... New looks: vivid and ERROR-DOS colours.",
-  "date": "2026-11-27T19:23Z"
+  "size": 2447056,
+  "md5": "86ca2544e8ac540de41019db845b0e66",
+  "notes": "The live transcript streams to error.blue/dream (lines made safely, a refused line no longer blocks the rest)",
+  "date": "2026-11-27T20:57Z"
 }

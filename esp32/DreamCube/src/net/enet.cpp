@@ -273,8 +273,18 @@ static void doLink() {
   dreamState(st, 1500);
   int nl = dreamLinesJson(ln, 4200), np = dreamPairJson(pr, 300);
   size_t n = snprintf(out, 7000, "{\"code\":\"%s\",\"last\":%d,\"st\":%s,\"lines\":%s,\"pair\":%s}", dcfg.code, (int)(lastCmd < 0 ? 0 : lastCmd), st, ln, pr);
+  if (n >= 7000) {                            // never: but then without the lines
+    nl = 0; n = snprintf(out, 7000, "{\"code\":\"%s\",\"last\":%d,\"st\":%s,\"lines\":[],\"pair\":%s}", dcfg.code, (int)(lastCmd < 0 ? 0 : lastCmd), st, pr);
+    if (n >= 7000) return;
+  }
   int code = req("POST", LINK_PATH, "application/json", (const uint8_t*)out, n, body, BODY);
-  if (code != 200) return;
+  static int refused = 0;
+  if (code != 200) {
+    // error.blue said no to these lines three times (not the internet, not busy): the oldest one goes
+    if (code >= 400 && code != 429 && nl > 0 && ++refused >= 3) { refused = 0; dreamLinesDone(1); }
+    return;
+  }
+  refused = 0;
   linkAt = millis();
   dreamLinesDone(nl); dreamPairDone(np);
   JsonDocument d;

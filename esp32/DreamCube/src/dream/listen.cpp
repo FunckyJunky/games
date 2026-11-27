@@ -127,10 +127,14 @@ static bool inFlight = false, forced = false;
 // the lines for the control page's live transcript (sent with the next link, which comes at once)
 struct Line { char t[400]; uint32_t at; };
 #define NL 24
-static Line* lq = nullptr; static int lHead = 0, lN = 0;
+static Line* lq = nullptr; static volatile int lHead = 0, lN = 0;
+static uint32_t heardN = 0;                      // pieces with words (the page sees it count)
 static void lineAdd(const char* t) {
-  if (!dcfg.link) return;
+  if (!dcfg.link || !t) return;
+  while (*t == ' ') t++;
+  if (!*t) return;
   if (!lq) lq = (Line*)heap_caps_malloc(sizeof(Line) * NL, MALLOC_CAP_SPIRAM);
+  if (!lq) lq = (Line*)malloc(sizeof(Line) * NL);
   if (!lq) return;
   LOCK();
   if (lN == NL) { lHead = (lHead + 1) % NL; lN--; }     // too many waiting (no internet): the oldest goes
@@ -140,17 +144,37 @@ static void lineAdd(const char* t) {
   UNLOCK();
 }
 int dreamLinesWaiting() { return lN; }
+// the lines are copied while locked; the JSON is made after (nothing that allocates inside the lock)
 int dreamLinesJson(char* out, size_t n) {
-  JsonDocument d;
-  JsonArray a = d.to<JsonArray>();
-  LOCK();
-  int k = lN < 8 ? lN : 8;
-  for (int i = 0; i < k; i++) { const Line& l = lq[(lHead + i) % NL]; JsonObject o = a.add<JsonObject>(); o["t"] = (const char*)l.t; o["ago"] = millis() - l.at; }
-  UNLOCK();
-  serializeJson(d, out, n);
-  return k;
+  static Line* snap = nullptr;
+  if (!snap) snap = (Line*)heap_caps_malloc(sizeof(Line) * 8, MALLOC_CAP_SPIRAM);
+  if (!snap) snap = (Line*)malloc(sizeof(Line) * 8);
+  if (!out || n < 3) return 0;
+  int k = 0;
+  if (lq && snap) {
+    LOCK();
+    k = lN < 8 ? lN : 8;
+    for (int i = 0; i < k; i++) snap[i] = lq[(lHead + i) % NL];
+    UNLOCK();
+  }
+  uint32_t now = millis();
+  // as many as fit (the rest go with the next link)
+  size_t w = 0;
+  out[w++] = '[';
+  int sent = 0;
+  for (int i = 0; i < k; i++) {
+    JsonDocument d;
+    d["t"] = (const char*)snap[i].t; d["ago"] = now - snap[i].at;
+    size_t need = measureJson(d) + 2;
+    if (w + need + 2 > n) break;
+    if (sent) out[w++] = ',';
+    w += serializeJson(d, out + w, n - w);
+    sent++;
+  }
+  out[w++] = ']'; out[w] = 0;
+  return sent;
 }
-void dreamLinesDone(int k) { LOCK(); if (k > lN) k = lN; lHead = (lHead + k) % NL; lN -= k; UNLOCK(); }
+void dreamLinesDone(int k) { if (k <= 0) return; LOCK(); if (k > lN) k = lN; lHead = (lHead + k) % NL; lN -= k; UNLOCK(); }
 // "link a phone?": the answers (YES / NO on the cube) wait for the next link
 struct PairAck { char id[16]; int8_t ok; };
 static PairAck acks[4]; static int nAck = 0;
@@ -194,7 +218,7 @@ void scribeDone(uint32_t id, int code, const char* text, const char* lang, const
   if (code == 200) {
     err[0] = 0;
     if (lang && strlen(lang) == 2) snprintf(detLang, sizeof(detLang), "%s", lang);
-    if (text && *text) { addWords(text); lineAdd(text); }
+    if (text && *text) { addWords(text); lineAdd(text); heardN++; }
     status = ST_LISTEN;
   } else {
     snprintf(err, sizeof(err), "%s", e && *e ? e : "ERROR");
@@ -414,7 +438,7 @@ void dreamLoop() {
 void dreamState(char* out, size_t n) {
   JsonDocument d;
   d["v"] = CUBE_VERSION; d["listen"] = dcfg.listen; d["st"] = dreamStatusText(dreamStatus());
-  d["title"] = shownTitle; d["heard"] = heard; d["pos"] = pos; d["kept"] = nHist; d["made"] = scenesMade;
+  d["title"] = shownTitle; d["heard"] = heard; d["hn"] = heardN; d["lw"] = lN; d["pos"] = pos; d["kept"] = nHist; d["made"] = scenesMade;
   d["lang"] = dcfg.lang ? LANGS[dcfg.lang % N_LANGS].code : detLang;
   JsonObject c = d["cfg"].to<JsonObject>();
   c["often"] = dcfg.often; c["mind"] = dcfg.mind; c["words"] = dcfg.words; c["title"] = dcfg.title; c["cam"] = dcfg.cam;
