@@ -50,7 +50,8 @@ bool r3dInit();                           // band buffers + the triangle list (f
 void r3dBegin(Vec eye, Vec target, float fovDeg, float roll = 0);
 void r3dLight(Vec toSun, Col sun, Col skyAmb, Col groundAmb);
 void r3dFog(float nearZ, float farZ, Col c);
-void r3dFill(Col c);                     // a soft light from the camera (so the subject never disappears in the dark)
+void r3dFill(Col c);
+void r3dLook(int mode, Col tint);         // colours: 0 as they are, 1 vivid, 2 one colour (tint: ERROR-DOS)                     // a soft light from the camera (so the subject never disappears in the dark)
 void r3dSkyRows(Col top, Col horizon, Col below);   // the background, by height above the horizon
 void r3dMesh(int prim, const Mat& world, Col c, int flags = 0);
 void r3dTri(Vec a, Vec b, Vec c, Col color, int flags = 0);   // world space

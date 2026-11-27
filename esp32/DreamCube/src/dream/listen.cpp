@@ -9,6 +9,7 @@
 #include <esp_random.h>
 #include <ArduinoJson.h>
 #include <deque>
+#include <string>
 #include "../core/sys.h"
 #include "../ui/ui.h"
 #include "dream.h"
@@ -123,6 +124,44 @@ static uint32_t lastWordsAt = 0, lastSceneAt = 0, scenesMade = 0;
 static char heard[200] = "";
 static uint32_t heardAt = 0;
 static bool inFlight = false, forced = false;
+// the lines for the control page's live transcript (sent with the next link, which comes at once)
+struct Line { char t[400]; uint32_t at; };
+#define NL 24
+static Line* lq = nullptr; static int lHead = 0, lN = 0;
+static void lineAdd(const char* t) {
+  if (!dcfg.link) return;
+  if (!lq) lq = (Line*)heap_caps_malloc(sizeof(Line) * NL, MALLOC_CAP_SPIRAM);
+  if (!lq) return;
+  LOCK();
+  if (lN == NL) { lHead = (lHead + 1) % NL; lN--; }     // too many waiting (no internet): the oldest goes
+  Line& l = lq[(lHead + lN) % NL];
+  snprintf(l.t, sizeof(l.t), "%s", t); l.at = millis();
+  lN++;
+  UNLOCK();
+}
+int dreamLinesWaiting() { return lN; }
+int dreamLinesJson(char* out, size_t n) {
+  JsonDocument d;
+  JsonArray a = d.to<JsonArray>();
+  LOCK();
+  int k = lN < 8 ? lN : 8;
+  for (int i = 0; i < k; i++) { const Line& l = lq[(lHead + i) % NL]; JsonObject o = a.add<JsonObject>(); o["t"] = (const char*)l.t; o["ago"] = millis() - l.at; }
+  UNLOCK();
+  serializeJson(d, out, n);
+  return k;
+}
+void dreamLinesDone(int k) { LOCK(); if (k > lN) k = lN; lHead = (lHead + k) % NL; lN -= k; UNLOCK(); }
+// "link a phone?": the answers (YES / NO on the cube) wait for the next link
+struct PairAck { char id[16]; int8_t ok; };
+static PairAck acks[4]; static int nAck = 0;
+int dreamPairJson(char* out, size_t n) {
+  if (!out) return nAck;
+  JsonDocument d; JsonArray a = d.to<JsonArray>();
+  for (int i = 0; i < nAck; i++) { JsonObject o = a.add<JsonObject>(); o["id"] = (const char*)acks[i].id; o["ok"] = acks[i].ok; }
+  serializeJson(d, out, n);
+  return nAck;
+}
+void dreamPairDone(int k) { if (k >= nAck) nAck = 0; else { memmove(acks, acks + k, sizeof(PairAck) * (nAck - k)); nAck -= k; } }
 static int countWords(const char* s) { int n = 0; bool in = false; for (; *s; s++) { bool w = !isspace((unsigned char)*s); if (w && !in) n++; in = w; } return n; }
 static void addWords(const char* t) {
   while (*t == ' ') t++;
@@ -155,7 +194,7 @@ void scribeDone(uint32_t id, int code, const char* text, const char* lang, const
   if (code == 200) {
     err[0] = 0;
     if (lang && strlen(lang) == 2) snprintf(detLang, sizeof(detLang), "%s", lang);
-    if (text && *text) addWords(text);
+    if (text && *text) { addWords(text); lineAdd(text); }
     status = ST_LISTEN;
   } else {
     snprintf(err, sizeof(err), "%s", e && *e ? e : "ERROR");
@@ -333,8 +372,15 @@ static void setCfg(const char* json) {
   u8("cam", dcfg.cam, 3); u8("soft", dcfg.soft, 1); u8("detail", dcfg.detail, 1); u8("wake", dcfg.wake, 1);
   u8("lang", dcfg.lang, N_LANGS - 1); u8("sens", dcfg.sens, 3); u8("mics", dcfg.mics, 2);
   uint8_t g = dcfg.gain; u8("gain", g, 14); if (g != dcfg.gain) { dcfg.gain = g; micGain(g); }
+  u8("pause", dcfg.pause, 2); u8("colors", dcfg.colors, 2); u8("fx", dcfg.fxOn, 1); u8("fps", dcfg.fps, 1);
   if (d["listen"].is<int>()) dreamListen((int)d["listen"] != 0);
   dreamCfgSave();
+  // ERROR-CUBE's own: screen and sound
+  bool c = false;
+  auto cu8 = [&](const char* k, uint8_t& v, int lo, int hi) { if (d[k].is<int>()) { int x = d[k]; if (x >= lo && x <= hi && x != v) { v = x; c = true; } } };
+  cu8("bright", cfg.bright, 5, 100); cu8("off", cfg.offIdx, 0, N_OFF - 1); cu8("color", cfg.color, 0, N_SCHEMES - 1);
+  cu8("vol", cfg.vol, 0, 100); cu8("autoUpd", cfg.autoUpd, 0, 1);
+  if (c) cfgChanged();
   uiDirty();
 }
 void dreamLoop() {
@@ -352,6 +398,16 @@ void dreamLoop() {
     else if (!strcmp(c, "scene")) { put(x.a, false); x.a = nullptr; if (dcfg.wake) uiWake(); }
     else if (!strcmp(c, "cfg")) setCfg(x.a);
     else if (!strcmp(c, "unlink")) { dcfg.link = 0; dreamCfgSave(); }
+    else if (!strcmp(c, "pair")) {           // a phone at error.blue/dream wants to link: "id|1234"
+      std::string a = x.a ? x.a : "", id = a.substr(0, a.find('|')), num = a.find('|') != std::string::npos ? a.substr(a.find('|') + 1) : "";
+      uiWake();
+      char msg[200];
+      snprintf(msg, sizeof(msg), "A phone at error.blue/dream wants to see what this cube hears and use its buttons.\nThe phone shows: %s", num.c_str());
+      ask("LINK A PHONE?", msg, {"YES", "NO"}, [id](int k) {
+        if (nAck < 4) { snprintf(acks[nAck].id, sizeof(acks[nAck].id), "%s", id.c_str()); acks[nAck].ok = k == 0 ? 1 : 0; nAck++; }
+        toast(k == 0 ? "PHONE LINKED" : "NOT LINKED");
+      });
+    }
     if (x.a) heap_caps_free(x.a);
   }
 }
@@ -363,7 +419,8 @@ void dreamState(char* out, size_t n) {
   JsonObject c = d["cfg"].to<JsonObject>();
   c["often"] = dcfg.often; c["mind"] = dcfg.mind; c["words"] = dcfg.words; c["title"] = dcfg.title; c["cam"] = dcfg.cam;
   c["soft"] = dcfg.soft; c["detail"] = dcfg.detail; c["wake"] = dcfg.wake; c["lang"] = dcfg.lang; c["sens"] = dcfg.sens;
-  c["gain"] = dcfg.gain; c["mics"] = dcfg.mics;
+  c["gain"] = dcfg.gain; c["mics"] = dcfg.mics; c["pause"] = dcfg.pause; c["colors"] = dcfg.colors; c["fx"] = dcfg.fxOn; c["fps"] = dcfg.fps;
+  c["bright"] = cfg.bright; c["off"] = cfg.offIdx; c["color"] = cfg.color; c["vol"] = cfg.vol; c["autoUpd"] = cfg.autoUpd;
   d["awake"] = uiAwake(); d["bat"] = S.battery ? S.batPct : -1; d["chg"] = S.charging; d["wifi"] = S.ssid;
   serializeJson(d, out, n);
 }

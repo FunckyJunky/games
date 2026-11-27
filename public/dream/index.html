@@ -4,107 +4,172 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DREAM-CUBE · control</title>
-<meta name="description" content="DREAM-CUBE: the cube listens and turns what's said into a little animated 3D world. Its scenes, buttons and settings.">
+<meta name="description" content="DREAM-CUBE: the cube listens and turns what's said into a little animated 3D world. Live transcript, scenes, settings.">
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
   :root { --fg: #39ff7a; --dim: #1fa04c; --bg: #031208; --red: #ff5a6a; --warn: #ffb43a; --hi: #d8ffe5; }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 22px/1.3 'VT323', ui-monospace, monospace; text-shadow: 0 0 5px rgba(57,255,122,.45); }
   main { max-width: 860px; margin: 0 auto; padding: 0 16px 60px; }
-  h1 { background: var(--fg); color: var(--bg); text-shadow: none; font-weight: normal; font-size: 34px; margin: 0 -16px 14px; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+  h1 { background: var(--fg); color: var(--bg); text-shadow: none; font-weight: normal; font-size: 34px; margin: 0 -16px 12px; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
   h1 small { font-size: 22px; }
-  h2 { font-weight: normal; font-size: 26px; margin: 28px 0 10px; border-bottom: 3px double var(--fg); }
+  h2 { font-weight: normal; font-size: 26px; margin: 26px 0 10px; border-bottom: 3px double var(--fg); }
   a { color: #b8ffd0; }
   .dim { color: var(--dim); } .red { color: var(--red); } .warn { color: var(--warn); } .hi { color: var(--hi); }
-  button, .btn { font: inherit; font-size: 22px; background: var(--fg); color: var(--bg); text-shadow: none; border: 0; padding: 5px 16px; margin: 4px 8px 4px 0; cursor: pointer; }
+  button { font: inherit; font-size: 22px; background: var(--fg); color: var(--bg); text-shadow: none; border: 0; padding: 4px 14px; margin: 4px 8px 4px 0; cursor: pointer; }
   button.b2 { background: none; color: var(--fg); border: 2px solid var(--fg); }
   button.rm { background: none; color: var(--red); border: 2px solid var(--red); }
-  button:disabled { opacity: .35; cursor: default; }
-  input, select, textarea { font: inherit; font-size: 22px; background: #000; color: var(--fg); border: 2px solid var(--fg); padding: 4px 8px; width: 100%; }
+  button.sm { font-size: 19px; padding: 1px 10px; }
+  input, select, textarea { font: inherit; font-size: 22px; background: #000; color: var(--fg); border: 2px solid var(--fg); padding: 3px 8px; width: 100%; }
+  input[type=range] { padding: 0; accent-color: var(--fg); }
   textarea { height: 76px; resize: vertical; }
   .box { border: 3px double var(--dim); padding: 10px 14px; margin: 12px 0; }
-  .bar { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .bar { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; }
+  nav { display: flex; gap: 6px; margin: 10px 0 0; position: sticky; top: 0; background: var(--bg); padding: 6px 0; z-index: 2; }
+  nav button { flex: 1; margin: 0; background: none; color: var(--dim); border: 2px solid var(--dim); }
+  nav button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
   #dot { width: 16px; height: 16px; border-radius: 50%; background: var(--dim); display: inline-block; }
   #dot.on { background: var(--fg); box-shadow: 0 0 10px var(--fg); } #dot.off { background: var(--red); }
-  #now { font-size: 40px; color: var(--hi); margin: 8px 0 0; letter-spacing: 1px; }
-  #heard { min-height: 1.3em; }
-  .scene { border-left: 5px solid var(--fg); padding: 8px 12px; margin: 10px 0; background: rgba(57,255,122,.05); }
-  .scene.cur { border-color: var(--warn); }
-  .scene .t { font-size: 28px; color: var(--hi); }
-  .scene .w { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0; }
-  .scene .things { font-size: 30px; letter-spacing: 4px; text-shadow: none; }
-  .scene button { font-size: 19px; padding: 2px 10px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+  #now { font-size: 34px; color: var(--hi); letter-spacing: 1px; }
+  #live { border: 2px solid var(--dim); height: 46vh; min-height: 220px; overflow-y: auto; padding: 8px 10px; background: #010a04; }
+  #live p { margin: 0 0 6px; } #live time, .tx time { color: var(--dim); margin-right: 10px; }
+  #live .new { color: var(--hi); }
+  .item { border-left: 5px solid var(--fg); padding: 6px 12px; margin: 10px 0; background: rgba(57,255,122,.05); }
+  .item.cur { border-color: var(--warn); }
+  .item .t { font-size: 27px; color: var(--hi); }
+  .item .things { font-size: 30px; letter-spacing: 4px; text-shadow: none; }
+  .tx { max-height: 50vh; overflow-y: auto; border-top: 1px dashed var(--dim); margin-top: 8px; padding-top: 6px; }
+  .tx p { margin: 0 0 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
   label { display: block; margin: 8px 0 2px; color: var(--dim); }
-  .code { font-size: 44px; letter-spacing: 6px; }
-  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--fg); color: var(--bg); text-shadow: none; padding: 6px 16px; display: none; }
-  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } #now { font-size: 32px; } }
+  .code { font-size: 40px; letter-spacing: 6px; }
+  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--fg); color: var(--bg); text-shadow: none; padding: 6px 16px; display: none; z-index: 5; }
+  .big { font-size: 64px; letter-spacing: 10px; color: var(--hi); }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } #now { font-size: 28px; } nav button { font-size: 19px; padding: 4px 2px; } }
 </style>
 </head>
 <body>
 <main>
   <h1><span>C:\&gt;DREAM-CUBE</span><small id="hcode"></small></h1>
 
-  <section id="link">
-    <p>The <b>DREAM-CUBE</b> listens, and turns what's said into a little animated 3D world on its screen. This page shows
-    its scenes, has its buttons and settings, and lets you type words for it to dream.</p>
-    <div class="box">
-      <label>THE CUBE'S CODE (8 letters: on the cube, SETUP &gt; CONTROL PAGE, or scan the QR code there)</label>
+  <!-- not linked yet: find the cube by itself -->
+  <section id="link" hidden>
+    <p>The <b>DREAM-CUBE</b> listens, and turns what's said into a little animated 3D world on its screen. Here: what it hears
+    (live), its transcripts and scenes, and all its settings.</p>
+    <div class="box" id="find">
+      <div id="fmsg">LOOKING FOR YOUR CUBE...</div>
+      <div id="fnum" hidden><p>Your cube asks on its screen: <b>LINK A PHONE?</b> Press <b>YES</b> on the cube. It shows this number:</p><div class="big" id="num"></div></div>
+      <div id="fno" hidden><p class="warn">No DREAM-CUBE found from here.</p>
+        <p class="dim">The cube has to be on, connected to the internet, and on the same WiFi as this phone or computer.</p>
+        <button id="bFind">LOOK AGAIN</button></div>
+    </div>
+    <details><summary class="dim">OR TYPE THE CUBE'S CODE</summary>
+      <p class="dim">8 letters: on the cube, SETUP &gt; CONTROL PAGE (or scan the QR code there).</p>
       <form id="lf" class="bar"><input id="codeIn" maxlength="8" autocomplete="off" style="max-width:260px;text-transform:uppercase"><button>LINK</button></form>
       <div id="lmsg" class="dim"></div>
-    </div>
-    <p>No DREAM-CUBE yet? <a href="flash/">Install it with USB</a> (flash.bat) on the Waveshare ESP32-S3-Touch-AMOLED-2.16,
-    or from ERROR-CUBE: SYSTEM &gt; UPDATE &gt; FW Other &gt; DREAM-CUBE.</p>
+    </details>
+    <p>No DREAM-CUBE yet? <a href="flash/">Install it with USB</a> (flash.bat) on the Waveshare ESP32-S3-Touch-AMOLED-2.16.</p>
   </section>
 
   <section id="app" hidden>
-    <div class="box">
-      <div class="bar"><span id="dot"></span><span id="online">...</span><span id="st" class="hi"></span><span id="meta" class="dim"></span></div>
-      <div id="now">...</div>
-      <div id="heard" class="dim"></div>
-      <div class="bar" style="margin-top:8px">
-        <button id="bListen">PAUSE</button>
-        <button class="b2" data-c="wake">SCREEN ON</button><button class="b2" data-c="sleep">SCREEN OFF</button>
-        <button class="b2" data-c="prev">&lt; OLDER</button><button class="b2" data-c="next">NEWER &gt;</button>
+    <div class="bar"><span id="dot"></span><span id="online">...</span><span id="st" class="hi"></span><span id="meta" class="dim"></span></div>
+    <nav><button data-tab="live" class="on">LIVE</button><button data-tab="scenes">SCENES</button><button data-tab="d3">3D</button><button data-tab="cube">CUBE</button></nav>
+
+    <div data-p="live">
+      <div class="box">
+        <div class="dim">ON THE CUBE NOW</div>
+        <div id="now">...</div>
+        <div class="bar">
+          <button id="bListen">PAUSE</button>
+          <button class="b2" data-c="wake">SCREEN ON</button><button class="b2" data-c="sleep">SCREEN OFF</button>
+          <button class="b2" data-c="prev">&lt; OLDER</button><button class="b2" data-c="next">NEWER &gt;</button>
+        </div>
       </div>
+      <h2>LIVE TRANSCRIPT <span class="dim" id="lcount"></span></h2>
+      <div id="live"><p class="dim">Waiting for words... (the cube has to be listening, and on the internet)</p></div>
+      <div class="bar"><button id="bSave">SAVE</button><button class="rm" id="bClearLive">CLEAR</button><span class="dim">SAVE keeps it below and starts a new one.</span></div>
+      <h2>SAVED TRANSCRIPTS <span class="dim" id="tcount"></span></h2>
+      <div id="txs"><p class="dim">None yet.</p></div>
     </div>
 
-    <h2>DREAM OF...</h2>
-    <form id="sf"><textarea id="say" placeholder="type anything: a story, a wish, what happened today. The cube shows it."></textarea>
-    <div class="bar"><button>DREAM IT</button><span id="smsg" class="dim"></span></div></form>
-
-    <h2>SCENES <span class="dim" id="count"></span></h2>
-    <div id="scenes"><p class="dim">Nothing yet: talk near the cube (it has to be on the internet), or type above.</p></div>
-    <div class="bar"><button class="rm" id="bClear">DELETE ALL</button></div>
-
-    <h2>SETTINGS</h2>
-    <form id="cf"><div class="grid">
-      <div><label>NEW SCENE</label><select name="often"><option value="0">OFTEN (every few seconds of talk)<option value="1">NORMAL<option value="2">CALM (less often)</select></div>
-      <div><label>THINKING</label><select name="mind"><option value="0">QUICK<option value="1">SMART (slower, more detail)</select></div>
-      <div><label>WORDS ON SCREEN</label><select name="words"><option value="1">ON<option value="0">OFF</select></div>
-      <div><label>TITLE ON SCREEN</label><select name="title"><option value="1">ON<option value="0">OFF</select></div>
-      <div><label>CAMERA</label><select name="cam"><option value="0">STILL<option value="1">SLOW<option value="2">NORMAL<option value="3">FAST</select></div>
-      <div><label>PIXELS</label><select name="soft"><option value="1">SMOOTH<option value="0">SHARP</select></div>
-      <div><label>DETAIL</label><select name="detail"><option value="1">FULL<option value="0">LESS (FASTER)</select></div>
-      <div><label>A NEW SCENE WAKES THE SCREEN</label><select name="wake"><option value="1">YES<option value="0">NO</select></div>
-      <div><label>LANGUAGE</label><select name="lang" id="lang"></select></div>
-      <div><label>WHAT COUNTS AS SPEECH</label><select name="sens"><option value="0">LOUD ONLY<option value="1">NORMAL<option value="2">QUIET TOO<option value="3">EVERYTHING</select></div>
-      <div><label>MICROPHONE GAIN</label><select name="gain" id="gain"></select></div>
-      <div><label>MICROPHONES</label><select name="mics"><option value="0">BOTH<option value="1">LEFT<option value="2">RIGHT</select></div>
+    <div data-p="scenes" hidden>
+      <h2>DREAM OF...</h2>
+      <form id="sf"><textarea id="say" placeholder="type anything: a story, a wish, what happened today. The cube shows it."></textarea>
+      <div class="bar"><button>DREAM IT</button><span id="smsg" class="dim"></span></div></form>
+      <h2>SCENES <span class="dim" id="count"></span></h2>
+      <div id="scenes"><p class="dim">Nothing yet: talk near the cube, or type above.</p></div>
+      <div class="bar"><button class="rm" id="bClear">DELETE ALL SCENES</button></div>
     </div>
-    <div class="bar"><button>SAVE TO THE CUBE</button><span id="cmsg" class="dim"></span></div></form>
 
-    <h2>THIS PAGE</h2>
-    <p>Linked to the cube with code <span class="code hi" id="code"></span>. Anyone with this code (or this page's address)
-    can see its scenes and use its buttons: give it only to people you trust. A new code: on the cube, SETUP &gt; NEW CODE.</p>
-    <div class="bar"><button class="b2" id="bUnlink">FORGET THIS CUBE HERE</button><a href="flash/">INSTALL / UPDATE WITH USB</a></div>
-    <p class="dim">WiFi is set on the cube itself (it shows the networks it finds; SETUP &gt; WIFI for another one). Scenes are made on error.blue
-    (speech to text: Whisper; the scene: an AI on Cloudflare Workers AI, or a word list when the AI isn't there). The sound isn't kept.</p>
+    <div data-p="d3" hidden>
+      <h2>HOW SPEECH BECOMES 3D</h2>
+      <p class="dim">Used by error.blue for every new scene of this cube (and for DREAM OF...).</p>
+      <form id="if"><div class="grid">
+        <div><label>STYLE</label><select name="style"><option value="playful">PLAYFUL (the things talked about)<option value="literal">LITERAL (exactly what's said)<option value="dreamy">DREAMY (surreal, magical)<option value="symbolic">SYMBOLIC (feelings and ideas as symbols)</select></div>
+        <div><label>HOW MANY THINGS</label><select name="things"><option value="few">FEW (1-2, the main thing)<option value="normal">NORMAL (up to 5)<option value="many">MANY (crowds)</select></div>
+        <div><label>PLACE</label><select name="place" id="iplace"></select></div>
+        <div><label>TIME OF DAY</label><select name="time"><option value="auto">FROM THE WORDS<option value="clock">THE REAL CLOCK<option value="day">ALWAYS DAY<option value="sunset">ALWAYS SUNSET<option value="night">ALWAYS NIGHT<option value="dawn">ALWAYS DAWN</select></div>
+        <div><label>WEATHER</label><select name="weather" id="iweather"></select></div>
+        <div><label>MOOD</label><select name="mood" id="imood"></select></div>
+        <div><label>EFFECTS</label><select name="fx" id="ifx"></select></div>
+        <div><label>CAMERA</label><select name="cam" id="icam"></select></div>
+        <div><label>TITLE LANGUAGE</label><select name="titleLang"><option value="speech">AS SPOKEN<option value="en">ENGLISH<option value="nl">NEDERLANDS<option value="de">DEUTSCH<option value="fr">FRANÇAIS<option value="es">ESPAÑOL<option value="uk">УКРАЇНСЬКА<option value="ru">РУССКИЙ</select></div>
+        <div><label>STORY</label><select name="story"><option value="0">EACH SCENE ON ITS OWN<option value="1">GO ON FROM THE LAST SCENE</select></div>
+      </div>
+      <label>YOUR WISH FOR THE AI (optional, e.g. "put a cat in every scene", "everything made of candy")</label>
+      <input name="wish" maxlength="200">
+      <div class="bar"><button>SAVE</button><span id="imsg" class="dim"></span></div></form>
+
+      <h2>HOW IT LOOKS ON THE CUBE</h2>
+      <form id="lookf" class="cfgf"><div class="grid">
+        <div><label>COLOURS</label><select name="colors"><option value="0">NATURAL<option value="1">VIVID<option value="2">ERROR-DOS (ONE COLOUR)</select></div>
+        <div><label>EFFECTS (HEARTS, SPARKLES...)</label><select name="fx"><option value="1">ON<option value="0">OFF</select></div>
+        <div><label>CAMERA TURNS</label><select name="cam"><option value="0">STILL<option value="1">SLOW<option value="2">NORMAL<option value="3">FAST</select></div>
+        <div><label>PIXELS</label><select name="soft"><option value="1">SMOOTH<option value="0">SHARP</select></div>
+        <div><label>DETAIL (TREES, HOUSES AROUND)</label><select name="detail"><option value="1">FULL<option value="0">LESS (FASTER)</select></div>
+        <div><label>TITLE ON SCREEN</label><select name="title"><option value="1">ON<option value="0">OFF</select></div>
+        <div><label>WORDS ON SCREEN</label><select name="words"><option value="1">ON<option value="0">OFF</select></div>
+        <div><label>FRAME RATE ON SCREEN</label><select name="fps"><option value="0">OFF<option value="1">ON</select></div>
+      </div><div class="bar"><button>SAVE TO THE CUBE</button><span class="dim cmsg"></span></div></form>
+    </div>
+
+    <div data-p="cube" hidden>
+      <h2>LISTENING</h2>
+      <form class="cfgf"><div class="grid">
+        <div><label>NEW SCENE</label><select name="often"><option value="0">OFTEN<option value="1">NORMAL<option value="2">CALM (less often)</select></div>
+        <div><label>THINKING</label><select name="mind"><option value="0">QUICK<option value="1">SMART (slower, more detail)</select></div>
+        <div><label>LANGUAGE</label><select name="lang" id="lang"></select></div>
+        <div><label>WHAT COUNTS AS SPEECH</label><select name="sens"><option value="0">LOUD ONLY<option value="1">NORMAL<option value="2">QUIET TOO<option value="3">EVERYTHING</select></div>
+        <div><label>MICROPHONE GAIN</label><select name="gain" id="gain"></select></div>
+        <div><label>MICROPHONES</label><select name="mics"><option value="0">BOTH<option value="1">LEFT<option value="2">RIGHT</select></div>
+        <div><label>PAUSE THAT ENDS A SENTENCE</label><select name="pause"><option value="0">SHORT<option value="1">NORMAL<option value="2">LONG</select></div>
+      </div><div class="bar"><button>SAVE TO THE CUBE</button><span class="dim cmsg"></span></div></form>
+      <h2>SCREEN + SOUND</h2>
+      <form class="cfgf"><div class="grid">
+        <div><label>BRIGHTNESS <span class="dim" id="bv"></span></label><input type="range" name="bright" min="5" max="100" step="5"></div>
+        <div><label>VOLUME <span class="dim" id="vv"></span></label><input type="range" name="vol" min="0" max="100" step="5"></div>
+        <div><label>SCREEN OFF AFTER</label><select name="off"><option value="0">15 SEC<option value="1">30 SEC<option value="2">1 MIN<option value="3">2 MIN<option value="4">5 MIN<option value="5">10 MIN<option value="6">30 MIN<option value="7">NEVER</select></div>
+        <div><label>A NEW SCENE WAKES THE SCREEN</label><select name="wake"><option value="1">YES<option value="0">NO</select></div>
+        <div><label>COLOUR SCHEME</label><select name="color"><option value="0">GREEN<option value="1">AMBER<option value="2">WHITE<option value="3">DOS BLUE<option value="4">CYAN<option value="5">RED</select></div>
+        <div><label>AUTO UPDATE</label><select name="autoUpd"><option value="1">ON<option value="0">OFF</select></div>
+      </div><div class="bar"><button>SAVE TO THE CUBE</button><span class="dim cmsg"></span></div></form>
+      <h2>THIS PAGE</h2>
+      <p>Linked to the cube with code <span class="code hi" id="code"></span>. Anyone with this code can see what it hears and use
+      its buttons. A new code: on the cube, SETUP &gt; NEW CODE.</p>
+      <div class="bar"><button class="b2" id="bUnlink">FORGET THIS CUBE HERE</button><a href="flash/">INSTALL / UPDATE WITH USB</a></div>
+      <p class="dim">Speech to text: Whisper; scenes: an AI on Cloudflare Workers AI (or a word list when the AI isn't there).
+      The sound isn't kept; the words and scenes are kept on error.blue for this cube's code until you delete them.</p>
+    </div>
   </section>
   <div id="toast"></div>
 </main>
 <script>
 const $ = (i) => document.getElementById(i);
+const PLACES = ["grass", "forest", "jungle", "desert", "beach", "sea", "snow", "mountains", "city", "room", "space", "moon", "underwater", "clouds", "lava", "stage", "void"];
+const WEATHERS = ["clear", "cloudy", "rain", "snow", "storm", "fog", "wind"];
+const MOODS = ["neutral", "happy", "calm", "sad", "scary", "exciting", "love", "mystery", "angry", "funny"];
+const FXS = ["none", "hearts", "sparkles", "fire", "bubbles", "music", "confetti", "leaves", "zzz", "questions", "money", "stars", "smoke"];
+const CAMS = ["orbit", "close", "wide", "top", "low", "fly"];
 const LANGS = ["AUTO", "NEDERLANDS", "ENGLISH", "DEUTSCH", "FRANÇAIS", "УКРАЇНСЬКА", "РУССКИЙ", "ESPAÑOL", "ITALIANO", "POLSKI", "PORTUGUÊS", "TÜRKÇE"];
 const GAINS = ["0 dB", "3 dB", "6 dB", "9 dB", "12 dB", "15 dB", "18 dB", "21 dB", "24 dB", "27 dB", "30 dB", "33 dB", "34.5 dB", "36 dB", "37.5 dB"];
 const ICON = { person: "🧍", child: "🧒", robot: "🤖", ghost: "👻", alien: "👽", monster: "👾", dog: "🐕", cat: "🐈", bird: "🐦", fish: "🐟", whale: "🐋", horse: "🐎",
@@ -120,28 +185,59 @@ const ICON = { person: "🧍", child: "🧒", robot: "🤖", ghost: "👻", alie
   sphere: "🔵", pyramid: "🔺", cylinder: "🥫", ring: "💍", custom: "🧩" };
 const PLACE = { grass: "🌾", forest: "🌲", jungle: "🌴", desert: "🏜️", beach: "🏖️", sea: "🌊", snow: "❄️", mountains: "🏔️", city: "🏙️", room: "🏠", space: "🌌",
   moon: "🌑", underwater: "🐠", clouds: "☁️", lava: "🌋", stage: "🎤", void: "▦" };
-let code = "", topN = 0, scenes = [], cube = null, filled = false, curTitle = "";
+let code = "", topN = 0, scenes = [], cube = null, filled = false, curTitle = "", lastLine = 0, lines = [], interpFilled = false, txs = [];
 
-function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(e.t); e.t = setTimeout(() => (e.style.display = "none"), 2600); }
+function toast(t) { const e = $("toast"); e.textContent = t; e.style.display = "block"; clearTimeout(e.t); e.t = setTimeout(() => (e.style.display = "none"), 2800); }
 function esc(t) { return String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-async function api(method, body) {
-  const u = "/api/dream/app?code=" + code + (method === "GET" ? "&since=" + topN : "");
+const opts = (list, auto) => (auto ? `<option value="auto">${auto}` : "") + list.map((v) => `<option value="${v}">${v.toUpperCase()}`).join("");
+async function api(method, body, extra = "") {
+  const u = "/api/dream/app?code=" + code + (method === "GET" ? "&since=" + topN + "&lsince=" + lastLine + extra : "");
   const r = await fetch(u, method === "GET" ? { cache: "no-store" } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return r.json();
 }
 function ago(ms) { if (ms < 0) return "never"; const s = Math.round(ms / 1000); return s < 60 ? s + " s ago" : s < 3600 ? Math.round(s / 60) + " min ago" : Math.round(s / 3600) + " h ago"; }
-function when(at) { const d = new Date(at); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
+const hms = (at) => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const when = (at) => { const d = new Date(at); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
 
-function link(c) {
+// ---- tabs
+document.querySelectorAll("nav button").forEach((b) => (b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll("[data-p]").forEach((p) => (p.hidden = p.dataset.p !== b.dataset.tab));
+  if (b.dataset.tab === "live") scrollLive(true);
+}));
+
+// ---- linking: by itself (the cube asks "LINK A PHONE?" on its screen), or with the code
+function link(c, quiet) {
   c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(c)) { $("lmsg").textContent = "8 letters and digits (no I, O, 0 or 1)"; return; }
+  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(c)) { if (!quiet) $("lmsg").textContent = "8 letters and digits (no I, O, 0 or 1)"; return false; }
   code = c; localStorage.setItem("dreamCode", c); if (location.hash.slice(1) !== c) history.replaceState(null, "", "#" + c);
   $("link").hidden = true; $("app").hidden = false; $("code").textContent = c; $("hcode").textContent = c;
-  topN = 0; scenes = []; filled = false; poll();
+  topN = 0; scenes = []; filled = false; lastLine = 0; lines = []; interpFilled = false; poll();
+  return true;
 }
 $("lf").onsubmit = (e) => { e.preventDefault(); link($("codeIn").value); };
-$("bUnlink").onclick = () => { localStorage.removeItem("dreamCode"); history.replaceState(null, "", location.pathname); location.reload(); };
+$("bUnlink").onclick = () => { if (!confirm("Forget this cube on this phone / computer?")) return; localStorage.removeItem("dreamCode"); history.replaceState(null, "", location.pathname); location.reload(); };
+let pairTimer = null;
+async function find() {
+  $("link").hidden = false; $("app").hidden = true;
+  $("fmsg").textContent = "LOOKING FOR YOUR CUBE..."; $("fmsg").hidden = false; $("fnum").hidden = true; $("fno").hidden = true;
+  // phones often reach error.blue over IPv6 and the cube over IPv4: the IPv4 address helps to find it
+  let hint = "";
+  try { const c = new AbortController(); setTimeout(() => c.abort(), 3000); hint = (await (await fetch("https://api.ipify.org?format=json", { signal: c.signal })).json()).ip || ""; } catch (e) {}
+  let r; try { r = await (await fetch("/api/dream/near?hint=" + encodeURIComponent(hint), { cache: "no-store" })).json(); } catch (e) { r = {}; }
+  if (!r.found) { $("fmsg").hidden = true; $("fno").hidden = false; return; }
+  $("fmsg").hidden = true; $("fnum").hidden = false; $("num").textContent = r.num;
+  clearInterval(pairTimer);
+  const t0 = Date.now();
+  pairTimer = setInterval(async () => {
+    let p; try { p = await (await fetch("/api/dream/pair?id=" + r.pair, { cache: "no-store" })).json(); } catch (e) { return; }
+    if (p.code) { clearInterval(pairTimer); toast("LINKED"); link(p.code); }
+    else if (p.no || Date.now() - t0 > 5 * 60000) { clearInterval(pairTimer); $("fnum").hidden = true; $("fno").hidden = false; $("fno").querySelector("p").textContent = p.no && !p.late ? "The cube said NO." : "No answer from the cube."; }
+  }, 2000);
+}
+$("bFind").onclick = find;
 
+// ---- what comes from error.blue every 2 s
 async function poll() {
   if (!code) return;
   let j; try { j = await api("GET"); } catch (e) { $("online").textContent = "NO CONNECTION TO ERROR.BLUE"; return; }
@@ -153,59 +249,116 @@ async function poll() {
   $("meta").textContent = [st.v ? "v" + st.v : "", st.bat >= 0 && st.bat !== undefined ? st.bat + "%" + (st.chg ? "+" : "") : "", st.wifi || "", st.awake === false ? "SCREEN OFF" : ""].filter(Boolean).join(" · ");
   curTitle = st.title || "";
   $("now").textContent = curTitle || "...";
-  $("heard").textContent = st.heard ? "“" + st.heard + "”" : "";
-  $("bListen").textContent = st.listen ? "PAUSE" : "LISTEN";
-  $("bListen").dataset.c = st.listen ? "pause" : "listen";
-  if (!filled && st.cfg) { filled = true; for (const k in st.cfg) { const e = document.querySelector("#cf [name=" + k + "]"); if (e) e.value = st.cfg[k]; } }
+  $("bListen").textContent = st.listen ? "PAUSE" : "LISTEN"; $("bListen").dataset.c = st.listen ? "pause" : "listen";
+  if (!filled && st.cfg) { filled = true; for (const k in st.cfg) document.querySelectorAll(".cfgf [name=" + k + "]").forEach((e) => (e.value = st.cfg[k])); showRanges(); }
+  if (!interpFilled && j.interp) { interpFilled = true; for (const k in j.interp) { const e = document.querySelector("#if [name=" + k + "]"); if (e) e.value = j.interp[k]; } }
+  // the live transcript (CLEAR or SAVE elsewhere moved its start: drop what's before it)
+  if (lines.length && lines[0].n <= j.mark) { lines = lines.filter((l) => l.n > j.mark); drawLive(); }
+  if (j.lines.length) { const fresh = j.lines.filter((l) => l.n > lastLine); lines.push(...fresh); lines = lines.slice(-600); lastLine = Math.max(lastLine, ...j.lines.map((l) => l.n)); drawLive(fresh.length); }
+  else if (!lines.length) drawLive();
+  lastLine = Math.max(lastLine, j.mark);
+  txs = j.tx; drawTx();
   if (j.scenes.length) {
     const have = new Set(scenes.map((s) => s.n));
     for (const s of j.scenes) if (!have.has(s.n)) scenes.push(s);
-    scenes.sort((a, b) => b.n - a.n); scenes = scenes.slice(0, 80);
-    topN = Math.max(topN, j.top || 0);
+    scenes.sort((a, b) => b.n - a.n); scenes = scenes.slice(0, 80); topN = Math.max(topN, j.top || 0);
   }
-  draw();
+  drawScenes();
 }
-function draw() {
+function scrollLive(force) { const b = $("live"); if (force || b.scrollHeight - b.scrollTop - b.clientHeight < 80) b.scrollTop = b.scrollHeight; }
+function drawLive(fresh = 0) {
+  $("lcount").textContent = lines.length ? "(" + lines.length + " lines since " + hms(lines[0].at) + ")" : "";
+  if (!lines.length) { $("live").innerHTML = '<p class="dim">Waiting for words... (the cube has to be listening, and on the internet)</p>'; return; }
+  const b = $("live"), stick = b.scrollHeight - b.scrollTop - b.clientHeight < 80;
+  b.innerHTML = lines.map((l, i) => `<p${i >= lines.length - fresh ? ' class="new"' : ""}><time>${hms(l.at)}</time>${esc(l.text)}</p>`).join("");
+  if (stick) b.scrollTop = b.scrollHeight;
+}
+$("bSave").onclick = async () => {
+  if (!lines.length) return toast("NOTHING TO SAVE YET");
+  const title = prompt("A name for this transcript (empty = its first words):", "");
+  if (title === null) return;
+  const r = await api("POST", { c: "save", a: { title } });
+  if (r.ok) { toast("SAVED: " + r.title); lines = []; drawLive(); poll(); } else toast(r.error || "DIDN'T WORK");
+};
+$("bClearLive").onclick = async () => { if (!confirm("Clear the live transcript without saving it?")) return; await api("POST", { c: "clearlive" }); lines = []; drawLive(); };
+const opened = {};
+function drawTx() {
+  $("tcount").textContent = txs.length ? "(" + txs.length + ")" : "";
+  if (!txs.length) { $("txs").innerHTML = '<p class="dim">None yet: SAVE above keeps the live transcript here.</p>'; return; }
+  $("txs").innerHTML = txs.map((t) => `<div class="item"><div class="t">${esc(t.title)}</div>
+    <div class="dim">${esc(when(t.at))} · ${t.lines} lines</div>
+    <div class="bar"><button class="b2 sm" data-read="${t.id}">${opened[t.id] ? "CLOSE" : "READ"}</button><button class="b2 sm" data-dl="${t.id}">DOWNLOAD</button>
+    <button class="b2 sm" data-ren="${t.id}">RENAME</button><button class="rm sm" data-del="${t.id}">DELETE</button></div>
+    ${opened[t.id] ? `<div class="tx">${opened[t.id].map((l) => `<p><time>${hms(l[0])}</time>${esc(l[1])}</p>`).join("")}</div>` : ""}</div>`).join("");
+}
+async function getTx(id) { const r = await api("GET", null, "&tx=" + id); return r.ok ? r.tx : null; }
+$("txs").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.read) { const id = b.dataset.read; if (opened[id]) delete opened[id]; else { const t = await getTx(id); if (t) opened[id] = t.lines; } drawTx(); }
+  if (b.dataset.dl) {
+    const t = await getTx(b.dataset.dl); if (!t) return;
+    const txt = `${t.title}\n${when(t.at)} · DREAM-CUBE ${code}\n\n` + t.lines.map((l) => hms(l[0]) + "  " + l[1]).join("\n") + "\n";
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
+    a.download = (t.title.replace(/[^\w\- ]+/g, "").trim() || "transcript") + ".txt"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  if (b.dataset.ren) { const t = txs.find((x) => String(x.id) === b.dataset.ren); const n = prompt("New name:", t ? t.title : ""); if (n) { await api("POST", { c: "txren", a: { id: Number(b.dataset.ren), title: n } }); poll(); } }
+  if (b.dataset.del) { if (!confirm("Delete this transcript for good?")) return; await api("POST", { c: "txrm", a: Number(b.dataset.del) }); delete opened[b.dataset.del]; txs = txs.filter((x) => String(x.id) !== b.dataset.del); drawTx(); }
+};
+
+// ---- scenes
+function drawScenes() {
   $("count").textContent = scenes.length ? "(" + scenes.length + ")" : "";
   if (!scenes.length) return;
   $("scenes").innerHTML = scenes.map((s) => {
     const sc = s.scene || {};
     const th = (sc.things || []).map((t) => (ICON[t.m] || "🧩").repeat(Math.min(t.n || 1, 4))).join(" ");
     const tags = [PLACE[sc.place] ? PLACE[sc.place] + " " + sc.place : sc.place, sc.time, sc.weather !== "clear" ? sc.weather : "", sc.mood !== "neutral" ? sc.mood : "", sc.fx !== "none" ? sc.fx : ""].filter(Boolean);
-    return `<div class="scene${s.title === curTitle ? " cur" : ""}"><div class="t">${esc(s.title)}</div>
-      <div class="things">${th}</div>
-      <div class="w dim"><span>${esc(when(s.at))}</span>${tags.map((t) => "<span>" + esc(t) + "</span>").join("")}</div>
+    return `<div class="item${s.title === curTitle ? " cur" : ""}"><div class="t">${esc(s.title)}</div><div class="things">${th}</div>
+      <div class="bar dim"><span>${esc(when(s.at))}</span>${tags.map((t) => "<span>" + esc(t) + "</span>").join("")}</div>
       ${s.said ? `<div>“${esc(s.said)}”</div>` : ""}
-      <div class="bar"><button class="b2" data-show="${s.n}">SHOW ON THE CUBE</button><button class="rm" data-rm="${s.n}">DELETE</button></div></div>`;
+      <div class="bar"><button class="b2 sm" data-show="${s.n}">SHOW ON THE CUBE</button><button class="rm sm" data-rm="${s.n}">DELETE</button></div></div>`;
   }).join("");
 }
 $("scenes").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.show) { const r = await api("POST", { c: "show", a: Number(b.dataset.show) }); toast(r.ok ? "ON ITS WAY TO THE CUBE" : r.error || "DIDN'T WORK"); }
-  if (b.dataset.rm) { await api("POST", { c: "rm", a: Number(b.dataset.rm) }); scenes = scenes.filter((s) => s.n !== Number(b.dataset.rm)); draw(); if (!scenes.length) location.reload(); }
+  if (b.dataset.rm) { await api("POST", { c: "rm", a: Number(b.dataset.rm) }); scenes = scenes.filter((s) => s.n !== Number(b.dataset.rm)); drawScenes(); }
 };
-$("bClear").onclick = async () => { if (!confirm("Delete all the scenes kept here? (The cube keeps its own.)")) return; await api("POST", { c: "clear" }); scenes = []; location.reload(); };
+$("bClear").onclick = async () => { if (!confirm("Delete all the scenes kept here? (The cube keeps its own.)")) return; await api("POST", { c: "clear" }); scenes = []; $("scenes").innerHTML = '<p class="dim">Nothing yet.</p>'; };
+$("sf").onsubmit = async (e) => {
+  e.preventDefault(); const t = $("say").value.trim(); if (!t) return;
+  $("smsg").textContent = "DREAMING...";
+  const r = await api("POST", { c: "say", a: t, hour: new Date().getHours() });
+  $("smsg").textContent = r.ok ? "“" + r.scene.title + "”: ON ITS WAY TO THE CUBE" : r.error || "DIDN'T WORK";
+  if (r.ok) { $("say").value = ""; poll(); }
+};
+
+// ---- buttons and settings
 document.querySelectorAll("[data-c]").forEach((b) => (b.onclick = async () => {
   const c = b.dataset.c; const r = await api("POST", { c });
   toast(r.ok ? ({ listen: "LISTENING", pause: "PAUSED", wake: "SCREEN ON", sleep: "SCREEN OFF", prev: "OLDER", next: "NEWER" }[c] || "SENT") + " (in a few seconds)" : r.error || "DIDN'T WORK");
   setTimeout(poll, 4500);
 }));
-$("sf").onsubmit = async (e) => {
-  e.preventDefault(); const t = $("say").value.trim(); if (!t) return;
-  $("smsg").textContent = "DREAMING...";
-  const r = await api("POST", { c: "say", a: t });
-  $("smsg").textContent = r.ok ? "“" + r.scene.title + "”: ON ITS WAY TO THE CUBE" : r.error || "DIDN'T WORK";
-  if (r.ok) { $("say").value = ""; poll(); }
+document.querySelectorAll(".cfgf").forEach((f) => (f.onsubmit = async (e) => {
+  e.preventDefault(); const a = {}; for (const [k, v] of new FormData(f)) a[k] = Number(v);
+  const r = await api("POST", { c: "cfg", a }); f.querySelector(".cmsg").textContent = r.ok ? "SENT: THE CUBE TAKES IT IN A FEW SECONDS" : r.error || "DIDN'T WORK";
+}));
+function showRanges() { document.querySelectorAll(".cfgf input[type=range]").forEach((i) => { const o = $(i.name === "bright" ? "bv" : "vv"); if (o) o.textContent = i.value + "%"; }); }
+document.querySelectorAll(".cfgf input[type=range]").forEach((i) => (i.oninput = showRanges));
+$("if").onsubmit = async (e) => {
+  e.preventDefault(); const a = Object.fromEntries(new FormData($("if"))); a.story = Number(a.story);
+  const r = await api("POST", { c: "interp", a }); $("imsg").textContent = r.ok ? "SAVED: THE NEXT SCENES USE IT" : r.error || "DIDN'T WORK";
 };
-$("cf").onsubmit = async (e) => {
-  e.preventDefault(); const a = {}; for (const [k, v] of new FormData($("cf"))) a[k] = Number(v);
-  const r = await api("POST", { c: "cfg", a }); $("cmsg").textContent = r.ok ? "SENT: THE CUBE TAKES IT IN A FEW SECONDS" : r.error || "DIDN'T WORK";
-};
+$("iplace").innerHTML = opts(PLACES, "FROM THE WORDS");
+$("iweather").innerHTML = opts(WEATHERS, "FROM THE WORDS");
+$("imood").innerHTML = opts(MOODS, "FROM THE WORDS");
+$("ifx").innerHTML = `<option value="auto">FROM THE WORDS<option value="more">ALWAYS SOME</option>` + opts(FXS);
+$("icam").innerHTML = opts(CAMS, "FROM THE WORDS");
 $("lang").innerHTML = LANGS.map((n, i) => `<option value="${i}">${n}`).join("");
 $("gain").innerHTML = GAINS.map((n, i) => `<option value="${i}">${n}`).join("");
 const start = location.hash.slice(1) || localStorage.getItem("dreamCode");
-if (start) link(start);
-setInterval(poll, 3000);
+if (!start || !link(start, true)) find();
+setInterval(poll, 2000);
 </script>
 </body>
 </html>

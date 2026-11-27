@@ -153,8 +153,9 @@ static float tShow = -100;     // when the current scene came
 static float tOldGone = -100;
 static bool softUp = true;
 static float camSpeedK = 1;
-static bool decorOn = true;
+static bool decorOn = true, fxOn = true;
 void sceneDecor(bool on) { decorOn = on; }
+void sceneFx(bool on) { fxOn = on; }
 static float userYaw = 0, userPitch = 0;
 static float bounds = 4, heightMax = 2, ctrX = 0, ctrY = 1, ctrZ = 0;
 struct Cam { float R, H, ty, speed, arc, tx, tz; };
@@ -841,7 +842,7 @@ void sceneDraw(uint16_t* out, float dt) {
     drawInst(cur[i], t, life > 1 ? 1 : life, curParts);
   }
   drawWeather(t, target);
-  for (int i = 0; i < nEmit; i++) if (t - tShow > 1.2f) fxAt(emits[i].fx, t, emits[i].p, emits[i].spread, emits[i].n, i * 0.37f);
+  if (fxOn) for (int i = 0; i < nEmit; i++) if (t - tShow > 1.2f) fxAt(emits[i].fx, t, emits[i].p, emits[i].spread, emits[i].n, i * 0.37f);
   r3dRender(out, softUp);
   lastTris = r3dTris();
 }

@@ -47,7 +47,11 @@ void cfgChanged() {
 static const float CAM_SPEEDS[4] = {0, 0.45f, 1, 2};
 // too slow (more than ~11 frames a second lost): the place's own trees and houses go until the next scene
 static bool autoLess = false;
-static void applyLook() { sceneSoft(dcfg.soft && !autoLess); sceneSpeed(CAM_SPEEDS[dcfg.cam & 3]); sceneDecor(dcfg.detail && !autoLess); }
+static Col fgCol() { return col((C_FG >> 11) / 31.0f, ((C_FG >> 5) & 63) / 63.0f, (C_FG & 31) / 31.0f); }
+static void applyLook() {
+  sceneSoft(dcfg.soft && !autoLess); sceneSpeed(CAM_SPEEDS[dcfg.cam & 3]); sceneDecor(dcfg.detail && !autoLess);
+  sceneFx(dcfg.fxOn); r3dLook(dcfg.colors % 3, fgCol());
+}
 
 // ------------------------------------------------------------------ settings rows (as in ERROR-CUBE's SETUP)
 static Row heading(const char* n, uint8_t ic = 0) { Row r; r.name = n; r.kind = 4; r.icon = ic; return r; }
@@ -354,6 +358,8 @@ struct Setup : Screen {
     rows.push_back(dtoggle("WORDS ON SCREEN", &dcfg.words));
     rows.push_back(dtoggle("TITLE ON SCREEN", &dcfg.title));
     rows.push_back(dchoice("CAMERA", &dcfg.cam, 4, [](int i) { static const char* C4[4] = {"STILL", "SLOW", "NORMAL", "FAST"}; return C4[i]; }));
+    rows.push_back(dchoice("COLOURS", &dcfg.colors, 3, [](int i) { static const char* C3[3] = {"NATURAL", "VIVID", "ERROR-DOS"}; return C3[i]; }));
+    rows.push_back(dtoggle("EFFECTS", &dcfg.fxOn));
     rows.push_back(dchoice("PIXELS", &dcfg.soft, 2, [](int i) { return i ? "SMOOTH" : "SHARP"; }));
     rows.push_back(dchoice("DETAIL", &dcfg.detail, 2, [](int i) { return i ? "FULL" : "LESS (FASTER)"; }));
     rows.push_back(dchoice("NEW SCENE WAKES SCREEN", &dcfg.wake, 2, [](int i) { return i ? "YES" : "NO"; }));
@@ -457,7 +463,11 @@ struct Dream : Screen {
   bool fullScreen() override { return true; }
   bool plain() override { return true; }
   bool noSwipeBack() override { return true; }
-  void enter() override { last = msNow(); applyLook(); }
+  void enter() override {
+    last = msNow(); applyLook();
+    static bool hinted = false;
+    if (!hinted && dcfg.link) { hinted = true; toast("CONTROL PAGE: ERROR.BLUE/DREAM", 6000); }
+  }
   uint32_t lostAt = 0;
   void tick() override {
     // the WiFi gone for a minute: back to the WiFi screen (DREAM-CUBE starts again when it's connected)

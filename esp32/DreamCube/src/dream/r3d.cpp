@@ -23,7 +23,16 @@ Col hexCol(uint32_t c) { return col(((c >> 16) & 255) / 255.0f, ((c >> 8) & 255)
 Col clerp(Col a, Col b, float t) { return col(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t); }
 Col cmul(Col a, float s) { return col(a.r * s, a.g * s, a.b * s); }
 static inline int q(float v, int m) { int i = (int)(v * m + 0.5f); return i < 0 ? 0 : i > m ? m : i; }
-uint16_t c565(Col c) { return (uint16_t)((q(c.r, 31) << 11) | (q(c.g, 63) << 5) | q(c.b, 31)); }
+static int lookMode = 0; static Col lookTint = {0.22f, 1, 0.48f};
+void r3dLook(int mode, Col tint) { lookMode = mode; lookTint = tint; }
+uint16_t c565(Col c) {
+  if (lookMode) {
+    float g = c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
+    if (lookMode == 1) { const float k = 1.45f; c = col((g + (c.r - g) * k) * 1.04f, (g + (c.g - g) * k) * 1.04f, (g + (c.b - g) * k) * 1.04f); }
+    else { float l = 0.04f + powf(g, 1.45f) * 1.3f; c = col(lookTint.r * l, lookTint.g * l, lookTint.b * l); }
+  }
+  return (uint16_t)((q(c.r, 31) << 11) | (q(c.g, 63) << 5) | q(c.b, 31));
+}
 
 Mat matId() { Mat m = {{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0}}; return m; }
 Mat matMul(const Mat& a, const Mat& b) {

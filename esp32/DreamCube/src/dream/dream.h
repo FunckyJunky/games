@@ -37,6 +37,9 @@ struct DreamCfg {
   uint8_t link = 1;          // the control page at error.blue/dream
   char code[9] = "";         // its link code (made at the first start)
   uint8_t fps = 0;           // show the frame rate (for testing)
+  // 1.2
+  uint8_t colors = 0;        // 0 NATURAL, 1 VIVID, 2 ERROR-DOS (everything in the interface's one colour)
+  uint8_t fxOn = 1;          // hearts, sparkles, notes... (rain and snow stay)
   // new settings go here, at the end
 };
 extern DreamCfg dcfg;
@@ -97,6 +100,12 @@ bool dreamNext(char* text, size_t n, char* prev, size_t pn, char* lang, size_t l
 void dreamDone(int code, const char* json, const char* err);
 void dreamCmd(int n, const char* c, const char* a);   // from the control page (the net task)
 void dreamState(char* out, size_t n);        // how the cube is, as JSON (for the control page)
+// 1.2: what it heard, line by line, for the control page's live transcript; answers to "link a phone?"
+int dreamLinesWaiting();
+int dreamLinesJson(char* out, size_t n);     // up to 8 lines as [{"t":..,"ago":ms}] -> how many
+void dreamLinesDone(int k);                  // ... they're on error.blue
+int dreamPairJson(char* out, size_t n);      // [{"id":..,"ok":1}] -> how many
+void dreamPairDone(int k);
 // ------------------------------------------------------------------ ../net/enet.cpp
 void enetSwitch();                           // back to ERROR-CUBE (S.upd / S.updMsg like an update)
 extern volatile bool enetSwitching;

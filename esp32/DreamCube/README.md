@@ -1,5 +1,21 @@
 # DREAM-CUBE
 
+## New in 1.2
+
+- **Linking by itself:** open error.blue/dream on a phone or computer on the same network; the cube asks on its
+  screen **LINK A PHONE?** (with a number the page shows too): YES, and the page remembers the cube. (The page finds
+  cubes seen from its address, or from its IPv4 via api.ipify.org: phones often come over IPv6, the cube over IPv4.
+  Always with the YES on the cube: shared addresses (CGNAT) can't link to someone else's cube.) The code still works.
+- **Live transcript** on the page (LIVE tab): every line the cube hears, as it comes (the cube sends a new line at
+  once with its link). **SAVE** keeps it as a transcript (and starts a new one), **CLEAR** starts again without
+  saving. **Saved transcripts:** READ, DOWNLOAD (.txt), RENAME, DELETE.
+- **3D tab:** how speech becomes 3D (kept on error.blue for this cube): STYLE (playful, literal, dreamy, symbolic),
+  HOW MANY THINGS, PLACE / TIME (also the real clock) / WEATHER / MOOD / EFFECTS / CAMERA (from the words or fixed),
+  TITLE LANGUAGE, STORY (go on from the last scene), and a free WISH for the AI. And how it looks on the cube:
+  COLOURS (natural, vivid, ERROR-DOS = one colour, the cube's scheme), EFFECTS on / off, camera, pixels, detail...
+- **CUBE tab:** all its settings: listening (new scene, thinking, language, sensitivity, gain, microphones, pause),
+  screen + sound (brightness, volume, screen off after, wake on a new scene, colour scheme, auto update).
+
 ## New in 1.1
 
 - **WiFi made simple:** no hotspot and no phone page any more. The cube scans, you pick a network and type the
@@ -44,7 +60,9 @@ another network. (1.0 had an always-on hotspot with a phone page: gone in 1.1, i
 
 ## The control page: error.blue/dream
 
-Linked by the cube's 8-letter code (SETUP > CONTROL PAGE: scan the QR code, or type the code). There: online or not,
+Opened on the same network as the cube, it finds it: the cube asks LINK A PHONE? (YES). Or the cube's 8-letter code
+(SETUP > CONTROL PAGE: scan the QR code, or type the code). Tabs: LIVE (the cube now + its buttons, the live
+transcript, saved transcripts), SCENES (DREAM OF..., the scenes), 3D (interpretation + look), CUBE (settings). There: online or not,
 listening / paused, battery, WiFi; the scene now and what was heard; **PAUSE / LISTEN, SCREEN ON / OFF, OLDER / NEWER**;
 **DREAM OF...** (type anything, the cube shows it); the **scenes** it made (what was said, the place, the things as
 icons; **SHOW ON THE CUBE**, **DELETE**); all the **settings**. The cube asks error.blue every 4 s (12 s with the screen
@@ -76,8 +94,9 @@ on the cube makes the old link stop working.
   `DREAM_QUICK` / `DREAM_SMART` to change), with a word list (English, Dutch, German) when the AI fails or today's limit
   (`DREAM_DAY_SCENES`, default 1500) is reached. A scene costs roughly 15 (QUICK) to 90 (SMART) neurons; Workers AI's
   free allowance is 10,000 a day, shared with EAR-CUBE's speech to text.
-- `POST /api/dream/cube`, `GET|POST /api/dream/app`: the control page (D1: `dream_cube`, `dream_cmd`, `dream_scene`
-  (300 per cube), `dream_use`).
+- `POST /api/dream/cube` (state, live lines, pairing answers -> commands), `GET /api/dream/near` + `/api/dream/pair`
+  (linking by itself), `GET|POST /api/dream/app` (the page). D1: `dream_cube` (+ ipk, interp, linen, mark),
+  `dream_cmd`, `dream_scene` (300 per cube), `dream_line` (3000 per cube), `dream_tx`, `dream_pair`, `dream_use`.
 
 ## Build, test, publish
 

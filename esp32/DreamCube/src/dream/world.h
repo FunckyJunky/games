@@ -108,5 +108,6 @@ void sceneDrag(float dx, float dy);        // a finger turns the camera (pixels)
 void sceneSoft(bool on);                   // smooth 2x up (else sharp pixels)
 void sceneSpeed(float s);                  // camera speed (0 = still)
 void sceneDecor(bool on);                  // the place's own trees, houses... (off = faster)
+void sceneFx(bool on);                     // hearts, sparkles, notes, smoke... (rain and snow stay)
 float sceneTransition();                   // 0..1 while a new scene comes in, 1 = done
 int sceneTris();

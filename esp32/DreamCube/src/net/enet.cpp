@@ -243,6 +243,7 @@ static void doDream() {
   if (!body) { dreamDone(-1, nullptr, "NO MEMORY"); return; }
   JsonDocument q;
   q["text"] = text; q["lang"] = lang; q["id"] = S.host; q["prev"] = prev; q["mind"] = dcfg.mind ? "smart" : "quick";
+  struct tm tm; if (sysLocalTime(tm)) q["hour"] = tm.tm_hour;     // (3D settings: TIME = THE CLOCK)
   if (dcfg.link) q["code"] = dcfg.code;
   static char out[1400];
   size_t n = serializeJson(q, out, sizeof(out));
@@ -266,13 +267,16 @@ static void doLink() {
     Preferences p; p.begin("dream", true); lastCmd = p.getInt(dcfg.code, -1); p.end();
   }
   if (!body) body = (char*)psram(BODY);
-  if (!body) return;
-  static char st[900], out[1200];
-  dreamState(st, sizeof(st));
-  size_t n = snprintf(out, sizeof(out), "{\"code\":\"%s\",\"last\":%d,\"st\":%s}", dcfg.code, (int)(lastCmd < 0 ? 0 : lastCmd), st);
+  static char* out = nullptr; static char *st = nullptr, *ln = nullptr, *pr = nullptr;
+  if (!out) { out = (char*)psram(7000); st = (char*)psram(1500); ln = (char*)psram(4200); pr = (char*)psram(300); }
+  if (!body || !out || !st || !ln || !pr) return;
+  dreamState(st, 1500);
+  int nl = dreamLinesJson(ln, 4200), np = dreamPairJson(pr, 300);
+  size_t n = snprintf(out, 7000, "{\"code\":\"%s\",\"last\":%d,\"st\":%s,\"lines\":%s,\"pair\":%s}", dcfg.code, (int)(lastCmd < 0 ? 0 : lastCmd), st, ln, pr);
   int code = req("POST", LINK_PATH, "application/json", (const uint8_t*)out, n, body, BODY);
   if (code != 200) return;
   linkAt = millis();
+  dreamLinesDone(nl); dreamPairDone(np);
   JsonDocument d;
   if (deserializeJson(d, body)) return;
   int top = d["top"] | 0;
@@ -422,7 +426,9 @@ void cloudStep() {
   if (want(J_STT) && scribeWants()) post(J_STT);
   if (want(J_DREAM) && want(J_STT) && dreamWants()) post(J_DREAM);
   // the control page: every 4 s while the screen is on, every 12 s when it's off
+  // (at once when it heard something new, or answered "link a phone?")
   uint32_t every = uiAwake() ? 4000 : 12000;
+  if (dcfg.link && (dreamLinesWaiting() || dreamPairJson(nullptr, 0) > 0)) every = 1200;
   if (dcfg.link && want(J_LINK) && (!linkTry || now - linkTry > every)) { linkTry = now; post(J_LINK); }
   if (!upAt) { upAt = now; fwAt = now - (UPD_HOURS[cfg.updIdx % N_UPD] * 3600000u) + 30000; }   // first check 30 s after WiFi came
   uint32_t fwEvery = UPD_HOURS[cfg.updIdx % N_UPD] * 3600000u;

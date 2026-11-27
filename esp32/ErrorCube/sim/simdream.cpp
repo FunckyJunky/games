@@ -16,7 +16,7 @@ const int N_LANGS = 4;
 const char* gainLabel(int s) { static char b[12]; snprintf(b, sizeof(b), "%d dB", s * 3); return b; }
 void dreamApName(char* o, size_t n) { snprintf(o, n, "%s", dcfg.apName[0] ? dcfg.apName : "DREAM-CUBE-4F2A"); }
 void dreamNewCode() { strcpy(dcfg.code, "K7M2QX9D"); }
-void dreamCfgLoad() { strcpy(dcfg.apPass, "48151623"); strcpy(dcfg.code, "Q7DRMX4K"); if (getenv("SIM_PAUSE")) dcfg.listen = 0; if (getenv("SIM_FPS")) dcfg.fps = 1; }
+void dreamCfgLoad() { strcpy(dcfg.apPass, "48151623"); strcpy(dcfg.code, "Q7DRMX4K"); if (getenv("SIM_PAUSE")) dcfg.listen = 0; if (getenv("SIM_FPS")) dcfg.fps = 1; if (getenv("SIM_COLORS")) dcfg.colors = atoi(getenv("SIM_COLORS")); }
 void dreamCfgSave() {}
 volatile bool enetSwitching = false;
 void enetSwitch() { enetSwitching = true; S.upd = UPD_LOADING; S.updPct = 37; snprintf(S.updMsg, sizeof(S.updMsg), "ERROR-CUBE 1.5.5"); }

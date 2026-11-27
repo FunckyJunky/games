@@ -5,13 +5,19 @@
 //        the words -> a scene (an LLM on Workers AI, JSON), checked against what the cube can draw. When the AI isn't
 //        there or today's limit is reached, a word list makes the scene instead (free, always works).
 //   The cube and the control page at error.blue/dream (linked by the cube's 8-letter code):
-//   POST /api/dream/cube       {code, st, last}  -> {ok, cmds: [{n, c, a}]}   the cube: how it is + what to do
-//   GET  /api/dream/app?code=&since=N            -> {ok, cube, scenes}         the page: the cube + its scenes
-//   POST /api/dream/app?code=  {c, a}            -> {ok}                       the page's buttons and settings
-//        c: listen pause wake sleep prev next show(a = scene n) say(a = words: a scene for them) cfg(a = {...})
-//           rm(a = scene n) clear
-// Kept in D1: dream_cube (how each cube is), dream_cmd (what it should do), dream_scene (its scenes, 300 at most),
-// dream_use (scenes made today: all together, per address).
+//   The cube and the control page at error.blue/dream (linked by the cube's 8-letter code):
+//   POST /api/dream/cube   {code, st, last, lines: [{t, ago}], pair: [{id, ok}]} -> {ok, cmds: [{n, c, a}], top}
+//        the cube: how it is, what it heard (the live transcript), its answers to "link a phone?" -> what to do
+//   GET  /api/dream/near?hint=IPv4      the page, no code yet: cubes seen from this address (or the hinted IPv4: phones
+//        often come over IPv6, the cube over IPv4) are asked on their screen "LINK A PHONE?" -> {pair, num}
+//   GET  /api/dream/pair?id=            -> {code} once someone pressed YES on the cube, {wait} / {no}
+//   GET  /api/dream/app?code=&since=N&lsince=L   -> {ok, cube, scenes, lines, mark, tx, interp}
+//   POST /api/dream/app?code=  {c, a}   the page: listen pause wake sleep prev next cfg(a = {...}) unlink show(n) say(words)
+//        rm(n) clear | save(a = {title}) the live transcript -> a saved one, clearlive, txget(id), txrm(id) |
+//        interp(a = {...}) how speech becomes 3D (kept here, used by /api/dream for this cube)
+// Kept in D1: dream_cube (how each cube is, its interpretation settings), dream_cmd (what it should do), dream_scene
+// (its scenes, 300 at most), dream_line (the live transcript, 3000 lines), dream_tx (saved transcripts), dream_pair
+// (phones asking to link), dream_use (scenes made today: all together, per address).
 // The scene format (scene.cpp on the cube reads exactly this):
 //   {title, said, place, time, weather, mood, fx, cam, things: [{m, n, a, at, c, c2, s} | {m: "custom", name, parts: [...]}]}
 
@@ -288,9 +294,58 @@ function firstJson(s) {
   try { return JSON.parse(t.replace(/,\s*([}\]])/g, "$1").replace(/[\u201c\u201d]/g, '"')); } catch (e) {}
   return null;
 }
-async function aiScene(env, text, lang, prev, smart) {
+// how speech becomes 3D, per cube (the page's 3D tab)
+const INTERP = { style: "playful", things: "normal", place: "auto", time: "auto", weather: "auto", mood: "auto", fx: "auto", cam: "auto",
+  titleLang: "speech", story: 0, wish: "" };
+const STYLES = ["playful", "literal", "dreamy", "symbolic"];
+const TITLE_LANGS = { speech: "", en: "English", nl: "Dutch", de: "German", fr: "French", es: "Spanish", uk: "Ukrainian", ru: "Russian" };
+export function cleanInterp(o) {
+  const r = { ...INTERP };
+  if (!o || typeof o !== "object") return r;
+  r.style = pickOne(o.style, STYLES, "playful");
+  r.things = pickOne(o.things, ["few", "normal", "many"], "normal");
+  r.place = pickOne(o.place, ["auto", ...PLACES], "auto");
+  r.time = pickOne(o.time, ["auto", "clock", ...TIMES], "auto");
+  r.weather = pickOne(o.weather, ["auto", ...WEATHERS], "auto");
+  r.mood = pickOne(o.mood, ["auto", ...MOODS], "auto");
+  r.fx = pickOne(o.fx, ["auto", "more", ...FXS], "auto");
+  r.cam = pickOne(o.cam, ["auto", ...CAMS], "auto");
+  r.titleLang = pickOne(o.titleLang, Object.keys(TITLE_LANGS), "speech");
+  r.story = o.story ? 1 : 0;
+  r.wish = String(o.wish || "").replace(/[\u0000-\u001f]/g, " ").slice(0, 200).trim();
+  return r;
+}
+function interpPrompt(ip) {
+  const t = [];
+  if (ip.style === "literal") t.push("Style: literal. Show exactly the things that are said, natural colours, no extra symbols, fx none unless it fits.");
+  if (ip.style === "dreamy") t.push("Style: dreamy and surreal. Exaggerate, mix things in unexpected ways, prefer magical places (clouds, space, void, underwater, night), glowing colours and effects.");
+  if (ip.style === "symbolic") t.push("Style: symbolic. Show the feelings and ideas with symbols (heart, bulb, question, money, up, down, clock, speech, globe, check, cross, smiley, sadface...) more than objects.");
+  if (ip.things === "few") t.push("Use only 1 or 2 things: the most important.");
+  if (ip.things === "many") t.push("Use 4 to 6 things; groups (n up to 8) are welcome.");
+  if (ip.titleLang !== "speech") t.push(`Write the title in ${TITLE_LANGS[ip.titleLang]}.`);
+  if (ip.wish) t.push(`The owner's wish (follow it when it doesn't break the JSON rules): ${ip.wish}`);
+  return t.join("\n");
+}
+function timeFromHour(h) { return h >= 6 && h < 8 ? "dawn" : h >= 8 && h < 18 ? "day" : h >= 18 && h < 21 ? "sunset" : "night"; }
+const MOOD_FX = { love: "hearts", happy: "sparkles", exciting: "confetti", funny: "confetti", calm: "leaves", sad: "leaves", scary: "smoke", mystery: "stars", angry: "fire" };
+function applyInterp(sc, ip, hour) {
+  if (!ip) return sc;
+  if (ip.place !== "auto") sc.place = ip.place;
+  if (ip.time === "clock" && hour >= 0 && hour < 24) sc.time = timeFromHour(hour);
+  else if (ip.time !== "auto" && ip.time !== "clock") sc.time = ip.time;
+  if (ip.weather !== "auto") sc.weather = ip.weather;
+  if (ip.mood !== "auto") sc.mood = ip.mood;
+  if (ip.fx === "more") { if (sc.fx === "none") sc.fx = MOOD_FX[sc.mood] || "sparkles"; }
+  else if (ip.fx !== "auto") sc.fx = ip.fx;
+  if (ip.cam !== "auto") sc.cam = ip.cam;
+  const max = ip.things === "few" ? 2 : ip.things === "many" ? 6 : 5;
+  sc.things = sc.things.slice(0, max);
+  return sc;
+}
+async function aiScene(env, text, lang, prev, smart, ip) {
   const model = smart ? (env.DREAM_SMART || SMART) : (env.DREAM_QUICK || QUICK);
-  const messages = [{ role: "system", content: SYSTEM }];
+  const extra = ip ? interpPrompt(ip) : "";
+  const messages = [{ role: "system", content: extra ? SYSTEM + "\nFor this screen:\n" + extra : SYSTEM }];
   for (const [u, a] of EXAMPLES) { messages.push({ role: "user", content: u }); messages.push({ role: "assistant", content: JSON.stringify(a) }); }
   let ask = text;
   if (prev) ask = `(the scene before: ${String(prev).slice(0, 60)})\n${text}`;
@@ -307,21 +362,39 @@ async function aiScene(env, text, lang, prev, smart) {
 let ready = null;
 function tables(env) {
   if (!ready) {
-    ready = env.DB.batch([
-      env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_cube (code TEXT PRIMARY KEY, at INTEGER NOT NULL, st TEXT NOT NULL DEFAULT '{}', cmdn INTEGER NOT NULL DEFAULT 0, scenen INTEGER NOT NULL DEFAULT 0)`),
-      env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_cmd (code TEXT NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, c TEXT NOT NULL, a TEXT NOT NULL DEFAULT '', PRIMARY KEY (code, n))`),
-      env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_scene (code TEXT NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, said TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (code, n))`),
-      env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_use (day TEXT NOT NULL, k TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, k))`),
-    ]).catch((e) => { ready = null; throw e; });
+    ready = (async () => {
+      await env.DB.batch([
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_cube (code TEXT PRIMARY KEY, at INTEGER NOT NULL, st TEXT NOT NULL DEFAULT '{}', cmdn INTEGER NOT NULL DEFAULT 0, scenen INTEGER NOT NULL DEFAULT 0)`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_cmd (code TEXT NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, c TEXT NOT NULL, a TEXT NOT NULL DEFAULT '', PRIMARY KEY (code, n))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_scene (code TEXT NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, said TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (code, n))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_use (day TEXT NOT NULL, k TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, k))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_line (code TEXT NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, text TEXT NOT NULL, PRIMARY KEY (code, n))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_tx (code TEXT NOT NULL, id INTEGER NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, lines INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (code, id))`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS dream_pair (id TEXT NOT NULL, code TEXT NOT NULL, at INTEGER NOT NULL, num TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, code))`),
+      ]);
+      // 1.2: new columns (an error = already there)
+      for (const col of ["ipk TEXT NOT NULL DEFAULT ''", "interp TEXT NOT NULL DEFAULT '{}'", "linen INTEGER NOT NULL DEFAULT 0", "mark INTEGER NOT NULL DEFAULT 0"])
+        try { await env.DB.prepare(`ALTER TABLE dream_cube ADD COLUMN ${col}`).run(); } catch (e) {}
+    })().catch((e) => { ready = null; throw e; });
   }
   return ready;
 }
+// where a request comes from, hashed: IPv4 as it is, IPv6 by its /64 (one home)
+function ipPrefix(ip) {
+  ip = String(ip || "");
+  if (!ip.includes(":")) return ip;
+  let [h, t] = ip.split("::");
+  const a = h ? h.split(":") : [], b = t !== undefined ? (t ? t.split(":") : []) : [];
+  const full = t !== undefined ? [...a, ...Array(8 - a.length - b.length).fill("0"), ...b] : a;
+  return full.slice(0, 4).map((x) => parseInt(x || "0", 16).toString(16)).join(":") + "::/64";
+}
+async function ipKey(ip) { return (await sha("dream-ip:" + ipPrefix(ip))).slice(0, 16); }
 async function cube(env, code) {
   await tables(env);
   let row = await env.DB.prepare(`SELECT * FROM dream_cube WHERE code = ?`).bind(code).first();
   if (!row) {
     await env.DB.prepare(`INSERT OR IGNORE INTO dream_cube (code, at) VALUES (?, 0)`).bind(code).run();
-    row = { code, at: 0, st: "{}", cmdn: 0, scenen: 0 };
+    row = { code, at: 0, st: "{}", cmdn: 0, scenen: 0, ipk: "", interp: "{}", linen: 0, mark: 0 };
   }
   return row;
 }
@@ -351,9 +424,9 @@ async function sha(text) {
 }
 
 // words -> scene, with today's limits (the word list when the AI can't)
-async function makeScene(request, env, ctx, text, lang, prev, smart) {
+async function makeScene(request, env, ctx, text, lang, prev, smart, ip = null, hour = -1) {
   text = String(text || "").replace(/\s+/g, " ").trim().slice(0, 600);
-  if (!text) return { scene: cleanScene({ title: "...", place: "void", time: "night", mood: "mystery", things: [{ m: "question", a: "spin" }] }, ""), via: "empty" };
+  if (!text) return { scene: applyInterp(cleanScene({ title: "...", place: "void", time: "night", mood: "mystery", things: [{ m: "question", a: "spin" }] }, ""), ip, hour), via: "empty" };
   const day = new Date().toISOString().slice(0, 10);
   const ipKey = "ip:" + (await sha("dream:" + (request.headers.get("CF-Connecting-IP") || "local")));
   const cap = Math.max(10, Number(env.DREAM_DAY_SCENES) || DAY_SCENES);
@@ -367,17 +440,24 @@ async function makeScene(request, env, ctx, text, lang, prev, smart) {
   }
   let res = null, why = "";
   if (env.AI && all < cap && mine < cap * 0.6) {
-    try { res = await aiScene(env, text, lang, prev, smart); } catch (e) { why = String(e?.message || e).slice(0, 80); }
-    if (!res && smart) { try { res = await aiScene(env, text, lang, prev, false); } catch (e) {} }
+    try { res = await aiScene(env, text, lang, prev, smart, ip); } catch (e) { why = String(e?.message || e).slice(0, 80); }
+    if (!res && smart) { try { res = await aiScene(env, text, lang, prev, false, ip); } catch (e) {} }
     if (res && env.DB) {
       const add = env.DB.prepare(`INSERT INTO dream_use (day, k, n) VALUES (?, ?, 1) ON CONFLICT(day, k) DO UPDATE SET n = n + 1`);
       const p = env.DB.batch([add.bind(day, "all"), add.bind(day, ipKey)]).catch(() => {});
       if (ctx?.waitUntil) ctx.waitUntil(p); else await p;
     }
   } else why = env.AI ? "daily limit" : "no ai";
-  if (res) return { scene: res.scene, via: res.model.split("/").pop() };
-  return { scene: wordScene(text), via: "words", why };
+  if (res) return { scene: applyInterp(res.scene, ip, hour), via: res.model.split("/").pop() };
+  return { scene: applyInterp(wordScene(text), ip, hour), via: "words", why };
 }
+
+async function interpOf(env, code) {
+  if (!code || !env.DB) return null;
+  try { const row = await cube(env, code); return cleanInterp(JSON.parse(row.interp || "{}")); } catch (e) { return null; }
+}
+const clean = (t, n) => String(t || "").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+const rnd = (n, chars) => { let s = ""; const b = crypto.getRandomValues(new Uint8Array(n)); for (const x of b) s += chars[x % chars.length]; return s; };
 
 // ------------------------------------------------------------------ the routes
 export async function handleDream(request, env, ctx, path) {
@@ -391,22 +471,52 @@ export async function handleDream(request, env, ctx, path) {
     const lang = /^[a-z]{2}$/.test(String(body.lang || "")) ? body.lang : "";
     const id = ID_RE.test(String(body.id || "")) ? body.id : "";
     const code = CODE_RE.test(String(body.code || "")) ? body.code : "";
+    const hour = Number.isInteger(body.hour) ? body.hour : -1;
     const t0 = Date.now();
-    const r = await makeScene(request, env, ctx, body.text, lang, String(body.prev || "").slice(0, 80), body.mind === "smart");
+    const ip = await interpOf(env, code);
+    let prev = String(body.prev || "").slice(0, 80);
+    if (ip && ip.story && code) {          // story: the scene before, and what was said then
+      try { const x = await env.DB.prepare(`SELECT title, said FROM dream_scene WHERE code = ? ORDER BY n DESC LIMIT 1`).bind(code).first(); if (x) prev = `${x.title}: ${x.said}`.slice(0, 200); } catch (e) {}
+    }
+    const r = await makeScene(request, env, ctx, body.text, lang, prev, body.mind === "smart", ip, hour);
     let n = 0;
     if (code && env.DB && r.via !== "empty") { try { n = await addScene(env, code, r.scene); } catch (e) {} }
     return json({ ok: true, scene: r.scene, n, via: r.via, ms: Date.now() - t0, id });
   }
   if (!env.DB) return json({ error: "no database" }, 503);
+  await tables(env);
+  const now = Date.now();
 
   if (path === "/api/dream/cube") {
     const code = String(body.code || "");
     if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
     const row = await cube(env, code);
-    const now = Date.now();
-    const st = body.st && typeof body.st === "object" ? JSON.stringify(body.st).slice(0, 2000) : row.st;
+    const st = body.st && typeof body.st === "object" ? JSON.stringify(body.st).slice(0, 2400) : row.st;
+    const ipk = await ipKey(request.headers.get("CF-Connecting-IP") || "");
     // written only when it changed, or once a minute (the page sees "online" from it)
-    if (st !== row.st || now - row.at > 60000) await env.DB.prepare(`UPDATE dream_cube SET at = ?, st = ? WHERE code = ?`).bind(now, st, code).run();
+    if (st !== row.st || ipk !== row.ipk || now - row.at > 60000)
+      await env.DB.prepare(`UPDATE dream_cube SET at = ?, st = ?, ipk = ? WHERE code = ?`).bind(now, st, ipk, code).run();
+    // what it heard: the live transcript
+    const lines = Array.isArray(body.lines) ? body.lines.slice(0, 20) : [];
+    if (lines.length) {
+      let n = row.linen;
+      const ins = env.DB.prepare(`INSERT OR REPLACE INTO dream_line (code, n, at, text) VALUES (?, ?, ?, ?)`);
+      const batch = [];
+      for (const l of lines) {
+        const t = clean(l && l.t, 500);
+        if (!t) continue;
+        n++;
+        batch.push(ins.bind(code, n, now - Math.min(Math.max(Number(l.ago) || 0, 0), 3600000), t));
+      }
+      if (batch.length) {
+        batch.push(env.DB.prepare(`UPDATE dream_cube SET linen = ? WHERE code = ?`).bind(n, code));
+        if (n % 50 === 0) batch.push(env.DB.prepare(`DELETE FROM dream_line WHERE code = ? AND n <= ?`).bind(code, n - 3000));
+        await env.DB.batch(batch);
+      }
+    }
+    // its answers to "link a phone?"
+    for (const p of Array.isArray(body.pair) ? body.pair.slice(0, 4) : [])
+      if (p && typeof p.id === "string") await env.DB.prepare(`UPDATE dream_pair SET ok = ? WHERE id = ? AND code = ?`).bind(p.ok ? 1 : -1, p.id.slice(0, 16), code).run();
     const last = Math.max(0, Number(body.last) || 0);
     let cmds = [];
     if (row.cmdn > last) {
@@ -416,16 +526,55 @@ export async function handleDream(request, env, ctx, path) {
     return json({ ok: true, cmds, top: row.cmdn });
   }
 
+  // a phone without a code: the cubes on its network (or the IPv4 it says it has) are asked on their screen
+  if (path === "/api/dream/near") {
+    const keys = [await ipKey(request.headers.get("CF-Connecting-IP") || "")];
+    const hint = String(url.searchParams.get("hint") || "");
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hint)) keys.push(await ipKey(hint));
+    const r = await env.DB.prepare(`SELECT code FROM dream_cube WHERE ipk IN (?, ?) AND at > ? ORDER BY at DESC LIMIT 3`).bind(keys[0], keys[1] || keys[0], now - 10 * 60000).all();
+    const codes = (r.results || []).map((x) => x.code);
+    if (!codes.length) return json({ ok: true, found: 0 });
+    const id = rnd(12, "abcdefghijkmnpqrstuvwxyz23456789"), num = String(1000 + (crypto.getRandomValues(new Uint16Array(1))[0] % 9000));
+    await env.DB.prepare(`DELETE FROM dream_pair WHERE at < ?`).bind(now - 15 * 60000).run();
+    for (const code of codes) {
+      await env.DB.prepare(`INSERT INTO dream_pair (id, code, at, num) VALUES (?, ?, ?, ?)`).bind(id, code, now, num).run();
+      await addCmd(env, code, "pair", id + "|" + num);
+    }
+    return json({ ok: true, found: codes.length, pair: id, num });
+  }
+  if (path === "/api/dream/pair") {
+    const id = String(url.searchParams.get("id") || "").slice(0, 16);
+    const r = await env.DB.prepare(`SELECT code, ok, at FROM dream_pair WHERE id = ?`).bind(id).all();
+    const rows = r.results || [];
+    const yes = rows.find((x) => x.ok === 1);
+    if (yes) return json({ ok: true, code: yes.code });
+    if (!rows.length || rows.every((x) => x.ok === -1)) return json({ ok: true, no: true });
+    if (rows.every((x) => now - x.at > 5 * 60000)) return json({ ok: true, no: true, late: true });
+    return json({ ok: true, wait: true });
+  }
+
   if (path === "/api/dream/app") {
     const code = String(url.searchParams.get("code") || body.code || "").toUpperCase();
     if (!CODE_RE.test(code)) return json({ error: "bad code" }, 400);
+    const row = await cube(env, code);
     if (request.method === "GET") {
-      const row = await cube(env, code);
+      if (url.searchParams.get("tx")) {          // one saved transcript, whole
+        const x = await env.DB.prepare(`SELECT id, at, title, lines, json FROM dream_tx WHERE code = ? AND id = ?`).bind(code, Number(url.searchParams.get("tx")) || 0).first();
+        if (!x) return json({ error: "no such transcript" }, 404);
+        return json({ ok: true, tx: { id: x.id, at: x.at, title: x.title, lines: JSON.parse(x.json) } });
+      }
       const since = Math.max(0, Number(url.searchParams.get("since")) || 0);
-      const r = await env.DB.prepare(`SELECT n, at, title, said, json FROM dream_scene WHERE code = ? AND n > ? ORDER BY n DESC LIMIT 60`).bind(code, since).all();
+      const lsince = Math.max(row.mark, Number(url.searchParams.get("lsince")) || 0);
+      const [sc, ln, tx] = await Promise.all([
+        env.DB.prepare(`SELECT n, at, title, said, json FROM dream_scene WHERE code = ? AND n > ? ORDER BY n DESC LIMIT 60`).bind(code, since).all(),
+        env.DB.prepare(`SELECT n, at, text FROM dream_line WHERE code = ? AND n > ? ORDER BY n DESC LIMIT 400`).bind(code, lsince).all(),
+        env.DB.prepare(`SELECT id, at, title, lines FROM dream_tx WHERE code = ? ORDER BY id DESC LIMIT 200`).bind(code).all(),
+      ]);
       let st = {}; try { st = JSON.parse(row.st || "{}"); } catch (e) {}
-      return json({ ok: true, cube: { seen: row.at, ago: row.at ? Date.now() - row.at : -1, online: row.at > 0 && Date.now() - row.at < 90000, st },
-        top: row.scenen, scenes: (r.results || []).map((x) => ({ n: x.n, at: x.at, title: x.title, said: x.said, scene: JSON.parse(x.json) })) });
+      let ip = INTERP; try { ip = cleanInterp(JSON.parse(row.interp || "{}")); } catch (e) {}
+      return json({ ok: true, cube: { seen: row.at, ago: row.at ? now - row.at : -1, online: row.at > 0 && now - row.at < 90000, st },
+        top: row.scenen, scenes: (sc.results || []).map((x) => ({ n: x.n, at: x.at, title: x.title, said: x.said, scene: JSON.parse(x.json) })),
+        linen: row.linen, mark: row.mark, lines: (ln.results || []).reverse(), tx: tx.results || [], interp: ip });
     }
     const c = String(body.c || "");
     const OK = ["listen", "pause", "wake", "sleep", "prev", "next", "cfg", "unlink"];
@@ -433,9 +582,15 @@ export async function handleDream(request, env, ctx, path) {
       const a = c === "cfg" ? JSON.stringify(body.a && typeof body.a === "object" ? body.a : {}).slice(0, 800) : String(body.a ?? "").slice(0, 40);
       return json({ ok: true, n: await addCmd(env, code, c, a) });
     }
+    if (c === "interp") {
+      const ip = cleanInterp(body.a);
+      await env.DB.prepare(`UPDATE dream_cube SET interp = ? WHERE code = ?`).bind(JSON.stringify(ip), code).run();
+      return json({ ok: true, interp: ip });
+    }
     if (c === "say") {
-      const st = JSON.parse((await cube(env, code)).st || "{}");
-      const r = await makeScene(request, env, ctx, body.a, st.lang || "", "", (st.cfg && st.cfg.mind === 1));
+      let st = {}; try { st = JSON.parse(row.st || "{}"); } catch (e) {}
+      let ip = INTERP; try { ip = cleanInterp(JSON.parse(row.interp || "{}")); } catch (e) {}
+      const r = await makeScene(request, env, ctx, body.a, st.lang || "", "", !!(st.cfg && st.cfg.mind === 1), ip, Number.isInteger(body.hour) ? body.hour : -1);
       const n = await addScene(env, code, r.scene);
       await addCmd(env, code, "scene", JSON.stringify({ n, ...r.scene }));
       return json({ ok: true, n, scene: r.scene, via: r.via });
@@ -449,6 +604,28 @@ export async function handleDream(request, env, ctx, path) {
     }
     if (c === "rm") { await env.DB.prepare(`DELETE FROM dream_scene WHERE code = ? AND n = ?`).bind(code, Number(body.a) || 0).run(); return json({ ok: true }); }
     if (c === "clear") { await env.DB.prepare(`DELETE FROM dream_scene WHERE code = ?`).bind(code).run(); return json({ ok: true }); }
+    // the live transcript -> a saved one (and the live view starts again)
+    if (c === "save") {
+      const r = await env.DB.prepare(`SELECT at, text FROM dream_line WHERE code = ? AND n > ? AND n <= ? ORDER BY n`).bind(code, row.mark, row.linen).all();
+      const lines = (r.results || []).map((x) => [x.at, x.text]);
+      if (!lines.length) return json({ error: "nothing to save" }, 400);
+      const a = body.a && typeof body.a === "object" ? body.a : {};
+      const title = clean(a.title, 60) || clean(lines.map((l) => l[1]).join(" "), 40);
+      const top = await env.DB.prepare(`SELECT MAX(id) AS m FROM dream_tx WHERE code = ?`).bind(code).first();
+      const id = ((top && top.m) || 0) + 1;
+      await env.DB.batch([
+        env.DB.prepare(`INSERT INTO dream_tx (code, id, at, title, lines, json) VALUES (?, ?, ?, ?, ?, ?)`).bind(code, id, now, title, lines.length, JSON.stringify(lines)),
+        env.DB.prepare(`UPDATE dream_cube SET mark = ? WHERE code = ?`).bind(row.linen, code),
+      ]);
+      return json({ ok: true, id, title, lines: lines.length });
+    }
+    if (c === "clearlive") { await env.DB.prepare(`UPDATE dream_cube SET mark = ? WHERE code = ?`).bind(row.linen, code).run(); return json({ ok: true }); }
+    if (c === "txrm") { await env.DB.prepare(`DELETE FROM dream_tx WHERE code = ? AND id = ?`).bind(code, Number(body.a) || 0).run(); return json({ ok: true }); }
+    if (c === "txren") {
+      const a = body.a && typeof body.a === "object" ? body.a : {};
+      await env.DB.prepare(`UPDATE dream_tx SET title = ? WHERE code = ? AND id = ?`).bind(clean(a.title, 60) || "TRANSCRIPT", code, Number(a.id) || 0).run();
+      return json({ ok: true });
+    }
     return json({ error: "unknown command" }, 400);
   }
   return json({ error: "not found" }, 404);
