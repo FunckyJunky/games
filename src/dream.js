@@ -350,6 +350,7 @@ async function aiScene(env, text, lang, prev, smart, ip) {
   let ask = text;
   if (prev) ask = `(the scene before: ${String(prev).slice(0, 60)})\n${text}`;
   if (lang) ask += `\n(language: ${lang})`;
+  if (ip && ip.wish) ask += `\n(the owner's wish, follow it: ${ip.wish})`;
   messages.push({ role: "user", content: ask });
   const r = await env.AI.run(model, { messages, max_tokens: 700, temperature: 0.5 });
   const out = typeof r?.response === "string" ? r.response : r?.response ? JSON.stringify(r.response) : "";
@@ -456,7 +457,7 @@ async function interpOf(env, code) {
   if (!code || !env.DB) return null;
   try { const row = await cube(env, code); return cleanInterp(JSON.parse(row.interp || "{}")); } catch (e) { return null; }
 }
-const clean = (t, n) => String(t || "").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
+const clean = (t, n) => String(t || "").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n).trim();
 const rnd = (n, chars) => { let s = ""; const b = crypto.getRandomValues(new Uint8Array(n)); for (const x of b) s += chars[x % chars.length]; return s; };
 
 // ------------------------------------------------------------------ the routes
